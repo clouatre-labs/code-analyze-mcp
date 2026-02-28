@@ -120,3 +120,45 @@ fn test_analyze_directory_binary_file_skipping() {
     let output = analyze_directory(root, None).unwrap();
     assert!(output.formatted.contains("SUMMARY"));
 }
+
+#[test]
+fn test_walk_directory_ignore_file_respected() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create .ignore file that excludes ignored.rs
+    fs::write(root.join(".ignore"), "ignored.rs\n").unwrap();
+    fs::write(root.join("ignored.rs"), "fn ignored() {}").unwrap();
+    fs::write(root.join("kept.rs"), "fn kept() {}").unwrap();
+
+    // Act: Walk the directory
+    let entries = walk_directory(root, None).unwrap();
+
+    // Assert: ignored.rs should not be in results, kept.rs should be
+    let has_ignored = entries.iter().any(|e| e.path.ends_with("ignored.rs"));
+    let has_kept = entries.iter().any(|e| e.path.ends_with("kept.rs"));
+
+    assert!(!has_ignored, "ignored.rs should be excluded by .ignore");
+    assert!(has_kept, "kept.rs should be included");
+}
+
+#[test]
+fn test_walk_directory_ignore_precedence_over_gitignore() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create .gitignore that excludes foo.rs, then .ignore that includes it
+    fs::write(root.join(".gitignore"), "foo.rs\n").unwrap();
+    fs::write(root.join(".ignore"), "!foo.rs\n").unwrap();
+    fs::write(root.join("foo.rs"), "fn foo() {}").unwrap();
+
+    // Act: Walk the directory
+    let entries = walk_directory(root, None).unwrap();
+
+    // Assert: foo.rs should be included (proving .ignore precedence)
+    let has_foo = entries.iter().any(|e| e.path.ends_with("foo.rs"));
+    assert!(
+        has_foo,
+        "foo.rs should be included due to .ignore precedence over .gitignore"
+    );
+}

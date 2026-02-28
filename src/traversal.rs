@@ -18,7 +18,7 @@ pub enum TraversalError {
     Io(#[from] std::io::Error),
 }
 
-/// Walk a directory with support for .gitignore and .gooseignore.
+/// Walk a directory with support for .gitignore and .ignore.
 /// max_depth=0 maps to unlimited recursion (None), positive values limit depth.
 #[instrument(skip_all, fields(path = %root.display(), max_depth))]
 pub fn walk_directory(
@@ -26,10 +26,7 @@ pub fn walk_directory(
     max_depth: Option<u32>,
 ) -> Result<Vec<WalkEntry>, TraversalError> {
     let mut builder = WalkBuilder::new(root);
-    builder
-        .hidden(true)
-        .standard_filters(true)
-        .add_custom_ignore_filename(".gooseignore");
+    builder.hidden(true).standard_filters(true);
 
     // Map max_depth: 0 = unlimited (None), positive = Some(n)
     if let Some(depth) = max_depth {
