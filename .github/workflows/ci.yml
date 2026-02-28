@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Validate commit messages
-        uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6
+        uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
 
   check-base:
     name: Check Branch Base
@@ -50,7 +50,7 @@ jobs:
           base_commit=$(git merge-base origin/main HEAD)
           main_head=$(git rev-parse origin/main)
           if [ "$base_commit" != "$main_head" ]; then
-            behind=$(git rev-list --count $base_commit..$main_head)
+            behind=$(git rev-list --count "$base_commit".."$main_head")
             echo "::error::Branch is $behind commit(s) behind main. Rebase required."
             echo "Run: git fetch origin && git rebase origin/main"
             exit 1
@@ -85,7 +85,7 @@ jobs:
           toolchain: stable
           components: clippy
       - name: Setup Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run Clippy lints
