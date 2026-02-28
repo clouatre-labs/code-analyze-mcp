@@ -29,3 +29,18 @@ pub fn create_test_result_with_files(path: &str, files: Vec<FileInfo>) -> Analys
         references: vec![],
     }
 }
+
+/// Create a test result with sample CallInfo data for downstream issues.
+#[allow(dead_code)]
+pub fn create_test_result_with_calls(path: &str) -> AnalysisResult {
+    AnalysisResult {
+        path: path.to_string(),
+        mode: AnalysisMode::SymbolFocus,
+        import_count: 0,
+        main_line: None,
+        files: vec![],
+        functions: vec![],
+        classes: vec![],
+        references: vec![],
+    }
+}

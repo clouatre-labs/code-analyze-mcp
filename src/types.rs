@@ -6,8 +6,11 @@ pub struct AnalyzeParams {
     #[schemars(description = "Path to the file or directory to analyze")]
     pub path: String,
 
-    #[schemars(description = "Analysis mode: 'overview', 'file_details', or 'symbol_focus'")]
-    pub mode: AnalysisMode,
+    #[schemars(
+        description = "Analysis mode: 'overview', 'file_details', or 'symbol_focus' (auto-detected if not provided)"
+    )]
+    #[serde(default)]
+    pub mode: Option<AnalysisMode>,
 
     #[schemars(description = "Maximum recursion depth for directory traversal")]
     pub max_depth: Option<u32>,
@@ -38,6 +41,15 @@ pub struct FileInfo {
     pub line_count: usize,
     pub function_count: usize,
     pub class_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct FileAnalysis {
+    pub path: String,
+    pub line_count: usize,
+    pub function_count: usize,
+    pub class_count: usize,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -93,7 +105,7 @@ pub enum EntryType {
     Variable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisMode {
     Overview,

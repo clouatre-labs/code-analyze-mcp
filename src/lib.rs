@@ -40,8 +40,13 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
 
+        // Determine mode if not provided
+        let mode = params
+            .mode
+            .unwrap_or_else(|| analyze::determine_mode(&params.path, params.focus.as_deref()));
+
         // Dispatch based on mode
-        let (result_text, files) = match params.mode {
+        let (result_text, files) = match mode {
             AnalysisMode::Overview => {
                 let path = Path::new(&params.path);
                 match analyze::analyze_directory(path, params.max_depth) {
@@ -72,7 +77,7 @@ impl CodeAnalyzer {
 
         let result = AnalysisResult {
             path: params.path.clone(),
-            mode: params.mode,
+            mode,
             import_count: 0,
             main_line: None,
             files,

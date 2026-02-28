@@ -1,19 +1,15 @@
 use crate::traversal::WalkEntry;
+use crate::types::FileAnalysis;
 use std::collections::HashMap;
 use tracing::instrument;
 
-#[derive(Debug, Clone)]
-pub struct FileAnalysis {
-    pub path: String,
-    pub line_count: usize,
-    pub function_count: usize,
-    pub class_count: usize,
-    pub language: String,
-}
-
 /// Format directory structure analysis results.
 #[instrument(skip_all)]
-pub fn format_structure(entries: &[WalkEntry], analysis_results: &[FileAnalysis]) -> String {
+pub fn format_structure(
+    entries: &[WalkEntry],
+    analysis_results: &[FileAnalysis],
+    max_depth: Option<u32>,
+) -> String {
     let mut output = String::new();
 
     // Build a map of path -> analysis for quick lookup
@@ -27,17 +23,20 @@ pub fn format_structure(entries: &[WalkEntry], analysis_results: &[FileAnalysis]
     let total_functions: usize = analysis_results.iter().map(|a| a.function_count).sum();
     let total_classes: usize = analysis_results.iter().map(|a| a.class_count).sum();
 
-    // Count files by language
+    // Count files by language and calculate percentages
     let mut lang_counts: HashMap<String, usize> = HashMap::new();
     for analysis in analysis_results {
         *lang_counts.entry(analysis.language.clone()).or_insert(0) += 1;
     }
+    let total_files = analysis_results.len();
 
     // SUMMARY block
-    output.push_str("SUMMARY\n");
-    output.push_str(&format!("Total LOC: {}\n", total_loc));
-    output.push_str(&format!("Total Functions: {}\n", total_functions));
-    output.push_str(&format!("Total Classes: {}\n", total_classes));
+    output.push_str("SUMMARY:\n");
+    let max_depth_display = max_depth.unwrap_or(0);
+    output.push_str(&format!(
+        "Shown: {} files, {}L, {}F, {}C (max_depth={})\n",
+        total_files, total_loc, total_functions, total_classes, max_depth_display
+    ));
 
     if !lang_counts.is_empty() {
         output.push_str("Languages: ");
@@ -45,7 +44,14 @@ pub fn format_structure(entries: &[WalkEntry], analysis_results: &[FileAnalysis]
         langs.sort_by_key(|&(name, _)| name);
         let lang_strs: Vec<String> = langs
             .iter()
-            .map(|(name, count)| format!("{} ({})", name, count))
+            .map(|(name, count)| {
+                let percentage = if total_files > 0 {
+                    (**count * 100) / total_files
+                } else {
+                    0
+                };
+                format!("{} ({}%)", name, percentage)
+            })
             .collect();
         output.push_str(&lang_strs.join(", "));
         output.push('\n');
@@ -54,7 +60,7 @@ pub fn format_structure(entries: &[WalkEntry], analysis_results: &[FileAnalysis]
     output.push('\n');
 
     // PATH block - tree structure
-    output.push_str("PATH\n");
+    output.push_str("PATH [LOC, FUNCTIONS, CLASSES]\n");
 
     for entry in entries {
         // Skip the root directory itself
@@ -78,13 +84,13 @@ pub fn format_structure(entries: &[WalkEntry], analysis_results: &[FileAnalysis]
                 let mut info_parts = Vec::new();
 
                 if analysis.line_count > 0 {
-                    info_parts.push(analysis.line_count.to_string());
+                    info_parts.push(format!("{}L", analysis.line_count));
                 }
                 if analysis.function_count > 0 {
-                    info_parts.push(format!("FUNCTIONS: {}", analysis.function_count));
+                    info_parts.push(format!("{}F", analysis.function_count));
                 }
                 if analysis.class_count > 0 {
-                    info_parts.push(format!("CLASSES: {}", analysis.class_count));
+                    info_parts.push(format!("{}C", analysis.class_count));
                 }
 
                 if info_parts.is_empty() {

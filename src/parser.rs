@@ -61,3 +61,14 @@ impl ParserManager {
         Ok((function_count, class_count))
     }
 }
+
+/// Canonical API for extracting element counts from source code.
+pub struct ElementExtractor;
+
+impl ElementExtractor {
+    /// Extract function and class counts from source code with depth parameter.
+    #[instrument(skip_all, fields(language))]
+    pub fn extract_with_depth(source: &str, language: &str) -> Result<(usize, usize), ParserError> {
+        ParserManager::extract_counts(source, language)
+    }
+}
