@@ -25,7 +25,12 @@ If the repo has existing source code, follow the patterns already established th
 ## rmcp patterns (verify against installed version)
 
 ```rust
-use rmcp::{ErrorData, model::*, tool, tool_router, handler::server::tool::ToolRouter};
+use rmcp::{
+    model::{CallToolResult, ErrorData, RawContent},
+    tool,
+    tool_router,
+    handler::server::{tool::ToolRouter, wrapper::Parameters},
+};
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct MyParams {
@@ -46,7 +51,7 @@ impl MyServer {
 
     #[tool(name = "my_tool", description = "What this tool does", annotations(read_only_hint = true))]
     async fn my_tool(&self, params: Parameters<MyParams>) -> Result<CallToolResult, ErrorData> {
-        Ok(CallToolResult::success(vec![Content::text("result")]))
+        Ok(CallToolResult::success(vec![RawContent::text("result")]))
     }
 }
 ```
