@@ -1,17 +1,6 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
-pub struct FileResult {
-    pub relative_path: PathBuf,
-    pub depth: usize,
-    pub is_dir: bool,
-    pub is_symlink: bool,
-    pub symlink_target: Option<PathBuf>,
-    pub language: Option<String>,
-    pub line_count: usize,
-    pub function_count: usize,
-    pub class_count: usize,
-}
+use crate::types::FileResult;
 
 pub fn format_structure_output(results: &[FileResult], max_depth: usize) -> String {
     let mut output = String::new();
@@ -111,6 +100,7 @@ pub fn format_structure_output(results: &[FileResult], max_depth: usize) -> Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::FileResult;
     use std::path::PathBuf;
 
     fn make_file(name: &str, depth: usize, loc: usize, funcs: usize, classes: usize) -> FileResult {

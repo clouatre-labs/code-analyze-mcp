@@ -32,7 +32,10 @@ pub fn walk_directory(root: &Path, options: &WalkOptions) -> Vec<DirEntry> {
     for result in builder.build() {
         let entry = match result {
             Ok(e) => e,
-            Err(_) => continue,
+            Err(err) => {
+                tracing::debug!(error = %err, "Skipping unreadable directory entry");
+                continue;
+            }
         };
 
         if entry.depth() == 0 {
@@ -112,6 +115,30 @@ mod tests {
 
         assert!(names.contains(&"kept.rs".to_string()));
         assert!(!names.contains(&"ignored.rs".to_string()));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_walk_directory_gooseignore_respected() {
+        let tmp = std::env::temp_dir().join("ts_walk_test_gooseignore");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        fs::write(tmp.join(".gooseignore"), "goose_ignored.rs\n").unwrap();
+        fs::write(tmp.join("goose_ignored.rs"), "fn goose() {}").unwrap();
+        fs::write(tmp.join("kept.rs"), "fn kept() {}").unwrap();
+
+        let entries = walk_directory(&tmp, &WalkOptions { max_depth: 1 });
+        let names: Vec<_> = entries
+            .iter()
+            .map(|e| e.relative_path.to_str().unwrap_or("").to_string())
+            .collect();
+
+        assert!(names.contains(&"kept.rs".to_string()));
+        assert!(
+            !names.contains(&"goose_ignored.rs".to_string()),
+            ".gooseignore patterns must be respected"
+        );
 
         let _ = fs::remove_dir_all(&tmp);
     }

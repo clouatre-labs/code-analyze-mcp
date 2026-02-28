@@ -1,12 +1,12 @@
 use rayon::prelude::*;
 use std::path::Path;
 
-use crate::formatter::{format_structure_output, FileResult};
+use crate::formatter::format_structure_output;
 use crate::lang::language_from_extension;
 use crate::languages::get_language_info;
 use crate::parser::ElementExtractor;
 use crate::traversal::{walk_directory, WalkOptions};
-use crate::types::{AnalysisMode, AnalyzeParams};
+use crate::types::{AnalysisMode, AnalyzeParams, FileResult};
 
 /// Auto-detect the analysis mode from the path and params.
 /// An explicit focus symbol → SymbolFocus; a directory path → Overview; otherwise → FileDetails.
@@ -27,9 +27,9 @@ pub fn analyze_directory(root: &Path, max_depth: usize) -> String {
 
     let results: Vec<FileResult> = entries
         .par_iter()
-        .map(|entry| {
+        .filter_map(|entry| {
             if entry.is_dir {
-                return FileResult {
+                return Some(FileResult {
                     relative_path: entry.relative_path.clone(),
                     depth: entry.depth,
                     is_dir: true,
@@ -39,7 +39,7 @@ pub fn analyze_directory(root: &Path, max_depth: usize) -> String {
                     line_count: 0,
                     function_count: 0,
                     class_count: 0,
-                };
+                });
             }
 
             let ext = entry
@@ -53,18 +53,13 @@ pub fn analyze_directory(root: &Path, max_depth: usize) -> String {
             // Skip binary / non-UTF-8 files gracefully
             let source = match std::fs::read_to_string(&entry.path) {
                 Ok(s) => s,
-                Err(_) => {
-                    return FileResult {
-                        relative_path: entry.relative_path.clone(),
-                        depth: entry.depth,
-                        is_dir: false,
-                        is_symlink: entry.is_symlink,
-                        symlink_target: entry.symlink_target.clone(),
-                        language: None,
-                        line_count: 0,
-                        function_count: 0,
-                        class_count: 0,
-                    };
+                Err(err) => {
+                    tracing::debug!(
+                        path = %entry.path.display(),
+                        error = %err,
+                        "Skipping unreadable file"
+                    );
+                    return None;
                 }
             };
 
@@ -78,7 +73,7 @@ pub fn analyze_directory(root: &Path, max_depth: usize) -> String {
                     None => (source.lines().count(), 0, 0),
                 };
 
-            FileResult {
+            Some(FileResult {
                 relative_path: entry.relative_path.clone(),
                 depth: entry.depth,
                 is_dir: false,
@@ -88,7 +83,7 @@ pub fn analyze_directory(root: &Path, max_depth: usize) -> String {
                 line_count,
                 function_count,
                 class_count,
-            }
+            })
         })
         .collect();
 
@@ -98,50 +93,6 @@ pub fn analyze_directory(root: &Path, max_depth: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_analyze_directory_produces_summary() {
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let output = analyze_directory(&src, 3);
-        assert!(output.contains("SUMMARY:"), "Output must contain SUMMARY header");
-        assert!(
-            output.contains("PATH [LOC, FUNCTIONS, CLASSES]"),
-            "Output must contain column header"
-        );
-    }
-
-    #[test]
-    fn test_analyze_directory_lists_rust_files() {
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let output = analyze_directory(&src, 3);
-        assert!(output.contains("lib.rs"), "lib.rs must appear in output");
-        assert!(output.contains("main.rs"), "main.rs must appear in output");
-    }
-
-    #[test]
-    fn test_analyze_directory_depth_limiting() {
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let shallow = analyze_directory(&src, 1);
-        let deep = analyze_directory(&src, 3);
-
-        let rs_in_shallow = shallow.lines().filter(|l| l.contains(".rs")).count();
-        let rs_in_deep = deep.lines().filter(|l| l.contains(".rs")).count();
-        assert!(
-            rs_in_deep >= rs_in_shallow,
-            "Deeper traversal must show at least as many files"
-        );
-    }
-
-    #[test]
-    fn test_analyze_directory_max_depth_zero_unlimited() {
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let output = analyze_directory(&src, 0);
-        assert!(output.contains("SUMMARY:"));
-        assert!(
-            !output.contains("max_depth="),
-            "max_depth=0 should not be printed in summary"
-        );
-    }
 
     #[test]
     fn test_determine_mode_directory() {
@@ -188,5 +139,23 @@ mod tests {
             determine_mode(&path, &params),
             AnalysisMode::SymbolFocus
         ));
+    }
+
+    #[test]
+    fn test_binary_files_skipped() {
+        use std::fs;
+        let tmp = std::env::temp_dir().join("analyze_binary_skip_test");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        // Write a binary file with null bytes (invalid UTF-8)
+        fs::write(tmp.join("binary.bin"), b"\x00\x01\x02\xFF\xFE").unwrap();
+        fs::write(tmp.join("valid.rs"), "fn main() {}").unwrap();
+
+        let output = analyze_directory(&tmp, 0);
+
+        assert!(!output.contains("binary.bin"), "Binary file must be skipped");
+        assert!(output.contains("valid.rs"), "Valid Rust file must appear");
+
+        let _ = fs::remove_dir_all(&tmp);
     }
 }

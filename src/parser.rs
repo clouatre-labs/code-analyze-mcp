@@ -51,6 +51,10 @@ impl ElementExtractor {
         let tree = match tree {
             Some(t) => t,
             None => {
+                tracing::warn!(
+                    language = language_info.name,
+                    "tree-sitter parse returned None; reporting zero counts"
+                );
                 return FileMetrics {
                     line_count,
                     function_count: 0,
@@ -61,7 +65,12 @@ impl ElementExtractor {
 
         let query = match Query::new(&language, language_info.element_query) {
             Ok(q) => q,
-            Err(_) => {
+            Err(err) => {
+                tracing::warn!(
+                    language = language_info.name,
+                    error = %err,
+                    "Failed to compile tree-sitter query; reporting zero counts"
+                );
                 return FileMetrics {
                     line_count,
                     function_count: 0,

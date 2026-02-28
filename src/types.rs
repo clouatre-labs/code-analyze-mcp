@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeParams {
@@ -35,6 +36,20 @@ pub struct AnalysisResult {
 pub struct FileInfo {
     pub path: String,
     pub language: String,
+    pub line_count: usize,
+    pub function_count: usize,
+    pub class_count: usize,
+}
+
+/// Internal representation of a single directory-walk entry used by the
+/// formatter and the analyzer.  Not part of the public JSON API.
+pub struct FileResult {
+    pub relative_path: PathBuf,
+    pub depth: usize,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub symlink_target: Option<PathBuf>,
+    pub language: Option<String>,
     pub line_count: usize,
     pub function_count: usize,
     pub class_count: usize,
