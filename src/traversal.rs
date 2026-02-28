@@ -62,8 +62,8 @@ pub fn walk_directory(
                     symlink_target,
                 });
             }
-            Err(_) => {
-                // Skip entries that can't be read
+            Err(e) => {
+                tracing::warn!(error = %e, "skipping unreadable entry");
                 continue;
             }
         }

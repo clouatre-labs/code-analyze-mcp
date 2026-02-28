@@ -32,11 +32,13 @@ impl ParserManager {
 
         let tree = PARSER.with(|p| {
             let mut parser = p.borrow_mut();
-            parser.set_language(&lang_info.language).ok();
-            parser.parse(source, None)
-        });
-
-        let tree = tree.ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))?;
+            parser
+                .set_language(&lang_info.language)
+                .map_err(|e| ParserError::ParseError(format!("Failed to set language: {}", e)))?;
+            parser
+                .parse(source, None)
+                .ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))
+        })?;
 
         let query = Query::new(&lang_info.language, lang_info.element_query)
             .map_err(|e| ParserError::QueryError(e.to_string()))?;
