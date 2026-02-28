@@ -37,7 +37,7 @@ pub fn analyze_directory(
     // Parallel analysis of files
     let analysis_results: Vec<FileInfo> = file_entries
         .par_iter()
-        .map(|entry| {
+        .filter_map(|entry| {
             let path_str = entry.path.display().to_string();
 
             // Detect language from extension
@@ -47,14 +47,8 @@ pub fn analyze_directory(
             let source = match std::fs::read_to_string(&entry.path) {
                 Ok(content) => content,
                 Err(_) => {
-                    // Binary file or unreadable - include with LOC only
-                    return FileInfo {
-                        path: path_str,
-                        line_count: 0,
-                        function_count: 0,
-                        class_count: 0,
-                        language: "unknown".to_string(),
-                    };
+                    // Binary file or unreadable - exclude from output
+                    return None;
                 }
             };
 
@@ -76,13 +70,13 @@ pub fn analyze_directory(
                 ("unknown".to_string(), 0, 0)
             };
 
-            FileInfo {
+            Some(FileInfo {
                 path: path_str,
                 line_count,
                 function_count,
                 class_count,
                 language,
-            }
+            })
         })
         .collect();
 
