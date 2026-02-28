@@ -21,8 +21,7 @@ pub fn walk_directory(root: &Path, options: &WalkOptions) -> Vec<DirEntry> {
         .hidden(true)
         .git_ignore(true)
         .require_git(false)
-        .follow_links(false)
-        .add_custom_ignore_filename(".gooseignore");
+        .follow_links(false);
 
     if options.max_depth > 0 {
         builder.max_depth(Some(options.max_depth));
@@ -120,12 +119,12 @@ mod tests {
     }
 
     #[test]
-    fn test_walk_directory_gooseignore_respected() {
-        let tmp = std::env::temp_dir().join("ts_walk_test_gooseignore");
+    fn test_walk_directory_ignore_file_respected() {
+        let tmp = std::env::temp_dir().join("ts_walk_test_ignore_file");
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(&tmp).unwrap();
-        fs::write(tmp.join(".gooseignore"), "goose_ignored.rs\n").unwrap();
-        fs::write(tmp.join("goose_ignored.rs"), "fn goose() {}").unwrap();
+        fs::write(tmp.join(".ignore"), "dot_ignored.rs\n").unwrap();
+        fs::write(tmp.join("dot_ignored.rs"), "fn ignored() {}").unwrap();
         fs::write(tmp.join("kept.rs"), "fn kept() {}").unwrap();
 
         let entries = walk_directory(&tmp, &WalkOptions { max_depth: 1 });
@@ -136,8 +135,8 @@ mod tests {
 
         assert!(names.contains(&"kept.rs".to_string()));
         assert!(
-            !names.contains(&"goose_ignored.rs".to_string()),
-            ".gooseignore patterns must be respected"
+            !names.contains(&"dot_ignored.rs".to_string()),
+            ".ignore patterns must be respected"
         );
 
         let _ = fs::remove_dir_all(&tmp);
