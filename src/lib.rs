@@ -1,4 +1,9 @@
+pub mod analyze;
+pub mod formatter;
 pub mod lang;
+pub mod languages;
+pub mod parser;
+pub mod traversal;
 pub mod types;
 
 use rmcp::handler::server::tool::ToolRouter;
@@ -8,8 +13,9 @@ use rmcp::model::{
     RawContent, Role,
 };
 use rmcp::{tool, tool_handler, tool_router, ServerHandler};
+use std::path::Path;
 use tracing::instrument;
-use types::{AnalysisResult, AnalyzeParams};
+use types::{AnalysisMode, AnalysisResult, AnalyzeParams};
 
 #[derive(Clone)]
 pub struct CodeAnalyzer {
@@ -33,27 +39,53 @@ impl CodeAnalyzer {
         params: Parameters<AnalyzeParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
-        let mock_result = AnalysisResult {
+
+        // Dispatch based on mode
+        let (result_text, files) = match params.mode {
+            AnalysisMode::Overview => {
+                let path = Path::new(&params.path);
+                match analyze::analyze_directory(path, params.max_depth) {
+                    Ok(output) => {
+                        let file_infos = output
+                            .files
+                            .iter()
+                            .map(|f| types::FileInfo {
+                                path: f.path.clone(),
+                                language: f.language.clone(),
+                                line_count: f.line_count,
+                                function_count: f.function_count,
+                                class_count: f.class_count,
+                            })
+                            .collect();
+                        (output.formatted, file_infos)
+                    }
+                    Err(e) => (format!("Error analyzing directory: {}", e), vec![]),
+                }
+            }
+            AnalysisMode::FileDetails => {
+                ("File details mode not yet implemented".to_string(), vec![])
+            }
+            AnalysisMode::SymbolFocus => {
+                ("Symbol focus mode not yet implemented".to_string(), vec![])
+            }
+        };
+
+        let result = AnalysisResult {
             path: params.path.clone(),
             mode: params.mode,
             import_count: 0,
             main_line: None,
-            files: vec![],
+            files,
             functions: vec![],
             classes: vec![],
             references: vec![],
         };
 
-        let json_output = serde_json::to_string(&mock_result).unwrap_or_else(|_| "{}".to_string());
-
-        let summary = format!(
-            "Analysis of {} completed. Found 0 imports, 0 functions, 0 classes.",
-            params.path
-        );
+        let json_output = serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string());
 
         let assistant_content = RawContent::text(json_output).with_audience(vec![Role::Assistant]);
 
-        let user_content = RawContent::text(summary)
+        let user_content = RawContent::text(result_text)
             .with_audience(vec![Role::User])
             .with_priority(0.0);
 
