@@ -32,10 +32,13 @@ pub fn format_structure(
 
     // SUMMARY block
     output.push_str("SUMMARY:\n");
-    let max_depth_display = max_depth.unwrap_or(0);
+    let depth_label = match max_depth {
+        Some(n) if n > 0 => format!(" (max_depth={})", n),
+        _ => String::new(),
+    };
     output.push_str(&format!(
-        "Shown: {} files, {}L, {}F, {}C (max_depth={})\n",
-        total_files, total_loc, total_functions, total_classes, max_depth_display
+        "Shown: {} files, {}L, {}F, {}C{}\n",
+        total_files, total_loc, total_functions, total_classes, depth_label
     ));
 
     if !lang_counts.is_empty() {
@@ -98,9 +101,8 @@ pub fn format_structure(
                 } else {
                     output.push_str(&format!("{}{} [{}]\n", indent, name, info_parts.join(", ")));
                 }
-            } else {
-                output.push_str(&format!("{}{}\n", indent, name));
             }
+            // Skip files not in analysis_map (binary/unreadable files)
         } else {
             output.push_str(&format!("{}{}/\n", indent, name));
         }

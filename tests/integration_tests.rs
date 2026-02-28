@@ -120,11 +120,13 @@ fn test_analyze_directory_binary_file_skipping() {
     fs::write(root.join("image.png"), b"\x89PNG\r\n\x1a\n").unwrap();
     fs::write(root.join("lib.rs"), "fn test() {}").unwrap();
 
-    // Should not panic, should include binary file with LOC only
+    // Should not panic, should exclude binary file from output
     let output = analyze_directory(root, None).unwrap();
     assert!(output.formatted.contains("SUMMARY:"));
-    // Binary file should be included with 0 LOC
-    assert!(output.formatted.contains("image.png"));
+    // Binary file should be excluded from analysis results
+    assert!(!output.formatted.contains("image.png"));
+    // Only the readable Rust file should be included
+    assert!(output.formatted.contains("lib.rs"));
 }
 
 #[test]
@@ -225,7 +227,8 @@ fn distance() -> f64 {
     assert!(output.formatted.contains("Shown: 1 files"));
     assert!(output.formatted.contains("L,"));
     assert!(output.formatted.contains("F,"));
-    assert!(output.formatted.contains("C (max_depth=0)"));
+    // When max_depth is None (unlimited), max_depth label should be omitted
+    assert!(!output.formatted.contains("max_depth="));
 
     // Verify PATH header format
     assert!(output.formatted.contains("PATH [LOC, FUNCTIONS, CLASSES]"));
