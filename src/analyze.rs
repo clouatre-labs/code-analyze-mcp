@@ -2,7 +2,7 @@ use crate::formatter::format_structure;
 use crate::lang::language_from_extension;
 use crate::parser::ElementExtractor;
 use crate::traversal::{walk_directory, WalkEntry};
-use crate::types::{AnalysisMode, FileAnalysis};
+use crate::types::{AnalysisMode, FileInfo};
 use rayon::prelude::*;
 use std::path::Path;
 use thiserror::Error;
@@ -19,7 +19,7 @@ pub enum AnalyzeError {
 /// Result of directory analysis containing both formatted output and file data.
 pub struct AnalysisOutput {
     pub formatted: String,
-    pub files: Vec<FileAnalysis>,
+    pub files: Vec<FileInfo>,
 }
 
 /// Analyze a directory structure and return formatted output and file data.
@@ -35,7 +35,7 @@ pub fn analyze_directory(
     let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
 
     // Parallel analysis of files
-    let analysis_results: Vec<FileAnalysis> = file_entries
+    let analysis_results: Vec<FileInfo> = file_entries
         .par_iter()
         .map(|entry| {
             let path_str = entry.path.display().to_string();
@@ -48,7 +48,7 @@ pub fn analyze_directory(
                 Ok(content) => content,
                 Err(_) => {
                     // Binary file or unreadable - include with LOC only
-                    return FileAnalysis {
+                    return FileInfo {
                         path: path_str,
                         line_count: 0,
                         function_count: 0,
@@ -76,7 +76,7 @@ pub fn analyze_directory(
                 ("unknown".to_string(), 0, 0)
             };
 
-            FileAnalysis {
+            FileInfo {
                 path: path_str,
                 line_count,
                 function_count,

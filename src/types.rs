@@ -43,15 +43,6 @@ pub struct FileInfo {
     pub class_count: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct FileAnalysis {
-    pub path: String,
-    pub line_count: usize,
-    pub function_count: usize,
-    pub class_count: usize,
-    pub language: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FunctionInfo {
     pub name: String,

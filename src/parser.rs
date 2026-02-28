@@ -20,13 +20,13 @@ thread_local! {
     static PARSER: RefCell<Parser> = RefCell::new(Parser::new());
 }
 
-/// Manages tree-sitter parsers with thread-local instances for rayon parallelism.
-pub struct ParserManager;
+/// Canonical API for extracting element counts from source code.
+pub struct ElementExtractor;
 
-impl ParserManager {
+impl ElementExtractor {
     /// Extract function and class counts from source code.
     #[instrument(skip_all, fields(language))]
-    pub fn extract_counts(source: &str, language: &str) -> Result<(usize, usize), ParserError> {
+    pub fn extract_with_depth(source: &str, language: &str) -> Result<(usize, usize), ParserError> {
         let lang_info = get_language_info(language)
             .ok_or_else(|| ParserError::UnsupportedLanguage(language.to_string()))?;
 
@@ -59,16 +59,5 @@ impl ParserManager {
         }
 
         Ok((function_count, class_count))
-    }
-}
-
-/// Canonical API for extracting element counts from source code.
-pub struct ElementExtractor;
-
-impl ElementExtractor {
-    /// Extract function and class counts from source code with depth parameter.
-    #[instrument(skip_all, fields(language))]
-    pub fn extract_with_depth(source: &str, language: &str) -> Result<(usize, usize), ParserError> {
-        ParserManager::extract_counts(source, language)
     }
 }

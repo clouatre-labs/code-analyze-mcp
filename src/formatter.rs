@@ -1,5 +1,5 @@
 use crate::traversal::WalkEntry;
-use crate::types::FileAnalysis;
+use crate::types::FileInfo;
 use std::collections::HashMap;
 use tracing::instrument;
 
@@ -7,13 +7,13 @@ use tracing::instrument;
 #[instrument(skip_all)]
 pub fn format_structure(
     entries: &[WalkEntry],
-    analysis_results: &[FileAnalysis],
+    analysis_results: &[FileInfo],
     max_depth: Option<u32>,
 ) -> String {
     let mut output = String::new();
 
     // Build a map of path -> analysis for quick lookup
-    let analysis_map: HashMap<String, &FileAnalysis> = analysis_results
+    let analysis_map: HashMap<String, &FileInfo> = analysis_results
         .iter()
         .map(|a| (a.path.clone(), a))
         .collect();

@@ -30,9 +30,9 @@ pub fn create_test_result_with_files(path: &str, files: Vec<FileInfo>) -> Analys
     }
 }
 
-/// Create a test result with sample CallInfo data for downstream issues.
+/// Create a test result for symbol focus mode.
 #[allow(dead_code)]
-pub fn create_test_result_with_calls(path: &str) -> AnalysisResult {
+pub fn create_test_result_symbol_focus(path: &str) -> AnalysisResult {
     AnalysisResult {
         path: path.to_string(),
         mode: AnalysisMode::SymbolFocus,

@@ -50,20 +50,7 @@ impl CodeAnalyzer {
             AnalysisMode::Overview => {
                 let path = Path::new(&params.path);
                 match analyze::analyze_directory(path, params.max_depth) {
-                    Ok(output) => {
-                        let file_infos = output
-                            .files
-                            .iter()
-                            .map(|f| types::FileInfo {
-                                path: f.path.clone(),
-                                language: f.language.clone(),
-                                line_count: f.line_count,
-                                function_count: f.function_count,
-                                class_count: f.class_count,
-                            })
-                            .collect();
-                        (output.formatted, file_infos)
-                    }
+                    Ok(output) => (output.formatted, output.files),
                     Err(e) => (format!("Error analyzing directory: {}", e), vec![]),
                 }
             }
