@@ -1,4 +1,9 @@
+pub mod analyze;
+pub mod formatter;
 pub mod lang;
+pub mod languages;
+pub mod parser;
+pub mod traversal;
 pub mod types;
 
 use rmcp::handler::server::tool::ToolRouter;
@@ -9,7 +14,10 @@ use rmcp::model::{
 };
 use rmcp::{tool, tool_handler, tool_router, ServerHandler};
 use tracing::instrument;
-use types::{AnalysisResult, AnalyzeParams};
+use types::AnalyzeParams;
+
+use analyze::{analyze_directory, determine_mode};
+use types::AnalysisMode;
 
 #[derive(Clone)]
 pub struct CodeAnalyzer {
@@ -33,27 +41,21 @@ impl CodeAnalyzer {
         params: Parameters<AnalyzeParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
-        let mock_result = AnalysisResult {
-            path: params.path.clone(),
-            mode: params.mode,
-            import_count: 0,
-            main_line: None,
-            files: vec![],
-            functions: vec![],
-            classes: vec![],
-            references: vec![],
+        let path = std::path::Path::new(&params.path);
+        let mode = determine_mode(path, &params);
+        let max_depth = params.max_depth.unwrap_or(0) as usize;
+
+        let output = match mode {
+            AnalysisMode::Overview => analyze_directory(path, max_depth),
+            _ => format!(
+                "Mode '{:?}' is not yet implemented. Provide a directory path for structure overview.",
+                mode
+            ),
         };
 
-        let json_output = serde_json::to_string(&mock_result).unwrap_or_else(|_| "{}".to_string());
-
-        let summary = format!(
-            "Analysis of {} completed. Found 0 imports, 0 functions, 0 classes.",
-            params.path
-        );
-
-        let assistant_content = RawContent::text(json_output).with_audience(vec![Role::Assistant]);
-
-        let user_content = RawContent::text(summary)
+        let assistant_content =
+            RawContent::text(output.clone()).with_audience(vec![Role::Assistant]);
+        let user_content = RawContent::text(output)
             .with_audience(vec![Role::User])
             .with_priority(0.0);
 
