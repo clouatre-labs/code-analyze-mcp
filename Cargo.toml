@@ -3,7 +3,7 @@ name = "code-analyze-mcp"
 version = "0.1.0"
 edition = "2021"
 authors = ["Hugues Clouatre"]
-license = "MIT"
+license = "Apache-2.0"
 description = "MCP server for code structure analysis using tree-sitter"
 
 [dependencies]
