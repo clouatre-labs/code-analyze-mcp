@@ -1,5 +1,5 @@
 use crate::traversal::WalkEntry;
-use crate::types::FileInfo;
+use crate::types::{FileInfo, SemanticAnalysis};
 use std::collections::HashMap;
 use tracing::instrument;
 
@@ -105,6 +105,91 @@ pub fn format_structure(
             // Skip files not in analysis_map (binary/unreadable files)
         } else {
             output.push_str(&format!("{}{}/\n", indent, name));
+        }
+    }
+
+    output
+}
+
+/// Format file-level semantic analysis results.
+#[instrument(skip_all)]
+pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: usize) -> String {
+    let mut output = String::new();
+
+    // FILE: header with counts
+    output.push_str(&format!(
+        "FILE: {} ({}L, {}F, {}C, {}I)\n",
+        path,
+        line_count,
+        analysis.functions.len(),
+        analysis.classes.len(),
+        analysis.imports.len()
+    ));
+
+    // C: section with classes
+    if !analysis.classes.is_empty() {
+        output.push_str("C:\n");
+        for class in &analysis.classes {
+            output.push_str(&format!("  {}:{}\n", class.name, class.line));
+        }
+    }
+
+    // F: section with functions and call frequency
+    if !analysis.functions.is_empty() {
+        output.push_str("F:\n");
+        let mut line = String::from("  ");
+        for (i, func) in analysis.functions.iter().enumerate() {
+            let call_marker = if let Some(&count) = analysis.call_frequency.get(&func.name) {
+                if count > 3 {
+                    format!("{}:{}•{}", func.name, func.line, count)
+                } else {
+                    format!("{}:{}", func.name, func.line)
+                }
+            } else {
+                format!("{}:{}", func.name, func.line)
+            };
+
+            if i == 0 {
+                line.push_str(&call_marker);
+            } else if line.len() + call_marker.len() + 2 > 100 {
+                output.push_str(&line);
+                output.push('\n');
+                line = format!("  {}", call_marker);
+            } else {
+                line.push_str(", ");
+                line.push_str(&call_marker);
+            }
+        }
+        if !line.trim().is_empty() {
+            output.push_str(&line);
+            output.push('\n');
+        }
+    }
+
+    // I: section with imports grouped by module
+    if !analysis.imports.is_empty() {
+        output.push_str("I:\n");
+        let mut module_map: HashMap<String, Vec<String>> = HashMap::new();
+        for import in &analysis.imports {
+            module_map
+                .entry(import.module.clone())
+                .or_default()
+                .extend(import.items.clone());
+        }
+
+        let mut modules: Vec<_> = module_map.keys().collect();
+        modules.sort();
+        for module in modules {
+            let items = &module_map[module];
+            output.push_str(&format!("  {} ({})\n", module, items.len()));
+        }
+    }
+
+    // R: section with references (conditional)
+    if !analysis.references.is_empty() {
+        output.push_str("R:\n");
+        for reference in &analysis.references {
+            output.push_str(&format!("  {}\n", reference));
         }
     }
 

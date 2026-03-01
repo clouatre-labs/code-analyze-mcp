@@ -1,6 +1,6 @@
 mod fixtures;
 
-use code_analyze_mcp::analyze::{analyze_directory, determine_mode};
+use code_analyze_mcp::analyze::{analyze_directory, analyze_file, determine_mode};
 use code_analyze_mcp::traversal::walk_directory;
 use code_analyze_mcp::types::AnalysisMode;
 use std::fs;
@@ -265,4 +265,128 @@ fn test_determine_mode_with_focus() {
 
     let mode = determine_mode(root.to_str().unwrap(), Some("my_function"));
     assert_eq!(mode, AnalysisMode::SymbolFocus);
+}
+
+#[test]
+fn test_semantic_analysis_happy_path() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+
+    let rust_code = r#"
+use std::collections::HashMap;
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Point {
+    fn new(x: i32, y: i32) -> Self {
+        Point { x, y }
+    }
+
+    fn distance(&self) -> f64 {
+        ((self.x * self.x + self.y * self.y) as f64).sqrt()
+    }
+}
+
+fn calculate(a: i32, b: i32) -> i32 {
+    let result = a + b;
+    process(result);
+    process(result);
+    process(result);
+    process(result);
+    result
+}
+
+fn process(x: i32) -> i32 {
+    x * 2
+}
+"#;
+
+    fs::write(&file_path, rust_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify FILE: header with counts
+    assert!(output.formatted.contains("FILE:"));
+    assert!(output.formatted.contains("test.rs"));
+    assert!(output.formatted.contains("L,"));
+    assert!(output.formatted.contains("F,"));
+    assert!(output.formatted.contains("C,"));
+    assert!(output.formatted.contains("I)"));
+
+    // Verify functions extracted (new, distance, calculate, process)
+    assert_eq!(output.semantic.functions.len(), 4);
+    assert!(output.semantic.functions.iter().any(|f| f.name == "new"));
+    assert!(
+        output
+            .semantic
+            .functions
+            .iter()
+            .any(|f| f.name == "distance")
+    );
+    assert!(
+        output
+            .semantic
+            .functions
+            .iter()
+            .any(|f| f.name == "calculate")
+    );
+    assert!(
+        output
+            .semantic
+            .functions
+            .iter()
+            .any(|f| f.name == "process")
+    );
+
+    // Verify classes extracted
+    assert_eq!(output.semantic.classes.len(), 1);
+    assert_eq!(output.semantic.classes[0].name, "Point");
+
+    // Verify imports extracted
+    assert_eq!(output.semantic.imports.len(), 1);
+    assert_eq!(output.semantic.imports[0].module, "std");
+
+    // Verify C: section present
+    assert!(output.formatted.contains("C:"));
+    assert!(output.formatted.contains("Point:"));
+
+    // Verify F: section present
+    assert!(output.formatted.contains("F:"));
+
+    // Verify I: section present
+    assert!(output.formatted.contains("I:"));
+    assert!(output.formatted.contains("std"));
+
+    // Verify call frequency tracking (process called 4 times, should have bullet)
+    assert!(output.semantic.call_frequency.contains_key("process"));
+    assert_eq!(output.semantic.call_frequency["process"], 4);
+    assert!(output.formatted.contains("•4"));
+}
+
+#[test]
+fn test_semantic_analysis_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.rs");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify FILE: header still present
+    assert!(output.formatted.contains("FILE:"));
+    assert!(output.formatted.contains("empty.rs"));
+
+    // Verify empty sections handled gracefully
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+    assert_eq!(output.semantic.imports.len(), 0);
+
+    // Verify no C:, F:, I:, R: sections for empty file
+    assert!(!output.formatted.contains("C:"));
+    assert!(!output.formatted.contains("F:"));
+    assert!(!output.formatted.contains("I:"));
+    assert!(!output.formatted.contains("R:"));
 }

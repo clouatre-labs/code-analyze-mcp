@@ -1,8 +1,8 @@
-use crate::formatter::format_structure;
+use crate::formatter::{format_file_details, format_structure};
 use crate::lang::language_from_extension;
-use crate::parser::ElementExtractor;
+use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::traversal::{WalkEntry, walk_directory};
-use crate::types::{AnalysisMode, FileInfo};
+use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis};
 use rayon::prelude::*;
 use std::path::Path;
 use thiserror::Error;
@@ -20,6 +20,13 @@ pub enum AnalyzeError {
 pub struct AnalysisOutput {
     pub formatted: String,
     pub files: Vec<FileInfo>,
+}
+
+/// Result of file-level semantic analysis.
+pub struct FileAnalysisOutput {
+    pub formatted: String,
+    pub semantic: SemanticAnalysis,
+    pub line_count: usize,
 }
 
 /// Analyze a directory structure and return formatted output and file data.
@@ -101,4 +108,36 @@ pub fn determine_mode(path: &str, focus: Option<&str>) -> AnalysisMode {
     } else {
         AnalysisMode::FileDetails
     }
+}
+
+/// Analyze a single file and return semantic analysis with formatted output.
+#[instrument(skip_all, fields(path))]
+pub fn analyze_file(
+    path: &str,
+    ast_recursion_limit: Option<usize>,
+) -> Result<FileAnalysisOutput, AnalyzeError> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|e| AnalyzeError::Parser(crate::parser::ParserError::ParseError(e.to_string())))?;
+
+    let line_count = source.lines().count();
+
+    // Detect language from extension
+    let ext = Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(language_from_extension)
+        .map(|l| l.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // Extract semantic information
+    let semantic = SemanticExtractor::extract(&source, &ext, ast_recursion_limit)?;
+
+    // Format output
+    let formatted = format_file_details(path, &semantic, line_count);
+
+    Ok(FileAnalysisOutput {
+        formatted,
+        semantic,
+        line_count,
+    })
 }
