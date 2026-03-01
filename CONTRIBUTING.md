@@ -92,3 +92,45 @@ Ensure your commits are GPG-signed and all CI checks pass before opening a pull 
 ## License
 
 By contributing, you agree your contributions are licensed under [Apache-2.0](LICENSE).
+
+## AI Agent Contributions
+
+This section covers workflows for using **GitHub Copilot coding agent** to implement issues.
+
+### Authoring Issues for Agents
+
+A good agent-assignable issue includes:
+
+- **Self-contained scope** with explicit deliverables and acceptance criteria checkboxes
+- **Tool interfaces** with exact signatures (types, annotations, return types)
+- **Key crates** with verified API surface (not based on training data)
+- **Design notes** for non-obvious decisions
+- **"Not In Scope"** section to prevent scope creep
+- **Dependency chain** (`Depends on: #N`) for ordering
+
+### Assigning Copilot
+
+**REST API:**
+```bash
+gh api repos/{owner}/{repo}/issues/{number} --method PATCH -f "assignees[]=copilot-swe-agent[bot]"
+```
+
+**UI:** Issue sidebar → Assignees → select `copilot-swe-agent[bot]`.
+
+- Assign issues only after their dependencies have merged (wave-based)
+- One Copilot assignment per issue — it opens a PR autonomously
+
+### PR Review Checklist
+
+- [ ] Acceptance criteria checkboxes from the issue are satisfied
+- [ ] `cargo fmt --check && cargo clippy -- -D warnings && cargo test` all pass
+- [ ] No scope creep beyond the issue deliverables
+- [ ] No hallucinated APIs (methods verified against installed crate versions)
+- [ ] Conventional commit message with DCO sign-off (`Signed-off-by:`)
+
+### Iteration Pattern
+
+1. Comment `@copilot` on the PR with specific, actionable feedback
+2. Agent pushes follow-up commits addressing the feedback
+3. Re-review after each iteration
+4. If the agent cannot resolve after two iterations: close the PR, amend the issue with clarifications, and re-assign
