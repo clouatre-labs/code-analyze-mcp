@@ -14,7 +14,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
     match lang_name {
         "rust" => Some(LanguageInfo {
             name: "rust",
-            language: tree_sitter_rust::language(),
+            language: tree_sitter_rust::LANGUAGE.into(),
             element_query: rust::ELEMENT_QUERY,
         }),
         _ => None,

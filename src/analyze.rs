@@ -1,7 +1,7 @@
 use crate::formatter::format_structure;
 use crate::lang::language_from_extension;
 use crate::parser::ElementExtractor;
-use crate::traversal::{walk_directory, WalkEntry};
+use crate::traversal::{WalkEntry, walk_directory};
 use crate::types::{AnalysisMode, FileInfo};
 use rayon::prelude::*;
 use std::path::Path;

@@ -2,7 +2,7 @@ use crate::languages::get_language_info;
 use std::cell::RefCell;
 use thiserror::Error;
 use tracing::instrument;
-use tree_sitter::{Parser, Query, QueryCursor};
+use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 #[derive(Debug, Error)]
 pub enum ParserError {
@@ -47,7 +47,8 @@ impl ElementExtractor {
         let mut function_count = 0;
         let mut class_count = 0;
 
-        for mat in cursor.matches(&query, tree.root_node(), source.as_bytes()) {
+        let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+        while let Some(mat) = matches.next() {
             for capture in mat.captures {
                 let capture_name = query.capture_names()[capture.index as usize];
                 match capture_name {

@@ -29,10 +29,10 @@ pub fn walk_directory(
     builder.hidden(true).standard_filters(true);
 
     // Map max_depth: 0 = unlimited (None), positive = Some(n)
-    if let Some(depth) = max_depth {
-        if depth > 0 {
-            builder.max_depth(Some(depth as usize));
-        }
+    if let Some(depth) = max_depth
+        && depth > 0
+    {
+        builder.max_depth(Some(depth as usize));
     }
 
     let mut entries = Vec::new();
