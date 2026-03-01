@@ -12,7 +12,7 @@ use rmcp::model::{
     AnnotateAble, CallToolResult, ErrorData, Implementation, InitializeResult, ProtocolVersion,
     RawContent, Role,
 };
-use rmcp::{tool, tool_handler, tool_router, ServerHandler};
+use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use std::path::Path;
 use tracing::instrument;
 use types::{AnalysisMode, AnalysisResult, AnalyzeParams};

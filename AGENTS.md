@@ -62,16 +62,18 @@ impl MyServer {
 
 ## tree-sitter patterns
 
-- Use `tree-sitter` 0.21 with language-specific grammar crates
+- Use `tree-sitter` 0.26+ with language-specific grammar crates
+- Grammar crates export `LANGUAGE` const; use `tree_sitter_rust::LANGUAGE.into()` pattern
 - Parse files with `Parser::new()`, set language, then `parser.parse(source, None)`
+- Query results use `StreamingIterator`; iterate with `while let Some(mat) = matches.next()`
 - Walk the tree with `TreeCursor` for efficient traversal
 - Node kinds are language-specific; check grammar definitions
 - All analysis is read-only; tree-sitter does not modify source files
 
 ## Rust conventions
 
-- Edition 2021 idioms
-- `thiserror` for all error types; no `anyhow` (library-style crate)
+- Edition 2024 idioms
+- `thiserror` 2.x for all error types; no `anyhow` (library-style crate)
 - `tokio` for async; `#[instrument]` on all async functions via `tracing`
 - `schemars` 1.x for JSON Schema generation; use `#[schemars(description = "...")]` on every field
 - `serde` + `serde_json` for serialization
