@@ -347,7 +347,7 @@ fn process(x: i32) -> i32 {
 
     // Verify imports extracted
     assert_eq!(output.semantic.imports.len(), 1);
-    assert_eq!(output.semantic.imports[0].module, "std");
+    assert_eq!(output.semantic.imports[0].module, "std::collections");
 
     // Verify C: section present
     assert!(output.formatted.contains("C:"));

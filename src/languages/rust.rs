@@ -56,15 +56,20 @@ pub fn extract_function_name(node: &Node, source: &str, _query_name: &str) -> Op
 /// Find method name for a receiver type.
 pub fn find_method_for_receiver(
     node: &Node,
-    _source: &str,
+    source: &str,
     _depth: Option<usize>,
 ) -> Option<String> {
     if node.kind() != "method_item" && node.kind() != "function_item" {
         return None;
     }
     node.child_by_field_name("name").and_then(|n| {
-        let text = n.utf8_text(&[]).ok()?;
-        Some(text.to_string())
+        let start = n.start_byte();
+        let end = n.end_byte();
+        if end <= source.len() {
+            Some(source[start..end].to_string())
+        } else {
+            None
+        }
     })
 }
 

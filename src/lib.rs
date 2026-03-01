@@ -89,17 +89,9 @@ impl CodeAnalyzer {
                                 fields: c.fields.clone(),
                             })
                             .collect();
-                        let references = output
-                            .semantic
-                            .references
-                            .iter()
-                            .map(|r| types::ReferenceInfo {
-                                symbol: r.clone(),
-                                reference_type: types::ReferenceType::Usage,
-                                location: params.path.clone(),
-                                line: 0,
-                            })
-                            .collect();
+                        // References are currently omitted because location and reference-type
+                        // information is not yet propagated to AnalysisResult consumers.
+                        let references: Vec<types::ReferenceInfo> = Vec::new();
                         (
                             output.formatted,
                             vec![],

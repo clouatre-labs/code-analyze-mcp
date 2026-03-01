@@ -134,20 +134,31 @@ pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: 
         }
     }
 
-    // F: section with functions and call frequency
+    // F: section with functions, parameters, return types and call frequency
     if !analysis.functions.is_empty() {
         output.push_str("F:\n");
         let mut line = String::from("  ");
         for (i, func) in analysis.functions.iter().enumerate() {
-            let call_marker = if let Some(&count) = analysis.call_frequency.get(&func.name) {
+            let params_display = func.parameters.first().map(|p| p.as_str()).unwrap_or("()");
+            let ret_display = func
+                .return_type
+                .as_deref()
+                .map(|r| format!(" {}", r))
+                .unwrap_or_default();
+            let call_suffix = if let Some(&count) = analysis.call_frequency.get(&func.name) {
                 if count > 3 {
-                    format!("{}:{}•{}", func.name, func.line, count)
+                    format!("•{}", count)
                 } else {
-                    format!("{}:{}", func.name, func.line)
+                    String::new()
                 }
             } else {
-                format!("{}:{}", func.name, func.line)
+                String::new()
             };
+
+            let call_marker = format!(
+                "{}{}{}:{}{}",
+                func.name, params_display, ret_display, func.line, call_suffix
+            );
 
             if i == 0 {
                 line.push_str(&call_marker);
@@ -169,27 +180,30 @@ pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: 
     // I: section with imports grouped by module
     if !analysis.imports.is_empty() {
         output.push_str("I:\n");
-        let mut module_map: HashMap<String, Vec<String>> = HashMap::new();
+        let mut module_map: HashMap<String, usize> = HashMap::new();
         for import in &analysis.imports {
             module_map
                 .entry(import.module.clone())
-                .or_default()
-                .extend(import.items.clone());
+                .and_modify(|count| *count += 1)
+                .or_insert(1);
         }
 
         let mut modules: Vec<_> = module_map.keys().collect();
         modules.sort();
         for module in modules {
-            let items = &module_map[module];
-            output.push_str(&format!("  {} ({})\n", module, items.len()));
+            let count = module_map[module];
+            output.push_str(&format!("  {} ({})\n", module, count));
         }
     }
 
-    // R: section with references (conditional)
+    // R: section with references and line numbers
     if !analysis.references.is_empty() {
         output.push_str("R:\n");
         for reference in &analysis.references {
-            output.push_str(&format!("  {}\n", reference));
+            output.push_str(&format!(
+                "  {} (line {}, Usage)\n",
+                reference.symbol, reference.line
+            ));
         }
     }
 

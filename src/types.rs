@@ -131,9 +131,13 @@ pub struct ElementQueryResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ImportInfo {
-    #[schemars(description = "Module path (e.g., 'std::collections')")]
+    #[schemars(
+        description = "Full module path excluding the imported symbol (e.g., 'std::collections' for 'use std::collections::HashMap')"
+    )]
     pub module: String,
-    #[schemars(description = "Imported items")]
+    #[schemars(
+        description = "Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap')"
+    )]
     pub items: Vec<String>,
     #[schemars(description = "Line number where import appears")]
     pub line: usize,
@@ -145,10 +149,12 @@ pub struct SemanticAnalysis {
     pub functions: Vec<FunctionInfo>,
     #[schemars(description = "Classes/structs")]
     pub classes: Vec<ClassInfo>,
-    #[schemars(description = "Imports grouped by module")]
+    #[schemars(
+        description = "Flat list of imports; each entry carries its full module path and imported symbols"
+    )]
     pub imports: Vec<ImportInfo>,
-    #[schemars(description = "Type references")]
-    pub references: Vec<String>,
+    #[schemars(description = "Type references with location information")]
+    pub references: Vec<ReferenceInfo>,
     #[schemars(description = "Call frequency map (function name -> count)")]
     pub call_frequency: HashMap<String, usize>,
 }
