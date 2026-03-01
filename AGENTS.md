@@ -3,8 +3,8 @@
 ## Project overview
 
 Rust MCP server providing code structure analysis tools (directory overview, file details, symbol call graphs) using tree-sitter.
-Rust edition 2021, async with tokio, MCP protocol via `rmcp` crate.
-Single-crate binary, MIT licensed.
+Rust edition 2024, async with tokio, MCP protocol via `rmcp` crate.
+Single crate, Apache-2.0 licensed.
 
 ## Commands
 
@@ -74,7 +74,7 @@ impl MyServer {
 
 - Edition 2024 idioms
 - `thiserror` 2.x for all error types; no `anyhow` (library-style crate)
-- `tokio` for async; `#[instrument]` on all async functions via `tracing`
+- `tokio` for async; `#[instrument]` on key functions via `tracing`
 - `schemars` 1.x for JSON Schema generation; use `#[schemars(description = "...")]` on every field
 - `serde` + `serde_json` for serialization
 - No `unwrap()` or `expect()` in library code; use `?` with typed errors
@@ -87,7 +87,6 @@ impl MyServer {
 - MCP tool annotations: `read_only_hint = true` for all tools (this server is read-only)
 - Three analysis modes: directory overview, file details, symbol focus (call graphs)
 - `rayon` for parallel file processing; `ignore` crate for .gitignore-aware directory walking
-- `lru` crate for parse tree caching
 
 ## Code style
 
