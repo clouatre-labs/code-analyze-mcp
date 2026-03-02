@@ -2,9 +2,12 @@
 
 ## Project overview
 
-Rust MCP server providing code structure analysis tools (directory overview, file details, symbol call graphs) using tree-sitter.
-Rust edition 2024, async with tokio, MCP protocol via `rmcp` crate.
-Single crate, Apache-2.0 licensed.
+- Rust MCP server for code structure analysis using tree-sitter
+- 9 languages planned; only Rust is implemented
+- Three analysis modes: Overview, FileDetails (implemented); SymbolFocus (planned Wave 3)
+- Rust edition 2024, async with tokio, MCP protocol via `rmcp`
+- Single crate, Apache-2.0 licensed
+- See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for design and module map
 
 ## Commands
 
@@ -18,9 +21,11 @@ cargo deny check advisories licenses
 
 ## API verification (critical)
 
-Do not rely on training data for `rmcp`, `schemars`, or `thiserror` APIs. These crates evolve rapidly.
-Before using any API: check `Cargo.lock` for the installed version, then verify the method exists in the crate source under `~/.cargo/registry/src/` or by running `cargo doc --open`.
-If the repo has existing source code, follow the patterns already established there. Existing code is the most reliable reference.
+- Do not rely on training data for `rmcp`, `schemars`, or `thiserror` APIs
+- These crates evolve rapidly
+- Check `Cargo.lock` for the installed version before using any API
+- Verify the method exists in crate source under `~/.cargo/registry/src/` or via `cargo doc --open`
+- Follow patterns already established in existing code; it is the most reliable reference
 
 ## rmcp patterns (verify against installed version)
 
@@ -56,7 +61,8 @@ impl MyServer {
 }
 ```
 
-- Tool annotations: `read_only_hint`, `destructive_hint`, `idempotent_hint`, `open_world_hint` (all `Option<bool>`)
+- Tool annotations (all `Option<bool>`):
+  `read_only_hint`, `destructive_hint`, `idempotent_hint`, `open_world_hint`
 - `ServerHandler` impl with `#[tool_handler]` macro for `call_tool` and `list_tools`
 - Transport: `transport-io` feature for stdio
 
@@ -85,7 +91,10 @@ impl MyServer {
 
 - `Parameters<T>` struct pattern for tool parameters (see rmcp example above)
 - MCP tool annotations: `read_only_hint = true` for all tools (this server is read-only)
-- Three analysis modes: directory overview, file details, symbol focus (call graphs)
+- Analysis modes: Overview (directory tree), FileDetails (semantic extraction) are implemented
+- SymbolFocus (call graphs) is planned for Wave 3
+- Language handler system: `LanguageInfo` registry with tree-sitter queries and semantic handlers
+- Adding a language: see [ARCHITECTURE.md](docs/ARCHITECTURE.md#language-handler-system)
 - `rayon` for parallel file processing; `ignore` crate for .gitignore-aware directory walking
 
 ## Code style
@@ -103,8 +112,21 @@ impl MyServer {
 - DCO sign-off all commits: `--signoff` flag
 - Do not add co-author trailers for AI agents
 
-## Reference documentation (for agents with web access)
+## Project status
 
+- Only Rust language support is implemented
+- README.md shows 9 languages; that is aspirational
+- Roadmap: [issue #1](https://github.com/clouatre-labs/code-analyze-mcp/issues/1)
+- Wave 0 (Foundation): complete
+- Wave 1 (Tooling): complete
+- Wave 2 (Overview, FileDetails modes; Rust): in progress
+- Wave 3 (SymbolFocus / call graphs): planned
+- Wave 4 (Caching, performance): planned
+
+## Design references
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - design, module map, data flow, language handlers
+- [README.md](README.md) - Quick start, tool interface, analysis modes, supported languages
 - rmcp: https://docs.rs/rmcp/latest/rmcp/
 - MCP specification: https://spec.modelcontextprotocol.io/
 - tree-sitter: https://tree-sitter.github.io/tree-sitter/
