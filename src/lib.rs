@@ -46,31 +46,89 @@ impl CodeAnalyzer {
             .unwrap_or_else(|| analyze::determine_mode(&params.path, params.focus.as_deref()));
 
         // Dispatch based on mode
-        let (result_text, files) = match mode {
+        let (result_text, files, functions, classes, references, import_count) = match mode {
             AnalysisMode::Overview => {
                 let path = Path::new(&params.path);
                 match analyze::analyze_directory(path, params.max_depth) {
-                    Ok(output) => (output.formatted, output.files),
-                    Err(e) => (format!("Error analyzing directory: {}", e), vec![]),
+                    Ok(output) => (output.formatted, output.files, vec![], vec![], vec![], 0),
+                    Err(e) => (
+                        format!("Error analyzing directory: {}", e),
+                        vec![],
+                        vec![],
+                        vec![],
+                        vec![],
+                        0,
+                    ),
                 }
             }
             AnalysisMode::FileDetails => {
-                ("File details mode not yet implemented".to_string(), vec![])
+                match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
+                    Ok(output) => {
+                        let import_count = output.semantic.imports.len();
+                        let functions = output
+                            .semantic
+                            .functions
+                            .iter()
+                            .map(|f| types::FunctionInfo {
+                                name: f.name.clone(),
+                                line: f.line,
+                                end_line: f.end_line,
+                                parameters: f.parameters.clone(),
+                                return_type: f.return_type.clone(),
+                            })
+                            .collect();
+                        let classes = output
+                            .semantic
+                            .classes
+                            .iter()
+                            .map(|c| types::ClassInfo {
+                                name: c.name.clone(),
+                                line: c.line,
+                                end_line: c.end_line,
+                                methods: c.methods.clone(),
+                                fields: c.fields.clone(),
+                            })
+                            .collect();
+                        // references now carry accurate location + line data (set by analyze_file)
+                        let references = output.semantic.references.clone();
+                        (
+                            output.formatted,
+                            vec![],
+                            functions,
+                            classes,
+                            references,
+                            import_count,
+                        )
+                    }
+                    Err(e) => (
+                        format!("Error analyzing file: {}", e),
+                        vec![],
+                        vec![],
+                        vec![],
+                        vec![],
+                        0,
+                    ),
+                }
             }
-            AnalysisMode::SymbolFocus => {
-                ("Symbol focus mode not yet implemented".to_string(), vec![])
-            }
+            AnalysisMode::SymbolFocus => (
+                "Symbol focus mode not yet implemented".to_string(),
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                0,
+            ),
         };
 
         let result = AnalysisResult {
             path: params.path.clone(),
             mode,
-            import_count: 0,
+            import_count,
             main_line: None,
             files,
-            functions: vec![],
-            classes: vec![],
-            references: vec![],
+            functions,
+            classes,
+            references,
         };
 
         let json_output = serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string());

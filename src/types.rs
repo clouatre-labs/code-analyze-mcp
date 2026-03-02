@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeParams {
@@ -20,6 +21,9 @@ pub struct AnalyzeParams {
 
     #[schemars(description = "Call graph depth for symbol_focus mode")]
     pub follow_depth: Option<u32>,
+
+    #[schemars(description = "Maximum AST recursion depth for tree-sitter queries")]
+    pub ast_recursion_limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -123,4 +127,34 @@ pub struct ElementQueryResult {
     pub query: String,
     pub results: Vec<String>,
     pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ImportInfo {
+    #[schemars(
+        description = "Full module path excluding the imported symbol (e.g., 'std::collections' for 'use std::collections::HashMap')"
+    )]
+    pub module: String,
+    #[schemars(
+        description = "Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap')"
+    )]
+    pub items: Vec<String>,
+    #[schemars(description = "Line number where import appears")]
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SemanticAnalysis {
+    #[schemars(description = "Functions with parameters and return types")]
+    pub functions: Vec<FunctionInfo>,
+    #[schemars(description = "Classes/structs")]
+    pub classes: Vec<ClassInfo>,
+    #[schemars(
+        description = "Flat list of imports; each entry carries its full module path and imported symbols"
+    )]
+    pub imports: Vec<ImportInfo>,
+    #[schemars(description = "Type references with location information")]
+    pub references: Vec<ReferenceInfo>,
+    #[schemars(description = "Call frequency map (function name -> count)")]
+    pub call_frequency: HashMap<String, usize>,
 }
