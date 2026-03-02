@@ -89,17 +89,8 @@ impl CodeAnalyzer {
                                 fields: c.fields.clone(),
                             })
                             .collect();
-                        let references = output
-                            .semantic
-                            .references
-                            .iter()
-                            .map(|r| types::ReferenceInfo {
-                                symbol: r.clone(),
-                                reference_type: types::ReferenceType::Usage,
-                                location: params.path.clone(),
-                                line: 0,
-                            })
-                            .collect();
+                        // references now carry accurate location + line data (set by analyze_file)
+                        let references = output.semantic.references.clone();
                         (
                             output.formatted,
                             vec![],
