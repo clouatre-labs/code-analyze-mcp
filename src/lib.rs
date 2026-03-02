@@ -156,7 +156,7 @@ impl Default for CodeAnalyzer {
 impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
         InitializeResult {
-            protocol_version: ProtocolVersion::V_2024_11_05,
+            protocol_version: ProtocolVersion::LATEST,
             capabilities: Default::default(),
             server_info: Implementation {
                 name: "code-analyze-mcp".into(),
