@@ -10,7 +10,7 @@ use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
     AnnotateAble, CallToolResult, ErrorData, Implementation, InitializeResult, ProtocolVersion,
-    RawContent, Role,
+    RawContent, Role, ServerCapabilities,
 };
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use std::path::Path;
@@ -32,7 +32,13 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self))]
     #[tool(
-        description = "Analyze code structure in 3 modes: 1) Directory overview - file tree with LOC/function/class counts to max_depth. 2) File details - functions, classes, imports. 3) Symbol focus - call graphs across directory to max_depth (requires directory path, case-sensitive). Typical flow: directory → files → symbols. Functions called >3x show •N."
+        description = "Analyze code structure in 3 modes: 1) Directory overview - file tree with LOC/function/class counts to max_depth. 2) File details - functions, classes, imports. 3) Symbol focus - call graphs across directory to max_depth (requires directory path, case-sensitive). Typical flow: directory → files → symbols. Functions called >3x show •N.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn analyze(
         &self,
@@ -156,8 +162,8 @@ impl Default for CodeAnalyzer {
 impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
         InitializeResult {
-            protocol_version: ProtocolVersion::V_2024_11_05,
-            capabilities: Default::default(),
+            protocol_version: ProtocolVersion::V_2025_06_18,
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation {
                 name: "code-analyze-mcp".into(),
                 version: "0.1.0".into(),
@@ -168,7 +174,7 @@ impl ServerHandler for CodeAnalyzer {
                 icons: None,
                 website_url: None,
             },
-            instructions: None,
+            instructions: Some("Analyze code structure using three modes: directory overview (file tree with metrics), file details (functions/classes/imports), or symbol focus (call graphs). Provide a path and optionally specify mode and max_depth.".into()),
         }
     }
 }
