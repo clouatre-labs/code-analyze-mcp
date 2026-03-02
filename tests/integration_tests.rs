@@ -345,6 +345,16 @@ fn process(x: i32) -> i32 {
     assert_eq!(output.semantic.classes.len(), 1);
     assert_eq!(output.semantic.classes[0].name, "Point");
 
+    // Verify impl methods populated on the class
+    assert_eq!(output.semantic.classes[0].methods.len(), 2);
+    let method_names: Vec<&str> = output.semantic.classes[0]
+        .methods
+        .iter()
+        .map(|m| m.name.as_str())
+        .collect();
+    assert!(method_names.contains(&"new"));
+    assert!(method_names.contains(&"distance"));
+
     // Verify imports extracted
     assert_eq!(output.semantic.imports.len(), 1);
     assert_eq!(output.semantic.imports[0].module, "std::collections");
@@ -364,6 +374,25 @@ fn process(x: i32) -> i32 {
     assert!(output.semantic.call_frequency.contains_key("process"));
     assert_eq!(output.semantic.call_frequency["process"], 4);
     assert!(output.formatted.contains("•4"));
+
+    // Verify references extracted with line numbers and location set
+    let point_ref = output
+        .semantic
+        .references
+        .iter()
+        .find(|r| r.symbol == "Point");
+    assert!(point_ref.is_some(), "expected a 'Point' type reference");
+    let point_ref = point_ref.unwrap();
+    assert!(point_ref.line > 0, "reference line should be non-zero");
+    assert!(
+        !point_ref.location.is_empty(),
+        "reference location should be populated with the file path"
+    );
+    assert!(
+        point_ref.location.ends_with("test.rs"),
+        "reference location should point to test.rs, got: {}",
+        point_ref.location
+    );
 }
 
 #[test]

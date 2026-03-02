@@ -89,9 +89,8 @@ impl CodeAnalyzer {
                                 fields: c.fields.clone(),
                             })
                             .collect();
-                        // References are currently omitted because location and reference-type
-                        // information is not yet propagated to AnalysisResult consumers.
-                        let references: Vec<types::ReferenceInfo> = Vec::new();
+                        // references now carry accurate location + line data (set by analyze_file)
+                        let references = output.semantic.references.clone();
                         (
                             output.formatted,
                             vec![],

@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use thiserror::Error;
 use tracing::instrument;
-use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{Node, Parser, Query, QueryCursor, StreamingIterator};
 
 #[derive(Debug, Error)]
 pub enum ParserError {
@@ -67,7 +67,132 @@ impl ElementExtractor {
     }
 }
 
-/// Semantic extractor for file-level analysis.
+/// Recursively extract `ImportInfo` entries from a use-clause node, respecting all Rust
+/// use-declaration forms (`scoped_identifier`, `scoped_use_list`, `use_list`,
+/// `use_as_clause`, `use_wildcard`, bare `identifier`).
+fn extract_imports_from_node(
+    node: &Node,
+    source: &str,
+    prefix: &str,
+    line: usize,
+    imports: &mut Vec<ImportInfo>,
+) {
+    match node.kind() {
+        // Simple identifier: `use foo;` or an item inside `{foo, bar}`
+        "identifier" | "self" | "super" | "crate" => {
+            let name = source[node.start_byte()..node.end_byte()].to_string();
+            imports.push(ImportInfo {
+                module: prefix.to_string(),
+                items: vec![name],
+                line,
+            });
+        }
+        // Qualified path: `std::collections::HashMap`
+        "scoped_identifier" => {
+            let item = node
+                .child_by_field_name("name")
+                .map(|n| source[n.start_byte()..n.end_byte()].to_string())
+                .unwrap_or_default();
+            let module = node
+                .child_by_field_name("path")
+                .map(|p| {
+                    let path_text = source[p.start_byte()..p.end_byte()].to_string();
+                    if prefix.is_empty() {
+                        path_text
+                    } else {
+                        format!("{}::{}", prefix, path_text)
+                    }
+                })
+                .unwrap_or_else(|| prefix.to_string());
+            if !item.is_empty() {
+                imports.push(ImportInfo {
+                    module,
+                    items: vec![item],
+                    line,
+                });
+            }
+        }
+        // `std::{io, fs}` — path prefix followed by a brace list
+        "scoped_use_list" => {
+            let new_prefix = node
+                .child_by_field_name("path")
+                .map(|p| {
+                    let path_text = source[p.start_byte()..p.end_byte()].to_string();
+                    if prefix.is_empty() {
+                        path_text
+                    } else {
+                        format!("{}::{}", prefix, path_text)
+                    }
+                })
+                .unwrap_or_else(|| prefix.to_string());
+            if let Some(list) = node.child_by_field_name("list") {
+                extract_imports_from_node(&list, source, &new_prefix, line, imports);
+            }
+        }
+        // `{HashMap, HashSet}` — brace-enclosed list of items
+        "use_list" => {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                match child.kind() {
+                    "{" | "}" | "," => {}
+                    _ => extract_imports_from_node(&child, source, prefix, line, imports),
+                }
+            }
+        }
+        // `std::io::*` — glob import
+        "use_wildcard" => {
+            let text = source[node.start_byte()..node.end_byte()].to_string();
+            let module = if let Some(stripped) = text.strip_suffix("::*") {
+                if prefix.is_empty() {
+                    stripped.to_string()
+                } else {
+                    format!("{}::{}", prefix, stripped)
+                }
+            } else {
+                prefix.to_string()
+            };
+            imports.push(ImportInfo {
+                module,
+                items: vec!["*".to_string()],
+                line,
+            });
+        }
+        // `io as stdio` or `std::io as stdio`
+        "use_as_clause" => {
+            let alias = node
+                .child_by_field_name("alias")
+                .map(|n| source[n.start_byte()..n.end_byte()].to_string())
+                .unwrap_or_default();
+            let module = if let Some(path_node) = node.child_by_field_name("path") {
+                match path_node.kind() {
+                    "scoped_identifier" => path_node
+                        .child_by_field_name("path")
+                        .map(|p| {
+                            let p_text = source[p.start_byte()..p.end_byte()].to_string();
+                            if prefix.is_empty() {
+                                p_text
+                            } else {
+                                format!("{}::{}", prefix, p_text)
+                            }
+                        })
+                        .unwrap_or_else(|| prefix.to_string()),
+                    _ => prefix.to_string(),
+                }
+            } else {
+                prefix.to_string()
+            };
+            if !alias.is_empty() {
+                imports.push(ImportInfo {
+                    module,
+                    items: vec![alias],
+                    line,
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
 pub struct SemanticExtractor;
 
 impl SemanticExtractor {
@@ -210,23 +335,8 @@ impl SemanticExtractor {
                 let capture_name = import_query.capture_names()[capture.index as usize];
                 if capture_name == "import_path" {
                     let node = capture.node;
-                    let import_path = source[node.start_byte()..node.end_byte()].to_string();
-                    let parts: Vec<&str> = import_path.split("::").collect();
-                    // module = full path excluding the last segment (imported symbol)
-                    // items  = [last segment] (the imported symbol)
-                    let (module, items) = if parts.len() > 1 {
-                        let module = parts[..parts.len() - 1].join("::");
-                        let item = parts.last().unwrap().to_string();
-                        (module, vec![item])
-                    } else {
-                        (import_path.clone(), Vec::new())
-                    };
-
-                    imports.push(ImportInfo {
-                        module,
-                        items,
-                        line: node.start_position().row + 1,
-                    });
+                    let line = node.start_position().row + 1;
+                    extract_imports_from_node(&node, source, "", line, &mut imports);
                 }
             }
         }
@@ -311,7 +421,7 @@ impl SemanticExtractor {
                             references.push(ReferenceInfo {
                                 symbol: type_ref,
                                 reference_type: ReferenceType::Usage,
-                                // location is populated by the caller once the file path is known
+                                // location is intentionally empty here; set by the caller (analyze_file)
                                 location: String::new(),
                                 line: node.start_position().row + 1,
                             });

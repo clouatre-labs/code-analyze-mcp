@@ -130,7 +130,12 @@ pub fn analyze_file(
         .unwrap_or_else(|| "unknown".to_string());
 
     // Extract semantic information
-    let semantic = SemanticExtractor::extract(&source, &ext, ast_recursion_limit)?;
+    let mut semantic = SemanticExtractor::extract(&source, &ext, ast_recursion_limit)?;
+
+    // Populate the file path on references now that the path is known
+    for r in &mut semantic.references {
+        r.location = path.to_string();
+    }
 
     // Format output
     let formatted = format_file_details(path, &semantic, line_count);
