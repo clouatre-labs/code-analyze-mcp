@@ -1,4 +1,5 @@
 pub mod analyze;
+pub mod cache;
 pub mod formatter;
 pub mod graph;
 pub mod lang;
@@ -7,6 +8,7 @@ pub mod parser;
 pub mod traversal;
 pub mod types;
 
+use cache::AnalysisCache;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -21,6 +23,7 @@ use types::{AnalysisMode, AnalysisResult, AnalyzeParams};
 #[derive(Clone)]
 pub struct CodeAnalyzer {
     tool_router: ToolRouter<Self>,
+    cache: AnalysisCache,
 }
 
 #[tool_router]
@@ -28,6 +31,7 @@ impl CodeAnalyzer {
     pub fn new() -> Self {
         CodeAnalyzer {
             tool_router: Self::tool_router(),
+            cache: AnalysisCache::new(100),
         }
     }
 
@@ -69,7 +73,39 @@ impl CodeAnalyzer {
                 }
             }
             AnalysisMode::FileDetails => {
-                match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
+                // Build cache key from file metadata
+                let cache_key = std::fs::metadata(&params.path).ok().and_then(|meta| {
+                    meta.modified().ok().map(|mtime| cache::CacheKey {
+                        path: std::path::PathBuf::from(&params.path),
+                        modified: mtime,
+                        mode: AnalysisMode::FileDetails,
+                    })
+                });
+
+                // Check cache first
+                let output_result = if let Some(ref key) = cache_key {
+                    if let Some(cached) = self.cache.get(key) {
+                        Ok(cached)
+                    } else {
+                        // Cache miss, analyze and store
+                        match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
+                            Ok(output) => {
+                                let arc_output = std::sync::Arc::new(output);
+                                self.cache.put(key.clone(), arc_output.clone());
+                                Ok(arc_output)
+                            }
+                            Err(e) => Err(format!("Error analyzing file: {}", e)),
+                        }
+                    }
+                } else {
+                    // No cache key available, analyze directly
+                    match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
+                        Ok(output) => Ok(std::sync::Arc::new(output)),
+                        Err(e) => Err(format!("Error analyzing file: {}", e)),
+                    }
+                };
+
+                match output_result {
                     Ok(output) => {
                         let import_count = output.semantic.imports.len();
                         let functions = output
@@ -99,7 +135,7 @@ impl CodeAnalyzer {
                         // references now carry accurate location + line data (set by analyze_file)
                         let references = output.semantic.references.clone();
                         (
-                            output.formatted,
+                            output.formatted.clone(),
                             vec![],
                             functions,
                             classes,
@@ -107,14 +143,7 @@ impl CodeAnalyzer {
                             import_count,
                         )
                     }
-                    Err(e) => (
-                        format!("Error analyzing file: {}", e),
-                        vec![],
-                        vec![],
-                        vec![],
-                        vec![],
-                        0,
-                    ),
+                    Err(e) => (e, vec![], vec![], vec![], vec![], 0),
                 }
             }
             AnalysisMode::SymbolFocus => {
@@ -138,6 +167,22 @@ impl CodeAnalyzer {
                     ),
                 }
             }
+        };
+
+        // Apply output size limiting
+        let line_count = result_text.lines().count();
+        let result_text = if line_count > 1000 && params.force != Some(true) {
+            let estimated_tokens = line_count * 40;
+            format!(
+                "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
+                 - force=true to return full output\n\
+                 - Narrow your scope (smaller directory, specific file)\n\
+                 - Use symbol_focus mode for targeted analysis\n\
+                 - Reduce max_depth parameter",
+                line_count, estimated_tokens
+            )
+        } else {
+            result_text
         };
 
         let result = AnalysisResult {
