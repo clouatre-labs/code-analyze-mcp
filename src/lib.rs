@@ -10,10 +10,9 @@ pub mod types;
 
 use cache::AnalysisCache;
 use rmcp::handler::server::tool::ToolRouter;
-use rmcp::handler::server::wrapper::Parameters;
+use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
-    AnnotateAble, CallToolResult, ErrorData, Implementation, InitializeResult, ProtocolVersion,
-    RawContent, Role, ServerCapabilities,
+    ErrorData, Implementation, InitializeResult, ProtocolVersion, ServerCapabilities,
 };
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use std::path::Path;
@@ -48,7 +47,7 @@ impl CodeAnalyzer {
     async fn analyze(
         &self,
         params: Parameters<AnalyzeParams>,
-    ) -> Result<CallToolResult, ErrorData> {
+    ) -> Result<Json<AnalysisResult>, ErrorData> {
         let params = params.0;
 
         // Determine mode if not provided
@@ -145,66 +144,70 @@ impl CodeAnalyzer {
         };
 
         // Extract fields from ModeResult
-        let (result_text, files, functions, classes, references, import_count) = match mode_result {
-            types::ModeResult::Overview(output) => {
-                (output.formatted, output.files, vec![], vec![], vec![], 0)
-            }
-            types::ModeResult::FileDetails(output) => {
-                let import_count = output.semantic.imports.len();
-                let functions = output
-                    .semantic
-                    .functions
-                    .iter()
-                    .map(|f| types::FunctionInfo {
-                        name: f.name.clone(),
-                        line: f.line,
-                        end_line: f.end_line,
-                        parameters: f.parameters.clone(),
-                        return_type: f.return_type.clone(),
-                    })
-                    .collect();
-                let classes = output
-                    .semantic
-                    .classes
-                    .iter()
-                    .map(|c| types::ClassInfo {
-                        name: c.name.clone(),
-                        line: c.line,
-                        end_line: c.end_line,
-                        methods: c.methods.clone(),
-                        fields: c.fields.clone(),
-                    })
-                    .collect();
-                let references = output.semantic.references.clone();
-                (
-                    output.formatted,
-                    vec![],
-                    functions,
-                    classes,
-                    references,
-                    import_count,
-                )
-            }
-            types::ModeResult::SymbolFocus(output) => {
-                (output.formatted, vec![], vec![], vec![], vec![], 0)
-            }
-        };
+        let (formatted_output, files, functions, classes, references, import_count) =
+            match mode_result {
+                types::ModeResult::Overview(output) => {
+                    (output.formatted, output.files, vec![], vec![], vec![], 0)
+                }
+                types::ModeResult::FileDetails(output) => {
+                    let import_count = output.semantic.imports.len();
+                    let functions = output
+                        .semantic
+                        .functions
+                        .iter()
+                        .map(|f| types::FunctionInfo {
+                            name: f.name.clone(),
+                            line: f.line,
+                            end_line: f.end_line,
+                            parameters: f.parameters.clone(),
+                            return_type: f.return_type.clone(),
+                        })
+                        .collect();
+                    let classes = output
+                        .semantic
+                        .classes
+                        .iter()
+                        .map(|c| types::ClassInfo {
+                            name: c.name.clone(),
+                            line: c.line,
+                            end_line: c.end_line,
+                            methods: c.methods.clone(),
+                            fields: c.fields.clone(),
+                        })
+                        .collect();
+                    let references = output.semantic.references.clone();
+                    (
+                        output.formatted,
+                        vec![],
+                        functions,
+                        classes,
+                        references,
+                        import_count,
+                    )
+                }
+                types::ModeResult::SymbolFocus(output) => {
+                    (output.formatted, vec![], vec![], vec![], vec![], 0)
+                }
+            };
 
         // Apply output size limiting
-        let line_count = result_text.lines().count();
-        let result_text = if line_count > 1000 && params.force != Some(true) {
+        let line_count = formatted_output.lines().count();
+        if line_count > 1000 && params.force != Some(true) {
             let estimated_tokens = line_count * 40;
-            format!(
+            let message = format!(
                 "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
                  - force=true to return full output\n\
                  - Narrow your scope (smaller directory, specific file)\n\
                  - Use symbol_focus mode for targeted analysis\n\
                  - Reduce max_depth parameter",
                 line_count, estimated_tokens
-            )
-        } else {
-            result_text
-        };
+            );
+            return Err(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_REQUEST,
+                message,
+                None,
+            ));
+        }
 
         let result = AnalysisResult {
             path: params.path.clone(),
@@ -217,18 +220,7 @@ impl CodeAnalyzer {
             references,
         };
 
-        let json_output = serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string());
-
-        let assistant_content = RawContent::text(json_output).with_audience(vec![Role::Assistant]);
-
-        let user_content = RawContent::text(result_text)
-            .with_audience(vec![Role::User])
-            .with_priority(0.0);
-
-        Ok(CallToolResult::success(vec![
-            assistant_content,
-            user_content,
-        ]))
+        Ok(Json(result))
     }
 }
 
