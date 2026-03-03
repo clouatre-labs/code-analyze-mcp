@@ -28,6 +28,7 @@ pub struct AnalysisOutput {
 }
 
 /// Result of file-level semantic analysis.
+#[derive(Clone)]
 pub struct FileAnalysisOutput {
     pub formatted: String,
     pub semantic: SemanticAnalysis,

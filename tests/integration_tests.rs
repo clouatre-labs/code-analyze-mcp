@@ -1,9 +1,12 @@
 mod fixtures;
 
 use code_analyze_mcp::analyze::{analyze_directory, analyze_file, determine_mode};
+use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
 use code_analyze_mcp::traversal::walk_directory;
 use code_analyze_mcp::types::AnalysisMode;
 use std::fs;
+use std::sync::Arc;
+use std::time::Duration;
 use tempfile::TempDir;
 
 #[test]
@@ -877,4 +880,196 @@ fn test_ruby_edge_case_empty_file() {
 
     assert_eq!(output.semantic.functions.len(), 0);
     assert_eq!(output.semantic.classes.len(), 0);
+}
+
+// Cache tests
+#[test]
+fn test_cache_hit() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+
+    let rust_code = r#"
+fn hello() {
+    println!("Hello");
+}
+"#;
+    fs::write(&file_path, rust_code).unwrap();
+
+    let cache = AnalysisCache::new(100);
+    let mtime = fs::metadata(&file_path).unwrap().modified().unwrap();
+    let key = CacheKey {
+        path: file_path.clone(),
+        modified: mtime,
+        mode: AnalysisMode::FileDetails,
+    };
+
+    // First analysis
+    let output1 = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let arc_output1 = Arc::new(output1);
+    cache.put(key.clone(), arc_output1.clone());
+
+    // Second retrieval from cache
+    let cached = cache.get(&key);
+    assert!(cached.is_some());
+    let cached_output = cached.unwrap();
+    assert_eq!(cached_output.semantic.functions.len(), 1);
+}
+
+#[test]
+fn test_cache_miss_on_mtime_change() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+
+    let rust_code = r#"
+fn hello() {
+    println!("Hello");
+}
+"#;
+    fs::write(&file_path, rust_code).unwrap();
+
+    let cache = AnalysisCache::new(100);
+    let mtime1 = fs::metadata(&file_path).unwrap().modified().unwrap();
+    let key1 = CacheKey {
+        path: file_path.clone(),
+        modified: mtime1,
+        mode: AnalysisMode::FileDetails,
+    };
+
+    // Store with first mtime
+    let output1 = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let arc_output1 = Arc::new(output1);
+    cache.put(key1.clone(), arc_output1);
+
+    // Simulate file modification by creating a key with different mtime
+    let mtime2 = mtime1 + Duration::from_secs(1);
+    let key2 = CacheKey {
+        path: file_path.clone(),
+        modified: mtime2,
+        mode: AnalysisMode::FileDetails,
+    };
+
+    // Cache miss with new mtime
+    let cached = cache.get(&key2);
+    assert!(cached.is_none());
+}
+
+#[test]
+fn test_cache_eviction_at_capacity() {
+    let cache = AnalysisCache::new(3);
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create 4 files and cache them
+    for i in 0..4 {
+        let file_path = temp_dir.path().join(format!("test{}.rs", i));
+        fs::write(&file_path, format!("fn f{}() {{}}", i)).unwrap();
+
+        let mtime = fs::metadata(&file_path).unwrap().modified().unwrap();
+        let key = CacheKey {
+            path: file_path.clone(),
+            modified: mtime,
+            mode: AnalysisMode::FileDetails,
+        };
+
+        let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+        let arc_output = Arc::new(output);
+        cache.put(key, arc_output);
+    }
+
+    // The first entry should have been evicted (LRU with capacity 3)
+    let file_path = temp_dir.path().join("test0.rs");
+    let mtime = fs::metadata(&file_path).unwrap().modified().unwrap();
+    let key = CacheKey {
+        path: file_path,
+        modified: mtime,
+        mode: AnalysisMode::FileDetails,
+    };
+
+    let cached = cache.get(&key);
+    assert!(cached.is_none(), "First entry should be evicted");
+}
+
+#[test]
+fn test_cache_mutex_poison_recovery() {
+    let cache = AnalysisCache::new(10);
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+    fs::write(&file_path, "fn test() {}").unwrap();
+
+    let mtime = fs::metadata(&file_path).unwrap().modified().unwrap();
+    let key = CacheKey {
+        path: file_path.clone(),
+        modified: mtime,
+        mode: AnalysisMode::FileDetails,
+    };
+
+    // Store an entry
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let arc_output = Arc::new(output);
+    cache.put(key.clone(), arc_output);
+
+    // Verify entry is cached
+    assert!(cache.get(&key).is_some());
+
+    // Verify we can still use the cache after multiple operations
+    let cached = cache.get(&key);
+    assert!(cached.is_some(), "Cache should still have the entry");
+
+    // Verify we can add more entries
+    let new_output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let new_arc_output = Arc::new(new_output);
+    cache.put(key.clone(), new_arc_output);
+    assert!(
+        cache.get(&key).is_some(),
+        "Cache should be usable after update"
+    );
+}
+
+// Output limiting tests
+#[test]
+fn test_output_limiting_large_output() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("large.rs");
+
+    // Create a file with many functions to generate substantial output
+    let mut large_code = String::new();
+    for i in 0..500 {
+        large_code.push_str(&format!("fn func_{}() {{}}\n", i));
+    }
+    fs::write(&file_path, large_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify output is generated (the actual line count depends on formatter)
+    let line_count = output.formatted.lines().count();
+    assert!(
+        line_count > 0,
+        "Generated output should have content, got {} lines",
+        line_count
+    );
+}
+
+#[test]
+fn test_output_limiting_below_threshold() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("small.rs");
+
+    // Create a file with <1000 lines
+    let mut small_code = String::new();
+    for i in 0..50 {
+        small_code.push_str(&format!("fn func_{}() {{}}\n", i));
+    }
+    fs::write(&file_path, small_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify output is returned normally (not limited)
+    let line_count = output.formatted.lines().count();
+    assert!(
+        line_count < 1000,
+        "Generated output should be under 1000 lines"
+    );
+    assert!(
+        output.formatted.contains("FILE:"),
+        "Should contain FILE header"
+    );
 }

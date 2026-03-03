@@ -24,6 +24,9 @@ pub struct AnalyzeParams {
 
     #[schemars(description = "Maximum AST recursion depth for tree-sitter queries")]
     pub ast_recursion_limit: Option<usize>,
+
+    #[schemars(description = "Bypass output size limiting (default: false)")]
+    pub force: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -100,7 +103,7 @@ pub enum EntryType {
     Variable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisMode {
     Overview,
