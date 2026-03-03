@@ -157,4 +157,6 @@ pub struct SemanticAnalysis {
     pub references: Vec<ReferenceInfo>,
     #[schemars(description = "Call frequency map (function name -> count)")]
     pub call_frequency: HashMap<String, usize>,
+    #[schemars(description = "Caller-callee pairs extracted from call expressions")]
+    pub calls: Vec<CallInfo>,
 }

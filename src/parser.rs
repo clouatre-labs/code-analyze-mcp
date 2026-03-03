@@ -1,6 +1,6 @@
 use crate::languages::get_language_info;
 use crate::types::{
-    ClassInfo, FunctionInfo, ImportInfo, ReferenceInfo, ReferenceType, SemanticAnalysis,
+    CallInfo, ClassInfo, FunctionInfo, ImportInfo, ReferenceInfo, ReferenceType, SemanticAnalysis,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -221,6 +221,7 @@ impl SemanticExtractor {
         let mut imports = Vec::new();
         let mut references = Vec::new();
         let mut call_frequency = HashMap::new();
+        let mut calls = Vec::new();
 
         // Validate and convert ast_recursion_limit once
         let max_depth: Option<u32> = ast_recursion_limit
@@ -316,7 +317,28 @@ impl SemanticExtractor {
                 if capture_name == "call" {
                     let node = capture.node;
                     let call_name = source[node.start_byte()..node.end_byte()].to_string();
-                    *call_frequency.entry(call_name).or_insert(0) += 1;
+                    *call_frequency.entry(call_name.clone()).or_insert(0) += 1;
+
+                    // Find the enclosing function for this call
+                    let mut current = node;
+                    let mut caller = "<module>".to_string();
+                    while let Some(parent) = current.parent() {
+                        if parent.kind() == "function_item"
+                            && let Some(name_node) = parent.child_by_field_name("name")
+                        {
+                            caller =
+                                source[name_node.start_byte()..name_node.end_byte()].to_string();
+                            break;
+                        }
+                        current = parent;
+                    }
+
+                    calls.push(CallInfo {
+                        caller,
+                        callee: call_name,
+                        line: node.start_position().row + 1,
+                        column: node.start_position().column,
+                    });
                 }
             }
         }
@@ -441,6 +463,7 @@ impl SemanticExtractor {
             imports,
             references,
             call_frequency,
+            calls,
         })
     }
 }

@@ -1,7 +1,15 @@
+use crate::graph::CallGraph;
 use crate::traversal::WalkEntry;
 use crate::types::{FileInfo, SemanticAnalysis};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use thiserror::Error;
 use tracing::instrument;
+
+#[derive(Debug, Error)]
+pub enum FormatterError {
+    #[error("Graph error: {0}")]
+    GraphError(#[from] crate::graph::GraphError),
+}
 
 /// Format directory structure analysis results.
 #[instrument(skip_all)]
@@ -208,4 +216,102 @@ pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: 
     }
 
     output
+}
+
+/// Format focused symbol analysis with call graph.
+#[instrument(skip_all)]
+pub fn format_focused(
+    graph: &CallGraph,
+    symbol: &str,
+    follow_depth: u32,
+) -> Result<String, FormatterError> {
+    let mut output = String::new();
+
+    // FOCUS section
+    output.push_str(&format!("FOCUS: {}\n", symbol));
+
+    // DEPTH section
+    output.push_str(&format!("DEPTH: {}\n", follow_depth));
+
+    // DEFINED section - show where the symbol is defined
+    if let Some(definitions) = graph.definitions.get(symbol) {
+        output.push_str("DEFINED:\n");
+        for (path, line) in definitions {
+            output.push_str(&format!("  {}:{}\n", path.display(), line));
+        }
+    } else {
+        output.push_str("DEFINED: (not found)\n");
+    }
+
+    // CALLERS section - who calls this symbol
+    let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
+    output.push_str("CALLERS:\n");
+    if incoming_chains.is_empty() {
+        output.push_str("  (none)\n");
+    } else {
+        for chain in &incoming_chains {
+            let chain_str = chain
+                .chain
+                .iter()
+                .map(|(name, _, _)| name.as_str())
+                .collect::<Vec<_>>()
+                .join(" <- ");
+            output.push_str(&format!("  {}\n", chain_str));
+        }
+    }
+
+    // CALLEES section - what this symbol calls
+    let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
+    output.push_str("CALLEES:\n");
+    if outgoing_chains.is_empty() {
+        output.push_str("  (none)\n");
+    } else {
+        for chain in &outgoing_chains {
+            let chain_str = chain
+                .chain
+                .iter()
+                .map(|(name, _, _)| name.as_str())
+                .collect::<Vec<_>>()
+                .join(" -> ");
+            output.push_str(&format!("  {}\n", chain_str));
+        }
+    }
+
+    // STATISTICS section
+    output.push_str("STATISTICS:\n");
+    let incoming_count = incoming_chains.len();
+    let outgoing_count = outgoing_chains.len();
+    output.push_str(&format!("  Incoming calls: {}\n", incoming_count));
+    output.push_str(&format!("  Outgoing calls: {}\n", outgoing_count));
+
+    // FILES section - collect unique files from chains
+    let mut files = HashSet::new();
+    for chain in &incoming_chains {
+        for (_, path, _) in &chain.chain {
+            files.insert(path.clone());
+        }
+    }
+    for chain in &outgoing_chains {
+        for (_, path, _) in &chain.chain {
+            files.insert(path.clone());
+        }
+    }
+    if let Some(definitions) = graph.definitions.get(symbol) {
+        for (path, _) in definitions {
+            files.insert(path.clone());
+        }
+    }
+
+    output.push_str("FILES:\n");
+    if files.is_empty() {
+        output.push_str("  (none)\n");
+    } else {
+        let mut sorted_files: Vec<_> = files.into_iter().collect();
+        sorted_files.sort();
+        for file in sorted_files {
+            output.push_str(&format!("  {}\n", file.display()));
+        }
+    }
+
+    Ok(output)
 }
