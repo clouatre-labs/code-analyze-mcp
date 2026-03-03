@@ -1,5 +1,6 @@
 pub mod analyze;
 pub mod formatter;
+pub mod graph;
 pub mod lang;
 pub mod languages;
 pub mod parser;
@@ -116,14 +117,27 @@ impl CodeAnalyzer {
                     ),
                 }
             }
-            AnalysisMode::SymbolFocus => (
-                "Symbol focus mode not yet implemented".to_string(),
-                vec![],
-                vec![],
-                vec![],
-                vec![],
-                0,
-            ),
+            AnalysisMode::SymbolFocus => {
+                let focus = params.focus.as_deref().unwrap_or("");
+                let follow_depth = params.follow_depth.unwrap_or(1);
+                match analyze::analyze_focused(
+                    Path::new(&params.path),
+                    focus,
+                    follow_depth,
+                    params.max_depth,
+                    params.ast_recursion_limit,
+                ) {
+                    Ok(output) => (output.formatted, vec![], vec![], vec![], vec![], 0),
+                    Err(e) => (
+                        format!("Error analyzing symbol focus: {}", e),
+                        vec![],
+                        vec![],
+                        vec![],
+                        vec![],
+                        0,
+                    ),
+                }
+            }
         };
 
         let result = AnalysisResult {

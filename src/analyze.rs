@@ -1,10 +1,11 @@
-use crate::formatter::{format_file_details, format_structure};
+use crate::formatter::{format_file_details, format_focused, format_structure};
+use crate::graph::CallGraph;
 use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::traversal::{WalkEntry, walk_directory};
 use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis};
 use rayon::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -14,6 +15,10 @@ pub enum AnalyzeError {
     Traversal(#[from] crate::traversal::TraversalError),
     #[error("Parser error: {0}")]
     Parser(#[from] crate::parser::ParserError),
+    #[error("Graph error: {0}")]
+    Graph(#[from] crate::graph::GraphError),
+    #[error("Formatter error: {0}")]
+    Formatter(#[from] crate::formatter::FormatterError),
 }
 
 /// Result of directory analysis containing both formatted output and file data.
@@ -145,4 +150,74 @@ pub fn analyze_file(
         semantic,
         line_count,
     })
+}
+
+/// Result of focused symbol analysis.
+pub struct FocusedAnalysisOutput {
+    pub formatted: String,
+}
+
+/// Analyze a symbol's call graph across a directory.
+#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
+pub fn analyze_focused(
+    root: &Path,
+    focus: &str,
+    follow_depth: u32,
+    max_depth: Option<u32>,
+    ast_recursion_limit: Option<usize>,
+) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    // Check if path is a file (hint to use directory)
+    if root.is_file() {
+        let formatted =
+            "Single-file focus not supported. Please provide a directory path for cross-file call graph analysis.\n"
+                .to_string();
+        return Ok(FocusedAnalysisOutput { formatted });
+    }
+
+    // Walk the directory
+    let entries = walk_directory(root, max_depth)?;
+
+    // Collect semantic analysis for all files in parallel
+    let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
+
+    let analysis_results: Vec<(PathBuf, SemanticAnalysis)> = file_entries
+        .par_iter()
+        .filter_map(|entry| {
+            let ext = entry.path.extension().and_then(|e| e.to_str());
+
+            // Try to read file content
+            let source = match std::fs::read_to_string(&entry.path) {
+                Ok(content) => content,
+                Err(_) => return None,
+            };
+
+            // Detect language and extract semantic information
+            let language = if let Some(ext_str) = ext {
+                language_from_extension(ext_str)
+                    .map(|l| l.to_string())
+                    .unwrap_or_else(|| "unknown".to_string())
+            } else {
+                "unknown".to_string()
+            };
+
+            match SemanticExtractor::extract(&source, &language, ast_recursion_limit) {
+                Ok(mut semantic) => {
+                    // Populate file path on references
+                    for r in &mut semantic.references {
+                        r.location = entry.path.display().to_string();
+                    }
+                    Some((entry.path.clone(), semantic))
+                }
+                Err(_) => None,
+            }
+        })
+        .collect();
+
+    // Build call graph
+    let graph = CallGraph::build_from_results(analysis_results)?;
+
+    // Format output
+    let formatted = format_focused(&graph, focus, follow_depth)?;
+
+    Ok(FocusedAnalysisOutput { formatted })
 }
