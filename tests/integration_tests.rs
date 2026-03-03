@@ -4,6 +4,7 @@ use code_analyze_mcp::analyze::{
     analyze_directory, analyze_directory_with_progress, analyze_file, determine_mode,
 };
 use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
+use code_analyze_mcp::completion::{path_completions, symbol_completions};
 use code_analyze_mcp::traversal::walk_directory;
 use code_analyze_mcp::types::AnalysisMode;
 use std::fs;
@@ -1126,4 +1127,215 @@ fn test_analyze_directory_with_progress_empty_directory() {
         "Formatted output should not be empty"
     );
     assert_eq!(output.files.len(), 0, "Should have no files");
+}
+
+// Completion tests
+
+#[test]
+fn test_path_completions_with_prefix() {
+    // Arrange: Create a temporary directory with files
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::create_dir(root.join("src")).unwrap();
+    fs::create_dir(root.join("tests")).unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("src/lib.rs"), "pub fn lib() {}").unwrap();
+    fs::write(root.join("README.md"), "# Test").unwrap();
+
+    // Act: Get completions for "src" prefix
+    let completions = path_completions(root, "src");
+
+    // Assert: Should find src directory
+    assert!(
+        !completions.is_empty(),
+        "Should find completions for 'src' prefix"
+    );
+    assert!(
+        completions.iter().any(|c| c.contains("src")),
+        "Should include 'src' in completions"
+    );
+}
+
+#[test]
+fn test_path_completions_respects_ignore_file() {
+    // Arrange: Create directory with .ignore file
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::create_dir(root.join("src")).unwrap();
+    fs::create_dir(root.join("target")).unwrap();
+    fs::write(root.join(".ignore"), "target/\n").unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("target/debug.txt"), "debug").unwrap();
+
+    // Act: Get completions for "t" prefix
+    let completions = path_completions(root, "t");
+
+    // Assert: Should not include target (ignored by .ignore)
+    assert!(
+        !completions.iter().any(|c| c.contains("target")),
+        "Should exclude 'target' directory (ignored by .ignore)"
+    );
+}
+
+#[test]
+fn test_path_completions_empty_prefix() {
+    // Arrange: Create a temporary directory
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::write(root.join("file.rs"), "fn f() {}").unwrap();
+
+    // Act: Get completions with empty prefix
+    let completions = path_completions(root, "");
+
+    // Assert: Should return empty for empty prefix
+    assert!(
+        completions.is_empty(),
+        "Should return empty completions for empty prefix"
+    );
+}
+
+#[test]
+fn test_path_completions_nonexistent_prefix() {
+    // Arrange: Create a temporary directory
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::write(root.join("main.rs"), "fn main() {}").unwrap();
+
+    // Act: Get completions for non-existent prefix
+    let completions = path_completions(root, "xyz");
+
+    // Assert: Should return empty for non-existent prefix
+    assert!(
+        completions.is_empty(),
+        "Should return empty completions for non-existent prefix"
+    );
+}
+
+#[test]
+fn test_path_completions_truncates_at_100() {
+    // Arrange: Create directory with >100 files
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    for i in 0..150 {
+        fs::write(root.join(format!("file_{:03}.rs", i)), "fn f() {}").unwrap();
+    }
+
+    // Act: Get completions for "file" prefix
+    let completions = path_completions(root, "file");
+
+    // Assert: Should cap at 100 results
+    assert_eq!(
+        completions.len(),
+        100,
+        "Should truncate completions to 100 results"
+    );
+}
+
+#[test]
+fn test_symbol_completions_with_cached_analysis() {
+    // Arrange: Create a Rust file and analyze it
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+    fs::write(
+        &file_path,
+        "fn hello_world() {}\nfn hello_there() {}\nstruct MyStruct {}",
+    )
+    .unwrap();
+
+    // Analyze the file to populate cache
+    let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let cache = AnalysisCache::new(100);
+    let cache_key = CacheKey {
+        path: file_path.clone(),
+        modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
+        mode: AnalysisMode::FileDetails,
+    };
+    cache.put(cache_key, Arc::new(analysis));
+
+    // Act: Get symbol completions for "hello" prefix
+    let completions = symbol_completions(&cache, &file_path, "hello");
+
+    // Assert: Should find matching functions
+    assert!(
+        !completions.is_empty(),
+        "Should find completions for 'hello' prefix"
+    );
+    assert!(
+        completions.iter().any(|c| c.contains("hello")),
+        "Should include functions starting with 'hello'"
+    );
+}
+
+#[test]
+fn test_symbol_completions_missing_path_argument() {
+    // Arrange: Create cache but don't populate it
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("nonexistent.rs");
+    let cache = AnalysisCache::new(100);
+
+    // Act: Get symbol completions for non-existent file
+    let completions = symbol_completions(&cache, &file_path, "test");
+
+    // Assert: Should return empty for missing file
+    assert!(
+        completions.is_empty(),
+        "Should return empty completions for missing file"
+    );
+}
+
+#[test]
+fn test_symbol_completions_empty_prefix() {
+    // Arrange: Create and analyze a file
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+    fs::write(&file_path, "fn test_func() {}").unwrap();
+
+    let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let cache = AnalysisCache::new(100);
+    let cache_key = CacheKey {
+        path: file_path.clone(),
+        modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
+        mode: AnalysisMode::FileDetails,
+    };
+    cache.put(cache_key, Arc::new(analysis));
+
+    // Act: Get symbol completions with empty prefix
+    let completions = symbol_completions(&cache, &file_path, "");
+
+    // Assert: Should return empty for empty prefix
+    assert!(
+        completions.is_empty(),
+        "Should return empty completions for empty prefix"
+    );
+}
+
+#[test]
+fn test_symbol_completions_truncates_at_100() {
+    // Arrange: Create a file with >100 functions
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+    let mut content = String::new();
+    for i in 0..150 {
+        content.push_str(&format!("fn func_{:03}() {{}}\n", i));
+    }
+    fs::write(&file_path, content).unwrap();
+
+    let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let cache = AnalysisCache::new(100);
+    let cache_key = CacheKey {
+        path: file_path.clone(),
+        modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
+        mode: AnalysisMode::FileDetails,
+    };
+    cache.put(cache_key, Arc::new(analysis));
+
+    // Act: Get symbol completions for "func" prefix
+    let completions = symbol_completions(&cache, &file_path, "func");
+
+    // Assert: Should cap at 100 results
+    assert_eq!(
+        completions.len(),
+        100,
+        "Should truncate completions to 100 results"
+    );
 }
