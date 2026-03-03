@@ -122,13 +122,9 @@ Functions called >3 times show `(•N)` notation.
 |----------|-----------|--------|
 | Rust | `.rs` | Implemented |
 | Python | `.py` | Implemented |
-| JavaScript | `.js`, `.jsx` | Implemented |
 | TypeScript | `.ts`, `.tsx` | Implemented |
 | Go | `.go` | Implemented |
 | Java | `.java` | Implemented |
-| Kotlin | `.kt`, `.kts` | Implemented |
-| Swift | `.swift` | Implemented |
-| Ruby | `.rb` | Implemented |
 
 ## Current Status
 
