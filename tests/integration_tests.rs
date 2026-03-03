@@ -1,7 +1,7 @@
 mod fixtures;
 
 use code_analyze_mcp::analyze::{
-    analyze_directory, analyze_directory_with_progress, analyze_file, determine_mode,
+    AnalyzeError, analyze_directory, analyze_directory_with_progress, analyze_file, determine_mode,
 };
 use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
 use code_analyze_mcp::completion::{path_completions, symbol_completions};
@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tempfile::TempDir;
+use tokio_util::sync::CancellationToken;
 
 #[test]
 fn test_walk_directory_basic() {
@@ -1091,7 +1092,8 @@ fn test_analyze_directory_with_progress_increments_counter() {
 
     // Analyze with progress counter
     let counter = Arc::new(AtomicUsize::new(0));
-    let output = analyze_directory_with_progress(root, None, counter.clone()).unwrap();
+    let ct = CancellationToken::new();
+    let output = analyze_directory_with_progress(root, None, counter.clone(), ct).unwrap();
 
     // Verify counter was incremented for each file
     let final_count = counter.load(Ordering::Relaxed);
@@ -1115,7 +1117,8 @@ fn test_analyze_directory_with_progress_empty_directory() {
 
     // Analyze empty directory with progress counter
     let counter = Arc::new(AtomicUsize::new(0));
-    let output = analyze_directory_with_progress(root, None, counter.clone()).unwrap();
+    let ct = CancellationToken::new();
+    let output = analyze_directory_with_progress(root, None, counter.clone(), ct).unwrap();
 
     // Verify counter is 0 for empty directory
     let final_count = counter.load(Ordering::Relaxed);
@@ -1401,4 +1404,45 @@ fn test_logging_level_filter_update() {
             assert_eq!(*filter, LevelFilter::ERROR);
         }
     });
+}
+
+// Cancellation tests
+
+#[test]
+fn test_cancellation_during_directory_walk() {
+    // Arrange: Create temp dir with a Rust file
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::write(root.join("main.rs"), "fn main() {}").unwrap();
+
+    // Create a pre-cancelled token
+    let ct = CancellationToken::new();
+    ct.cancel();
+
+    // Act: Call analyze_directory_with_progress with cancelled token
+    let counter = Arc::new(AtomicUsize::new(0));
+    let result = analyze_directory_with_progress(root, None, counter, ct);
+
+    // Assert: Should return Cancelled error
+    assert!(matches!(result, Err(AnalyzeError::Cancelled)));
+}
+
+#[test]
+fn test_cancellation_noop_after_completion() {
+    // Arrange: Create temp dir with a Rust file
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::write(root.join("main.rs"), "fn main() {}").unwrap();
+
+    // Create a non-cancelled token
+    let ct = CancellationToken::new();
+
+    // Act: Call analyze_directory_with_progress with active token
+    let counter = Arc::new(AtomicUsize::new(0));
+    let result = analyze_directory_with_progress(root, None, counter, ct);
+
+    // Assert: Should succeed (existing behavior unchanged)
+    assert!(result.is_ok());
+    let output = result.unwrap();
+    assert_eq!(output.files.len(), 1);
 }

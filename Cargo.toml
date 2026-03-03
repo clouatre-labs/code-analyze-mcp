@@ -17,6 +17,7 @@ tree-sitter-java = "0.23.5"
 tree-sitter-ruby = "0.23.1"
 tree-sitter-typescript = "0.23.2"
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 async-trait = "0.1"
 rayon = "1"
 ignore = "0.4"
