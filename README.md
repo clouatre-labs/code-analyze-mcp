@@ -132,15 +132,17 @@ Functions called >3 times show `(•N)` notation.
 
 ## Current Status
 
-This project is approximately 45% complete. See [issue #1](https://github.com/clouatre-labs/code-analyze-mcp/issues/1) for the full roadmap and wave-based merge plan.
+This project is approximately 90% complete. See [issue #1](https://github.com/clouatre-labs/code-analyze-mcp/issues/1) for the full roadmap and wave-based merge plan.
 
 | Wave | Milestone | Status |
 |------|-----------|--------|
 | 0 | Foundation (CI, community files) | Complete |
 | 1 | Tooling (dependencies, guidelines) | Complete |
-| 2 | Core Features (semantic mode, languages) | In Progress |
-| 3 | Call Graphs (symbol focus mode) | Planned |
-| 4 | Polish (caching, performance) | Planned |
+| 2 | Core Features (semantic mode, languages) | Complete |
+| 3 | Call Graphs (symbol focus mode) | Complete |
+| 4a | Polish (caching, output limiting) | Complete |
+| 4b | MCP Protocol (#42, #43, #44) | Planned |
+| 4c | Performance testing (#7) | Planned |
 
 ## Documentation
 

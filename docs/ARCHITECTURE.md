@@ -273,6 +273,26 @@ pub struct CacheEntry {
 - Max cache size: 1000 entries (configurable)
 - TTL: 1 hour (optional, for safety)
 
+## MCP Protocol (Planned)
+
+Issues #42, #43, and #44 will bring the server to full MCP 2025-06-18 compliance.
+
+**Protocol Version and Capabilities (#42):**
+- Bump from `V_2024_11_05` to `V_2025_06_18` (rmcp `ProtocolVersion::LATEST`)
+- Declare `tools` capability via `ServerCapabilities::builder().enable_tools()`
+- Add `read_only_hint = true` annotation to the analyze tool
+- Use `Json<T>` wrapper for structured output with `output_schema` and `structured_content`
+
+**Progress Notifications (#43):**
+- Store the MCP peer handle on `CodeAnalyzer` for bidirectional communication
+- Emit `notifications/progress` during directory walks (per-file or batched)
+- Throttle to avoid overwhelming clients on large codebases
+
+**Logging Notifications (#44):**
+- Custom `tracing::Layer` that forwards log events as `notifications/message`
+- Maps tracing levels to MCP log levels (DEBUG, INFO, WARN, ERROR)
+- Requires `logging` capability declaration in `ServerCapabilities`
+
 ## Error Handling
 
 Three error types using thiserror:
@@ -346,19 +366,22 @@ pub enum AnalyzeError {
 
 ## Current Status
 
-The project is approximately 45% complete:
+The project is approximately 90% complete:
 
-- **Implemented (Wave 2):**
+- **Complete (Waves 0-4a):**
   - Project skeleton (main.rs, lib.rs, types.rs, lang.rs)
+  - CI pipeline (format, lint, commitlint, check-base)
   - Structure mode (directory overview with file tree)
   - Semantic mode (file-level analysis with functions, classes, imports)
-  - Rust language support with semantic handlers
-
-- **Planned (Waves 3-4):**
   - Symbol focus mode (call graphs with BFS traversal)
-  - Remaining language modules (Basic Python, JavaScript, TypeScript, Go, Java, Kotlin, Swift, Ruby support)
+  - All 9 language modules (Rust, Python, JavaScript, TypeScript, Go, Java, Kotlin, Swift, Ruby)
   - LRU caching with mtime invalidation
   - Output size limiting and force flag
-  - Performance testing and tuning
+
+- **Planned (Waves 4b-4c):**
+  - MCP protocol compliance: version bump, capabilities, annotations, structured output (#42)
+  - MCP progress notifications during directory analysis (#43)
+  - MCP logging notifications: tracing-to-client bridge (#44)
+  - Performance testing and tuning (#7)
 
 See [issue #1](https://github.com/clouatre-labs/code-analyze-mcp/issues/1) for the complete roadmap and wave-based merge plan.
