@@ -33,6 +33,11 @@ tree-sitter-swift = "0.7.1"
 
 [dev-dependencies]
 tempfile = "3"
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
+[[bench]]
+name = "analysis"
+harness = false
 
 [profile.release]
 opt-level = 3
