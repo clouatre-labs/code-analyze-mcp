@@ -22,13 +22,14 @@ pub enum AnalyzeError {
 }
 
 /// Result of directory analysis containing both formatted output and file data.
+#[derive(Debug)]
 pub struct AnalysisOutput {
     pub formatted: String,
     pub files: Vec<FileInfo>,
 }
 
 /// Result of file-level semantic analysis.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FileAnalysisOutput {
     pub formatted: String,
     pub semantic: SemanticAnalysis,
@@ -154,6 +155,7 @@ pub fn analyze_file(
 }
 
 /// Result of focused symbol analysis.
+#[derive(Debug)]
 pub struct FocusedAnalysisOutput {
     pub formatted: String,
 }
