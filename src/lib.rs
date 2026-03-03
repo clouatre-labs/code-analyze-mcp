@@ -56,20 +56,19 @@ impl CodeAnalyzer {
             .mode
             .unwrap_or_else(|| analyze::determine_mode(&params.path, params.focus.as_deref()));
 
-        // Dispatch based on mode
-        let (result_text, files, functions, classes, references, import_count) = match mode {
+        // Dispatch based on mode and construct ModeResult
+        let mode_result = match mode {
             AnalysisMode::Overview => {
                 let path = Path::new(&params.path);
                 match analyze::analyze_directory(path, params.max_depth) {
-                    Ok(output) => (output.formatted, output.files, vec![], vec![], vec![], 0),
-                    Err(e) => (
-                        format!("Error analyzing directory: {}", e),
-                        vec![],
-                        vec![],
-                        vec![],
-                        vec![],
-                        0,
-                    ),
+                    Ok(output) => types::ModeResult::Overview(output),
+                    Err(e) => {
+                        let output = analyze::AnalysisOutput {
+                            formatted: format!("Error analyzing directory: {}", e),
+                            files: vec![],
+                        };
+                        types::ModeResult::Overview(output)
+                    }
                 }
             }
             AnalysisMode::FileDetails => {
@@ -106,44 +105,22 @@ impl CodeAnalyzer {
                 };
 
                 match output_result {
-                    Ok(output) => {
-                        let import_count = output.semantic.imports.len();
-                        let functions = output
-                            .semantic
-                            .functions
-                            .iter()
-                            .map(|f| types::FunctionInfo {
-                                name: f.name.clone(),
-                                line: f.line,
-                                end_line: f.end_line,
-                                parameters: f.parameters.clone(),
-                                return_type: f.return_type.clone(),
-                            })
-                            .collect();
-                        let classes = output
-                            .semantic
-                            .classes
-                            .iter()
-                            .map(|c| types::ClassInfo {
-                                name: c.name.clone(),
-                                line: c.line,
-                                end_line: c.end_line,
-                                methods: c.methods.clone(),
-                                fields: c.fields.clone(),
-                            })
-                            .collect();
-                        // references now carry accurate location + line data (set by analyze_file)
-                        let references = output.semantic.references.clone();
-                        (
-                            output.formatted.clone(),
-                            vec![],
-                            functions,
-                            classes,
-                            references,
-                            import_count,
-                        )
+                    Ok(output) => types::ModeResult::FileDetails((*output).clone()),
+                    Err(e) => {
+                        let output = analyze::FileAnalysisOutput {
+                            formatted: e,
+                            semantic: types::SemanticAnalysis {
+                                functions: vec![],
+                                classes: vec![],
+                                imports: vec![],
+                                references: vec![],
+                                call_frequency: std::collections::HashMap::new(),
+                                calls: vec![],
+                            },
+                            line_count: 0,
+                        };
+                        types::ModeResult::FileDetails(output)
                     }
-                    Err(e) => (e, vec![], vec![], vec![], vec![], 0),
                 }
             }
             AnalysisMode::SymbolFocus => {
@@ -156,16 +133,60 @@ impl CodeAnalyzer {
                     params.max_depth,
                     params.ast_recursion_limit,
                 ) {
-                    Ok(output) => (output.formatted, vec![], vec![], vec![], vec![], 0),
-                    Err(e) => (
-                        format!("Error analyzing symbol focus: {}", e),
-                        vec![],
-                        vec![],
-                        vec![],
-                        vec![],
-                        0,
-                    ),
+                    Ok(output) => types::ModeResult::SymbolFocus(output),
+                    Err(e) => {
+                        let output = analyze::FocusedAnalysisOutput {
+                            formatted: format!("Error analyzing symbol focus: {}", e),
+                        };
+                        types::ModeResult::SymbolFocus(output)
+                    }
                 }
+            }
+        };
+
+        // Extract fields from ModeResult
+        let (result_text, files, functions, classes, references, import_count) = match mode_result {
+            types::ModeResult::Overview(output) => {
+                (output.formatted, output.files, vec![], vec![], vec![], 0)
+            }
+            types::ModeResult::FileDetails(output) => {
+                let import_count = output.semantic.imports.len();
+                let functions = output
+                    .semantic
+                    .functions
+                    .iter()
+                    .map(|f| types::FunctionInfo {
+                        name: f.name.clone(),
+                        line: f.line,
+                        end_line: f.end_line,
+                        parameters: f.parameters.clone(),
+                        return_type: f.return_type.clone(),
+                    })
+                    .collect();
+                let classes = output
+                    .semantic
+                    .classes
+                    .iter()
+                    .map(|c| types::ClassInfo {
+                        name: c.name.clone(),
+                        line: c.line,
+                        end_line: c.end_line,
+                        methods: c.methods.clone(),
+                        fields: c.fields.clone(),
+                    })
+                    .collect();
+                let references = output.semantic.references.clone();
+                (
+                    output.formatted,
+                    vec![],
+                    functions,
+                    classes,
+                    references,
+                    import_count,
+                )
+            }
+            types::ModeResult::SymbolFocus(output) => {
+                (output.formatted, vec![], vec![], vec![], vec![], 0)
             }
         };
 

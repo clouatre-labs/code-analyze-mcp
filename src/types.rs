@@ -1,6 +1,16 @@
+use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// Internal enum wrapping the three analysis output types.
+/// Not serialized; used for type-safe dispatch in lib.rs.
+#[derive(Debug)]
+pub enum ModeResult {
+    Overview(AnalysisOutput),
+    FileDetails(FileAnalysisOutput),
+    SymbolFocus(FocusedAnalysisOutput),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeParams {
