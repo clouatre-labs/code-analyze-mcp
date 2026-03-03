@@ -1,14 +1,8 @@
 const EXTENSION_MAP: &[(&str, &str)] = &[
     ("rs", "rust"),
     ("py", "python"),
-    ("js", "javascript"),
-    ("jsx", "jsx"),
     ("go", "go"),
     ("java", "java"),
-    ("kt", "kotlin"),
-    ("kts", "kotlin"),
-    ("swift", "swift"),
-    ("rb", "ruby"),
     ("ts", "typescript"),
     ("tsx", "tsx"),
 ];
@@ -28,13 +22,8 @@ mod tests {
     fn test_language_from_extension_happy_path() {
         assert_eq!(language_from_extension("rs"), Some("rust"));
         assert_eq!(language_from_extension("py"), Some("python"));
-        assert_eq!(language_from_extension("js"), Some("javascript"));
-        assert_eq!(language_from_extension("jsx"), Some("jsx"));
         assert_eq!(language_from_extension("go"), Some("go"));
         assert_eq!(language_from_extension("java"), Some("java"));
-        assert_eq!(language_from_extension("kt"), Some("kotlin"));
-        assert_eq!(language_from_extension("swift"), Some("swift"));
-        assert_eq!(language_from_extension("rb"), Some("ruby"));
         assert_eq!(language_from_extension("ts"), Some("typescript"));
         assert_eq!(language_from_extension("tsx"), Some("tsx"));
     }

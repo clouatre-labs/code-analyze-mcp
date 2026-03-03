@@ -3,7 +3,7 @@
 ## Design Goals
 
 - **Goose analyze parity in standalone binary**: Replicate goose's code analysis capabilities as a standalone MCP server, enabling integration with any MCP client
-- **Language-agnostic parsing via tree-sitter**: Support 9 languages with a unified query-based extraction system, avoiding language-specific parsers
+- **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system, avoiding language-specific parsers
 - **Single MCP tool with auto-detected modes**: One `analyze` tool that automatically detects analysis mode (overview, file details, symbol focus) based on input parameters
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
 
@@ -374,7 +374,7 @@ The project is approximately 90% complete:
   - Structure mode (directory overview with file tree)
   - Semantic mode (file-level analysis with functions, classes, imports)
   - Symbol focus mode (call graphs with BFS traversal)
-  - All 9 language modules (Rust, Python, JavaScript, TypeScript, Go, Java, Kotlin, Swift, Ruby)
+  - All 5 language modules (Rust, Python, TypeScript, Go, Java)
   - LRU caching with mtime invalidation
   - Output size limiting and force flag
 

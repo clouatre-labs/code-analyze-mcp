@@ -1,11 +1,7 @@
 pub mod go;
 pub mod java;
-pub mod javascript;
-pub mod kotlin;
 pub mod python;
-pub mod ruby;
 pub mod rust;
-pub mod swift;
 pub mod typescript;
 
 use tree_sitter::{Language, Node};
@@ -60,30 +56,6 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_method_for_receiver: None,
             find_receiver_type: None,
         }),
-        "javascript" => Some(LanguageInfo {
-            name: "javascript",
-            language: tree_sitter_javascript::LANGUAGE.into(),
-            element_query: javascript::ELEMENT_QUERY,
-            call_query: javascript::CALL_QUERY,
-            reference_query: None,
-            import_query: None,
-            impl_query: None,
-            extract_function_name: None,
-            find_method_for_receiver: None,
-            find_receiver_type: None,
-        }),
-        "jsx" => Some(LanguageInfo {
-            name: "jsx",
-            language: tree_sitter_javascript::LANGUAGE.into(),
-            element_query: javascript::ELEMENT_QUERY,
-            call_query: javascript::CALL_QUERY,
-            reference_query: None,
-            import_query: None,
-            impl_query: None,
-            extract_function_name: None,
-            find_method_for_receiver: None,
-            find_receiver_type: None,
-        }),
         "typescript" => Some(LanguageInfo {
             name: "typescript",
             language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
@@ -130,42 +102,6 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             impl_query: None,
             extract_function_name: None,
             find_method_for_receiver: None,
-            find_receiver_type: None,
-        }),
-        "kotlin" => Some(LanguageInfo {
-            name: "kotlin",
-            language: tree_sitter_kotlin_ng::LANGUAGE.into(),
-            element_query: kotlin::ELEMENT_QUERY,
-            call_query: kotlin::CALL_QUERY,
-            reference_query: None,
-            import_query: None,
-            impl_query: None,
-            extract_function_name: None,
-            find_method_for_receiver: None,
-            find_receiver_type: None,
-        }),
-        "swift" => Some(LanguageInfo {
-            name: "swift",
-            language: tree_sitter_swift::LANGUAGE.into(),
-            element_query: swift::ELEMENT_QUERY,
-            call_query: swift::CALL_QUERY,
-            reference_query: None,
-            import_query: None,
-            impl_query: None,
-            extract_function_name: Some(swift::extract_function_name),
-            find_method_for_receiver: None,
-            find_receiver_type: None,
-        }),
-        "ruby" => Some(LanguageInfo {
-            name: "ruby",
-            language: tree_sitter_ruby::LANGUAGE.into(),
-            element_query: ruby::ELEMENT_QUERY,
-            call_query: ruby::CALL_QUERY,
-            reference_query: Some(ruby::REFERENCE_QUERY),
-            import_query: None,
-            impl_query: None,
-            extract_function_name: None,
-            find_method_for_receiver: Some(ruby::find_method_for_receiver),
             find_receiver_type: None,
         }),
         _ => None,
