@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
@@ -59,6 +60,9 @@ pub fn analyze_directory_with_progress(
 
     // Detect language from file extension
     let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
+
+    let start = Instant::now();
+    tracing::debug!(file_count = file_entries.len(), root = %root.display(), "analysis start");
 
     // Parallel analysis of files
     let analysis_results: Vec<FileInfo> = file_entries
@@ -119,6 +123,12 @@ pub fn analyze_directory_with_progress(
         return Err(AnalyzeError::Cancelled);
     }
 
+    tracing::debug!(
+        file_count = file_entries.len(),
+        duration_ms = start.elapsed().as_millis() as u64,
+        "analysis complete"
+    );
+
     // Format output
     let formatted = format_structure(&entries, &analysis_results, max_depth);
 
@@ -159,6 +169,7 @@ pub fn analyze_file(
     path: &str,
     ast_recursion_limit: Option<usize>,
 ) -> Result<FileAnalysisOutput, AnalyzeError> {
+    let start = Instant::now();
     let source = std::fs::read_to_string(path)
         .map_err(|e| AnalyzeError::Parser(crate::parser::ParserError::ParseError(e.to_string())))?;
 
@@ -182,6 +193,8 @@ pub fn analyze_file(
 
     // Format output
     let formatted = format_file_details(path, &semantic, line_count);
+
+    tracing::debug!(path = %path, language = %ext, functions = semantic.functions.len(), classes = semantic.classes.len(), imports = semantic.imports.len(), duration_ms = start.elapsed().as_millis() as u64, "file analysis complete");
 
     Ok(FileAnalysisOutput {
         formatted,

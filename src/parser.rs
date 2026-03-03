@@ -63,6 +63,8 @@ impl ElementExtractor {
             }
         }
 
+        tracing::debug!(language = %language, functions = function_count, classes = class_count, "parse complete");
+
         Ok((function_count, class_count))
     }
 }
@@ -456,6 +458,8 @@ impl SemanticExtractor {
                 }
             }
         }
+
+        tracing::debug!(language = %language, functions = functions.len(), classes = classes.len(), imports = imports.len(), references = references.len(), calls = calls.len(), "extraction complete");
 
         Ok(SemanticAnalysis {
             functions,
