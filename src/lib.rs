@@ -14,9 +14,10 @@ use cache::AnalysisCache;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
-    CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData, Implementation,
-    InitializeResult, LoggingLevel, Notification, NumberOrString, ProgressNotificationParam,
-    ProgressToken, ProtocolVersion, ServerCapabilities, ServerNotification, SetLevelRequestParams,
+    CancelledNotificationParam, CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData,
+    Implementation, InitializeResult, LoggingLevel, Notification, NumberOrString,
+    ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
+    ServerNotification, SetLevelRequestParams,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
@@ -74,7 +75,7 @@ impl CodeAnalyzer {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, context))]
     #[tool(
         description = "Analyze code structure in 3 modes: 1) Directory overview - file tree with LOC/function/class counts to max_depth. 2) File details - functions, classes, imports. 3) Symbol focus - call graphs across directory to max_depth (requires directory path, case-sensitive). Typical flow: directory → files → symbols. Functions called >3x show •N.",
         annotations(
@@ -87,8 +88,10 @@ impl CodeAnalyzer {
     async fn analyze(
         &self,
         params: Parameters<AnalyzeParams>,
+        context: RequestContext<RoleServer>,
     ) -> Result<Json<AnalysisResult>, ErrorData> {
         let params = params.0;
+        let ct = context.ct.clone();
 
         // Determine mode if not provided
         let mode = params
@@ -103,6 +106,7 @@ impl CodeAnalyzer {
                 let counter_clone = counter.clone();
                 let path_owned = path.to_path_buf();
                 let max_depth = params.max_depth;
+                let ct_clone = ct.clone();
 
                 // Get total file count for progress reporting
                 let total_files = match walk_directory(path, max_depth) {
@@ -112,7 +116,12 @@ impl CodeAnalyzer {
 
                 // Spawn blocking analysis with progress tracking
                 let handle = tokio::task::spawn_blocking(move || {
-                    analyze::analyze_directory_with_progress(&path_owned, max_depth, counter_clone)
+                    analyze::analyze_directory_with_progress(
+                        &path_owned,
+                        max_depth,
+                        counter_clone,
+                        ct_clone,
+                    )
                 });
 
                 // Poll and emit progress every 100ms
@@ -127,8 +136,13 @@ impl CodeAnalyzer {
                     .into(),
                 ));
                 let mut last_progress = 0usize;
+                let mut cancelled = false;
                 loop {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    if ct.is_cancelled() {
+                        cancelled = true;
+                        break;
+                    }
                     let current = counter.load(std::sync::atomic::Ordering::Relaxed);
                     if current != last_progress && total_files > 0 {
                         self.emit_progress(
@@ -145,8 +159,8 @@ impl CodeAnalyzer {
                     }
                 }
 
-                // Emit final 100% progress
-                if total_files > 0 {
+                // Emit final 100% progress only if not cancelled
+                if !cancelled && total_files > 0 {
                     self.emit_progress(
                         &token,
                         total_files as f64,
@@ -158,6 +172,13 @@ impl CodeAnalyzer {
 
                 match handle.await {
                     Ok(Ok(output)) => types::ModeResult::Overview(output),
+                    Ok(Err(analyze::AnalyzeError::Cancelled)) => {
+                        let output = analyze::AnalysisOutput {
+                            formatted: "Analysis cancelled".to_string(),
+                            files: vec![],
+                        };
+                        types::ModeResult::Overview(output)
+                    }
                     Ok(Err(e)) => {
                         let output = analyze::AnalysisOutput {
                             formatted: format!("Error analyzing directory: {}", e),
@@ -236,6 +257,7 @@ impl CodeAnalyzer {
                 let max_depth = params.max_depth;
                 let focus_owned = focus.to_string();
                 let ast_recursion_limit = params.ast_recursion_limit;
+                let ct_clone = ct.clone();
 
                 // Get total file count for progress reporting
                 let total_files = match walk_directory(path, max_depth) {
@@ -252,6 +274,7 @@ impl CodeAnalyzer {
                         max_depth,
                         ast_recursion_limit,
                         counter_clone,
+                        ct_clone,
                     )
                 });
 
@@ -267,8 +290,13 @@ impl CodeAnalyzer {
                     .into(),
                 ));
                 let mut last_progress = 0usize;
+                let mut cancelled = false;
                 loop {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    if ct.is_cancelled() {
+                        cancelled = true;
+                        break;
+                    }
                     let current = counter.load(std::sync::atomic::Ordering::Relaxed);
                     if current != last_progress && total_files > 0 {
                         self.emit_progress(
@@ -288,8 +316,8 @@ impl CodeAnalyzer {
                     }
                 }
 
-                // Emit final 100% progress
-                if total_files > 0 {
+                // Emit final 100% progress only if not cancelled
+                if !cancelled && total_files > 0 {
                     self.emit_progress(
                         &token,
                         total_files as f64,
@@ -304,6 +332,12 @@ impl CodeAnalyzer {
 
                 match handle.await {
                     Ok(Ok(output)) => types::ModeResult::SymbolFocus(output),
+                    Ok(Err(analyze::AnalyzeError::Cancelled)) => {
+                        let output = analyze::FocusedAnalysisOutput {
+                            formatted: "Analysis cancelled".to_string(),
+                        };
+                        types::ModeResult::SymbolFocus(output)
+                    }
                     Ok(Err(e)) => {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: format!("Error analyzing symbol focus: {}", e),
@@ -428,6 +462,19 @@ impl ServerHandler for CodeAnalyzer {
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
         let mut peer_lock = self.peer.lock().await;
         *peer_lock = Some(context.peer);
+    }
+
+    #[instrument(skip(self, _context))]
+    async fn on_cancelled(
+        &self,
+        notification: CancelledNotificationParam,
+        _context: NotificationContext<RoleServer>,
+    ) {
+        tracing::info!(
+            request_id = ?notification.request_id,
+            reason = ?notification.reason,
+            "Received cancellation notification"
+        );
     }
 
     #[instrument(skip(self, _context))]

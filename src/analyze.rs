@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 #[derive(Debug, Error)]
@@ -21,6 +22,8 @@ pub enum AnalyzeError {
     Graph(#[from] crate::graph::GraphError),
     #[error("Formatter error: {0}")]
     Formatter(#[from] crate::formatter::FormatterError),
+    #[error("Analysis cancelled")]
+    Cancelled,
 }
 
 /// Result of directory analysis containing both formatted output and file data.
@@ -44,7 +47,13 @@ pub fn analyze_directory_with_progress(
     root: &Path,
     max_depth: Option<u32>,
     progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
 ) -> Result<AnalysisOutput, AnalyzeError> {
+    // Check if already cancelled
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
     // Walk the directory
     let entries = walk_directory(root, max_depth)?;
 
@@ -55,6 +64,11 @@ pub fn analyze_directory_with_progress(
     let analysis_results: Vec<FileInfo> = file_entries
         .par_iter()
         .filter_map(|entry| {
+            // Check cancellation per file
+            if ct.is_cancelled() {
+                return None;
+            }
+
             let path_str = entry.path.display().to_string();
 
             // Detect language from extension
@@ -100,6 +114,11 @@ pub fn analyze_directory_with_progress(
         })
         .collect();
 
+    // Check if cancelled after parallel processing
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
     // Format output
     let formatted = format_structure(&entries, &analysis_results, max_depth);
 
@@ -116,7 +135,8 @@ pub fn analyze_directory(
     max_depth: Option<u32>,
 ) -> Result<AnalysisOutput, AnalyzeError> {
     let counter = Arc::new(AtomicUsize::new(0));
-    analyze_directory_with_progress(root, max_depth, counter)
+    let ct = CancellationToken::new();
+    analyze_directory_with_progress(root, max_depth, counter, ct)
 }
 
 /// Determine analysis mode based on parameters and path.
@@ -185,7 +205,13 @@ pub fn analyze_focused_with_progress(
     max_depth: Option<u32>,
     ast_recursion_limit: Option<usize>,
     progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    // Check if already cancelled
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
     // Check if path is a file (hint to use directory)
     if root.is_file() {
         let formatted =
@@ -203,6 +229,11 @@ pub fn analyze_focused_with_progress(
     let analysis_results: Vec<(PathBuf, SemanticAnalysis)> = file_entries
         .par_iter()
         .filter_map(|entry| {
+            // Check cancellation per file
+            if ct.is_cancelled() {
+                return None;
+            }
+
             let ext = entry.path.extension().and_then(|e| e.to_str());
 
             // Try to read file content
@@ -240,6 +271,11 @@ pub fn analyze_focused_with_progress(
         })
         .collect();
 
+    // Check if cancelled after parallel processing
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
     // Build call graph
     let graph = CallGraph::build_from_results(analysis_results)?;
 
@@ -259,6 +295,7 @@ pub fn analyze_focused(
     ast_recursion_limit: Option<usize>,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     let counter = Arc::new(AtomicUsize::new(0));
+    let ct = CancellationToken::new();
     analyze_focused_with_progress(
         root,
         focus,
@@ -266,5 +303,6 @@ pub fn analyze_focused(
         max_depth,
         ast_recursion_limit,
         counter,
+        ct,
     )
 }
