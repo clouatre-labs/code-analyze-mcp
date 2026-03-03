@@ -1,11 +1,14 @@
 mod fixtures;
 
-use code_analyze_mcp::analyze::{analyze_directory, analyze_file, determine_mode};
+use code_analyze_mcp::analyze::{
+    analyze_directory, analyze_directory_with_progress, analyze_file, determine_mode,
+};
 use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
 use code_analyze_mcp::traversal::walk_directory;
 use code_analyze_mcp::types::AnalysisMode;
 use std::fs;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -1072,4 +1075,55 @@ fn test_output_limiting_below_threshold() {
         output.formatted.contains("FILE:"),
         "Should contain FILE header"
     );
+}
+
+#[test]
+fn test_analyze_directory_with_progress_increments_counter() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create test structure with known file count
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("src/lib.rs"), "pub fn lib_fn() {}").unwrap();
+    fs::write(root.join("README.md"), "# Test").unwrap();
+
+    // Analyze with progress counter
+    let counter = Arc::new(AtomicUsize::new(0));
+    let output = analyze_directory_with_progress(root, None, counter.clone()).unwrap();
+
+    // Verify counter was incremented for each file
+    let final_count = counter.load(Ordering::Relaxed);
+    assert_eq!(
+        final_count, 3,
+        "Counter should equal number of files analyzed"
+    );
+
+    // Verify analysis output is correct
+    assert!(
+        !output.formatted.is_empty(),
+        "Formatted output should not be empty"
+    );
+    assert_eq!(output.files.len(), 3, "Should have analyzed 3 files");
+}
+
+#[test]
+fn test_analyze_directory_with_progress_empty_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Analyze empty directory with progress counter
+    let counter = Arc::new(AtomicUsize::new(0));
+    let output = analyze_directory_with_progress(root, None, counter.clone()).unwrap();
+
+    // Verify counter is 0 for empty directory
+    let final_count = counter.load(Ordering::Relaxed);
+    assert_eq!(final_count, 0, "Counter should be 0 for empty directory");
+
+    // Verify analysis output is valid
+    assert!(
+        !output.formatted.is_empty(),
+        "Formatted output should not be empty"
+    );
+    assert_eq!(output.files.len(), 0, "Should have no files");
 }

@@ -12,17 +12,24 @@ use cache::AnalysisCache;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
-    ErrorData, Implementation, InitializeResult, ProtocolVersion, ServerCapabilities,
+    ErrorData, Implementation, InitializeResult, Notification, NumberOrString,
+    ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
+    ServerNotification,
 };
-use rmcp::{ServerHandler, tool, tool_handler, tool_router};
+use rmcp::service::NotificationContext;
+use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use std::path::Path;
-use tracing::instrument;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tracing::{instrument, warn};
+use traversal::walk_directory;
 use types::{AnalysisMode, AnalysisResult, AnalyzeParams};
 
 #[derive(Clone)]
 pub struct CodeAnalyzer {
     tool_router: ToolRouter<Self>,
     cache: AnalysisCache,
+    peer: Arc<Mutex<Option<Peer<RoleServer>>>>,
 }
 
 #[tool_router]
@@ -31,6 +38,31 @@ impl CodeAnalyzer {
         CodeAnalyzer {
             tool_router: Self::tool_router(),
             cache: AnalysisCache::new(100),
+            peer: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    #[instrument(skip(self))]
+    async fn emit_progress(
+        &self,
+        token: &ProgressToken,
+        progress: f64,
+        total: f64,
+        message: String,
+    ) {
+        let peer = self.peer.lock().await.clone();
+        if let Some(peer) = peer {
+            let notification = ServerNotification::ProgressNotification(Notification::new(
+                ProgressNotificationParam {
+                    progress_token: token.clone(),
+                    progress,
+                    total: Some(total),
+                    message: Some(message),
+                },
+            ));
+            if let Err(e) = peer.send_notification(notification).await {
+                warn!("Failed to send progress notification: {}", e);
+            }
         }
     }
 
@@ -59,11 +91,75 @@ impl CodeAnalyzer {
         let mode_result = match mode {
             AnalysisMode::Overview => {
                 let path = Path::new(&params.path);
-                match analyze::analyze_directory(path, params.max_depth) {
-                    Ok(output) => types::ModeResult::Overview(output),
-                    Err(e) => {
+                let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                let counter_clone = counter.clone();
+                let path_owned = path.to_path_buf();
+                let max_depth = params.max_depth;
+
+                // Get total file count for progress reporting
+                let total_files = match walk_directory(path, max_depth) {
+                    Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
+                    Err(_) => 0,
+                };
+
+                // Spawn blocking analysis with progress tracking
+                let handle = tokio::task::spawn_blocking(move || {
+                    analyze::analyze_directory_with_progress(&path_owned, max_depth, counter_clone)
+                });
+
+                // Poll and emit progress every 100ms
+                let token = ProgressToken(NumberOrString::String(
+                    format!(
+                        "analyze-overview-{}",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_nanos())
+                            .unwrap_or(0)
+                    )
+                    .into(),
+                ));
+                let mut last_progress = 0usize;
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    let current = counter.load(std::sync::atomic::Ordering::Relaxed);
+                    if current != last_progress && total_files > 0 {
+                        self.emit_progress(
+                            &token,
+                            current as f64,
+                            total_files as f64,
+                            format!("Analyzing {}/{} files", current, total_files),
+                        )
+                        .await;
+                        last_progress = current;
+                    }
+                    if handle.is_finished() {
+                        break;
+                    }
+                }
+
+                // Emit final 100% progress
+                if total_files > 0 {
+                    self.emit_progress(
+                        &token,
+                        total_files as f64,
+                        total_files as f64,
+                        format!("Completed analyzing {} files", total_files),
+                    )
+                    .await;
+                }
+
+                match handle.await {
+                    Ok(Ok(output)) => types::ModeResult::Overview(output),
+                    Ok(Err(e)) => {
                         let output = analyze::AnalysisOutput {
                             formatted: format!("Error analyzing directory: {}", e),
+                            files: vec![],
+                        };
+                        types::ModeResult::Overview(output)
+                    }
+                    Err(e) => {
+                        let output = analyze::AnalysisOutput {
+                            formatted: format!("Task join error: {}", e),
                             files: vec![],
                         };
                         types::ModeResult::Overview(output)
@@ -125,17 +221,90 @@ impl CodeAnalyzer {
             AnalysisMode::SymbolFocus => {
                 let focus = params.focus.as_deref().unwrap_or("");
                 let follow_depth = params.follow_depth.unwrap_or(1);
-                match analyze::analyze_focused(
-                    Path::new(&params.path),
-                    focus,
-                    follow_depth,
-                    params.max_depth,
-                    params.ast_recursion_limit,
-                ) {
-                    Ok(output) => types::ModeResult::SymbolFocus(output),
-                    Err(e) => {
+                let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                let counter_clone = counter.clone();
+                let path = Path::new(&params.path);
+                let path_owned = path.to_path_buf();
+                let max_depth = params.max_depth;
+                let focus_owned = focus.to_string();
+                let ast_recursion_limit = params.ast_recursion_limit;
+
+                // Get total file count for progress reporting
+                let total_files = match walk_directory(path, max_depth) {
+                    Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
+                    Err(_) => 0,
+                };
+
+                // Spawn blocking analysis with progress tracking
+                let handle = tokio::task::spawn_blocking(move || {
+                    analyze::analyze_focused_with_progress(
+                        &path_owned,
+                        &focus_owned,
+                        follow_depth,
+                        max_depth,
+                        ast_recursion_limit,
+                        counter_clone,
+                    )
+                });
+
+                // Poll and emit progress every 100ms
+                let token = ProgressToken(NumberOrString::String(
+                    format!(
+                        "analyze-symbol-{}",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_nanos())
+                            .unwrap_or(0)
+                    )
+                    .into(),
+                ));
+                let mut last_progress = 0usize;
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    let current = counter.load(std::sync::atomic::Ordering::Relaxed);
+                    if current != last_progress && total_files > 0 {
+                        self.emit_progress(
+                            &token,
+                            current as f64,
+                            total_files as f64,
+                            format!(
+                                "Analyzing {}/{} files for symbol '{}'",
+                                current, total_files, focus
+                            ),
+                        )
+                        .await;
+                        last_progress = current;
+                    }
+                    if handle.is_finished() {
+                        break;
+                    }
+                }
+
+                // Emit final 100% progress
+                if total_files > 0 {
+                    self.emit_progress(
+                        &token,
+                        total_files as f64,
+                        total_files as f64,
+                        format!(
+                            "Completed analyzing {} files for symbol '{}'",
+                            total_files, focus
+                        ),
+                    )
+                    .await;
+                }
+
+                match handle.await {
+                    Ok(Ok(output)) => types::ModeResult::SymbolFocus(output),
+                    Ok(Err(e)) => {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: format!("Error analyzing symbol focus: {}", e),
+                        };
+                        types::ModeResult::SymbolFocus(output)
+                    }
+                    Err(e) => {
+                        let output = analyze::FocusedAnalysisOutput {
+                            formatted: format!("Task join error: {}", e),
                         };
                         types::ModeResult::SymbolFocus(output)
                     }
@@ -248,5 +417,10 @@ impl ServerHandler for CodeAnalyzer {
             },
             instructions: Some("Analyze code structure using three modes: directory overview (file tree with metrics), file details (functions/classes/imports), or symbol focus (call graphs). Provide a path and optionally specify mode and max_depth.".into()),
         }
+    }
+
+    async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
+        let mut peer_lock = self.peer.lock().await;
+        *peer_lock = Some(context.peer);
     }
 }

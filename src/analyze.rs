@@ -6,6 +6,8 @@ use crate::traversal::{WalkEntry, walk_directory};
 use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -36,11 +38,12 @@ pub struct FileAnalysisOutput {
     pub line_count: usize,
 }
 
-/// Analyze a directory structure and return formatted output and file data.
+/// Analyze a directory structure with progress tracking.
 #[instrument(skip_all, fields(path = %root.display()))]
-pub fn analyze_directory(
+pub fn analyze_directory_with_progress(
     root: &Path,
     max_depth: Option<u32>,
+    progress: Arc<AtomicUsize>,
 ) -> Result<AnalysisOutput, AnalyzeError> {
     // Walk the directory
     let entries = walk_directory(root, max_depth)?;
@@ -62,6 +65,7 @@ pub fn analyze_directory(
                 Ok(content) => content,
                 Err(_) => {
                     // Binary file or unreadable - exclude from output
+                    progress.fetch_add(1, Ordering::Relaxed);
                     return None;
                 }
             };
@@ -84,6 +88,8 @@ pub fn analyze_directory(
                 ("unknown".to_string(), 0, 0)
             };
 
+            progress.fetch_add(1, Ordering::Relaxed);
+
             Some(FileInfo {
                 path: path_str,
                 line_count,
@@ -101,6 +107,16 @@ pub fn analyze_directory(
         formatted,
         files: analysis_results,
     })
+}
+
+/// Analyze a directory structure and return formatted output and file data.
+#[instrument(skip_all, fields(path = %root.display()))]
+pub fn analyze_directory(
+    root: &Path,
+    max_depth: Option<u32>,
+) -> Result<AnalysisOutput, AnalyzeError> {
+    let counter = Arc::new(AtomicUsize::new(0));
+    analyze_directory_with_progress(root, max_depth, counter)
 }
 
 /// Determine analysis mode based on parameters and path.
@@ -160,14 +176,15 @@ pub struct FocusedAnalysisOutput {
     pub formatted: String,
 }
 
-/// Analyze a symbol's call graph across a directory.
+/// Analyze a symbol's call graph across a directory with progress tracking.
 #[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
-pub fn analyze_focused(
+pub fn analyze_focused_with_progress(
     root: &Path,
     focus: &str,
     follow_depth: u32,
     max_depth: Option<u32>,
     ast_recursion_limit: Option<usize>,
+    progress: Arc<AtomicUsize>,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     // Check if path is a file (hint to use directory)
     if root.is_file() {
@@ -191,7 +208,10 @@ pub fn analyze_focused(
             // Try to read file content
             let source = match std::fs::read_to_string(&entry.path) {
                 Ok(content) => content,
-                Err(_) => return None,
+                Err(_) => {
+                    progress.fetch_add(1, Ordering::Relaxed);
+                    return None;
+                }
             };
 
             // Detect language and extract semantic information
@@ -209,9 +229,13 @@ pub fn analyze_focused(
                     for r in &mut semantic.references {
                         r.location = entry.path.display().to_string();
                     }
+                    progress.fetch_add(1, Ordering::Relaxed);
                     Some((entry.path.clone(), semantic))
                 }
-                Err(_) => None,
+                Err(_) => {
+                    progress.fetch_add(1, Ordering::Relaxed);
+                    None
+                }
             }
         })
         .collect();
@@ -223,4 +247,24 @@ pub fn analyze_focused(
     let formatted = format_focused(&graph, focus, follow_depth)?;
 
     Ok(FocusedAnalysisOutput { formatted })
+}
+
+/// Analyze a symbol's call graph across a directory.
+#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
+pub fn analyze_focused(
+    root: &Path,
+    focus: &str,
+    follow_depth: u32,
+    max_depth: Option<u32>,
+    ast_recursion_limit: Option<usize>,
+) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    let counter = Arc::new(AtomicUsize::new(0));
+    analyze_focused_with_progress(
+        root,
+        focus,
+        follow_depth,
+        max_depth,
+        ast_recursion_limit,
+        counter,
+    )
 }
