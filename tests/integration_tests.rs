@@ -419,3 +419,462 @@ fn test_semantic_analysis_empty_file() {
     assert!(!output.formatted.contains("I:"));
     assert!(!output.formatted.contains("R:"));
 }
+
+#[test]
+fn test_python_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.py");
+
+    let python_code = r#"
+def hello():
+    print("Hello")
+
+def world():
+    print("World")
+
+class MyClass:
+    def method(self):
+        pass
+"#;
+
+    fs::write(&file_path, python_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify functions extracted (hello, world, method)
+    assert_eq!(output.semantic.functions.len(), 3);
+    assert!(output.semantic.functions.iter().any(|f| f.name == "hello"));
+    assert!(output.semantic.functions.iter().any(|f| f.name == "world"));
+    assert!(output.semantic.functions.iter().any(|f| f.name == "method"));
+
+    // Verify class extracted
+    assert_eq!(output.semantic.classes.len(), 1);
+    assert_eq!(output.semantic.classes[0].name, "MyClass");
+}
+
+#[test]
+fn test_python_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.py");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_javascript_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.js");
+
+    let js_code = r#"
+function hello() {
+    console.log("Hello");
+}
+
+class MyClass {
+    method() {
+        return 42;
+    }
+}
+
+const arrow = () => {
+    return "arrow";
+};
+"#;
+
+    fs::write(&file_path, js_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify functions extracted (hello, method)
+    assert_eq!(output.semantic.functions.len(), 2);
+    assert!(output.semantic.functions.iter().any(|f| f.name == "hello"));
+
+    // Verify class extracted
+    assert_eq!(output.semantic.classes.len(), 1);
+    assert_eq!(output.semantic.classes[0].name, "MyClass");
+}
+
+#[test]
+fn test_javascript_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.js");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_typescript_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.ts");
+
+    let ts_code = r#"
+function hello(): void {
+    console.log("Hello");
+}
+
+interface MyInterface {
+    name: string;
+}
+
+type MyType = {
+    id: number;
+};
+
+enum MyEnum {
+    A = 1,
+    B = 2,
+}
+
+abstract class AbstractClass {
+    abstract method(): void;
+}
+
+class MyClass {
+    method(): string {
+        return "test";
+    }
+}
+"#;
+
+    fs::write(&file_path, ts_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify function extracted
+    assert!(output.semantic.functions.iter().any(|f| f.name == "hello"));
+
+    // Verify classes and TS-specific types extracted
+    assert!(output.semantic.classes.len() >= 4);
+    let class_names: Vec<&str> = output
+        .semantic
+        .classes
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert!(class_names.contains(&"MyInterface"));
+    assert!(class_names.contains(&"MyType"));
+    assert!(class_names.contains(&"MyEnum"));
+    assert!(class_names.contains(&"AbstractClass"));
+    assert!(class_names.contains(&"MyClass"));
+}
+
+#[test]
+fn test_typescript_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.ts");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_go_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.go");
+
+    let go_code = r#"
+package main
+
+func Hello() {
+    println("Hello")
+}
+
+type MyStruct struct {
+    Name string
+}
+
+type MyInterface interface {
+    Method()
+}
+"#;
+
+    fs::write(&file_path, go_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify function extracted
+    assert!(output.semantic.functions.iter().any(|f| f.name == "Hello"));
+
+    // Verify types extracted as classes
+    assert!(output.semantic.classes.len() >= 2);
+    let class_names: Vec<&str> = output
+        .semantic
+        .classes
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert!(class_names.contains(&"MyStruct"));
+    assert!(class_names.contains(&"MyInterface"));
+}
+
+#[test]
+fn test_go_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.go");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_java_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("Test.java");
+
+    let java_code = r#"
+public class MyClass {
+    public void method() {
+        System.out.println("Hello");
+    }
+}
+
+interface MyInterface {
+    void doSomething();
+}
+
+enum MyEnum {
+    A, B, C
+}
+"#;
+
+    fs::write(&file_path, java_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify method extracted
+    assert!(output.semantic.functions.iter().any(|f| f.name == "method"));
+
+    // Verify classes extracted
+    assert!(output.semantic.classes.len() >= 3);
+    let class_names: Vec<&str> = output
+        .semantic
+        .classes
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert!(class_names.contains(&"MyClass"));
+    assert!(class_names.contains(&"MyInterface"));
+    assert!(class_names.contains(&"MyEnum"));
+}
+
+#[test]
+fn test_java_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.java");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_kotlin_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.kt");
+
+    let kotlin_code = r#"
+fun hello() {
+    println("Hello")
+}
+
+class MyClass {
+    fun method() {
+        println("Method")
+    }
+}
+
+object MySingleton {
+    fun doSomething() {
+        println("Singleton")
+    }
+}
+"#;
+
+    fs::write(&file_path, kotlin_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify functions extracted
+    assert!(output.semantic.functions.iter().any(|f| f.name == "hello"));
+    assert!(output.semantic.functions.iter().any(|f| f.name == "method"));
+    assert!(
+        output
+            .semantic
+            .functions
+            .iter()
+            .any(|f| f.name == "doSomething")
+    );
+
+    // Verify classes extracted
+    assert!(output.semantic.classes.len() >= 2);
+    let class_names: Vec<&str> = output
+        .semantic
+        .classes
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert!(class_names.contains(&"MyClass"));
+    assert!(class_names.contains(&"MySingleton"));
+}
+
+#[test]
+fn test_kotlin_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.kt");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_swift_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.swift");
+
+    let swift_code = r#"
+func hello() {
+    print("Hello")
+}
+
+class MyClass {
+    func method() {
+        print("Method")
+    }
+}
+
+struct MyStruct {
+    var name: String
+}
+
+protocol MyProtocol {
+    func doSomething()
+}
+
+enum MyEnum {
+    case a
+    case b
+}
+"#;
+
+    fs::write(&file_path, swift_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify function extracted
+    assert!(output.semantic.functions.iter().any(|f| f.name == "hello"));
+    assert!(output.semantic.functions.iter().any(|f| f.name == "method"));
+
+    // Verify types extracted
+    assert!(output.semantic.classes.len() >= 4);
+    let class_names: Vec<&str> = output
+        .semantic
+        .classes
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert!(class_names.contains(&"MyClass"));
+    assert!(class_names.contains(&"MyStruct"));
+    assert!(class_names.contains(&"MyProtocol"));
+    assert!(class_names.contains(&"MyEnum"));
+}
+
+#[test]
+fn test_swift_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.swift");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_ruby_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rb");
+
+    let ruby_code = r#"
+def hello
+  puts "Hello"
+end
+
+class MyClass
+  def method
+    puts "Method"
+  end
+end
+
+module MyModule
+  def module_method
+    puts "Module"
+  end
+end
+"#;
+
+    fs::write(&file_path, ruby_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify methods extracted
+    assert!(output.semantic.functions.iter().any(|f| f.name == "hello"));
+    assert!(output.semantic.functions.iter().any(|f| f.name == "method"));
+    assert!(
+        output
+            .semantic
+            .functions
+            .iter()
+            .any(|f| f.name == "module_method")
+    );
+
+    // Verify classes/modules extracted
+    assert!(output.semantic.classes.len() >= 2);
+    let class_names: Vec<&str> = output
+        .semantic
+        .classes
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert!(class_names.contains(&"MyClass"));
+    assert!(class_names.contains(&"MyModule"));
+}
+
+#[test]
+fn test_ruby_edge_case_empty_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("empty.rb");
+
+    fs::write(&file_path, "").unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    assert_eq!(output.semantic.functions.len(), 0);
+    assert_eq!(output.semantic.classes.len(), 0);
+}

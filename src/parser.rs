@@ -322,80 +322,84 @@ impl SemanticExtractor {
         }
 
         // Extract imports
-        let import_query = Query::new(&lang_info.language, crate::languages::rust::IMPORT_QUERY)
-            .map_err(|e| ParserError::QueryError(e.to_string()))?;
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
+        if let Some(import_query_str) = lang_info.import_query {
+            let import_query = Query::new(&lang_info.language, import_query_str)
+                .map_err(|e| ParserError::QueryError(e.to_string()))?;
+            let mut cursor = QueryCursor::new();
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
+            }
 
-        let mut matches = cursor.matches(&import_query, tree.root_node(), source.as_bytes());
-        while let Some(mat) = matches.next() {
-            for capture in mat.captures {
-                let capture_name = import_query.capture_names()[capture.index as usize];
-                if capture_name == "import_path" {
-                    let node = capture.node;
-                    let line = node.start_position().row + 1;
-                    extract_imports_from_node(&node, source, "", line, &mut imports);
+            let mut matches = cursor.matches(&import_query, tree.root_node(), source.as_bytes());
+            while let Some(mat) = matches.next() {
+                for capture in mat.captures {
+                    let capture_name = import_query.capture_names()[capture.index as usize];
+                    if capture_name == "import_path" {
+                        let node = capture.node;
+                        let line = node.start_position().row + 1;
+                        extract_imports_from_node(&node, source, "", line, &mut imports);
+                    }
                 }
             }
         }
 
         // Populate class methods from impl blocks
-        let impl_query = Query::new(&lang_info.language, crate::languages::rust::IMPL_QUERY)
-            .map_err(|e| ParserError::QueryError(e.to_string()))?;
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-
-        let mut matches = cursor.matches(&impl_query, tree.root_node(), source.as_bytes());
-        while let Some(mat) = matches.next() {
-            let mut impl_type_name = String::new();
-            let mut method_name = String::new();
-            let mut method_line = 0usize;
-            let mut method_end_line = 0usize;
-            let mut method_params = String::new();
-            let mut method_return_type: Option<String> = None;
-
-            for capture in mat.captures {
-                let capture_name = impl_query.capture_names()[capture.index as usize];
-                let node = capture.node;
-                match capture_name {
-                    "impl_type" => {
-                        impl_type_name = source[node.start_byte()..node.end_byte()].to_string();
-                    }
-                    "method_name" => {
-                        method_name = source[node.start_byte()..node.end_byte()].to_string();
-                    }
-                    "method_params" => {
-                        method_params = source[node.start_byte()..node.end_byte()].to_string();
-                    }
-                    "method" => {
-                        method_line = node.start_position().row + 1;
-                        method_end_line = node.end_position().row + 1;
-                        method_return_type = node
-                            .child_by_field_name("return_type")
-                            .map(|r| source[r.start_byte()..r.end_byte()].to_string());
-                    }
-                    _ => {}
-                }
+        if let Some(impl_query_str) = lang_info.impl_query {
+            let impl_query = Query::new(&lang_info.language, impl_query_str)
+                .map_err(|e| ParserError::QueryError(e.to_string()))?;
+            let mut cursor = QueryCursor::new();
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
             }
 
-            if !impl_type_name.is_empty() && !method_name.is_empty() {
-                let func = FunctionInfo {
-                    name: method_name,
-                    line: method_line,
-                    end_line: method_end_line,
-                    parameters: if method_params.is_empty() {
-                        Vec::new()
-                    } else {
-                        vec![method_params]
-                    },
-                    return_type: method_return_type,
-                };
-                if let Some(class) = classes.iter_mut().find(|c| c.name == impl_type_name) {
-                    class.methods.push(func);
+            let mut matches = cursor.matches(&impl_query, tree.root_node(), source.as_bytes());
+            while let Some(mat) = matches.next() {
+                let mut impl_type_name = String::new();
+                let mut method_name = String::new();
+                let mut method_line = 0usize;
+                let mut method_end_line = 0usize;
+                let mut method_params = String::new();
+                let mut method_return_type: Option<String> = None;
+
+                for capture in mat.captures {
+                    let capture_name = impl_query.capture_names()[capture.index as usize];
+                    let node = capture.node;
+                    match capture_name {
+                        "impl_type" => {
+                            impl_type_name = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "method_name" => {
+                            method_name = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "method_params" => {
+                            method_params = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "method" => {
+                            method_line = node.start_position().row + 1;
+                            method_end_line = node.end_position().row + 1;
+                            method_return_type = node
+                                .child_by_field_name("return_type")
+                                .map(|r| source[r.start_byte()..r.end_byte()].to_string());
+                        }
+                        _ => {}
+                    }
+                }
+
+                if !impl_type_name.is_empty() && !method_name.is_empty() {
+                    let func = FunctionInfo {
+                        name: method_name,
+                        line: method_line,
+                        end_line: method_end_line,
+                        parameters: if method_params.is_empty() {
+                            Vec::new()
+                        } else {
+                            vec![method_params]
+                        },
+                        return_type: method_return_type,
+                    };
+                    if let Some(class) = classes.iter_mut().find(|c| c.name == impl_type_name) {
+                        class.methods.push(func);
+                    }
                 }
             }
         }
