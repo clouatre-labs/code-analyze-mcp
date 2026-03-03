@@ -1,5 +1,6 @@
 use ignore::WalkBuilder;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use thiserror::Error;
 use tracing::instrument;
 
@@ -25,6 +26,7 @@ pub fn walk_directory(
     root: &Path,
     max_depth: Option<u32>,
 ) -> Result<Vec<WalkEntry>, TraversalError> {
+    let start = Instant::now();
     let mut builder = WalkBuilder::new(root);
     builder.hidden(true).standard_filters(true);
 
@@ -65,6 +67,17 @@ pub fn walk_directory(
             }
         }
     }
+
+    let dir_count = entries.iter().filter(|e| e.is_dir).count();
+    let file_count = entries.iter().filter(|e| !e.is_dir).count();
+
+    tracing::debug!(
+        entries = entries.len(),
+        dirs = dir_count,
+        files = file_count,
+        duration_ms = start.elapsed().as_millis() as u64,
+        "walk complete"
+    );
 
     Ok(entries)
 }

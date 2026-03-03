@@ -76,6 +76,17 @@ impl CallGraph {
             }
         }
 
+        let total_edges = graph.callees.values().map(|v| v.len()).sum::<usize>()
+            + graph.callers.values().map(|v| v.len()).sum::<usize>();
+        let file_count = results.len();
+
+        tracing::debug!(
+            definitions = graph.definitions.len(),
+            edges = total_edges,
+            files = file_count,
+            "graph built"
+        );
+
         Ok(graph)
     }
 

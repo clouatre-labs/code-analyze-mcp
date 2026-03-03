@@ -3,7 +3,7 @@ use rmcp::RoleServer;
 use rmcp::model::{
     LoggingLevel, LoggingMessageNotificationParam, Notification, ServerNotification,
 };
-use serde_json::json;
+use serde_json::{Map, Value};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as TokioMutex;
 use tracing::span::Attributes;
@@ -58,9 +58,9 @@ where
         }
         drop(filter_level);
 
-        // Extract message from the event using a visitor.
-        let mut message = String::new();
-        let mut visitor = MessageVisitor(&mut message);
+        // Extract fields from the event using a visitor that collects into a Map.
+        let mut fields = Map::new();
+        let mut visitor = MessageVisitor(&mut fields);
         event.record(&mut visitor);
 
         let mcp_level = level_to_mcp(&level);
@@ -68,7 +68,7 @@ where
         // Spawn async task to send notification without blocking on_event.
         let peer = self.peer.clone();
         let logger = target.to_string();
-        let msg = message.clone();
+        let data = Value::Object(fields);
 
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             handle.spawn(async move {
@@ -78,7 +78,7 @@ where
                         Notification::new(LoggingMessageNotificationParam {
                             level: mcp_level,
                             logger: Some(logger),
-                            data: json!(msg),
+                            data,
                         }),
                     );
                     if let Err(e) = peer.send_notification(notification).await {
@@ -106,23 +106,33 @@ where
     fn on_new_span(&self, _attrs: &Attributes<'_>, _id: &tracing::span::Id, _ctx: Context<'_, S>) {}
 }
 
-/// Visitor to extract message from tracing event.
-struct MessageVisitor<'a>(&'a mut String);
+/// Visitor to extract fields from tracing event into a JSON Map.
+struct MessageVisitor<'a>(&'a mut Map<String, Value>);
 
 impl<'a> tracing::field::Visit for MessageVisitor<'a> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "message" {
-            self.0.push_str(&format!("{:?}", value));
-        } else {
-            self.0.push_str(&format!("{}={:?}", field.name(), value));
-        }
+        self.0.insert(
+            field.name().to_string(),
+            Value::String(format!("{:?}", value)),
+        );
     }
 
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        if field.name() == "message" {
-            self.0.push_str(value);
-        } else {
-            self.0.push_str(&format!("{}={}", field.name(), value));
-        }
+        self.0
+            .insert(field.name().to_string(), Value::String(value.to_string()));
+    }
+
+    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+        self.0
+            .insert(field.name().to_string(), Value::Number(value.into()));
+    }
+
+    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
+        self.0
+            .insert(field.name().to_string(), Value::Number(value.into()));
+    }
+
+    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
+        self.0.insert(field.name().to_string(), Value::Bool(value));
     }
 }
