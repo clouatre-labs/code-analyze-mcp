@@ -93,11 +93,43 @@ jobs:
       - name: Run Clippy lints
         run: cargo clippy -- -D warnings
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: stable
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Run tests
+        run: cargo test
+
+  deny:
+    name: Audit Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@d6e286fa45544157a02d45a43742857ebbc25d12 # v2
+        with:
+          tool: cargo-deny
+      - name: Check advisories and licenses
+        run: cargo deny check advisories licenses
+
   ci-result:
     name: CI Result
     runs-on: ubuntu-latest
     if: always()
-    needs: [commitlint, check-base, format, lint]
+    needs: [commitlint, check-base, format, lint, test, deny]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
