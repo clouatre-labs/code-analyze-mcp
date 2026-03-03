@@ -1,5 +1,6 @@
 pub mod analyze;
 pub mod cache;
+pub mod completion;
 pub mod formatter;
 pub mod graph;
 pub mod lang;
@@ -12,11 +13,11 @@ use cache::AnalysisCache;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
-    ErrorData, Implementation, InitializeResult, Notification, NumberOrString,
-    ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
-    ServerNotification,
+    CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData, Implementation,
+    InitializeResult, Notification, NumberOrString, ProgressNotificationParam, ProgressToken,
+    ProtocolVersion, ServerCapabilities, ServerNotification,
 };
-use rmcp::service::NotificationContext;
+use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use std::path::Path;
 use std::sync::Arc;
@@ -404,7 +405,10 @@ impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
         InitializeResult {
             protocol_version: ProtocolVersion::V_2025_06_18,
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            capabilities: ServerCapabilities::builder()
+                .enable_tools()
+                .enable_completions()
+                .build(),
             server_info: Implementation {
                 name: "code-analyze-mcp".into(),
                 version: "0.1.0".into(),
@@ -422,5 +426,62 @@ impl ServerHandler for CodeAnalyzer {
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
         let mut peer_lock = self.peer.lock().await;
         *peer_lock = Some(context.peer);
+    }
+
+    #[instrument(skip(self, _context))]
+    async fn complete(
+        &self,
+        request: CompleteRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CompleteResult, ErrorData> {
+        // Dispatch on argument name: "path" or "focus"
+        let argument_name = &request.argument.name;
+        let argument_value = &request.argument.value;
+
+        let completions = match argument_name.as_str() {
+            "path" => {
+                // Path completions: use current directory as root
+                let root = Path::new(".");
+                completion::path_completions(root, argument_value)
+            }
+            "focus" => {
+                // Focus completions: need the path argument from context
+                let path_arg = request
+                    .context
+                    .as_ref()
+                    .and_then(|ctx| ctx.get_argument("path"));
+
+                match path_arg {
+                    Some(path_str) => {
+                        let path = Path::new(path_str);
+                        completion::symbol_completions(&self.cache, path, argument_value)
+                    }
+                    None => Vec::new(),
+                }
+            }
+            _ => Vec::new(),
+        };
+
+        // Create CompletionInfo with has_more flag if >100 results
+        let total_count = completions.len() as u32;
+        let (values, has_more) = if completions.len() > 100 {
+            (completions.into_iter().take(100).collect(), true)
+        } else {
+            (completions, false)
+        };
+
+        let completion_info =
+            match CompletionInfo::with_pagination(values, Some(total_count), has_more) {
+                Ok(info) => info,
+                Err(_) => {
+                    // Graceful degradation: return empty on error
+                    CompletionInfo::with_all_values(Vec::new())
+                        .unwrap_or_else(|_| CompletionInfo::new(Vec::new()).unwrap())
+                }
+            };
+
+        Ok(CompleteResult {
+            completion: completion_info,
+        })
     }
 }
