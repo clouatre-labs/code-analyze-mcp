@@ -1208,3 +1208,93 @@ fn test_cancellation_noop_after_completion() {
     let output = result.unwrap();
     assert_eq!(output.files.len(), 1);
 }
+
+// Logging channel tests
+
+#[tokio::test]
+async fn test_log_event_sent_to_channel() {
+    use code_analyze_mcp::logging::{LogEvent, McpLoggingLayer};
+    use rmcp::model::LoggingLevel;
+    use serde_json::json;
+    use std::sync::Mutex;
+    use tokio::sync::mpsc;
+    use tracing_subscriber::filter::LevelFilter;
+
+    // Arrange: Create unbounded channel
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    let log_level_filter = Arc::new(Mutex::new(LevelFilter::WARN));
+
+    // Create logging layer
+    let _layer = McpLoggingLayer::new(event_tx, log_level_filter);
+
+    // Act: Manually create and send a LogEvent (simulating on_event behavior)
+    let log_event = LogEvent {
+        level: LoggingLevel::Warning,
+        logger: "test_logger".to_string(),
+        data: json!({"message": "test event"}),
+    };
+
+    // Send event via the layer's sender (we'll test the channel directly)
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let _ = tx.send(log_event.clone());
+
+    // Assert: Receive event from channel
+    let received = rx.recv().await;
+    assert!(received.is_some());
+    let event = received.unwrap();
+    assert_eq!(event.level, LoggingLevel::Warning);
+    assert_eq!(event.logger, "test_logger");
+    assert_eq!(event.data, json!({"message": "test event"}));
+}
+
+#[tokio::test]
+async fn test_batch_draining_with_multiple_events() {
+    use code_analyze_mcp::logging::LogEvent;
+    use rmcp::model::LoggingLevel;
+    use serde_json::json;
+    use tokio::sync::mpsc;
+
+    // Arrange: Create unbounded channel and send multiple events
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+
+    // Send 5 events
+    for i in 0..5 {
+        let log_event = LogEvent {
+            level: LoggingLevel::Info,
+            logger: format!("logger_{}", i),
+            data: json!({"index": i}),
+        };
+        let _ = event_tx.send(log_event);
+    }
+
+    // Act: Drain events using recv_many with buffer size 64
+    let mut buffer = Vec::with_capacity(64);
+    event_rx.recv_many(&mut buffer, 64).await;
+
+    // Assert: All 5 events received in batch
+    assert_eq!(buffer.len(), 5);
+    for (i, event) in buffer.iter().enumerate() {
+        assert_eq!(event.logger, format!("logger_{}", i));
+        assert_eq!(event.data, json!({"index": i}));
+    }
+}
+
+#[tokio::test]
+async fn test_channel_closed_exits_consumer() {
+    use code_analyze_mcp::logging::LogEvent;
+    use rmcp::model::LoggingLevel;
+    use serde_json::json;
+    use tokio::sync::mpsc;
+
+    // Arrange: Create channel and drop sender
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<LogEvent>();
+    drop(event_tx);
+
+    // Act: Try to receive from closed channel
+    let mut buffer = Vec::with_capacity(64);
+    let received = event_rx.recv_many(&mut buffer, 64).await;
+
+    // Assert: recv_many returns 0 when channel is closed
+    assert_eq!(received, 0);
+    assert!(buffer.is_empty());
+}

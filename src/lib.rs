@@ -11,19 +11,20 @@ pub mod traversal;
 pub mod types;
 
 use cache::AnalysisCache;
+use logging::LogEvent;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
     CancelledNotificationParam, CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData,
-    Implementation, InitializeResult, LoggingLevel, Notification, NumberOrString,
-    ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
+    Implementation, InitializeResult, LoggingLevel, LoggingMessageNotificationParam, Notification,
+    NumberOrString, ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
     ServerNotification, SetLevelRequestParams,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
@@ -35,6 +36,7 @@ pub struct CodeAnalyzer {
     cache: AnalysisCache,
     peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
     log_level_filter: Arc<Mutex<LevelFilter>>,
+    event_rx: Arc<TokioMutex<Option<mpsc::UnboundedReceiver<LogEvent>>>>,
 }
 
 #[tool_router]
@@ -42,12 +44,14 @@ impl CodeAnalyzer {
     pub fn new(
         peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
         log_level_filter: Arc<Mutex<LevelFilter>>,
+        event_rx: mpsc::UnboundedReceiver<LogEvent>,
     ) -> Self {
         CodeAnalyzer {
             tool_router: Self::tool_router(),
             cache: AnalysisCache::new(100),
             peer,
             log_level_filter,
+            event_rx: Arc::new(TokioMutex::new(Some(event_rx))),
         }
     }
 
@@ -461,7 +465,49 @@ impl ServerHandler for CodeAnalyzer {
 
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
         let mut peer_lock = self.peer.lock().await;
-        *peer_lock = Some(context.peer);
+        *peer_lock = Some(context.peer.clone());
+        drop(peer_lock);
+
+        // Spawn consumer task to drain log events from channel with batching.
+        let peer = self.peer.clone();
+        let event_rx = self.event_rx.clone();
+
+        tokio::spawn(async move {
+            let rx = {
+                let mut rx_lock = event_rx.lock().await;
+                rx_lock.take()
+            };
+
+            if let Some(mut receiver) = rx {
+                let mut buffer = Vec::with_capacity(64);
+                loop {
+                    // Drain up to 64 events from channel
+                    receiver.recv_many(&mut buffer, 64).await;
+
+                    if buffer.is_empty() {
+                        // Channel closed, exit consumer task
+                        break;
+                    }
+
+                    // Acquire peer lock once per batch
+                    let peer_lock = peer.lock().await;
+                    if let Some(peer) = peer_lock.as_ref() {
+                        for log_event in buffer.drain(..) {
+                            let notification = ServerNotification::LoggingMessageNotification(
+                                Notification::new(LoggingMessageNotificationParam {
+                                    level: log_event.level,
+                                    logger: Some(log_event.logger),
+                                    data: log_event.data,
+                                }),
+                            );
+                            if let Err(e) = peer.send_notification(notification).await {
+                                warn!("Failed to send logging notification: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     #[instrument(skip(self, _context))]
