@@ -1,0 +1,229 @@
+{
+  "benchmark_version": "v2",
+  "issue": "https://github.com/clouatre-labs/code-analyze-mcp/issues/64",
+  "date": "2026-03-03",
+  "goose": {
+    "version": "1.26.1",
+    "orchestrator_session_id": "20260303_120",
+    "sessions_db": "~/.local/share/goose/sessions/sessions.db"
+  },
+  "target_repo": {
+    "name": "sharkdp/bat",
+    "url": "https://github.com/sharkdp/bat",
+    "commit_sha": "cc5f782d28a8e6156b8ebd3346b0a7f7c49256e2",
+    "local_path": "/tmp/bat_check",
+    "loc": 10800,
+    "files": 40,
+    "language": "Rust"
+  },
+  "model": {
+    "name": "claude-haiku-4-5@20251001",
+    "provider": "gcp_vertex_ai",
+    "temperature": 0.5
+  },
+  "conditions": {
+    "control": {
+      "label": "A (control)",
+      "extensions": ["developer"],
+      "extensions_disabled": ["developer__analyze"],
+      "prompt_file": "prompt-control.md",
+      "description": "Pure rg + cat + text_editor, no structural analysis tools"
+    },
+    "treatment": {
+      "label": "B (treatment)",
+      "extensions": ["developer", "code-analyze-mcp"],
+      "extensions_disabled": ["developer__analyze"],
+      "prompt_file": "prompt-treatment.md",
+      "description": "code-analyze-mcp forced for structural queries"
+    }
+  },
+  "runs": [
+    {
+      "id": "A1",
+      "condition": "control",
+      "session_id": "20260303_121",
+      "total_tokens": 32953,
+      "input_tokens": 29668,
+      "output_tokens": 3285,
+      "wall_time_seconds": 40,
+      "tool_calls": 26,
+      "tool_breakdown": {
+        "analyze": 0,
+        "shell": 24,
+        "text_editor": 2
+      },
+      "tokens": {
+        "total": 32953,
+        "input": 29668,
+        "output": 3285
+      },
+      "score": {
+        "structural_accuracy": 3,
+        "cross_module_tracing": 3,
+        "approach_quality": 3,
+        "tool_efficiency": 0,
+        "total": 9
+      }
+    },
+    {
+      "id": "A2",
+      "condition": "control",
+      "session_id": "20260303_122",
+      "total_tokens": 30821,
+      "input_tokens": 27475,
+      "output_tokens": 3346,
+      "wall_time_seconds": 55,
+      "tool_calls": 37,
+      "tool_breakdown": {
+        "analyze": 0,
+        "shell": 35,
+        "text_editor": 2
+      },
+      "tokens": {
+        "total": 30821,
+        "input": 27475,
+        "output": 3346
+      },
+      "score": {
+        "structural_accuracy": 3,
+        "cross_module_tracing": 3,
+        "approach_quality": 3,
+        "tool_efficiency": 0,
+        "total": 9
+      }
+    },
+    {
+      "id": "A3",
+      "condition": "control",
+      "session_id": "20260303_123",
+      "total_tokens": 36614,
+      "input_tokens": 36118,
+      "output_tokens": 496,
+      "wall_time_seconds": 76,
+      "tool_calls": 31,
+      "tool_breakdown": {
+        "analyze": 0,
+        "shell": 29,
+        "text_editor": 2
+      },
+      "tokens": {
+        "total": 36614,
+        "input": 36118,
+        "output": 496
+      },
+      "score": {
+        "structural_accuracy": 3,
+        "cross_module_tracing": 3,
+        "approach_quality": 3,
+        "tool_efficiency": 0,
+        "total": 9
+      }
+    },
+    {
+      "id": "B1",
+      "condition": "treatment",
+      "session_id": "20260303_124",
+      "total_tokens": 26046,
+      "input_tokens": 23245,
+      "output_tokens": 2801,
+      "wall_time_seconds": 25,
+      "tool_calls": 22,
+      "tool_breakdown": {
+        "analyze": 21,
+        "shell": 0,
+        "text_editor": 1
+      },
+      "tokens": {
+        "total": 26046,
+        "input": 23245,
+        "output": 2801
+      },
+      "score": {
+        "structural_accuracy": 2,
+        "cross_module_tracing": 2,
+        "approach_quality": 2,
+        "tool_efficiency": 2,
+        "total": 8
+      }
+    },
+    {
+      "id": "B2",
+      "condition": "treatment",
+      "session_id": "20260303_125",
+      "total_tokens": 26144,
+      "input_tokens": 22723,
+      "output_tokens": 3421,
+      "wall_time_seconds": 23,
+      "tool_calls": 21,
+      "tool_breakdown": {
+        "analyze": 20,
+        "shell": 0,
+        "text_editor": 1
+      },
+      "tokens": {
+        "total": 26144,
+        "input": 22723,
+        "output": 3421
+      },
+      "score": {
+        "structural_accuracy": 2,
+        "cross_module_tracing": 3,
+        "approach_quality": 2,
+        "tool_efficiency": 2,
+        "total": 9
+      }
+    },
+    {
+      "id": "B3",
+      "condition": "treatment",
+      "session_id": "20260303_126",
+      "total_tokens": 26738,
+      "input_tokens": 22920,
+      "output_tokens": 3818,
+      "wall_time_seconds": 25,
+      "tool_calls": 21,
+      "tool_breakdown": {
+        "analyze": 20,
+        "shell": 0,
+        "text_editor": 1
+      },
+      "tokens": {
+        "total": 26738,
+        "input": 22920,
+        "output": 3818
+      },
+      "score": {
+        "structural_accuracy": 2,
+        "cross_module_tracing": 3,
+        "approach_quality": 2,
+        "tool_efficiency": 2,
+        "total": 9
+      }
+    }
+  ],
+  "rubric": {
+    "dimensions": [
+      "structural_accuracy",
+      "cross_module_tracing",
+      "approach_quality",
+      "tool_efficiency"
+    ],
+    "scale": "0-3 per dimension, 0-12 total",
+    "thresholds": {
+      "tool_efficiency": {
+        "0": ">25 calls",
+        "1": "16-25",
+        "2": "8-15",
+        "3": "<8 calls"
+      }
+    }
+  },
+  "code_analyze_mcp": {
+    "version": "0.1.0",
+    "modes_available": [
+      "Overview",
+      "FileDetails",
+      "SymbolFocus"
+    ]
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "run": "B-treatment",
+  "extensions_used": [
+    "developer",
+    "code-analyze-mcp"
+  ],
+  "tool_calls": {
+    "analyze": 1,
+    "text_editor": 8,
+    "shell": 11,
+    "total": 20
+  },
+  "findings": {
+    "query_call_sites_found": 6,
+    "call_sites": [
+      {
+        "line": 47,
+        "function": "ElementExtractor::extract_with_depth",
+        "query_type": "element_query",
+        "context": "Counts functions and classes for directory overview mode"
+      },
+      {
+        "line": 240,
+        "function": "SemanticExtractor::extract",
+        "query_type": "element_query",
+        "context": "Extracts functions and classes for file details mode"
+      },
+      {
+        "line": 306,
+        "function": "SemanticExtractor::extract",
+        "query_type": "call_query",
+        "context": "Extracts function calls and call frequency"
+      },
+      {
+        "line": 348,
+        "function": "SemanticExtractor::extract",
+        "query_type": "import_query",
+        "context": "Extracts import statements (optional per language)"
+      },
+      {
+        "line": 370,
+        "function": "SemanticExtractor::extract",
+        "query_type": "impl_query",
+        "context": "Extracts impl blocks and methods (optional per language)"
+      },
+      {
+        "line": 431,
+        "function": "SemanticExtractor::extract",
+        "query_type": "reference_query",
+        "context": "Extracts type references (optional per language)"
+      }
+    ],
+    "thread_safety_verified": true,
+    "thread_safety_details": {
+      "query_is_send": true,
+      "query_is_sync": true,
+      "verification_source": "tree-sitter 0.26.5 binding_rust/lib.rs declares 'unsafe impl Send for Query {}' and 'unsafe impl Sync for Query {}'",
+      "implication": "Query objects can be safely shared across threads and stored in static/thread-local caches"
+    },
+    "language_info_structure_understood": true,
+    "language_info_details": {
+      "location": "src/languages/mod.rs",
+      "structure": {
+        "name": "static &str",
+        "language": "tree_sitter::Language",
+        "element_query": "static &str",
+        "call_query": "static &str",
+        "reference_query": "Option<static &str>",
+        "import_query": "Option<static &str>",
+        "impl_query": "Option<static &str>"
+      },
+      "key_insight": "All query strings are static references, never change per language, enabling safe caching",
+      "languages_supported": 9,
+      "registry_pattern": "get_language_info(lang_name) -> Option<LanguageInfo> function returns fresh LanguageInfo struct on each call"
+    },
+    "extractor_patterns_understood": true,
+    "extractor_details": {
+      "ElementExtractor": {
+        "location": "src/parser.rs lines 27-68",
+        "method": "extract_with_depth(source, language) -> Result<(usize, usize)>",
+        "call_frequency": "Once per file in overview mode, up to thousands of files",
+        "query_compilation_cost": "HIGH - compiles element_query on every call"
+      },
+      "SemanticExtractor": {
+        "location": "src/parser.rs lines 196-469",
+        "method": "extract(source, language, ast_recursion_limit) -> Result<SemanticAnalysis>",
+        "call_frequency": "Once per file in file_details and symbol_focus modes",
+        "query_compilation_cost": "VERY HIGH - compiles up to 5 queries per call (element, call, import, impl, reference)",
+        "conditional_queries": "import_query, impl_query, reference_query are optional per language"
+      },
+      "current_bottleneck": "SemanticExtractor::extract recompiles 5-6 identical Query objects every time it's called, even for the same language"
+    },
+    "performance_impact": {
+      "current_behavior": "6 Query::new() calls per file × thousands of files = millions of redundant compilations",
+      "query_compilation_cost": "tree-sitter Query::new() parses and compiles S-expression patterns to bytecode; non-trivial CPU cost",
+      "cache_benefit": "Eliminate redundant compilation; reuse compiled Query objects across all files of same language",
+      "expected_improvement": "Proportional to query compilation time; likely 5-15% overall speedup depending on file count and language"
+    }
+  },
+  "approaches": [
+    {
+      "name": "Thread-Local HashMap Cache (Simplest)",
+      "description": "Store compiled Query objects in a thread-local HashMap keyed by (language_name, query_type). Lazily initialize on first access per thread.",
+      "implementation_sketch": "Create a new module query_cache.rs with thread_local! { static QUERY_CACHE: RefCell<HashMap<(String, &str), Query>> }. Add a get_or_compile_query(language, query_str) function that checks cache before calling Query::new().",
+      "pros": [
+        "Minimal code changes - only affects parser.rs and new query_cache.rs",
+        "No external dependencies (uses std HashMap and thread_local)",
+        "Thread-safe by design (thread_local ensures per-thread isolation)",
+        "No synchronization overhead (RefCell, no Mutex needed)",
+        "Easy to understand and debug",
+        "Works with existing thread-local PARSER pattern"
+      ],
+      "cons": [
+        "Cache not shared across threads (each thread has own copy)",
+        "In multi-threaded analysis (rayon), may duplicate cache entries",
+        "No eviction policy - grows unbounded (but only 6 queries per language)",
+        "Requires string allocation for HashMap keys"
+      ],
+      "complexity": "simple",
+      "files_touched": 2,
+      "estimated_loc_change": 50,
+      "cache_key_strategy": "(language_name: String, query_type: &str) or (language_name: String, query_str: &str)"
+    },
+    {
+      "name": "Global Arc<DashMap> Cache (Best for Parallelism)",
+      "description": "Store compiled Query objects in a global Arc-wrapped DashMap (concurrent hashmap). Lazily initialize on first access, shared across all threads.",
+      "implementation_sketch": "Add dashmap crate to Cargo.toml. Create query_cache.rs with lazy_static or once_cell: static QUERY_CACHE: Lazy<Arc<DashMap<QueryCacheKey, Arc<Query>>>> = Lazy::new(|| Arc::new(DashMap::new())). Define QueryCacheKey as (language_name: String, query_type: QueryType enum).",
+      "pros": [
+        "Cache shared across all threads (rayon workers benefit immediately)",
+        "Lock-free concurrent access (DashMap uses fine-grained locking)",
+        "Scales well with parallel file processing",
+        "Bounded memory (only 6 queries per language, ~9 languages = 54 max entries)",
+        "Lazy initialization avoids startup cost",
+        "Works seamlessly with rayon parallelism"
+      ],
+      "cons": [
+        "Adds external dependency (dashmap crate)",
+        "Slightly more complex than thread-local approach",
+        "Arc overhead for each cached Query",
+        "DashMap has small synchronization cost (acceptable for 6-entry cache)"
+      ],
+      "complexity": "medium",
+      "files_touched": 2,
+      "estimated_loc_change": 70,
+      "cache_key_strategy": "Enum-based QueryType { Element, Call, Import, Impl, Reference } + language_name string"
+    },
+    {
+      "name": "LanguageInfo Struct Extension (Most Elegant)",
+      "description": "Pre-compile Query objects at LanguageInfo creation time and store them as Arc<Query> fields in LanguageInfo. Move query compilation from parser.rs to languages/mod.rs.",
+      "implementation_sketch": "Extend LanguageInfo struct with Arc<Query> fields: element_query_compiled, call_query_compiled, import_query_compiled, impl_query_compiled, reference_query_compiled. In get_language_info(), compile queries once during LanguageInfo construction. Update parser.rs to use pre-compiled queries from lang_info instead of calling Query::new().",
+      "pros": [
+        "Eliminates caching logic entirely - queries compiled once at startup",
+        "No runtime cache lookups or synchronization",
+        "Compile-time safety (queries validated at LanguageInfo creation)",
+        "Queries live as long as LanguageInfo (natural lifecycle)",
+        "Minimal parser.rs changes (just use lang_info.element_query_compiled instead of Query::new())",
+        "Zero memory overhead (Arc is cheap)",
+        "Clearest intent: queries are part of language definition"
+      ],
+      "cons": [
+        "Requires modifying LanguageInfo struct (breaking change to type signature)",
+        "Startup cost moved to server initialization (compile all 6 queries × 9 languages = 54 queries upfront)",
+        "Harder to handle optional queries (import_query, impl_query, reference_query) - need Result handling",
+        "Requires refactoring get_language_info() to return Result<LanguageInfo, ParserError>",
+        "More files touched (languages/mod.rs, parser.rs, lib.rs error handling)"
+      ],
+      "complexity": "medium",
+      "files_touched": 4,
+      "estimated_loc_change": 120,
+      "cache_key_strategy": "No cache key needed; queries stored directly in LanguageInfo fields"
+    }
+  ],
+  "recommendation": {
+    "approach": "Approach 2: Global Arc<DashMap> Cache",
+    "rationale": [
+      "Best balance of simplicity and performance for the codebase's parallelism model (rayon-based file processing)",
+      "Cache is shared across all threads, eliminating redundant compilation in parallel analysis",
+      "Only 6 queries per language maximum (54 total entries) - DashMap synchronization overhead is negligible",
+      "Minimal changes to existing code: new query_cache.rs module + 6 function calls in parser.rs",
+      "Lazy initialization avoids startup cost; queries compiled on first access per language",
+      "Scales well as language support expands (currently 9, planned for more)",
+      "No breaking changes to LanguageInfo or public APIs",
+      "Approach 1 (thread-local) wastes cache space with rayon (each worker thread duplicates entries)",
+      "Approach 3 (LanguageInfo extension) requires more refactoring and moves compilation cost to startup"
+    ],
+    "implementation_steps": [
+      "1. Add dashmap = \"5\" to Cargo.toml",
+      "2. Create src/query_cache.rs with QueryCacheKey enum and get_or_compile_query() function",
+      "3. Replace 6 Query::new() calls in parser.rs with get_or_compile_query() calls",
+      "4. Add unit tests for cache hits and misses",
+      "5. Benchmark with large file sets to measure improvement"
+    ],
+    "expected_impact": "5-15% overall speedup for large directory analysis; more significant for repeated file analysis (FileDetails mode)"
+  },
+  "additional_notes": {
+    "query_string_immutability": "All query strings (element_query, call_query, etc.) are static &str defined in language modules, never change, enabling safe caching",
+    "parser_pattern_precedent": "Code already uses thread_local! for Parser caching; query caching follows same pattern",
+    "optional_queries": "import_query, impl_query, reference_query are Option<&str> per language; cache must handle None gracefully",
+    "error_handling": "Query::new() returns Result; cache must propagate errors (not cache failed compilations)",
+    "future_work": "Wave 4 roadmap mentions caching and performance; this issue aligns with that goal"
+  }
+}

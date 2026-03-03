@@ -1,0 +1,54 @@
+{
+  "benchmark_version": "v1",
+  "issue": "https://github.com/clouatre-labs/code-analyze-mcp/issues/55",
+  "date": "2026-02-28",
+  "status": "flawed - preserved for reference only",
+  "reason_flawed": "Single run per condition with no repetitions; insufficient for statistical comparison. See issue #60 for analysis.",
+  "goose": {
+    "version": "1.26.0",
+    "orchestrator_session_id": "20260228_100"
+  },
+  "target_repo": {
+    "name": "sharkdp/bat",
+    "url": "https://github.com/sharkdp/bat",
+    "commit_sha": "cc5f782d28a8e6156b8ebd3346b0a7f7c49256e2",
+    "local_path": "/tmp/bat_check",
+    "loc": 10800,
+    "files": 40,
+    "language": "Rust"
+  },
+  "model": {
+    "name": "claude-haiku-4-5@20251001",
+    "provider": "gcp_vertex_ai",
+    "temperature": 0.5
+  },
+  "conditions": {
+    "control": {
+      "label": "A (control)",
+      "extensions": ["developer"],
+      "extensions_disabled": ["developer__analyze"],
+      "description": "Pure rg + cat + text_editor, no structural analysis tools"
+    },
+    "treatment": {
+      "label": "B (treatment)",
+      "extensions": ["developer", "code-analyze-mcp"],
+      "extensions_disabled": ["developer__analyze"],
+      "description": "code-analyze-mcp forced for structural queries"
+    }
+  },
+  "runs": [
+    {
+      "id": "A1",
+      "condition": "control",
+      "session_id": "unknown",
+      "raw_data_file": "run-a-control.json"
+    },
+    {
+      "id": "B1",
+      "condition": "treatment",
+      "session_id": "unknown",
+      "raw_data_file": "run-b-treatment.json"
+    }
+  ],
+  "notes": "v1 was a proof-of-concept with a single run per condition. No statistical analysis is possible. See v2 for a properly designed benchmark with 3 repetitions per condition."
+}

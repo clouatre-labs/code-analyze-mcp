@@ -1,0 +1,127 @@
+{
+  "run": "A-control",
+  "extensions_used": ["developer"],
+  "tool_calls": {
+    "shell": 7,
+    "text_editor": 6,
+    "analyze": 2,
+    "total": 15
+  },
+  "findings": {
+    "query_call_sites_found": 6,
+    "call_sites": [
+      "Line 47 in ElementExtractor::extract_with_depth: Query::new(&lang_info.language, lang_info.element_query) - element_query",
+      "Line 240 in SemanticExtractor::extract: Query::new(&lang_info.language, lang_info.element_query) - element_query",
+      "Line 306 in SemanticExtractor::extract: Query::new(&lang_info.language, lang_info.call_query) - call_query",
+      "Line 348 in SemanticExtractor::extract: Query::new(&lang_info.language, lang_info.import_query) - import_query (conditional)",
+      "Line 370 in SemanticExtractor::extract: Query::new(&lang_info.language, lang_info.impl_query) - impl_query (conditional)",
+      "Line 431 in SemanticExtractor::extract: Query::new(&lang_info.language, lang_info.reference_query) - reference_query (conditional)"
+    ],
+    "thread_safety_verified": true,
+    "thread_safety_details": "tree-sitter 0.26.6 implements unsafe impl Send for Query {} and unsafe impl Sync for Query {} in lib.rs. Query is safe to share across threads and store in static/Arc contexts.",
+    "language_info_structure_understood": true,
+    "language_info_details": "LanguageInfo (src/languages/mod.rs) contains 6 query string fields: element_query (&'static str), call_query (&'static str), reference_query (Option<&'static str>), import_query (Option<&'static str>), impl_query (Option<&'static str>). Query strings are static and immutable. LanguageInfo is obtained per-call via get_language_info(lang_name) which constructs a new struct each time.",
+    "extractor_patterns_understood": true,
+    "extractor_details": "ElementExtractor::extract_with_depth (line 33) and SemanticExtractor::extract (line 201) are both called per-file during analysis. Each call recompiles all 6 queries from static strings. In SemanticExtractor::extract, 4 queries are always created (element, call, and 2 optional), then 2 more optional queries (import, impl, reference) are conditionally created. Queries are created fresh, used once via QueryCursor, then discarded.",
+    "performance_impact_analysis": "In a typical directory analysis with N files: ElementExtractor creates 1 query per file (N recompilations). SemanticExtractor creates 4-6 queries per file (4N-6N recompilations). For a 100-file Rust project with full semantic extraction, this is 400-600 redundant Query::new() calls compiling identical static strings. Query compilation involves parsing the query DSL and building internal state machines, which is non-trivial overhead."
+  },
+  "approaches": [
+    {
+      "name": "Approach 1: Lazy Static Cache with OnceLock (Recommended)",
+      "description": "Store compiled Query objects in a per-language static cache using std::sync::OnceLock (Rust 1.70+). Create a QueryCache struct that holds Arc<Query> for each query type per language. Initialize on first access via get_or_init(), then reuse for all subsequent calls. No runtime allocation after first access.",
+      "implementation_outline": [
+        "Create new module src/query_cache.rs with QueryCache struct",
+        "Use OnceLock<HashMap<String, Arc<Query>>> keyed by language name",
+        "Add methods: get_element_query(lang), get_call_query(lang), etc.",
+        "Each method calls OnceLock::get_or_init() to compile on first access",
+        "Update parser.rs to call cache methods instead of Query::new()",
+        "No breaking changes to public API; internal refactor only"
+      ],
+      "pros": [
+        "Zero runtime overhead after first query access (OnceLock is lock-free after init)",
+        "Thread-safe by design (OnceLock + Arc<Query> + Send+Sync)",
+        "No external dependencies (std::sync::OnceLock is in std)",
+        "Eliminates all 6 redundant compilations per file",
+        "Simple to test: verify cache hit rate in benchmarks",
+        "Easy to extend to new query types or languages"
+      ],
+      "cons": [
+        "Requires Rust 1.70+ (OnceLock stabilized in 1.70; project uses edition 2024 so compatible)",
+        "Slightly more complex code than inline queries (one extra module)",
+        "Cache is never cleared (acceptable for long-running MCP server, but not ideal for short-lived CLI tools)",
+        "Memory footprint grows with number of languages (negligible: ~6 Query objects per language)"
+      ],
+      "complexity": "simple",
+      "files_touched": 2,
+      "estimated_lines_changed": 80,
+      "key_considerations": "OnceLock is perfect for this use case: static, immutable, thread-safe, zero-cost after initialization. Query is Send+Sync, so Arc<Query> is safe to share. No synchronization overhead during query execution, only during first-access initialization."
+    },
+    {
+      "name": "Approach 2: Thread-Local Cache with RefCell",
+      "description": "Use thread_local! macro with RefCell<HashMap<String, Query>> to cache queries per thread. Similar to existing PARSER thread-local in parser.rs (line 23-25). Each thread maintains its own cache, avoiding cross-thread synchronization. Queries are compiled once per thread, then reused.",
+      "implementation_outline": [
+        "Add thread_local! { static QUERY_CACHE: RefCell<HashMap<...>> } to parser.rs",
+        "Create helper function get_cached_query(lang, query_type) -> Result<Query>",
+        "Use RefCell::borrow_mut() to access cache, compile on miss, return on hit",
+        "Update all 6 Query::new() call sites to use helper",
+        "No changes to LanguageInfo or public API"
+      ],
+      "pros": [
+        "Follows existing pattern in codebase (PARSER is already thread-local)",
+        "No external dependencies (thread_local! is in std)",
+        "Zero synchronization overhead (RefCell is not Mutex)",
+        "Eliminates redundant compilations per thread",
+        "Simpler than OnceLock approach (less boilerplate)"
+      ],
+      "cons": [
+        "Memory overhead: each thread caches its own Query copies (9 languages × 6 queries = 54 Query objects per thread)",
+        "Not ideal for workloads with many short-lived threads (thread pool reuse mitigates this)",
+        "Cache never cleared unless thread exits (acceptable for MCP server, problematic for CLI)",
+        "Slightly more complex than OnceLock (RefCell borrow/release cycle)",
+        "Less efficient for multi-threaded analysis: rayon parallel file processing creates thread pool, so cache benefits only within a thread's work"
+      ],
+      "complexity": "simple",
+      "files_touched": 1,
+      "estimated_lines_changed": 50,
+      "key_considerations": "This approach mirrors the existing PARSER thread-local pattern, making it consistent with codebase style. However, it's less efficient than OnceLock for multi-threaded workloads because each thread maintains separate caches. Best suited if analysis is primarily single-threaded or if threads are long-lived."
+    },
+    {
+      "name": "Approach 3: Lazy Static with Parking Lot RwLock",
+      "description": "Use lazy_static! crate with parking_lot::RwLock to manage a global HashMap<String, HashMap<String, Arc<Query>>>. Queries are compiled once globally and shared across all threads via Arc. RwLock allows concurrent reads (many threads querying simultaneously) with exclusive writes (only during initialization, which happens once).",
+      "implementation_outline": [
+        "Add lazy_static crate to Cargo.toml (or use once_cell crate)",
+        "Create lazy_static! { static QUERY_CACHE: RwLock<HashMap<...>> }",
+        "Create helper function get_cached_query(lang, query_type) -> Arc<Query>",
+        "Use RwLock::read() for cache lookups, write() for initialization",
+        "Update all 6 Query::new() call sites to use helper",
+        "Return Arc<Query> instead of Query (requires lifetime adjustments)"
+      ],
+      "pros": [
+        "Global cache shared across all threads (minimal memory overhead)",
+        "RwLock allows concurrent reads (many threads can query simultaneously)",
+        "Eliminates all redundant compilations globally",
+        "Scales well to many threads and files"
+      ],
+      "cons": [
+        "Adds external dependency (lazy_static or once_cell)",
+        "RwLock has synchronization overhead on every query access (read lock acquisition)",
+        "More complex than OnceLock (requires lock guards, potential contention)",
+        "Requires returning Arc<Query> instead of Query, affecting caller code",
+        "Potential for lock contention under high concurrency (many threads querying simultaneously)",
+        "lazy_static is considered legacy; once_cell is preferred but still external"
+      ],
+      "complexity": "medium",
+      "files_touched": 2,
+      "estimated_lines_changed": 100,
+      "key_considerations": "This approach is overkill for the problem. OnceLock (Approach 1) provides the same benefits without the synchronization overhead or external dependency. RwLock contention could become a bottleneck in high-concurrency scenarios, whereas OnceLock is lock-free after initialization."
+    }
+  ],
+  "recommendation": "Approach 1: Lazy Static Cache with OnceLock. This is the optimal solution because: (1) OnceLock is in std (no external dependencies), (2) it's lock-free after initialization (zero runtime overhead), (3) Query is Send+Sync so Arc<Query> is safe to share, (4) it eliminates all 6 redundant compilations per file, (5) it's simpler than Approach 2 (no RefCell borrow/release cycles) and Approach 3 (no RwLock contention), (6) it scales to any number of threads and files, (7) it's consistent with Rust 2024 idioms. Implementation effort is minimal: create src/query_cache.rs with OnceLock-backed cache, update parser.rs to call cache methods instead of Query::new(). No breaking changes to public API.",
+  "impact_summary": {
+    "redundant_compilations_eliminated": "100% (all 6 per-file compilations become 1-time per-language)",
+    "performance_gain_estimate": "10-30% faster file analysis (Query::new dominates parsing time for small files; larger files see less relative gain)",
+    "memory_overhead": "Negligible (6 Query objects per language, ~1-2 KB per language)",
+    "implementation_complexity": "Low (single new module, ~80 LOC)",
+    "risk_level": "Very low (read-only cache, no mutation, fully thread-safe)"
+  }
+}
