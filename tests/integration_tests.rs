@@ -1339,3 +1339,66 @@ fn test_symbol_completions_truncates_at_100() {
         "Should truncate completions to 100 results"
     );
 }
+
+// Logging tests
+#[test]
+fn test_logging_level_to_mcp_mapping() {
+    use code_analyze_mcp::logging::level_to_mcp;
+    use rmcp::model::LoggingLevel;
+    use tracing::Level;
+
+    // Test TRACE and DEBUG map to Debug
+    assert_eq!(level_to_mcp(&Level::TRACE), LoggingLevel::Debug);
+    assert_eq!(level_to_mcp(&Level::DEBUG), LoggingLevel::Debug);
+
+    // Test INFO maps to Info
+    assert_eq!(level_to_mcp(&Level::INFO), LoggingLevel::Info);
+
+    // Test WARN maps to Warning
+    assert_eq!(level_to_mcp(&Level::WARN), LoggingLevel::Warning);
+
+    // Test ERROR maps to Error
+    assert_eq!(level_to_mcp(&Level::ERROR), LoggingLevel::Error);
+}
+
+#[test]
+fn test_logging_level_filter_update() {
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use tracing_subscriber::filter::LevelFilter;
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let log_level_filter = Arc::new(Mutex::new(LevelFilter::WARN));
+
+        // Initial level should be WARN
+        {
+            let filter = log_level_filter.lock().await;
+            assert_eq!(*filter, LevelFilter::WARN);
+        }
+
+        // Update to INFO
+        {
+            let mut filter = log_level_filter.lock().await;
+            *filter = LevelFilter::INFO;
+        }
+
+        // Verify update
+        {
+            let filter = log_level_filter.lock().await;
+            assert_eq!(*filter, LevelFilter::INFO);
+        }
+
+        // Update to ERROR
+        {
+            let mut filter = log_level_filter.lock().await;
+            *filter = LevelFilter::ERROR;
+        }
+
+        // Verify final state
+        {
+            let filter = log_level_filter.lock().await;
+            assert_eq!(*filter, LevelFilter::ERROR);
+        }
+    });
+}

@@ -5,6 +5,7 @@ pub mod formatter;
 pub mod graph;
 pub mod lang;
 pub mod languages;
+pub mod logging;
 pub mod parser;
 pub mod traversal;
 pub mod types;
@@ -14,15 +15,16 @@ use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
     CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData, Implementation,
-    InitializeResult, Notification, NumberOrString, ProgressNotificationParam, ProgressToken,
-    ProtocolVersion, ServerCapabilities, ServerNotification,
+    InitializeResult, LoggingLevel, Notification, NumberOrString, ProgressNotificationParam,
+    ProgressToken, ProtocolVersion, ServerCapabilities, ServerNotification, SetLevelRequestParams,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use std::path::Path;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as TokioMutex;
 use tracing::{instrument, warn};
+use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
 use types::{AnalysisMode, AnalysisResult, AnalyzeParams};
 
@@ -30,16 +32,21 @@ use types::{AnalysisMode, AnalysisResult, AnalyzeParams};
 pub struct CodeAnalyzer {
     tool_router: ToolRouter<Self>,
     cache: AnalysisCache,
-    peer: Arc<Mutex<Option<Peer<RoleServer>>>>,
+    peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
+    log_level_filter: Arc<Mutex<LevelFilter>>,
 }
 
 #[tool_router]
 impl CodeAnalyzer {
-    pub fn new() -> Self {
+    pub fn new(
+        peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
+        log_level_filter: Arc<Mutex<LevelFilter>>,
+    ) -> Self {
         CodeAnalyzer {
             tool_router: Self::tool_router(),
             cache: AnalysisCache::new(100),
-            peer: Arc::new(Mutex::new(None)),
+            peer,
+            log_level_filter,
         }
     }
 
@@ -394,18 +401,13 @@ impl CodeAnalyzer {
     }
 }
 
-impl Default for CodeAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[tool_handler]
 impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
         InitializeResult {
             protocol_version: ProtocolVersion::V_2025_06_18,
             capabilities: ServerCapabilities::builder()
+                .enable_logging()
                 .enable_tools()
                 .enable_completions()
                 .build(),
@@ -483,5 +485,26 @@ impl ServerHandler for CodeAnalyzer {
         Ok(CompleteResult {
             completion: completion_info,
         })
+    }
+
+    async fn set_level(
+        &self,
+        params: SetLevelRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<(), ErrorData> {
+        let level_filter = match params.level {
+            LoggingLevel::Debug => LevelFilter::DEBUG,
+            LoggingLevel::Info => LevelFilter::INFO,
+            LoggingLevel::Notice => LevelFilter::INFO,
+            LoggingLevel::Warning => LevelFilter::WARN,
+            LoggingLevel::Error => LevelFilter::ERROR,
+            LoggingLevel::Critical => LevelFilter::ERROR,
+            LoggingLevel::Alert => LevelFilter::ERROR,
+            LoggingLevel::Emergency => LevelFilter::ERROR,
+        };
+
+        let mut filter_lock = self.log_level_filter.lock().unwrap();
+        *filter_lock = level_filter;
+        Ok(())
     }
 }
