@@ -17,6 +17,7 @@ pub fn format_structure(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
     max_depth: Option<u32>,
+    semantic_map: &HashMap<String, SemanticAnalysis>,
 ) -> String {
     let mut output = String::new();
 
@@ -104,11 +105,27 @@ pub fn format_structure(
                     info_parts.push(format!("{}C", analysis.class_count));
                 }
 
-                if info_parts.is_empty() {
-                    output.push_str(&format!("{}{}\n", indent, name));
+                let path_str = entry.path.display().to_string();
+                let mut line = if info_parts.is_empty() {
+                    format!("{}{}", indent, name)
                 } else {
-                    output.push_str(&format!("{}{} [{}]\n", indent, name, info_parts.join(", ")));
+                    format!("{}{} [{}]", indent, name, info_parts.join(", "))
+                };
+
+                // Append module summary if semantic data is available
+                if let Some(semantic) = semantic_map.get(&path_str) {
+                    // Find the largest class (first one if multiple)
+                    if let Some(class) = semantic.classes.first() {
+                        let import_count = semantic.imports.len();
+                        line.push_str(&format!(" | {}, {} deps", class.name, import_count));
+                    } else if !semantic.imports.is_empty() {
+                        // No classes but has imports
+                        let import_count = semantic.imports.len();
+                        line.push_str(&format!(" | {} deps", import_count));
+                    }
                 }
+
+                output.push_str(&format!("{}\n", line));
             }
             // Skip files not in analysis_map (binary/unreadable files)
         } else {
@@ -185,22 +202,19 @@ pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: 
         }
     }
 
-    // I: section with imports grouped by module
+    // I: section with full import paths
     if !analysis.imports.is_empty() {
         output.push_str("I:\n");
-        let mut module_map: HashMap<String, usize> = HashMap::new();
+        let mut import_paths: Vec<String> = Vec::new();
         for import in &analysis.imports {
-            module_map
-                .entry(import.module.clone())
-                .and_modify(|count| *count += 1)
-                .or_insert(1);
+            for item in &import.items {
+                import_paths.push(format!("{}::{}", import.module, item));
+            }
         }
-
-        let mut modules: Vec<_> = module_map.keys().collect();
-        modules.sort();
-        for module in modules {
-            let count = module_map[module];
-            output.push_str(&format!("  {} ({})\n", module, count));
+        import_paths.sort();
+        import_paths.dedup();
+        for path in import_paths {
+            output.push_str(&format!("  {}\n", path));
         }
     }
 
@@ -233,11 +247,18 @@ pub fn format_focused(
     // DEPTH section
     output.push_str(&format!("DEPTH: {}\n", follow_depth));
 
-    // DEFINED section - show where the symbol is defined
+    // DEFINED section - show where the symbol is defined with kind
     if let Some(definitions) = graph.definitions.get(symbol) {
         output.push_str("DEFINED:\n");
-        for (path, line) in definitions {
-            output.push_str(&format!("  {}:{}\n", path.display(), line));
+        for (path, line, kind) in definitions {
+            let kind_str = match kind {
+                crate::types::DefinitionKind::Function => "function",
+                crate::types::DefinitionKind::Struct => "struct",
+                crate::types::DefinitionKind::Trait => "trait",
+                crate::types::DefinitionKind::Enum => "enum",
+                crate::types::DefinitionKind::Method => "method",
+            };
+            output.push_str(&format!("  {}:{} ({})\n", path.display(), line, kind_str));
         }
     } else {
         output.push_str("DEFINED: (not found)\n");
@@ -260,13 +281,14 @@ pub fn format_focused(
         }
     }
 
-    // CALLEES section - what this symbol calls
+    // CALLEES section - what this symbol calls (capped at 25)
     let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
     output.push_str("CALLEES:\n");
     if outgoing_chains.is_empty() {
         output.push_str("  (none)\n");
     } else {
-        for chain in &outgoing_chains {
+        let display_count = outgoing_chains.len().min(25);
+        for chain in &outgoing_chains[..display_count] {
             let chain_str = chain
                 .chain
                 .iter()
@@ -274,6 +296,10 @@ pub fn format_focused(
                 .collect::<Vec<_>>()
                 .join(" -> ");
             output.push_str(&format!("  {}\n", chain_str));
+        }
+        if outgoing_chains.len() > 25 {
+            let remaining = outgoing_chains.len() - 25;
+            output.push_str(&format!("  ... and {} more\n", remaining));
         }
     }
 
@@ -297,7 +323,7 @@ pub fn format_focused(
         }
     }
     if let Some(definitions) = graph.definitions.get(symbol) {
-        for (path, _) in definitions {
+        for (path, _, _) in definitions {
             files.insert(path.clone());
         }
     }

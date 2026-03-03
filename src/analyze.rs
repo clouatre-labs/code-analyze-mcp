@@ -5,6 +5,7 @@ use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::traversal::{WalkEntry, walk_directory};
 use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis};
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -61,7 +62,7 @@ pub fn analyze_directory_with_progress(
     let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
 
     // Parallel analysis of files
-    let analysis_results: Vec<FileInfo> = file_entries
+    let results: Vec<(FileInfo, String, Option<SemanticAnalysis>)> = file_entries
         .par_iter()
         .filter_map(|entry| {
             // Check cancellation per file
@@ -88,31 +89,49 @@ pub fn analyze_directory_with_progress(
             let line_count = source.lines().count();
 
             // Detect language and extract counts
-            let (language, function_count, class_count) = if let Some(ext_str) = ext {
+            let (language, function_count, class_count, semantic) = if let Some(ext_str) = ext {
                 if let Some(lang) = language_from_extension(ext_str) {
                     let lang_str = lang.to_string();
                     match ElementExtractor::extract_with_depth(&source, &lang_str) {
-                        Ok((func_count, class_count)) => (lang_str, func_count, class_count),
-                        Err(_) => (lang_str, 0, 0),
+                        Ok((func_count, class_count)) => {
+                            // Also extract semantic data for module summary
+                            let semantic =
+                                SemanticExtractor::extract(&source, &lang_str, None).ok();
+                            (lang_str, func_count, class_count, semantic)
+                        }
+                        Err(_) => (lang_str, 0, 0, None),
                     }
                 } else {
-                    ("unknown".to_string(), 0, 0)
+                    ("unknown".to_string(), 0, 0, None)
                 }
             } else {
-                ("unknown".to_string(), 0, 0)
+                ("unknown".to_string(), 0, 0, None)
             };
 
             progress.fetch_add(1, Ordering::Relaxed);
 
-            Some(FileInfo {
-                path: path_str,
+            let file_info = FileInfo {
+                path: path_str.clone(),
                 line_count,
                 function_count,
                 class_count,
                 language,
-            })
+            };
+
+            Some((file_info, path_str, semantic))
         })
         .collect();
+
+    // Separate results into analysis_results and semantic_map
+    let mut analysis_results = Vec::new();
+    let mut semantic_map = HashMap::new();
+
+    for (file_info, path_str, semantic) in results {
+        analysis_results.push(file_info);
+        if let Some(sem) = semantic {
+            semantic_map.insert(path_str, sem);
+        }
+    }
 
     // Check if cancelled after parallel processing
     if ct.is_cancelled() {
@@ -120,7 +139,7 @@ pub fn analyze_directory_with_progress(
     }
 
     // Format output
-    let formatted = format_structure(&entries, &analysis_results, max_depth);
+    let formatted = format_structure(&entries, &analysis_results, max_depth, &semantic_map);
 
     Ok(AnalysisOutput {
         formatted,

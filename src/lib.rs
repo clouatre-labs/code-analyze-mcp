@@ -384,6 +384,7 @@ impl CodeAnalyzer {
                             end_line: c.end_line,
                             methods: c.methods.clone(),
                             fields: c.fields.clone(),
+                            kind: c.kind.clone(),
                         })
                         .collect();
                     let references = output.semantic.references.clone();

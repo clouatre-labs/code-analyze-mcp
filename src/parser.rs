@@ -1,6 +1,7 @@
 use crate::languages::get_language_info;
 use crate::types::{
-    CallInfo, ClassInfo, FunctionInfo, ImportInfo, ReferenceInfo, ReferenceType, SemanticAnalysis,
+    CallInfo, ClassInfo, DefinitionKind, FunctionInfo, ImportInfo, ReferenceInfo, ReferenceType,
+    SemanticAnalysis,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -193,6 +194,22 @@ fn extract_imports_from_node(
     }
 }
 
+/// Detect the definition kind from a tree-sitter node.
+fn detect_definition_kind(node: &Node) -> DefinitionKind {
+    match node.kind() {
+        "struct_item" => DefinitionKind::Struct,
+        "trait_item" => DefinitionKind::Trait,
+        "enum_item" => DefinitionKind::Enum,
+        _ => {
+            tracing::warn!(
+                node_kind = node.kind(),
+                "unknown class-like node kind, defaulting to Struct"
+            );
+            DefinitionKind::Struct
+        }
+    }
+}
+
 pub struct SemanticExtractor;
 
 impl SemanticExtractor {
@@ -288,12 +305,14 @@ impl SemanticExtractor {
                         if let Some(name_node) = node.child_by_field_name("name") {
                             let name =
                                 source[name_node.start_byte()..name_node.end_byte()].to_string();
+                            let kind = detect_definition_kind(&node);
                             classes.push(ClassInfo {
                                 name,
                                 line: node.start_position().row + 1,
                                 end_line: node.end_position().row + 1,
                                 methods: Vec::new(),
                                 fields: Vec::new(),
+                                kind,
                             });
                         }
                     }

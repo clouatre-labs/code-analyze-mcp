@@ -1,4 +1,4 @@
-use crate::types::SemanticAnalysis;
+use crate::types::{DefinitionKind, SemanticAnalysis};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use thiserror::Error;
@@ -19,7 +19,7 @@ pub struct CallChain {
 pub struct CallGraph {
     pub callers: HashMap<String, Vec<(PathBuf, usize, String)>>,
     pub callees: HashMap<String, Vec<(PathBuf, usize, String)>>,
-    pub definitions: HashMap<String, Vec<(PathBuf, usize)>>,
+    pub definitions: HashMap<String, Vec<(PathBuf, usize, DefinitionKind)>>,
 }
 
 impl CallGraph {
@@ -43,14 +43,14 @@ impl CallGraph {
                     .definitions
                     .entry(func.name.clone())
                     .or_default()
-                    .push((path.clone(), func.line));
+                    .push((path.clone(), func.line, DefinitionKind::Function));
             }
             for class in &analysis.classes {
                 graph
                     .definitions
                     .entry(class.name.clone())
                     .or_default()
-                    .push((path.clone(), class.line));
+                    .push((path.clone(), class.line, class.kind.clone()));
             }
         }
 

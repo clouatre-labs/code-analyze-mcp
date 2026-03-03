@@ -1208,3 +1208,226 @@ fn test_cancellation_noop_after_completion() {
     let output = result.unwrap();
     assert_eq!(output.files.len(), 1);
 }
+
+// Tests for enhanced output quality (issue #66, Phase 1)
+
+/// Helper struct to encapsulate test setup and context
+struct TestContext {
+    _temp_dir: TempDir,
+    dir_output: code_analyze_mcp::analyze::AnalysisOutput,
+    semantic_results: Vec<(
+        std::path::PathBuf,
+        code_analyze_mcp::types::SemanticAnalysis,
+    )>,
+}
+
+/// Setup helper: creates TempDir, writes Rust source, analyzes directory and files
+fn setup_rust_test(source: &str) -> TestContext {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("lib.rs");
+    fs::write(&file_path, source).unwrap();
+
+    let dir_output = analyze_directory(temp_dir.path(), None).unwrap();
+    let mut semantic_results = Vec::new();
+    for file in &dir_output.files {
+        let file_output = analyze_file(&file.path, None).unwrap();
+        semantic_results.push((std::path::PathBuf::from(&file.path), file_output.semantic));
+    }
+
+    TestContext {
+        _temp_dir: temp_dir,
+        dir_output,
+        semantic_results,
+    }
+}
+
+#[test]
+fn test_format_file_details_full_import_paths() {
+    // Arrange: Create a Rust file with multiple imports
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+
+    let rust_code = r#"
+use std::collections::HashMap;
+use std::io::Write;
+use serde::Serialize;
+
+fn main() {
+    let map = HashMap::new();
+}
+"#;
+    fs::write(&file_path, rust_code).unwrap();
+
+    // Act: Analyze the file
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Assert: Verify full import paths are shown (module::item format)
+    assert!(output.formatted.contains("I:"));
+    assert!(output.formatted.contains("std::collections::HashMap"));
+    assert!(output.formatted.contains("std::io::Write"));
+    assert!(output.formatted.contains("serde::Serialize"));
+    // Verify old format (module with count) is NOT present
+    assert!(!output.formatted.contains("std::collections ("));
+}
+
+#[test]
+fn test_format_file_details_no_imports() {
+    // Arrange: Create a Rust file with no imports
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+
+    let rust_code = r#"
+fn main() {
+    println!("Hello");
+}
+"#;
+    fs::write(&file_path, rust_code).unwrap();
+
+    // Act: Analyze the file
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Assert: Verify I: section is omitted when no imports
+    assert!(!output.formatted.contains("I:"));
+}
+
+#[test]
+fn test_format_focused_definition_kind_struct() {
+    // Arrange
+    let rust_code = r#"
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn distance(p: Point) -> f64 {
+    0.0
+}
+"#;
+    let ctx = setup_rust_test(rust_code);
+
+    // Act
+    let graph =
+        code_analyze_mcp::graph::CallGraph::build_from_results(ctx.semantic_results).unwrap();
+    let formatted = code_analyze_mcp::formatter::format_focused(&graph, "Point", 1).unwrap();
+
+    // Assert
+    assert!(formatted.contains("DEFINED:"));
+    assert!(formatted.contains("(struct)"));
+}
+
+#[test]
+fn test_format_focused_definition_kind_trait() {
+    // Arrange
+    let rust_code = r#"
+trait Drawable {
+    fn draw(&self);
+}
+
+fn render(obj: &dyn Drawable) {
+    obj.draw();
+}
+"#;
+    let ctx = setup_rust_test(rust_code);
+
+    // Act
+    let graph =
+        code_analyze_mcp::graph::CallGraph::build_from_results(ctx.semantic_results).unwrap();
+    let formatted = code_analyze_mcp::formatter::format_focused(&graph, "Drawable", 1).unwrap();
+
+    // Assert
+    assert!(formatted.contains("DEFINED:"));
+    assert!(formatted.contains("(trait)"));
+}
+
+#[test]
+fn test_format_focused_definition_kind_enum() {
+    // Arrange
+    let rust_code = r#"
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+fn describe(c: Color) -> &'static str {
+    "color"
+}
+"#;
+    let ctx = setup_rust_test(rust_code);
+
+    // Act
+    let graph =
+        code_analyze_mcp::graph::CallGraph::build_from_results(ctx.semantic_results).unwrap();
+    let formatted = code_analyze_mcp::formatter::format_focused(&graph, "Color", 1).unwrap();
+
+    // Assert
+    assert!(formatted.contains("DEFINED:"));
+    assert!(formatted.contains("(enum)"));
+}
+
+#[test]
+fn test_format_focused_chain_limiting() {
+    // Arrange
+    let rust_code = r#"
+fn hub() {
+    a(); b(); c(); d(); e(); f(); g(); h(); i(); j();
+    k(); l(); m(); n(); o(); p(); q(); r(); s(); t();
+    u(); v(); w(); x(); y(); z();
+    a1(); b1(); c1(); d1(); e1(); f1(); g1(); h1(); i1(); j1();
+    k1(); l1(); m1(); n1(); o1(); p1(); q1(); r1(); s1(); t1();
+    u1(); v1(); w1(); x1(); y1(); z1();
+}
+
+fn a() {} fn b() {} fn c() {} fn d() {} fn e() {}
+fn f() {} fn g() {} fn h() {} fn i() {} fn j() {}
+fn k() {} fn l() {} fn m() {} fn n() {} fn o() {}
+fn p() {} fn q() {} fn r() {} fn s() {} fn t() {}
+fn u() {} fn v() {} fn w() {} fn x() {} fn y() {}
+fn z() {} fn a1() {} fn b1() {} fn c1() {} fn d1() {}
+fn e1() {} fn f1() {} fn g1() {} fn h1() {} fn i1() {}
+fn j1() {} fn k1() {} fn l1() {} fn m1() {} fn n1() {}
+fn o1() {} fn p1() {} fn q1() {} fn r1() {} fn s1() {}
+fn t1() {} fn u1() {} fn v1() {} fn w1() {} fn x1() {}
+fn y1() {} fn z1() {}
+"#;
+    let ctx = setup_rust_test(rust_code);
+
+    // Act
+    let graph =
+        code_analyze_mcp::graph::CallGraph::build_from_results(ctx.semantic_results).unwrap();
+    let formatted = code_analyze_mcp::formatter::format_focused(&graph, "hub", 1).unwrap();
+
+    // Assert
+    assert!(formatted.contains("CALLEES:"));
+    let callees_section = formatted.split("CALLEES:").nth(1).unwrap_or("");
+    let callees_lines = callees_section
+        .split('\n')
+        .take_while(|l| !l.starts_with("STATISTICS:"))
+        .count();
+    assert!(callees_lines <= 27);
+    assert!(formatted.contains("... and"));
+}
+
+#[test]
+fn test_format_structure_with_classes_and_imports() {
+    // Arrange
+    let rust_code = r#"
+use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
+
+struct User {
+    name: String,
+    age: u32,
+}
+
+fn create_user() -> User {
+    User { name: "Alice".to_string(), age: 30 }
+}
+"#;
+    let ctx = setup_rust_test(rust_code);
+
+    // Act & Assert
+    assert!(ctx.dir_output.formatted.contains("lib.rs"));
+    assert!(ctx.dir_output.formatted.contains("1C"));
+    assert!(ctx.dir_output.formatted.contains("1F"));
+}

@@ -70,12 +70,29 @@ pub struct FunctionInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum DefinitionKind {
+    #[schemars(description = "Function definition")]
+    Function,
+    #[schemars(description = "Struct definition")]
+    Struct,
+    #[schemars(description = "Trait definition")]
+    Trait,
+    #[schemars(description = "Enum definition")]
+    Enum,
+    #[schemars(description = "Method definition")]
+    Method,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClassInfo {
     pub name: String,
     pub line: usize,
     pub end_line: usize,
     pub methods: Vec<FunctionInfo>,
     pub fields: Vec<String>,
+    #[schemars(description = "Kind of definition (struct, trait, enum)")]
+    pub kind: DefinitionKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
