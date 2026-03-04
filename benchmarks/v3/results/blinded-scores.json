@@ -1,0 +1,85 @@
+{
+  "scoring_notes": "Blind scoring of 10 lsd benchmark reports against ground truth. Structural accuracy: complete module map (9+ modules with subdir detail) = 3; partial (6-8 modules) = 1-2; incomplete (<6) = 0. Cross-module tracing: full pipeline + 3+ hubs = 3; partial = 1-2; minimal = 0. Approach quality: all 4 required files + Block::Checksum + Checksum struct + 3+ risks = 3; 3 files + types = 2; partial = 1; poor = 0. Tool efficiency: <8 analyze calls = 3; 8-15 = 2; 16-25 = 1; >25 = 0.",
+  "scores": {
+    "R01": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 10,
+      "notes": "Module coverage: 9+. Pipeline identified: complete. Files: 3/4, risks: 6. Calls: 6."
+    },
+    "R02": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 10,
+      "notes": "Module coverage: 9+. Pipeline identified: complete. Files: 3/4, risks: 5. Calls: 5."
+    },
+    "R03": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 9,
+      "notes": "Module coverage: 9+. Pipeline identified: good. Files: 5/4, risks: 5. Calls: 1."
+    },
+    "R04": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 9,
+      "notes": "Module coverage: 8. Pipeline identified: good. Files: 3/4, risks: 6. Calls: 2."
+    },
+    "R05": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "total": 11,
+      "notes": "Module coverage: 9+. Pipeline identified: good. Files: 4/4, risks: 6. Calls: 6."
+    },
+    "R06": {
+      "structural_accuracy": 1,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 9,
+      "notes": "Module coverage: 6-7. Pipeline identified: complete. Files: 3/4, risks: 5. Calls: 5."
+    },
+    "R07": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 10,
+      "notes": "Module coverage: 8. Pipeline identified: complete. Files: 4/4, risks: 5. Calls: 1."
+    },
+    "R08": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 9,
+      "notes": "Module coverage: 8. Pipeline identified: complete. Files: 4/4, risks: 5. Calls: 4."
+    },
+    "R09": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 10,
+      "notes": "Module coverage: 8. Pipeline identified: complete. Files: 5/4, risks: 6. Calls: 7."
+    },
+    "R10": {
+      "structural_accuracy": 1,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "total": 10,
+      "notes": "Module coverage: 6-7. Pipeline identified: complete. Files: 5/4, risks: 6. Calls: 6."
+    }
+  }
+}

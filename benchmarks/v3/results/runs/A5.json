@@ -1,0 +1,231 @@
+{
+  "run_id": "A5",
+  "condition": "A-control",
+  "module_map": [
+    {
+      "module": "core",
+      "responsibility": "Orchestrates lsd workflow: initializes theme/colors/icons, fetches file metadata, applies sorting, delegates to display",
+      "submodules": [],
+      "key_types": ["Core", "Flags", "Colors", "Icons", "GitTheme"],
+      "functions": ["new", "fetch", "sort", "display"],
+      "lines": 201
+    },
+    {
+      "module": "display",
+      "responsibility": "Renders file listings: grid/tree layout, column alignment, padding, header rendering, hyperlink support. Central formatting hub.",
+      "submodules": [],
+      "key_types": ["Cell", "Grid", "GridOptions"],
+      "functions": ["grid", "tree", "inner_display_grid", "inner_display_tree", "add_header", "detect_size_lengths", "get_padding_rules"],
+      "lines": 990
+    },
+    {
+      "module": "meta/",
+      "responsibility": "Metadata collection and storage. Central data structure carrying all file information through pipeline.",
+      "submodules": ["meta/name", "meta/date", "meta/size", "meta/permissions", "meta/filetype", "meta/owner", "meta/symlink", "meta/inode", "meta/indicator", "meta/access_control", "meta/git_file_status"],
+      "key_types": ["Meta", "Name", "Date", "Size", "FileType", "Owner", "Permissions"],
+      "functions": ["from_path", "recurse_into", "calculate_total_size", "calculate_total_file_size"],
+      "lines": 3840
+    },
+    {
+      "module": "flags/",
+      "responsibility": "CLI argument parsing and validation. Defines user-configurable display options.",
+      "submodules": ["flags/blocks", "flags/color", "flags/date", "flags/icons", "flags/sorting", "flags/permission", "flags/recursion", "flags/size", "flags/layout", "flags/display"],
+      "key_types": ["Flags", "Block", "ColorOption", "SortOrder"],
+      "functions": [],
+      "lines": 4253
+    },
+    {
+      "module": "color",
+      "responsibility": "Color resolution: maps file attributes to ANSI colors using lscolors, theme configuration, git status.",
+      "submodules": [],
+      "key_types": ["Colors", "Elem", "ColorTheme", "ContentStyle"],
+      "functions": ["new", "colorize", "style", "get_color", "get_indicator_from_elem"],
+      "lines": 500
+    },
+    {
+      "module": "icon",
+      "responsibility": "Icon resolution: selects icons based on file type, extension, or name. TTY and encoding aware.",
+      "submodules": [],
+      "key_types": ["Icons"],
+      "functions": ["new", "get", "get_no_icon_never_tty", "get_icon_auto_tty"],
+      "lines": 237
+    },
+    {
+      "module": "theme/",
+      "responsibility": "Theme configuration loading and caching. Supports default, lscolors, custom JSON themes.",
+      "submodules": ["theme/color", "theme/icon"],
+      "key_types": ["ThemeOption", "ColorTheme", "IconTheme"],
+      "functions": [],
+      "lines": 1558
+    },
+    {
+      "module": "sort",
+      "responsibility": "Sorting implementation: comparators for size, date, name, extension, version, inode, links, accessed time.",
+      "submodules": [],
+      "key_types": ["SortFn"],
+      "functions": [],
+      "lines": 422
+    }
+  ],
+  "data_flow": [
+    {
+      "stage": "1. Initialization",
+      "module": "core.rs",
+      "key_function": "Core::new()",
+      "description": "Parse CLI args into Flags. Initialize Colors (theme-aware), Icons (TTY/encoding-aware), GitTheme. Set up sort functions.",
+      "types_produced": ["Flags", "Colors", "Icons", "GitTheme", "Vec<SortFn>"],
+      "next_stage": "2. Metadata collection"
+    },
+    {
+      "stage": "2. Metadata collection",
+      "module": "meta/mod.rs + meta/*.rs",
+      "key_function": "Meta::from_path(path, dereference, permission_flag)",
+      "description": "For each path: read symlink_metadata(), resolve symlinks, extract Name (with hyperlinks), Date, Owner, Permissions, FileType, Size, INode, Links. Recursive via recurse_into().",
+      "types_produced": ["Meta", "Name", "Date", "Owner", "Permissions", "FileType", "Size"],
+      "next_stage": "3. Sorting"
+    },
+    {
+      "stage": "3. Sorting",
+      "module": "core.rs + sort.rs",
+      "key_function": "Core::sort(metas: Vec<Meta>)",
+      "description": "Apply sort functions (Name, Size, Date, Inode, Links, Version, Extension, AccessTime) as configured in Flags.sorting. Returns sorted Meta vector.",
+      "types_produced": ["Vec<Meta>"],
+      "next_stage": "4. Display rendering"
+    },
+    {
+      "stage": "4a. Color resolution",
+      "module": "color.rs",
+      "key_function": "Colors::colorize(path, elem) → ContentStyle",
+      "description": "For each Meta.name/size/date/owner: map file attributes (type, permissions, git_status, extension) to ANSI style via lscolors/theme.",
+      "types_produced": ["ContentStyle", "ColoredString"],
+      "next_stage": "4b. Icon resolution"
+    },
+    {
+      "stage": "4b. Icon resolution",
+      "module": "icon.rs",
+      "key_function": "Icons::get(name, file_type) → String",
+      "description": "Select icon for each file: by extension, by name, or default. Return Unicode or nerd-font icon.",
+      "types_produced": ["String"],
+      "next_stage": "4c. Block rendering"
+    },
+    {
+      "stage": "4c. Block rendering",
+      "module": "display.rs + meta/*.rs",
+      "key_function": "inner_display_grid/tree(metas, Flags.blocks, Colors, Icons)",
+      "description": "For each Meta and each Block (Name, Size, Date, Owner, Permissions, INode, Links, GitStatus): call Meta.render(colors, icons) → ColoredString. Collect into Cell.",
+      "types_produced": ["Cell", "Vec<Cell>"],
+      "next_stage": "4d. Grid layout"
+    },
+    {
+      "stage": "4d. Grid layout and output",
+      "module": "display.rs + term_grid",
+      "key_function": "Grid::fit_into_columns()",
+      "description": "Calculate padding per column (detect_size_lengths), add header, create term_grid Grid, add cells with padding rules, render to string. Respect terminal width.",
+      "types_produced": ["String"],
+      "endpoint": "Output to stdout"
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "display.rs",
+      "inbound_deps": 8,
+      "outbound_deps": 9,
+      "reason": "Central formatting hub. Imports: Colors, Icons, Meta, Flags, GitTheme, Block, FileType, DisplayOption, term_grid. Exports: grid(), tree() public API. Called by core.rs::display(). Uses all other modules for rendering.",
+      "import_sources": ["color", "icon", "meta", "flags", "git_theme", "sort"]
+    },
+    {
+      "module": "meta/mod.rs",
+      "inbound_deps": 6,
+      "outbound_deps": 12,
+      "reason": "Central data structure. Meta struct passed through entire pipeline. Depends on 10+ submodules (name, date, size, owner, permissions, filetype, symlink, indicator, inode, links, access_control, git_file_status). Imported by core, display, sort, color.",
+      "import_sources": ["meta/name", "meta/date", "meta/size", "meta/owner", "meta/filetype", "meta/permissions", "meta/symlink", "meta/indicator", "meta/inode", "meta/links", "meta/access_control", "meta/git_file_status"]
+    },
+    {
+      "module": "flags/",
+      "inbound_deps": 7,
+      "outbound_deps": 0,
+      "reason": "Configuration source. Flags struct read by core, display, sort, meta, color, icon. Defines all user-configurable behavior. No outbound deps (leaf module in dependency tree).",
+      "import_sources": ["core", "display", "sort", "meta", "color", "icon", "theme"]
+    }
+  ],
+  "change_proposal": {
+    "title": "Add SHA-256 file checksum display column",
+    "description": "Add SHA-256 hash computation and display as optional Block alongside Name, Size, Date, etc.",
+    "files_to_modify": [
+      "src/meta/mod.rs - Add hash field to Meta struct",
+      "src/meta/hash.rs - NEW FILE - Hash type with from_path() and render()",
+      "src/flags/blocks.rs - Add Block::Hash variant",
+      "src/display.rs - Handle Block::Hash in inner_display_grid/tree cell rendering",
+      "src/color.rs - Add Elem::Hash for color styling (optional)",
+      "src/core.rs - NO CHANGE (generic Meta handling)",
+      "src/main.rs - NO CHANGE (generic arg handling)"
+    ],
+    "new_types": [
+      "meta/hash.rs: pub struct Hash { hash: String } - wraps hex SHA-256 digest",
+      "meta/hash.rs: impl Hash { pub fn from_path(path: &Path) -> io::Result<Self> } - computes hash via sha2 crate",
+      "flags/blocks.rs: Block::Hash - new enum variant with display string 'hash' or 'checksum'"
+    ],
+    "pattern_to_follow": "Follow meta/size.rs pattern: struct wraps computed value, impl has from_path() constructor, render() method returns ColoredString. Use lazy_static or OnceCell to cache hash computation for deduplicated files. Integrate into Block enum dispatch in display.rs.",
+    "integration_point": "In display.rs::inner_display_grid/tree, add match arm for Block::Hash. Call meta.hash.render(colors, icons) → ColoredString. Treat as fixed-width column (64 chars for SHA-256 hex). Add optional --blocks hash flag parsing in flags/blocks.rs.",
+    "architectural_fit": "Follows existing pattern: Meta struct holds computed value, render() called during display. No changes to core data flow (fetch, sort). Hash computation is I/O-bound; consider caching or async for large recursive listings.",
+    "risks": [
+      "PERFORMANCE: SHA-256 hashing all files adds I/O overhead. Recursive (-R) on large trees will be slow. Mitigate: make --blocks hash optional, cache hashes, offer async variant.",
+      "COLOR STYLING: Need to define Elem::Hash if coloring hashes by type/status. May require theme/color.rs updates.",
+      "COLUMN WIDTH: Fixed 64-char width may not fit narrow terminals. Consider truncation or wrapping logic (see detect_size_lengths pattern).",
+      "SYMLINKS: Should --dereference flag affect hash computation (hash link target vs. link itself)? Document behavior.",
+      "CACHING: If same file appears in multiple lists or recursive walks, hash computed multiple times. Consider Arc<Mutex<HashMap>> in Core.",
+      "ERROR HANDLING: File permission errors during hash (unreadable files) must be handled gracefully (similar to permission display errors)."
+    ]
+  },
+  "data_flow_diagram": {
+    "description": "File entry journey through lsd pipeline",
+    "steps": [
+      "User invokes lsd with Flags (--long, --blocks size,date,name, --sort name, -R)",
+      "Core::new() → Colors, Icons, GitTheme, sort functions",
+      "Core::fetch() → Vec<Meta> via Meta::from_path() for each path",
+      "Core::sort() → apply SortFn comparators to Meta.size, Meta.date, Meta.name",
+      "Core::display() → display::grid() or display::tree()",
+      "inner_display_grid() loops Meta → for each Block in Flags.blocks",
+      "  → Icons::get(Meta.name) → icon string",
+      "  → Colors::colorize(Meta.path) → ANSI style",
+      "  → Meta.render(colors, icons) → ColoredString",
+      "  → Cell { content, width }",
+      "Grid::fit_into_columns() → padding rules, header, layout",
+      "Output to stdout"
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "developer__analyze",
+      "call_count": 5,
+      "params": ["max_depth=2 path=src/", "path=core.rs", "path=display.rs", "path=meta/mod.rs", "path=icon.rs"],
+      "purpose": "Structural overview: file tree, function counts; detailed inspection of key modules and their exports/imports"
+    },
+    {
+      "tool": "developer__text_editor",
+      "call_count": 3,
+      "params": ["view path=core.rs lines 1-50", "view path=display.rs lines 1-100", "view path=meta/mod.rs lines 262-320"],
+      "purpose": "Read source to understand function signatures, type declarations, module dependencies"
+    },
+    {
+      "tool": "developer__shell",
+      "call_count": 1,
+      "params": ["rg from_path|display_grid|Meta::|Icons::|Colors:: /src --max-count=3 -A 2"],
+      "purpose": "Pattern search for key function calls and type usage"
+    },
+    {
+      "tool": "developer__analyze",
+      "call_count": 1,
+      "params": ["path=color.rs"],
+      "purpose": "Verify color module structure"
+    }
+  ],
+  "analysis_metadata": {
+    "codebase_size": "13223 lines, 672 functions across 52 files",
+    "primary_language": "Rust 2024 edition",
+    "key_dependencies": ["term_grid", "tree-sitter", "clap", "serde", "lscolors", "crossterm", "sha2 (for proposed feature)"],
+    "analysis_depth": 3,
+    "focus_areas": ["display.rs", "core.rs", "meta/mod.rs", "flags/", "color.rs", "icon.rs"],
+    "timestamp": "2026-03-04T08:39:00Z"
+  }
+}
