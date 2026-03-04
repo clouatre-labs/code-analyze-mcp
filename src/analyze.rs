@@ -6,6 +6,8 @@ use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
 use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis};
 use rayon::prelude::*;
+use schemars::JsonSchema;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,17 +31,22 @@ pub enum AnalyzeError {
 }
 
 /// Result of directory analysis containing both formatted output and file data.
-#[derive(Debug)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct AnalysisOutput {
+    #[schemars(description = "Formatted text representation of the analysis")]
     pub formatted: String,
+    #[schemars(description = "List of files analyzed in the directory")]
     pub files: Vec<FileInfo>,
 }
 
 /// Result of file-level semantic analysis.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct FileAnalysisOutput {
+    #[schemars(description = "Formatted text representation of the analysis")]
     pub formatted: String,
+    #[schemars(description = "Semantic analysis data including functions, classes, and imports")]
     pub semantic: SemanticAnalysis,
+    #[schemars(description = "Total line count of the analyzed file")]
     pub line_count: usize,
 }
 
@@ -211,8 +218,9 @@ pub fn analyze_file(
 }
 
 /// Result of focused symbol analysis.
-#[derive(Debug)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct FocusedAnalysisOutput {
+    #[schemars(description = "Formatted text representation of the call graph analysis")]
     pub formatted: String,
 }
 

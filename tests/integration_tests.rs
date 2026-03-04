@@ -6,7 +6,7 @@ use code_analyze_mcp::analyze::{
 use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
 use code_analyze_mcp::completion::{path_completions, symbol_completions};
 use code_analyze_mcp::traversal::walk_directory;
-use code_analyze_mcp::types::AnalysisMode;
+use code_analyze_mcp::types::{AnalysisMode, AnalysisResponse};
 use std::fs;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1623,4 +1623,92 @@ fn test_format_structure_partitions_test_files() {
         output.formatted.contains("main.rs"),
         "Production file should be listed in PATH section"
     );
+}
+
+// AnalysisResponse serialization tests
+
+#[test]
+fn test_analysis_response_overview_serialization() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a simple Rust file
+    fs::write(root.join("lib.rs"), "fn hello() {}\nfn world() {}").unwrap();
+
+    // Act: Analyze directory to get AnalysisOutput
+    let analysis_output = analyze_directory(root, None).unwrap();
+
+    // Convert to AnalysisResponse
+    let response = AnalysisResponse::Overview(analysis_output);
+
+    // Serialize to JSON
+    let json_value = serde_json::to_value(&response).unwrap();
+
+    // Assert: JSON has mode tag
+    assert_eq!(
+        json_value.get("mode").and_then(|v| v.as_str()),
+        Some("overview")
+    );
+
+    // Assert: JSON contains files array
+    assert!(json_value.get("files").is_some());
+    let files = json_value.get("files").unwrap();
+    assert!(files.is_array());
+
+    // Assert: JSON contains formatted field
+    assert!(json_value.get("formatted").is_some());
+    let formatted = json_value.get("formatted").unwrap();
+    assert!(formatted.is_string());
+    assert!(formatted.as_str().unwrap().contains("SUMMARY:"));
+}
+
+#[test]
+fn test_analysis_response_file_details_serialization() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+
+    // Arrange: Create a Rust file with semantic content
+    let rust_code = r#"
+use std::collections::HashMap;
+
+fn calculate(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+"#;
+    fs::write(&file_path, rust_code).unwrap();
+
+    // Act: Analyze file to get FileAnalysisOutput
+    let analysis_output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Convert to AnalysisResponse
+    let response = AnalysisResponse::FileDetails(analysis_output);
+
+    // Serialize to JSON
+    let json_value = serde_json::to_value(&response).unwrap();
+
+    // Assert: JSON has mode tag
+    assert_eq!(
+        json_value.get("mode").and_then(|v| v.as_str()),
+        Some("file_details")
+    );
+
+    // Assert: JSON contains semantic field with functions
+    assert!(json_value.get("semantic").is_some());
+    let semantic = json_value.get("semantic").unwrap();
+    assert!(semantic.get("functions").is_some());
+
+    // Assert: JSON contains formatted field
+    assert!(json_value.get("formatted").is_some());
+    let formatted = json_value.get("formatted").unwrap();
+    assert!(formatted.is_string());
+    assert!(formatted.as_str().unwrap().contains("FILE:"));
+
+    // Assert: JSON contains line_count field
+    assert!(json_value.get("line_count").is_some());
+    assert!(json_value.get("line_count").unwrap().is_number());
 }
