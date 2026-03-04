@@ -15,3 +15,8 @@ pub const CALL_QUERY: &str = r#"
 (method_invocation
   name: (identifier) @call)
 "#;
+
+/// Tree-sitter query for extracting type references.
+pub const REFERENCE_QUERY: &str = r#"
+(type_identifier) @type_ref
+"#;
