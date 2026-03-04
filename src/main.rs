@@ -30,7 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let analyzer = CodeAnalyzer::new(peer, log_level_filter, event_rx);
     let (stdin, stdout) = stdio();
 
-    serve_server(analyzer, (stdin, stdout)).await?;
+    let service = serve_server(analyzer, (stdin, stdout)).await?;
+    service.waiting().await?;
 
     Ok(())
 }
