@@ -16,6 +16,11 @@ pub const CALL_QUERY: &str = r#"
   name: (identifier) @call)
 "#;
 
+/// Tree-sitter query for extracting type references.
+pub const REFERENCE_QUERY: &str = r#"
+(type_identifier) @type_ref
+"#;
+
 /// Tree-sitter query for extracting Java imports.
 pub const IMPORT_QUERY: &str = r#"
 (import_declaration) @import_path

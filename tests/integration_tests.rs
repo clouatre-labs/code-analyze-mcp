@@ -1299,6 +1299,108 @@ async fn test_channel_closed_exits_consumer() {
     assert!(buffer.is_empty());
 }
 
+// Reference extraction tests for Python, Java, and TypeScript
+
+#[test]
+fn test_python_reference_extraction_happy_path() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.py");
+
+    let python_code = r#"
+class User:
+    pass
+
+def greet(user: User) -> User:
+    return user
+
+def process(items: list[User]) -> None:
+    pass
+"#;
+
+    fs::write(&file_path, python_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify references are extracted (non-empty)
+    assert!(
+        !output.semantic.references.is_empty(),
+        "Expected type references to be extracted from Python file"
+    );
+
+    // Verify expected type names are present
+    let ref_symbols: Vec<&str> = output
+        .semantic
+        .references
+        .iter()
+        .map(|r| r.symbol.as_str())
+        .collect();
+    assert!(
+        ref_symbols.contains(&"User"),
+        "Expected 'User' type reference in Python code"
+    );
+
+    // Verify references have line numbers and location
+    for reference in &output.semantic.references {
+        assert!(
+            reference.line > 0,
+            "Reference should have non-zero line number"
+        );
+        assert!(
+            !reference.location.is_empty(),
+            "Reference should have location populated"
+        );
+    }
+}
+
+#[test]
+fn test_python_reference_extraction_edge_case() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.py");
+
+    let python_code = r#"
+from typing import List, Union
+
+class Result:
+    pass
+
+class Data:
+    pass
+
+def process(items: List[Result]) -> Union[Result, Data]:
+    pass
+
+def handle(data: list[dict[Result, Data]]) -> None:
+    pass
+"#;
+
+    fs::write(&file_path, python_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify references are extracted for complex generic types
+    assert!(
+        !output.semantic.references.is_empty(),
+        "Expected type references from generic types"
+    );
+
+    let ref_symbols: Vec<&str> = output
+        .semantic
+        .references
+        .iter()
+        .map(|r| r.symbol.as_str())
+        .collect();
+
+    // Should capture base type names from generics
+    assert!(
+        ref_symbols.contains(&"Result"),
+        "Expected 'Result' from generic type parameters"
+    );
+    assert!(
+        ref_symbols.contains(&"Data"),
+        "Expected 'Data' from generic type parameters"
+    );
+}
+
 // Import extraction tests
 
 struct ImportTestCase {
