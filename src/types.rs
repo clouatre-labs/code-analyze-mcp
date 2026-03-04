@@ -59,6 +59,8 @@ pub struct FileInfo {
     pub line_count: usize,
     pub function_count: usize,
     pub class_count: usize,
+    #[schemars(description = "Whether this file is a test file")]
+    pub is_test: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
