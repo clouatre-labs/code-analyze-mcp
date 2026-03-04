@@ -1301,64 +1301,33 @@ async fn test_channel_closed_exits_consumer() {
 
 // Import extraction tests
 
-#[test]
-fn test_python_import_extraction() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.py");
+struct ImportTestCase {
+    lang: &'static str,
+    ext: &'static str,
+    code: &'static str,
+    expected_modules: Vec<&'static str>,
+}
 
-    let python_code = r#"
+#[test]
+fn test_import_extraction_happy_path() {
+    let test_cases = vec![
+        ImportTestCase {
+            lang: "Python",
+            ext: "py",
+            code: r#"
 import os
 from sys import argv
 from collections import defaultdict
 
 def main():
     pass
-"#;
-
-    fs::write(&file_path, python_code).unwrap();
-
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-
-    // Verify imports extracted
-    assert!(!output.semantic.imports.is_empty());
-    let import_modules: Vec<&str> = output
-        .semantic
-        .imports
-        .iter()
-        .map(|i| i.module.as_str())
-        .collect();
-    assert!(import_modules.iter().any(|m| m.contains("os")));
-    assert!(import_modules.iter().any(|m| m.contains("sys")));
-    assert!(import_modules.iter().any(|m| m.contains("collections")));
-}
-
-#[test]
-fn test_python_import_no_imports() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.py");
-
-    let python_code = r#"
-def hello():
-    print("Hello")
-
-class MyClass:
-    pass
-"#;
-
-    fs::write(&file_path, python_code).unwrap();
-
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-
-    // Verify no imports extracted
-    assert_eq!(output.semantic.imports.len(), 0);
-}
-
-#[test]
-fn test_go_import_extraction() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.go");
-
-    let go_code = r#"
+"#,
+            expected_modules: vec!["os", "sys", "collections"],
+        },
+        ImportTestCase {
+            lang: "Go",
+            ext: "go",
+            code: r#"
 package main
 
 import (
@@ -1371,52 +1340,13 @@ import "io"
 func main() {
     fmt.Println("Hello")
 }
-"#;
-
-    fs::write(&file_path, go_code).unwrap();
-
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-
-    // Verify imports extracted
-    assert!(!output.semantic.imports.is_empty());
-    let import_modules: Vec<&str> = output
-        .semantic
-        .imports
-        .iter()
-        .map(|i| i.module.as_str())
-        .collect();
-    assert!(import_modules.iter().any(|m| m.contains("fmt")));
-    assert!(import_modules.iter().any(|m| m.contains("os")));
-    assert!(import_modules.iter().any(|m| m.contains("io")));
-}
-
-#[test]
-fn test_go_import_no_imports() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.go");
-
-    let go_code = r#"
-package main
-
-func Hello() {
-    println("Hello")
-}
-"#;
-
-    fs::write(&file_path, go_code).unwrap();
-
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-
-    // Verify no imports extracted
-    assert_eq!(output.semantic.imports.len(), 0);
-}
-
-#[test]
-fn test_java_import_extraction() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("Test.java");
-
-    let java_code = r#"
+"#,
+            expected_modules: vec!["fmt", "os", "io"],
+        },
+        ImportTestCase {
+            lang: "Java",
+            ext: "java",
+            code: r#"
 import java.util.ArrayList;
 import java.util.List;
 import static java.lang.Math.sqrt;
@@ -1426,52 +1356,13 @@ public class Test {
         System.out.println("Hello");
     }
 }
-"#;
-
-    fs::write(&file_path, java_code).unwrap();
-
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-
-    // Verify imports extracted
-    assert!(!output.semantic.imports.is_empty());
-    let import_modules: Vec<&str> = output
-        .semantic
-        .imports
-        .iter()
-        .map(|i| i.module.as_str())
-        .collect();
-    assert!(import_modules.iter().any(|m| m.contains("ArrayList")));
-    assert!(import_modules.iter().any(|m| m.contains("List")));
-    assert!(import_modules.iter().any(|m| m.contains("Math")));
-}
-
-#[test]
-fn test_java_import_no_imports() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("Test.java");
-
-    let java_code = r#"
-public class Test {
-    public void method() {
-        System.out.println("Hello");
-    }
-}
-"#;
-
-    fs::write(&file_path, java_code).unwrap();
-
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-
-    // Verify no imports extracted
-    assert_eq!(output.semantic.imports.len(), 0);
-}
-
-#[test]
-fn test_typescript_import_extraction() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.ts");
-
-    let ts_code = r#"
+"#,
+            expected_modules: vec!["ArrayList", "List", "Math"],
+        },
+        ImportTestCase {
+            lang: "TypeScript",
+            ext: "ts",
+            code: r#"
 import { Component } from 'react';
 import * as fs from 'fs';
 import path from 'path';
@@ -1479,31 +1370,87 @@ import path from 'path';
 export function hello(): void {
     console.log("Hello");
 }
-"#;
+"#,
+            expected_modules: vec!["react", "fs", "path"],
+        },
+    ];
 
-    fs::write(&file_path, ts_code).unwrap();
+    for test_case in test_cases {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(format!("test.{}", test_case.ext));
 
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+        fs::write(&file_path, test_case.code).unwrap();
 
-    // Verify imports extracted
-    assert!(!output.semantic.imports.is_empty());
-    let import_modules: Vec<&str> = output
-        .semantic
-        .imports
-        .iter()
-        .map(|i| i.module.as_str())
-        .collect();
-    assert!(import_modules.iter().any(|m| m.contains("react")));
-    assert!(import_modules.iter().any(|m| m.contains("fs")));
-    assert!(import_modules.iter().any(|m| m.contains("path")));
+        let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+        // Verify imports extracted
+        assert!(
+            !output.semantic.imports.is_empty(),
+            "{}: expected non-empty imports",
+            test_case.lang
+        );
+        let import_modules: Vec<&str> = output
+            .semantic
+            .imports
+            .iter()
+            .map(|i| i.module.as_str())
+            .collect();
+
+        for expected in test_case.expected_modules {
+            assert!(
+                import_modules.iter().any(|m| m.contains(expected)),
+                "{}: expected module containing '{}' not found in {:?}",
+                test_case.lang,
+                expected,
+                import_modules
+            );
+        }
+    }
 }
 
 #[test]
-fn test_typescript_import_no_imports() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.ts");
+fn test_import_extraction_no_imports() {
+    let test_cases = vec![
+        ImportTestCase {
+            lang: "Python",
+            ext: "py",
+            code: r#"
+def hello():
+    print("Hello")
 
-    let ts_code = r#"
+class MyClass:
+    pass
+"#,
+            expected_modules: vec![],
+        },
+        ImportTestCase {
+            lang: "Go",
+            ext: "go",
+            code: r#"
+package main
+
+func Hello() {
+    println("Hello")
+}
+"#,
+            expected_modules: vec![],
+        },
+        ImportTestCase {
+            lang: "Java",
+            ext: "java",
+            code: r#"
+public class Test {
+    public void method() {
+        System.out.println("Hello");
+    }
+}
+"#,
+            expected_modules: vec![],
+        },
+        ImportTestCase {
+            lang: "TypeScript",
+            ext: "ts",
+            code: r#"
 export function hello(): void {
     console.log("Hello");
 }
@@ -1513,14 +1460,27 @@ export class MyClass {
         return "test";
     }
 }
-"#;
+"#,
+            expected_modules: vec![],
+        },
+    ];
 
-    fs::write(&file_path, ts_code).unwrap();
+    for test_case in test_cases {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(format!("test.{}", test_case.ext));
 
-    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+        fs::write(&file_path, test_case.code).unwrap();
 
-    // Verify no imports extracted
-    assert_eq!(output.semantic.imports.len(), 0);
+        let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+        // Verify no imports extracted
+        assert_eq!(
+            output.semantic.imports.len(),
+            0,
+            "{}: expected zero imports",
+            test_case.lang
+        );
+    }
 }
 
 // Test file partitioning tests
