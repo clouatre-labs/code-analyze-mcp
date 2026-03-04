@@ -15,8 +15,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create shared level filter for dynamic control (std::sync::Mutex for Copy type)
     let log_level_filter = Arc::new(Mutex::new(LevelFilter::WARN));
 
-    // Create MCP logging layer with filter
-    let mcp_logging_layer = McpLoggingLayer::new(peer.clone(), log_level_filter.clone());
+    // Create unbounded channel for log events
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+
+    // Create MCP logging layer with event sender
+    let mcp_logging_layer = McpLoggingLayer::new(event_tx, log_level_filter.clone());
 
     // Build layered subscriber: fmt + MCP logging
     tracing_subscriber::registry()
@@ -24,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(mcp_logging_layer)
         .init();
 
-    let analyzer = CodeAnalyzer::new(peer, log_level_filter);
+    let analyzer = CodeAnalyzer::new(peer, log_level_filter, event_rx);
     let (stdin, stdout) = stdio();
 
     serve_server(analyzer, (stdin, stdout)).await?;

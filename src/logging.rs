@@ -1,11 +1,7 @@
-use rmcp::Peer;
-use rmcp::RoleServer;
-use rmcp::model::{
-    LoggingLevel, LoggingMessageNotificationParam, Notification, ServerNotification,
-};
+use rmcp::model::LoggingLevel;
 use serde_json::{Map, Value};
 use std::sync::{Arc, Mutex};
-use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::mpsc;
 use tracing::span::Attributes;
 use tracing::subscriber::Interest;
 use tracing::{Level, Subscriber};
@@ -23,20 +19,28 @@ pub fn level_to_mcp(level: &Level) -> LoggingLevel {
     }
 }
 
-/// Custom tracing Layer that bridges tracing events to MCP client via peer.notify_logging_message().
-/// Holds a shared reference to the peer (set via on_initialized) and the log level filter.
+/// Lightweight event sent from McpLoggingLayer to consumer task via unbounded channel.
+#[derive(Clone, Debug)]
+pub struct LogEvent {
+    pub level: LoggingLevel,
+    pub logger: String,
+    pub data: Value,
+}
+
+/// Custom tracing Layer that bridges tracing events to MCP client via unbounded channel.
+/// Sends lightweight LogEvent to channel; consumer task in on_initialized drains with recv_many.
 pub struct McpLoggingLayer {
-    peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
+    event_tx: mpsc::UnboundedSender<LogEvent>,
     log_level_filter: Arc<Mutex<LevelFilter>>,
 }
 
 impl McpLoggingLayer {
     pub fn new(
-        peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
+        event_tx: mpsc::UnboundedSender<LogEvent>,
         log_level_filter: Arc<Mutex<LevelFilter>>,
     ) -> Self {
         Self {
-            peer,
+            event_tx,
             log_level_filter,
         }
     }
@@ -64,29 +68,18 @@ where
         event.record(&mut visitor);
 
         let mcp_level = level_to_mcp(&level);
-
-        // Spawn async task to send notification without blocking on_event.
-        let peer = self.peer.clone();
         let logger = target.to_string();
         let data = Value::Object(fields);
 
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                let peer_lock = peer.lock().await;
-                if let Some(peer) = peer_lock.as_ref() {
-                    let notification = ServerNotification::LoggingMessageNotification(
-                        Notification::new(LoggingMessageNotificationParam {
-                            level: mcp_level,
-                            logger: Some(logger),
-                            data,
-                        }),
-                    );
-                    if let Err(e) = peer.send_notification(notification).await {
-                        tracing::warn!("Failed to send logging notification: {}", e);
-                    }
-                }
-            });
-        }
+        // Send LogEvent to channel without blocking on_event.
+        let log_event = LogEvent {
+            level: mcp_level,
+            logger,
+            data,
+        };
+
+        // Ignore send error if receiver is dropped (channel closed).
+        let _ = self.event_tx.send(log_event);
     }
 
     fn register_callsite(&self, metadata: &'static tracing::Metadata<'static>) -> Interest {
