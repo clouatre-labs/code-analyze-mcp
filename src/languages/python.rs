@@ -13,3 +13,9 @@ pub const CALL_QUERY: &str = r#"
 (call
   function: (attribute attribute: (identifier) @call))
 "#;
+
+/// Tree-sitter query for extracting Python imports.
+pub const IMPORT_QUERY: &str = r#"
+(import_statement) @import_path
+(import_from_statement) @import_path
+"#;

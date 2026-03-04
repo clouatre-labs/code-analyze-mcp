@@ -27,6 +27,11 @@ pub const REFERENCE_QUERY: &str = r#"
 (type_identifier) @type_ref
 "#;
 
+/// Tree-sitter query for extracting Go imports.
+pub const IMPORT_QUERY: &str = r#"
+(import_declaration) @import_path
+"#;
+
 /// Find method name for a receiver type.
 pub fn find_method_for_receiver(
     node: &Node,

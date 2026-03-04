@@ -191,7 +191,19 @@ fn extract_imports_from_node(
                 });
             }
         }
-        _ => {}
+        // Fallback for non-Rust import nodes: capture full text as module
+        _ => {
+            let text = source[node.start_byte()..node.end_byte()]
+                .trim()
+                .to_string();
+            if !text.is_empty() {
+                imports.push(ImportInfo {
+                    module: text,
+                    items: vec![],
+                    line,
+                });
+            }
+        }
     }
 }
 

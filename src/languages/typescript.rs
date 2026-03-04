@@ -16,3 +16,8 @@ pub const CALL_QUERY: &str = r#"
 (call_expression
   function: (member_expression property: (property_identifier) @call))
 "#;
+
+/// Tree-sitter query for extracting TypeScript imports.
+pub const IMPORT_QUERY: &str = r#"
+(import_statement) @import_path
+"#;

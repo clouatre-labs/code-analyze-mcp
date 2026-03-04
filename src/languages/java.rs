@@ -15,3 +15,8 @@ pub const CALL_QUERY: &str = r#"
 (method_invocation
   name: (identifier) @call)
 "#;
+
+/// Tree-sitter query for extracting Java imports.
+pub const IMPORT_QUERY: &str = r#"
+(import_declaration) @import_path
+"#;
