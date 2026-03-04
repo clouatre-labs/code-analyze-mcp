@@ -14,13 +14,12 @@ pub mod types;
 use cache::AnalysisCache;
 use logging::LogEvent;
 use rmcp::handler::server::tool::ToolRouter;
-use rmcp::handler::server::wrapper::Parameters;
+use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
-    Annotated, CallToolResult, CancelledNotificationParam, CompleteRequestParams, CompleteResult,
-    CompletionInfo, ErrorData, Implementation, InitializeResult, LoggingLevel,
-    LoggingMessageNotificationParam, Notification, NumberOrString, ProgressNotificationParam,
-    ProgressToken, ProtocolVersion, RawContent, ServerCapabilities, ServerNotification,
-    SetLevelRequestParams,
+    CancelledNotificationParam, CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData,
+    Implementation, InitializeResult, LoggingLevel, LoggingMessageNotificationParam, Notification,
+    NumberOrString, ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
+    ServerNotification, SetLevelRequestParams,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
@@ -30,7 +29,7 @@ use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
-use types::{AnalysisMode, AnalyzeParams};
+use types::{AnalysisMode, AnalysisResponse, AnalyzeParams};
 
 #[derive(Clone)]
 pub struct CodeAnalyzer {
@@ -95,7 +94,7 @@ impl CodeAnalyzer {
         &self,
         params: Parameters<AnalyzeParams>,
         context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, ErrorData> {
+    ) -> Result<Json<AnalysisResponse>, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
 
@@ -360,36 +359,74 @@ impl CodeAnalyzer {
             }
         };
 
-        // Extract formatted_output from ModeResult
-        let formatted_output = match mode_result {
-            types::ModeResult::Overview(output) => output.formatted,
-            types::ModeResult::FileDetails(output) => output.formatted,
-            types::ModeResult::SymbolFocus(output) => output.formatted,
+        // Convert ModeResult to AnalysisResponse
+        let response = match mode_result {
+            types::ModeResult::Overview(output) => {
+                // Apply output size limiting
+                let line_count = output.formatted.lines().count();
+                if line_count > 1000 && params.force != Some(true) {
+                    let estimated_tokens = line_count * 40;
+                    let message = format!(
+                        "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
+                         - force=true to return full output\n\
+                         - Narrow your scope (smaller directory, specific file)\n\
+                         - Use symbol_focus mode for targeted analysis\n\
+                         - Reduce max_depth parameter",
+                        line_count, estimated_tokens
+                    );
+                    return Err(ErrorData::new(
+                        rmcp::model::ErrorCode::INVALID_REQUEST,
+                        message,
+                        None,
+                    ));
+                }
+                AnalysisResponse::Overview(output)
+            }
+            types::ModeResult::FileDetails(output) => {
+                // Apply output size limiting
+                let line_count = output.formatted.lines().count();
+                if line_count > 1000 && params.force != Some(true) {
+                    let estimated_tokens = line_count * 40;
+                    let message = format!(
+                        "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
+                         - force=true to return full output\n\
+                         - Narrow your scope (smaller directory, specific file)\n\
+                         - Use symbol_focus mode for targeted analysis\n\
+                         - Reduce max_depth parameter",
+                        line_count, estimated_tokens
+                    );
+                    return Err(ErrorData::new(
+                        rmcp::model::ErrorCode::INVALID_REQUEST,
+                        message,
+                        None,
+                    ));
+                }
+                AnalysisResponse::FileDetails(output)
+            }
+            types::ModeResult::SymbolFocus(output) => {
+                // Apply output size limiting
+                let line_count = output.formatted.lines().count();
+                if line_count > 1000 && params.force != Some(true) {
+                    let estimated_tokens = line_count * 40;
+                    let message = format!(
+                        "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
+                         - force=true to return full output\n\
+                         - Narrow your scope (smaller directory, specific file)\n\
+                         - Use symbol_focus mode for targeted analysis\n\
+                         - Reduce max_depth parameter",
+                        line_count, estimated_tokens
+                    );
+                    return Err(ErrorData::new(
+                        rmcp::model::ErrorCode::INVALID_REQUEST,
+                        message,
+                        None,
+                    ));
+                }
+                AnalysisResponse::SymbolFocus(output)
+            }
         };
 
-        // Apply output size limiting
-        let line_count = formatted_output.lines().count();
-        if line_count > 1000 && params.force != Some(true) {
-            let estimated_tokens = line_count * 40;
-            let message = format!(
-                "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
-                 - force=true to return full output\n\
-                 - Narrow your scope (smaller directory, specific file)\n\
-                 - Use symbol_focus mode for targeted analysis\n\
-                 - Reduce max_depth parameter",
-                line_count, estimated_tokens
-            );
-            return Err(ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_REQUEST,
-                message,
-                None,
-            ));
-        }
-
-        Ok(CallToolResult::success(vec![Annotated {
-            raw: RawContent::text(formatted_output),
-            annotations: None,
-        }]))
+        Ok(Json(response))
     }
 }
 
