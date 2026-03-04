@@ -1,0 +1,133 @@
+{
+  "metadata": {
+    "benchmark_version": "v3",
+    "experiment_date": "2026-03-03",
+    "model": "claude-haiku-4-5@20251001",
+    "temperature": 0.5,
+    "total_runs": 10,
+    "runs_per_condition": 5,
+    "randomization_seed": 42
+  },
+  "runs": [
+    {
+      "run_id": "A1",
+      "condition": "A",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "A2",
+      "condition": "A",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "A3",
+      "condition": "A",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "A4",
+      "condition": "A",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "A5",
+      "condition": "A",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "B1",
+      "condition": "B",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "B2",
+      "condition": "B",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "B3",
+      "condition": "B",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "B4",
+      "condition": "B",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    },
+    {
+      "run_id": "B5",
+      "condition": "B",
+      "session_id": "",
+      "tool_calls": [],
+      "input_tokens": null,
+      "output_tokens": null,
+      "total_tokens": null,
+      "wall_time_seconds": null,
+      "timestamp": "",
+      "notes": ""
+    }
+  ]
+}
