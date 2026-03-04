@@ -2,6 +2,7 @@ use crate::graph::CallGraph;
 use crate::traversal::WalkEntry;
 use crate::types::{FileInfo, SemanticAnalysis};
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 use thiserror::Error;
 use tracing::instrument;
 
@@ -147,33 +148,23 @@ pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: 
         output.push_str("F:\n");
         let mut line = String::from("  ");
         for (i, func) in analysis.functions.iter().enumerate() {
-            let params_display = func.parameters.first().map(|p| p.as_str()).unwrap_or("()");
-            let ret_display = func
-                .return_type
-                .as_deref()
-                .map(|r| format!(" {}", r))
-                .unwrap_or_default();
-            let call_suffix = if let Some(&count) = analysis.call_frequency.get(&func.name) {
-                if count > 3 {
-                    format!("•{}", count)
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            };
+            let mut call_marker = func.compact_signature();
 
-            let call_marker = format!(
-                "{}{}{}:{}{}",
-                func.name, params_display, ret_display, func.line, call_suffix
-            );
+            if let Some(&count) = analysis.call_frequency.get(&func.name)
+                && count > 3
+            {
+                write!(call_marker, "\u{2022}{}", count).ok();
+            }
 
             if i == 0 {
                 line.push_str(&call_marker);
             } else if line.len() + call_marker.len() + 2 > 100 {
                 output.push_str(&line);
                 output.push('\n');
-                line = format!("  {}", call_marker);
+                let mut new_line = String::with_capacity(2 + call_marker.len());
+                new_line.push_str("  ");
+                new_line.push_str(&call_marker);
+                line = new_line;
             } else {
                 line.push_str(", ");
                 line.push_str(&call_marker);

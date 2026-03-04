@@ -2,6 +2,7 @@ use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write;
 
 /// Internal enum wrapping the three analysis output types.
 /// Not serialized; used for type-safe dispatch in lib.rs.
@@ -67,6 +68,44 @@ pub struct FunctionInfo {
     pub end_line: usize,
     pub parameters: Vec<String>,
     pub return_type: Option<String>,
+}
+
+impl FunctionInfo {
+    /// Maximum length for parameter display before truncation.
+    const MAX_PARAMS_DISPLAY_LEN: usize = 80;
+    /// Truncation point when parameters exceed MAX_PARAMS_DISPLAY_LEN.
+    const TRUNCATION_POINT: usize = 77;
+
+    /// Format function signature as a single-line string with truncation.
+    /// Returns: `name(param1, param2, ...) -> return_type :start-end`
+    /// Parameters are truncated to ~80 chars with '...' if needed.
+    pub fn compact_signature(&self) -> String {
+        let mut sig = String::with_capacity(self.name.len() + 40);
+        sig.push_str(&self.name);
+        sig.push('(');
+
+        if !self.parameters.is_empty() {
+            let params_str = self.parameters.join(", ");
+            if params_str.len() > Self::MAX_PARAMS_DISPLAY_LEN {
+                // Truncate at a safe char boundary to avoid panicking on multibyte UTF-8.
+                let truncate_at = params_str.floor_char_boundary(Self::TRUNCATION_POINT);
+                sig.push_str(&params_str[..truncate_at]);
+                sig.push_str("...");
+            } else {
+                sig.push_str(&params_str);
+            }
+        }
+
+        sig.push(')');
+
+        if let Some(ret_type) = &self.return_type {
+            sig.push_str(" -> ");
+            sig.push_str(ret_type);
+        }
+
+        write!(sig, " :{}-{}", self.line, self.end_line).ok();
+        sig
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -172,4 +211,58 @@ pub struct SemanticAnalysis {
     pub call_frequency: HashMap<String, usize>,
     #[schemars(description = "Caller-callee pairs extracted from call expressions")]
     pub calls: Vec<CallInfo>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compact_signature_short_params() {
+        let func = FunctionInfo {
+            name: "add".to_string(),
+            line: 10,
+            end_line: 12,
+            parameters: vec!["a: i32".to_string(), "b: i32".to_string()],
+            return_type: Some("i32".to_string()),
+        };
+
+        let sig = func.compact_signature();
+        assert_eq!(sig, "add(a: i32, b: i32) -> i32 :10-12");
+    }
+
+    #[test]
+    fn test_compact_signature_long_params_truncation() {
+        let func = FunctionInfo {
+            name: "process".to_string(),
+            line: 20,
+            end_line: 50,
+            parameters: vec![
+                "config: ComplexConfigType".to_string(),
+                "data: VeryLongDataStructureNameThatExceedsEightyCharacters".to_string(),
+                "callback: Fn(Result) -> ()".to_string(),
+            ],
+            return_type: Some("Result<Output>".to_string()),
+        };
+
+        let sig = func.compact_signature();
+        assert!(sig.contains("process("));
+        assert!(sig.contains("..."));
+        assert!(sig.contains("-> Result<Output>"));
+        assert!(sig.contains(":20-50"));
+    }
+
+    #[test]
+    fn test_compact_signature_empty_params() {
+        let func = FunctionInfo {
+            name: "main".to_string(),
+            line: 1,
+            end_line: 5,
+            parameters: vec![],
+            return_type: None,
+        };
+
+        let sig = func.compact_signature();
+        assert_eq!(sig, "main() :1-5");
+    }
 }
