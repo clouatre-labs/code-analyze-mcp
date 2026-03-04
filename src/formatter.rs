@@ -405,3 +405,150 @@ pub fn format_focused(
 
     Ok(output)
 }
+
+/// Generate a compact summary of directory analysis for large outputs.
+/// Shows total counts, language breakdown, and top-level directory structure.
+#[instrument(skip_all)]
+pub fn format_summary(
+    entries: &[WalkEntry],
+    analysis_results: &[FileInfo],
+    max_depth: Option<u32>,
+) -> String {
+    let mut output = String::new();
+
+    // Partition files into production and test
+    let (prod_files, test_files): (Vec<_>, Vec<_>) =
+        analysis_results.iter().partition(|a| !a.is_test);
+
+    // Calculate totals
+    let total_loc: usize = analysis_results.iter().map(|a| a.line_count).sum();
+    let total_functions: usize = analysis_results.iter().map(|a| a.function_count).sum();
+    let total_classes: usize = analysis_results.iter().map(|a| a.class_count).sum();
+
+    // Count files by language
+    let mut lang_counts: HashMap<String, usize> = HashMap::new();
+    for analysis in analysis_results {
+        *lang_counts.entry(analysis.language.clone()).or_insert(0) += 1;
+    }
+    let total_files = analysis_results.len();
+
+    // SUMMARY block
+    output.push_str("SUMMARY:\n");
+    let depth_label = match max_depth {
+        Some(n) if n > 0 => format!(" (max_depth={})", n),
+        _ => String::new(),
+    };
+    output.push_str(&format!(
+        "Shown: {} files ({} prod, {} test), {}L, {}F, {}C{}\n",
+        total_files,
+        prod_files.len(),
+        test_files.len(),
+        total_loc,
+        total_functions,
+        total_classes,
+        depth_label
+    ));
+
+    if !lang_counts.is_empty() {
+        output.push_str("Languages: ");
+        let mut langs: Vec<_> = lang_counts.iter().collect();
+        langs.sort_by_key(|&(name, _)| name);
+        let lang_strs: Vec<String> = langs
+            .iter()
+            .map(|(name, count)| {
+                let percentage = if total_files > 0 {
+                    (**count * 100) / total_files
+                } else {
+                    0
+                };
+                format!("{} ({}%)", name, percentage)
+            })
+            .collect();
+        output.push_str(&lang_strs.join(", "));
+        output.push('\n');
+    }
+
+    output.push('\n');
+
+    // STRUCTURE block - top-level directories only (depth 1)
+    output.push_str("STRUCTURE (depth 1):\n");
+
+    let mut shown_dirs = HashSet::new();
+    let mut file_count_by_dir: HashMap<String, usize> = HashMap::new();
+
+    // First pass: count files by directory
+    for entry in entries {
+        if !entry.is_dir
+            && entry.depth == 1
+            && let Some(parent) = entry.path.parent()
+        {
+            let parent_key = parent.display().to_string();
+            *file_count_by_dir.entry(parent_key).or_insert(0) += 1;
+        }
+    }
+
+    // Second pass: show directories and file counts
+    for entry in entries {
+        // Only show depth 1 entries
+        if entry.depth == 0 || entry.depth > 1 {
+            continue;
+        }
+
+        // Get just the filename/dirname
+        let name = entry
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("?");
+
+        // For directories, show them with file count
+        if entry.is_dir {
+            let dir_key = entry.path.display().to_string();
+            if !shown_dirs.contains(&dir_key) {
+                shown_dirs.insert(dir_key.clone());
+                let file_count = file_count_by_dir.get(&dir_key).copied().unwrap_or(0);
+                if file_count > 0 {
+                    output.push_str(&format!("{}/  ({} files)\n", name, file_count));
+                } else {
+                    output.push_str(&format!("{}/\n", name));
+                }
+            }
+        } else if entry.depth == 1
+            && shown_dirs.len() <= 5
+            && let Some(analysis) = analysis_results
+                .iter()
+                .find(|a| a.path == entry.path.display().to_string())
+        {
+            // For files at depth 1, show with counts (but limit to first 5)
+            let mut info_parts = Vec::new();
+
+            if analysis.line_count > 0 {
+                info_parts.push(format!("{}L", analysis.line_count));
+            }
+            if analysis.function_count > 0 {
+                info_parts.push(format!("{}F", analysis.function_count));
+            }
+            if analysis.class_count > 0 {
+                info_parts.push(format!("{}C", analysis.class_count));
+            }
+
+            if info_parts.is_empty() {
+                output.push_str(&format!("  {}\n", name));
+            } else {
+                output.push_str(&format!("  {} [{}]\n", name, info_parts.join(", ")));
+            }
+        }
+    }
+
+    output.push('\n');
+
+    // SUGGESTION block
+    output.push_str("SUGGESTION:\n");
+    output.push_str("Output is large. To see full details, try:\n");
+    output.push_str("  - Reduce max_depth parameter\n");
+    output.push_str("  - Analyze a specific subdirectory\n");
+    output.push_str("  - Use file_details mode for a single file\n");
+    output.push_str("  - Use force=true to bypass this summary\n");
+
+    output
+}

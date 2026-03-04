@@ -33,6 +33,7 @@ pub enum AnalyzeError {
 pub struct AnalysisOutput {
     pub formatted: String,
     pub files: Vec<FileInfo>,
+    pub entries: Vec<WalkEntry>,
 }
 
 /// Result of file-level semantic analysis.
@@ -139,6 +140,7 @@ pub fn analyze_directory_with_progress(
     Ok(AnalysisOutput {
         formatted,
         files: analysis_results,
+        entries,
     })
 }
 

@@ -38,6 +38,11 @@ pub struct AnalyzeParams {
 
     #[schemars(description = "Bypass output size limiting (default: false)")]
     pub force: Option<bool>,
+
+    #[schemars(
+        description = "Generate compact summary instead of full output. Some(true)=force summary, Some(false)=force full, None=auto-detect on large output"
+    )]
+    pub summary: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

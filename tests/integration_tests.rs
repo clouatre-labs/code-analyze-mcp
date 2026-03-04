@@ -1624,3 +1624,94 @@ fn test_format_structure_partitions_test_files() {
         "Production file should be listed in PATH section"
     );
 }
+
+#[test]
+fn test_summary_auto_detect_large_directory() {
+    // Arrange: Create a directory with enough files to exceed 1000 lines of output
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create a structure that will generate >1000 lines of output
+    // The PATH section shows each file on its own line, so we need >1000 files
+    // Create 1100 files to ensure output exceeds 1000 lines
+    fs::create_dir(root.join("src")).unwrap();
+    for i in 0..1100 {
+        let content = "fn func() {}";
+        fs::write(root.join(format!("src/file_{i}.rs")), content).unwrap();
+    }
+
+    // Act: Analyze directory and generate summary
+    let output = analyze_directory(root, None).unwrap();
+    let summary = code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None);
+
+    // Assert: Summary format should be present
+    assert!(
+        summary.contains("SUMMARY:"),
+        "Summary should contain SUMMARY block"
+    );
+    assert!(
+        summary.contains("STRUCTURE (depth 1):"),
+        "Summary should contain STRUCTURE (depth 1) block"
+    );
+    assert!(
+        summary.contains("SUGGESTION:"),
+        "Summary should contain SUGGESTION block"
+    );
+
+    // Assert: Summary should show file counts
+    assert!(
+        summary.contains("1100 files"),
+        "Summary should show correct file count"
+    );
+
+    // Assert: Summary should show language breakdown
+    assert!(
+        summary.contains("Languages:"),
+        "Summary should show language breakdown"
+    );
+
+    // Assert: Summary should be much shorter than full output
+    let full_line_count = output.formatted.lines().count();
+    let summary_line_count = summary.lines().count();
+    assert!(
+        summary_line_count < full_line_count,
+        "Summary ({} lines) should be shorter than full output ({} lines)",
+        summary_line_count,
+        full_line_count
+    );
+}
+
+#[test]
+fn test_summary_explicit_on_small_directory() {
+    // Arrange: Create a small directory (would normally not trigger summary)
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("src/lib.rs"), "pub fn helper() {}").unwrap();
+
+    // Act: Analyze directory and generate summary
+    let output = analyze_directory(root, None).unwrap();
+    let summary = code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None);
+
+    // Assert: Summary format should be present even for small directory
+    assert!(
+        summary.contains("SUMMARY:"),
+        "Summary should contain SUMMARY block"
+    );
+    assert!(
+        summary.contains("STRUCTURE (depth 1):"),
+        "Summary should contain STRUCTURE (depth 1) block"
+    );
+    assert!(
+        summary.contains("SUGGESTION:"),
+        "Summary should contain SUGGESTION block"
+    );
+
+    // Assert: Summary should show correct file count
+    assert!(
+        summary.contains("2 files"),
+        "Summary should show correct file count"
+    );
+}

@@ -12,6 +12,7 @@ pub mod traversal;
 pub mod types;
 
 use cache::AnalysisCache;
+use formatter::format_summary;
 use logging::LogEvent;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -182,6 +183,7 @@ impl CodeAnalyzer {
                         let output = analyze::AnalysisOutput {
                             formatted: "Analysis cancelled".to_string(),
                             files: vec![],
+                            entries: vec![],
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -189,6 +191,7 @@ impl CodeAnalyzer {
                         let output = analyze::AnalysisOutput {
                             formatted: format!("Error analyzing directory: {}", e),
                             files: vec![],
+                            entries: vec![],
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -196,6 +199,7 @@ impl CodeAnalyzer {
                         let output = analyze::AnalysisOutput {
                             formatted: format!("Task join error: {}", e),
                             files: vec![],
+                            entries: vec![],
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -360,31 +364,37 @@ impl CodeAnalyzer {
             }
         };
 
-        // Extract formatted_output from ModeResult
-        let formatted_output = match mode_result {
-            types::ModeResult::Overview(output) => output.formatted,
-            types::ModeResult::FileDetails(output) => output.formatted,
-            types::ModeResult::SymbolFocus(output) => output.formatted,
-        };
+        // Extract formatted_output from ModeResult and handle summary logic
+        let formatted_output = match &mode_result {
+            types::ModeResult::Overview(output) => {
+                let line_count = output.formatted.lines().count();
 
-        // Apply output size limiting
-        let line_count = formatted_output.lines().count();
-        if line_count > 1000 && params.force != Some(true) {
-            let estimated_tokens = line_count * 40;
-            let message = format!(
-                "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
-                 - force=true to return full output\n\
-                 - Narrow your scope (smaller directory, specific file)\n\
-                 - Use symbol_focus mode for targeted analysis\n\
-                 - Reduce max_depth parameter",
-                line_count, estimated_tokens
-            );
-            return Err(ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_REQUEST,
-                message,
-                None,
-            ));
-        }
+                // Determine if we should generate a summary
+                let should_summarize = if params.force == Some(true) {
+                    // force=true bypasses summary entirely
+                    false
+                } else if params.summary == Some(true) {
+                    // Explicit summary=true always generates summary
+                    true
+                } else if params.summary == Some(false) {
+                    // Explicit summary=false never generates summary
+                    false
+                } else if line_count > 1000 {
+                    // Auto-detect: large output triggers summary
+                    true
+                } else {
+                    false
+                };
+
+                if should_summarize {
+                    format_summary(&output.entries, &output.files, params.max_depth)
+                } else {
+                    output.formatted.clone()
+                }
+            }
+            types::ModeResult::FileDetails(output) => output.formatted.clone(),
+            types::ModeResult::SymbolFocus(output) => output.formatted.clone(),
+        };
 
         Ok(CallToolResult::success(vec![Annotated {
             raw: RawContent::text(formatted_output),
