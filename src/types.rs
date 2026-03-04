@@ -133,13 +133,26 @@ pub struct ReferenceInfo {
     pub line: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum ReferenceType {
     Definition,
     Usage,
     Import,
     Export,
+}
+
+impl std::fmt::Display for ReferenceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReferenceType::Definition => write!(f, "definition"),
+            ReferenceType::Usage => write!(f, "usage"),
+            ReferenceType::Import => write!(f, "import"),
+            ReferenceType::Export => write!(f, "export"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

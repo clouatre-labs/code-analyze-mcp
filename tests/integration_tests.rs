@@ -5,8 +5,9 @@ use code_analyze_mcp::analyze::{
 };
 use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
 use code_analyze_mcp::completion::{path_completions, symbol_completions};
+use code_analyze_mcp::formatter::format_file_details;
 use code_analyze_mcp::traversal::walk_directory;
-use code_analyze_mcp::types::AnalysisMode;
+use code_analyze_mcp::types::{AnalysisMode, ReferenceInfo, ReferenceType, SemanticAnalysis};
 use std::fs;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1297,4 +1298,172 @@ async fn test_channel_closed_exits_consumer() {
     // Assert: recv_many returns 0 when channel is closed
     assert_eq!(received, 0);
     assert!(buffer.is_empty());
+}
+
+// Helper to create SemanticAnalysis with references
+fn make_analysis(references: Vec<ReferenceInfo>) -> SemanticAnalysis {
+    SemanticAnalysis {
+        functions: vec![],
+        classes: vec![],
+        imports: vec![],
+        references,
+        call_frequency: std::collections::HashMap::new(),
+        calls: vec![],
+    }
+}
+
+#[test]
+fn test_format_references_grouped_output_happy_path() {
+    // Arrange: Create a SemanticAnalysis with 3 references for the same symbol
+    let analysis = make_analysis(vec![
+        ReferenceInfo {
+            symbol: "foo".to_string(),
+            reference_type: ReferenceType::Usage,
+            location: "/tmp/project/src/main.rs".to_string(),
+            line: 10,
+        },
+        ReferenceInfo {
+            symbol: "foo".to_string(),
+            reference_type: ReferenceType::Usage,
+            location: "/tmp/project/src/lib.rs".to_string(),
+            line: 20,
+        },
+        ReferenceInfo {
+            symbol: "foo".to_string(),
+            reference_type: ReferenceType::Usage,
+            location: "/tmp/project/src/utils.rs".to_string(),
+            line: 30,
+        },
+    ]);
+
+    // Act: Format the file details
+    let output = format_file_details("test.rs", &analysis, 100);
+
+    // Assert: Output contains grouped format with relative paths
+    assert!(output.contains("R:"));
+    assert!(output.contains("foo (usage)"));
+    assert!(output.contains("main.rs:10"));
+    assert!(output.contains("lib.rs:20"));
+    assert!(output.contains("utils.rs:30"));
+    // Should be comma-separated on one line since <= 5 references
+    assert!(output.contains("main.rs:10, lib.rs:20, utils.rs:30"));
+}
+
+#[test]
+fn test_format_references_count_compression_edge_case() {
+    // Arrange: Create a SemanticAnalysis with 6 references (>5) for the same symbol
+    let analysis = make_analysis(vec![
+        ReferenceInfo {
+            symbol: "bar".to_string(),
+            reference_type: ReferenceType::Definition,
+            location: "/tmp/project/src/main.rs".to_string(),
+            line: 5,
+        },
+        ReferenceInfo {
+            symbol: "bar".to_string(),
+            reference_type: ReferenceType::Definition,
+            location: "/tmp/project/src/lib.rs".to_string(),
+            line: 15,
+        },
+        ReferenceInfo {
+            symbol: "bar".to_string(),
+            reference_type: ReferenceType::Definition,
+            location: "/tmp/project/src/utils.rs".to_string(),
+            line: 25,
+        },
+        ReferenceInfo {
+            symbol: "bar".to_string(),
+            reference_type: ReferenceType::Definition,
+            location: "/tmp/project/src/helpers.rs".to_string(),
+            line: 35,
+        },
+        ReferenceInfo {
+            symbol: "bar".to_string(),
+            reference_type: ReferenceType::Definition,
+            location: "/tmp/project/src/core.rs".to_string(),
+            line: 45,
+        },
+        ReferenceInfo {
+            symbol: "bar".to_string(),
+            reference_type: ReferenceType::Definition,
+            location: "/tmp/project/src/extra.rs".to_string(),
+            line: 55,
+        },
+    ]);
+
+    // Act: Format the file details
+    let output = format_file_details("test.rs", &analysis, 100);
+
+    // Assert: Output contains count-based compression format
+    assert!(output.contains("R:"));
+    assert!(output.contains("bar (definition)"));
+    assert!(output.contains("6 references"));
+    assert!(output.contains("across 6 files"));
+    // Should NOT contain individual line numbers when compressed
+    assert!(!output.contains("main.rs:5, lib.rs:15"));
+}
+
+#[test]
+fn test_format_references_multiple_types() {
+    // Arrange: Create references with different types
+    let analysis = make_analysis(vec![
+        ReferenceInfo {
+            symbol: "func".to_string(),
+            reference_type: ReferenceType::Definition,
+            location: "/tmp/project/src/main.rs".to_string(),
+            line: 1,
+        },
+        ReferenceInfo {
+            symbol: "func".to_string(),
+            reference_type: ReferenceType::Usage,
+            location: "/tmp/project/src/main.rs".to_string(),
+            line: 10,
+        },
+        ReferenceInfo {
+            symbol: "func".to_string(),
+            reference_type: ReferenceType::Import,
+            location: "/tmp/project/src/lib.rs".to_string(),
+            line: 5,
+        },
+    ]);
+
+    // Act: Format the file details
+    let output = format_file_details("test.rs", &analysis, 100);
+
+    // Assert: Output groups by type separately
+    assert!(output.contains("R:"));
+    assert!(output.contains("func (definition)"));
+    assert!(output.contains("func (usage)"));
+    assert!(output.contains("func (import)"));
+}
+
+#[test]
+fn test_format_references_single_reference() {
+    // Arrange: Create a SemanticAnalysis with a single reference
+    let analysis = make_analysis(vec![ReferenceInfo {
+        symbol: "single".to_string(),
+        reference_type: ReferenceType::Export,
+        location: "/tmp/project/src/module.rs".to_string(),
+        line: 42,
+    }]);
+
+    // Act: Format the file details
+    let output = format_file_details("test.rs", &analysis, 100);
+
+    // Assert: Output still uses grouped format even for single reference
+    assert!(output.contains("R:"));
+    assert!(output.contains("single (export)"));
+    assert!(output.contains("module.rs:42"));
+}
+
+#[test]
+fn test_format_references_empty() {
+    // Arrange: Create a SemanticAnalysis with no references
+    let analysis = make_analysis(vec![]);
+
+    // Act: Format the file details
+    let output = format_file_details("test.rs", &analysis, 100);
+
+    // Assert: Output does not contain R: section
+    assert!(!output.contains("R:"));
 }

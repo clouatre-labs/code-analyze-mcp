@@ -1,8 +1,9 @@
 use crate::graph::CallGraph;
 use crate::traversal::WalkEntry;
-use crate::types::{FileInfo, SemanticAnalysis};
-use std::collections::{HashMap, HashSet};
+use crate::types::{FileInfo, ReferenceInfo, ReferenceType, SemanticAnalysis};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write;
+use std::path::Path;
 use thiserror::Error;
 use tracing::instrument;
 
@@ -120,6 +121,111 @@ pub fn format_structure(
     output
 }
 
+/// Compute the longest common directory prefix across all reference locations.
+fn compute_common_prefix(refs: &[ReferenceInfo]) -> String {
+    if refs.is_empty() {
+        return String::new();
+    }
+
+    let paths: Vec<&Path> = refs.iter().map(|r| Path::new(&r.location)).collect();
+
+    // Start with the first path's parent directory
+    // All reference locations are file paths (set in analyze.rs lines 191 and 274)
+    let first_path = paths[0];
+    let mut common = if let Some(parent) = first_path.parent() {
+        parent.to_path_buf()
+    } else {
+        return String::new();
+    };
+
+    // Iteratively reduce common to the longest common ancestor
+    for path in &paths[1..] {
+        let mut path_ancestors = path.ancestors();
+        let mut found_common = false;
+
+        for ancestor in common.ancestors() {
+            if path_ancestors.any(|a| a == ancestor) {
+                common = ancestor.to_path_buf();
+                found_common = true;
+                break;
+            }
+        }
+
+        if !found_common {
+            // No common ancestor found
+            return String::new();
+        }
+    }
+
+    // Return the common prefix as a string without trailing separator
+    // Path::strip_prefix in format_references handles separators correctly
+    match common.to_str() {
+        Some(s) if !s.is_empty() && s != "/" => s.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Format references grouped by (symbol, reference_type) with relative paths.
+fn format_references(refs: &[ReferenceInfo]) -> String {
+    if refs.is_empty() {
+        return String::new();
+    }
+
+    let common_prefix = compute_common_prefix(refs);
+
+    // Group by (symbol, reference_type)
+    let mut groups: BTreeMap<(String, ReferenceType), Vec<(String, usize)>> = BTreeMap::new();
+
+    for reference in refs {
+        let relative_path = if !common_prefix.is_empty() {
+            Path::new(&reference.location)
+                .strip_prefix(Path::new(&common_prefix))
+                .ok()
+                .and_then(|p| p.to_str())
+                .unwrap_or(&reference.location)
+                .to_string()
+        } else {
+            reference.location.clone()
+        };
+
+        groups
+            .entry((reference.symbol.clone(), reference.reference_type.clone()))
+            .or_default()
+            .push((relative_path, reference.line));
+    }
+
+    let mut output = String::new();
+    output.push_str("R:\n");
+
+    for ((symbol, ref_type), locations) in groups {
+        if locations.len() <= 5 {
+            // Show all locations
+            let loc_str = locations
+                .iter()
+                .map(|(path, line)| format!("{}:{}", path, line))
+                .collect::<Vec<_>>()
+                .join(", ");
+            output.push_str(&format!("  {} ({}): {}\n", symbol, ref_type, loc_str));
+        } else {
+            // Show count and file count
+            let unique_files = locations
+                .iter()
+                .map(|(path, _)| path.as_str())
+                .collect::<std::collections::HashSet<_>>()
+                .len();
+            output.push_str(&format!(
+                "  {} ({}): {} references across {} files\n",
+                symbol,
+                ref_type,
+                locations.len(),
+                unique_files
+            ));
+        }
+    }
+
+    output
+}
+
 /// Format file-level semantic analysis results.
 #[instrument(skip_all)]
 pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: usize) -> String {
@@ -195,15 +301,9 @@ pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: 
         }
     }
 
-    // R: section with references and line numbers
+    // R: section with grouped references
     if !analysis.references.is_empty() {
-        output.push_str("R:\n");
-        for reference in &analysis.references {
-            output.push_str(&format!(
-                "  {} (line {}, Usage)\n",
-                reference.symbol, reference.line
-            ));
-        }
+        output.push_str(&format_references(&analysis.references));
     }
 
     output
