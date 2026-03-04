@@ -1,0 +1,174 @@
+{
+  "run_id": "A2",
+  "condition": "A-control",
+  "module_map": [
+    {
+      "module": "main.rs",
+      "responsibility": "Entry point; CLI parsing via clap and config file loading; orchestrates initialization of Core.",
+      "submodules": [],
+      "key_types": ["Cli", "Config", "Flags", "Core", "ExitCode"]
+    },
+    {
+      "module": "core.rs",
+      "responsibility": "Main orchestrator; manages file fetching, sorting, and display rendering. Coordinates between flags, meta collection, and display modules.",
+      "submodules": [],
+      "key_types": ["Core", "Flags", "Colors", "Icons", "GitTheme", "Meta", "SortOrder"]
+    },
+    {
+      "module": "display.rs",
+      "responsibility": "Converts Meta objects to visual output; handles grid and tree layouts; renders blocks with colors and icons.",
+      "submodules": [],
+      "key_types": ["Block", "DisplayOption", "Cell", "Grid"]
+    },
+    {
+      "module": "meta/",
+      "responsibility": "File metadata extraction and caching; root module that aggregates all file system properties.",
+      "submodules": ["name/", "size/", "date/", "permissions/", "owner/", "access_control/", "filetype/", "symlink/", "inode/", "links/", "indicator/", "git_file_status/"],
+      "key_types": ["Meta", "Name", "Size", "Date", "Owner", "Permissions", "FileType", "SymLink", "INode", "Links", "Indicator", "GitFileStatus"]
+    },
+    {
+      "module": "flags/",
+      "responsibility": "CLI flags and configuration; defines all display and behavior options.",
+      "submodules": ["blocks/", "color/", "date/", "icons/", "sorting/", "permission/", "size/", "display/", "layout/", "recursion/"],
+      "key_types": ["Flags", "Block", "ColorOption", "SortOrder", "Layout", "PermissionFlag"]
+    },
+    {
+      "module": "color.rs",
+      "responsibility": "Color theme management and element-to-color mapping; provides colorization utilities.",
+      "submodules": [],
+      "key_types": ["Colors", "Elem", "Color"]
+    },
+    {
+      "module": "icon.rs",
+      "responsibility": "Icon resolution for file types; maps file characteristics to icon glyphs.",
+      "submodules": [],
+      "key_types": ["Icons", "FileType"]
+    },
+    {
+      "module": "sort.rs",
+      "responsibility": "Sorting logic; assembles sorter functions and applies comparisons.",
+      "submodules": [],
+      "key_types": ["SortOrder", "SortFn"]
+    },
+    {
+      "module": "git.rs",
+      "responsibility": "Git status caching and retrieval for files.",
+      "submodules": [],
+      "key_types": ["GitCache", "GitFileStatus"]
+    },
+    {
+      "module": "theme/",
+      "responsibility": "Color and icon theme definitions; loads and manages theme configurations.",
+      "submodules": ["color/", "icon/", "git/"],
+      "key_types": ["ThemeOption"]
+    }
+  ],
+  "data_flow": [
+    {
+      "stage": "1. CLI & Config Load",
+      "module": "main.rs",
+      "key_function": "main()",
+      "description": "Parse CLI args with clap::Parser, load config file if specified, merge into Flags.",
+      "types_produced": ["Cli", "Config", "Flags"]
+    },
+    {
+      "stage": "2. Core Initialization",
+      "module": "core.rs",
+      "key_function": "Core::new(flags)",
+      "description": "Initialize Colors, Icons, GitTheme, and sorters based on flags. Store in Core struct.",
+      "types_produced": ["Core"]
+    },
+    {
+      "stage": "3. Metadata Collection",
+      "module": "meta/mod.rs",
+      "key_function": "Meta::from_path(path, dereference, permission_flag)",
+      "description": "Collect file metadata via fs::symlink_metadata() and fs::metadata(); construct sub-objects for each property (Owner, Permissions, Size, Date, INode, Links, Name, FileType, SymLink, Indicator, AccessControl).",
+      "types_produced": ["Meta", "Owner", "Permissions", "Size", "Date", "INode", "Links", "Name", "FileType", "SymLink", "Indicator", "AccessControl"]
+    },
+    {
+      "stage": "4. Recursion & Git Status",
+      "module": "meta/mod.rs",
+      "key_function": "Meta::recurse_into(depth, flags, cache)",
+      "description": "If directory and recursion enabled, walk directory tree and build nested Meta.content; query GitCache for git status on each file.",
+      "types_produced": ["Vec<Meta>", "GitFileStatus", "ExitCode"]
+    },
+    {
+      "stage": "5. Sorting",
+      "module": "sort.rs",
+      "key_function": "sort::by_meta(sorters, a, b)",
+      "description": "Apply configured sorters (sort_order) to Meta list using assembled SortFn callbacks.",
+      "types_produced": ["Ordering"]
+    },
+    {
+      "stage": "6. Display Rendering",
+      "module": "display.rs",
+      "key_function": "display::grid(metas, flags, colors, icons, git_theme)",
+      "description": "For each Meta, iterate through flags.blocks and call get_output() which routes to render methods (inode.render(), size.render(), date.render(), name.render(), etc.). Each render method uses Colors for colorization and Icons for glyph resolution. Build grid cells and format as output.",
+      "types_produced": ["String (formatted output)", "Cell", "Grid"]
+    },
+    {
+      "stage": "7. Output",
+      "module": "main.rs",
+      "key_function": "print_output!()",
+      "description": "Write formatted output string to stdout via macro that handles pipe failures.",
+      "types_produced": ["exit_code"]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "display.rs",
+      "inbound_deps": 7,
+      "outbound_deps": 8,
+      "reason": "Orchestrates rendering of all data: imports from core (Flags, Colors, Icons, GitTheme), meta (Meta, FileType, OwnerCache), flags (Block, Display, Layout, HyperlinkOption), color (Elem, Colors), icon (Icons). Routes each Meta/Block combination to specific render methods. Central nexus between data representation and visual output."
+    },
+    {
+      "module": "meta/mod.rs",
+      "inbound_deps": 6,
+      "outbound_deps": 15,
+      "reason": "Aggregates all file properties via submodules (Name, Size, Date, Owner, Permissions, FileType, SymLink, INode, Links, Indicator, AccessControl, git_file_status). Core.rs calls Meta::from_path(); display.rs reads from Meta fields. Imports Flags for permission handling, GitCache for git status. Hub for filesystem state."
+    },
+    {
+      "module": "flags/mod.rs & flags/blocks.rs",
+      "inbound_deps": 8,
+      "outbound_deps": 5,
+      "reason": "Central configuration hub: Core.rs instantiates Flags and passes to display.rs, sort.rs, meta recursion, color/icon initialization. Block enum drives the display.rs rendering loop. TryFrom<&str> parser integrates CLI args and config file into Flags. Flags affects almost every downstream decision."
+    }
+  ],
+  "change_proposal": {
+    "objective": "Add a SHA-256 file checksum display column",
+    "files_to_modify": [
+      "src/flags/blocks.rs - Add Block::Checksum enum variant and TryFrom parsing",
+      "src/flags.rs - Add Checksum flag variant if not already handled by blocks",
+      "src/meta/mod.rs - Add checksum: Option<Checksum> field to Meta struct",
+      "src/meta/checksum.rs (new) - New module to compute and cache SHA-256 hashes",
+      "src/display.rs - Add Block::Checksum match arm in get_output() function",
+      "src/app.rs - Add --checksum CLI flag if needed (or use --blocks checksum)"
+    ],
+    "new_types": [
+      "pub struct Checksum { hash: String } - Wraps SHA-256 hash string with render() method",
+      "pub enum ChecksumAlgo { SHA256 } - Extensible for future hash algorithms",
+      "ChecksumCache - Optional cache to avoid re-hashing same files across runs (future optimization)"
+    ],
+    "pattern_to_follow": "Follow Size and Date modules: implement From<&std::fs::Metadata> + render(colors: &Colors) -> String. Store in Meta.checksum as Option<Checksum>. In display.rs get_output(), match Block::Checksum and call checksum.render(colors). Use Block layout pattern (header, padding rules, color element mapping).",
+    "integration_point": "1. Meta::from_path() calls Checksum::from(&metadata) to compute hash during file collection (can be lazy-computed only if Block::Checksum is in flags.blocks.0 to avoid overhead). 2. display.rs get_output() adds Block::Checksum arm alongside Block::Size. 3. flags/blocks.rs Block enum + TryFrom<&str> enables --blocks checksum CLI option. 4. Theme color mapping: define new Elem::Checksum in color.rs for hash string coloring.",
+    "risks": [
+      "Performance: SHA-256 computation on every file is expensive. Mitigation: (1) Only compute if Block::Checksum in flags; (2) Consider optional lazy evaluation or caching; (3) Add --checksum-cache flag to cache hashes per run.",
+      "Large files: Reading entire file into memory for hashing can OOM on multi-GB files. Mitigation: Stream hash computation (sha2 crate supports incremental updates via Digest trait).",
+      "Terminal width: Long hash string (64 hex chars) competes with limited terminal width. Mitigation: Allow --checksum-truncate or column width configuration similar to Size block.",
+      "Cross-platform: File hashing may differ on Windows if line endings are normalized. Ensure binary-mode reading to avoid this.",
+      "Breaking change: Adding Block::Checksum expands the Block enum. Existing configs with --blocks won't break, but binary size increases slightly."
+    ],
+    "example_usage": "lsd --long --blocks permission,user,group,size,checksum,date,name would display checksum column between size and date. Short hashes could use truncate-owner pattern for display control."
+  },
+  "tool_usage": [
+    {
+      "tool": "developer__analyze",
+      "params": "1. max_depth=2 on /tmp/lsd-benchmark-target (overview); 2. max_depth=3 on src/ (file tree); 3. focus=from_path on meta/mod.rs (call chains); 4. Examined display.rs, core.rs, flags/blocks.rs manually to trace render pipeline."
+    },
+    {
+      "tool": "developer__text_editor",
+      "params": "view commands to read source files and understand data flow (main.rs, core.rs, display.rs, meta/mod.rs, flags/blocks.rs)"
+    }
+  ],
+  "notes": "lsd is a columnar file lister with pluggable blocks (permission, user, group, size, date, name, inode, links, git, context). Architecture follows Unix philosophy: metadata collection (meta/) → sorting (sort.rs) → rendering (display.rs) → output. Checksum would fit naturally as a new Block type, following existing Size/Date/INode patterns. Main risk is I/O performance; streaming hash computation with early-exit on Checksum-not-enabled is critical. No shared mutable state concerns for checksums (read-only file access, no cache write conflicts in single-threaded main flow)."
+}

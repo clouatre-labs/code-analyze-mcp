@@ -1,0 +1,299 @@
+{
+  "experiment": "v3-benchmark",
+  "conditions": {
+    "A-control": "developer__analyze (goose built-in)",
+    "B-treatment": "code-analyze-mcp__analyze"
+  },
+  "model": "claude-haiku-4-5",
+  "temperature": 0.5,
+  "target_repo": "lsd-rs/lsd",
+  "tool_isolation_verified": true,
+  "blinding": {
+    "method": "Random shuffle with seed=69, condition labels stripped before scoring",
+    "mapping": {
+      "R01": "A4",
+      "R02": "B1",
+      "R03": "A2",
+      "R04": "A5",
+      "R05": "B2",
+      "R06": "B3",
+      "R07": "A1",
+      "R08": "B4",
+      "R09": "B5",
+      "R10": "A3"
+    }
+  },
+  "per_run_scores": {
+    "A1": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 10
+    },
+    "A2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 9
+    },
+    "A3": {
+      "structural_accuracy": 1,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "total": 10
+    },
+    "A4": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 10
+    },
+    "A5": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 9
+    },
+    "B1": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 10
+    },
+    "B2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "total": 11
+    },
+    "B3": {
+      "structural_accuracy": 1,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 9
+    },
+    "B4": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 1,
+      "tool_efficiency": 3,
+      "total": 9
+    },
+    "B5": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 3,
+      "total": 10
+    }
+  },
+  "summary": {
+    "condition_A": {
+      "totals": [
+        10,
+        9,
+        10,
+        10,
+        9
+      ],
+      "median": 10,
+      "range": [
+        9,
+        10
+      ]
+    },
+    "condition_B": {
+      "totals": [
+        10,
+        11,
+        9,
+        9,
+        10
+      ],
+      "median": 10,
+      "range": [
+        9,
+        11
+      ]
+    }
+  },
+  "per_dimension_medians": {
+    "structural_accuracy": {
+      "A": 2,
+      "B": 2
+    },
+    "cross_module_tracing": {
+      "A": 3,
+      "B": 3
+    },
+    "approach_quality": {
+      "A": 2,
+      "B": 2
+    },
+    "tool_efficiency": {
+      "A": 3,
+      "B": 3
+    }
+  },
+  "statistics": {
+    "test": "Mann-Whitney U (two-tailed)",
+    "n_A": 5,
+    "n_B": 5,
+    "U": 11.0,
+    "U_critical_alpha_05": 2,
+    "z": -0.313,
+    "p_value_approx": 0.754,
+    "significant": false,
+    "rank_biserial_r": 0.12,
+    "effect_size": "small"
+  },
+  "efficiency": {
+    "per_run": {
+      "A1": {
+        "tokens": 23969,
+        "wall_seconds": 59,
+        "analyze_calls": 6,
+        "shell_calls": 2,
+        "editor_calls": 5,
+        "total_calls": 13
+      },
+      "A2": {
+        "tokens": 29827,
+        "wall_seconds": 61,
+        "analyze_calls": 4,
+        "shell_calls": 0,
+        "editor_calls": 11,
+        "total_calls": 15
+      },
+      "A3": {
+        "tokens": 26239,
+        "wall_seconds": 65,
+        "analyze_calls": 7,
+        "shell_calls": 0,
+        "editor_calls": 7,
+        "total_calls": 14
+      },
+      "A4": {
+        "tokens": 22761,
+        "wall_seconds": 82,
+        "analyze_calls": 6,
+        "shell_calls": 5,
+        "editor_calls": 6,
+        "total_calls": 17
+      },
+      "A5": {
+        "tokens": 20535,
+        "wall_seconds": 59,
+        "analyze_calls": 6,
+        "shell_calls": 2,
+        "editor_calls": 4,
+        "total_calls": 12
+      },
+      "B1": {
+        "tokens": 30651,
+        "wall_seconds": 77,
+        "analyze_calls": 7,
+        "shell_calls": 1,
+        "editor_calls": 7,
+        "total_calls": 15
+      },
+      "B2": {
+        "tokens": 32341,
+        "wall_seconds": 78,
+        "analyze_calls": 7,
+        "shell_calls": 3,
+        "editor_calls": 6,
+        "total_calls": 16
+      },
+      "B3": {
+        "tokens": 37947,
+        "wall_seconds": 109,
+        "analyze_calls": 6,
+        "shell_calls": 10,
+        "editor_calls": 5,
+        "total_calls": 21
+      },
+      "B4": {
+        "tokens": 27746,
+        "wall_seconds": 80,
+        "analyze_calls": 6,
+        "shell_calls": 9,
+        "editor_calls": 6,
+        "total_calls": 21
+      },
+      "B5": {
+        "tokens": 31005,
+        "wall_seconds": 90,
+        "analyze_calls": 10,
+        "shell_calls": 6,
+        "editor_calls": 2,
+        "total_calls": 18
+      }
+    },
+    "statistics": {
+      "tokens": {
+        "A_median": 23969,
+        "B_median": 31005,
+        "U": 1.0,
+        "z": -2.402,
+        "p": 0.016,
+        "r": 0.92,
+        "significant": true
+      },
+      "wall_time": {
+        "A_median": 61,
+        "B_median": 80,
+        "U": 3.0,
+        "z": -1.984,
+        "p": 0.047,
+        "r": 0.76,
+        "significant": true
+      },
+      "total_calls": {
+        "A_median": 14,
+        "B_median": 18,
+        "U": 2.5,
+        "z": -2.089,
+        "p": 0.037,
+        "r": 0.8,
+        "significant": true
+      },
+      "analyze_calls": {
+        "A_median": 6,
+        "B_median": 7,
+        "U": 6.0,
+        "z": -1.358,
+        "p": 0.175,
+        "r": 0.52,
+        "significant": false
+      },
+      "shell_calls": {
+        "A_median": 2,
+        "B_median": 6,
+        "U": 4.0,
+        "z": -1.776,
+        "p": 0.076,
+        "r": 0.68,
+        "significant": false
+      }
+    },
+    "derived": {
+      "tokens_per_quality_point": {
+        "A_median": 2529,
+        "B_median": 3234
+      },
+      "quality_per_tool_call": {
+        "A_median": 0.69,
+        "B_median": 0.56
+      }
+    }
+  }
+}
