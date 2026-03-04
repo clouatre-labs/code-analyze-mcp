@@ -7,6 +7,7 @@ pub mod lang;
 pub mod languages;
 pub mod logging;
 pub mod parser;
+pub mod test_detection;
 pub mod traversal;
 pub mod types;
 

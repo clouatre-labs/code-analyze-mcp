@@ -21,3 +21,8 @@ pub const CALL_QUERY: &str = r#"
 pub const REFERENCE_QUERY: &str = r#"
 (type_identifier) @type_ref
 "#;
+
+/// Tree-sitter query for extracting TypeScript imports.
+pub const IMPORT_QUERY: &str = r#"
+(import_statement) @import_path
+"#;

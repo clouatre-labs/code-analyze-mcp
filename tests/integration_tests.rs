@@ -1400,3 +1400,227 @@ def handle(data: list[dict[Result, Data]]) -> None:
         "Expected 'Data' from generic type parameters"
     );
 }
+
+// Import extraction tests
+
+struct ImportTestCase {
+    lang: &'static str,
+    ext: &'static str,
+    code: &'static str,
+    expected_modules: Vec<&'static str>,
+}
+
+#[test]
+fn test_import_extraction_happy_path() {
+    let test_cases = vec![
+        ImportTestCase {
+            lang: "Python",
+            ext: "py",
+            code: r#"
+import os
+from sys import argv
+from collections import defaultdict
+
+def main():
+    pass
+"#,
+            expected_modules: vec!["os", "sys", "collections"],
+        },
+        ImportTestCase {
+            lang: "Go",
+            ext: "go",
+            code: r#"
+package main
+
+import (
+    "fmt"
+    "os"
+)
+
+import "io"
+
+func main() {
+    fmt.Println("Hello")
+}
+"#,
+            expected_modules: vec!["fmt", "os", "io"],
+        },
+        ImportTestCase {
+            lang: "Java",
+            ext: "java",
+            code: r#"
+import java.util.ArrayList;
+import java.util.List;
+import static java.lang.Math.sqrt;
+
+public class Test {
+    public void method() {
+        System.out.println("Hello");
+    }
+}
+"#,
+            expected_modules: vec!["ArrayList", "List", "Math"],
+        },
+        ImportTestCase {
+            lang: "TypeScript",
+            ext: "ts",
+            code: r#"
+import { Component } from 'react';
+import * as fs from 'fs';
+import path from 'path';
+
+export function hello(): void {
+    console.log("Hello");
+}
+"#,
+            expected_modules: vec!["react", "fs", "path"],
+        },
+    ];
+
+    for test_case in test_cases {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(format!("test.{}", test_case.ext));
+
+        fs::write(&file_path, test_case.code).unwrap();
+
+        let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+        // Verify imports extracted
+        assert!(
+            !output.semantic.imports.is_empty(),
+            "{}: expected non-empty imports",
+            test_case.lang
+        );
+        let import_modules: Vec<&str> = output
+            .semantic
+            .imports
+            .iter()
+            .map(|i| i.module.as_str())
+            .collect();
+
+        for expected in test_case.expected_modules {
+            assert!(
+                import_modules.iter().any(|m| m.contains(expected)),
+                "{}: expected module containing '{}' not found in {:?}",
+                test_case.lang,
+                expected,
+                import_modules
+            );
+        }
+    }
+}
+
+#[test]
+fn test_import_extraction_no_imports() {
+    let test_cases = vec![
+        ImportTestCase {
+            lang: "Python",
+            ext: "py",
+            code: r#"
+def hello():
+    print("Hello")
+
+class MyClass:
+    pass
+"#,
+            expected_modules: vec![],
+        },
+        ImportTestCase {
+            lang: "Go",
+            ext: "go",
+            code: r#"
+package main
+
+func Hello() {
+    println("Hello")
+}
+"#,
+            expected_modules: vec![],
+        },
+        ImportTestCase {
+            lang: "Java",
+            ext: "java",
+            code: r#"
+public class Test {
+    public void method() {
+        System.out.println("Hello");
+    }
+}
+"#,
+            expected_modules: vec![],
+        },
+        ImportTestCase {
+            lang: "TypeScript",
+            ext: "ts",
+            code: r#"
+export function hello(): void {
+    console.log("Hello");
+}
+
+export class MyClass {
+    method(): string {
+        return "test";
+    }
+}
+"#,
+            expected_modules: vec![],
+        },
+    ];
+
+    for test_case in test_cases {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join(format!("test.{}", test_case.ext));
+
+        fs::write(&file_path, test_case.code).unwrap();
+
+        let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+        // Verify no imports extracted
+        assert_eq!(
+            output.semantic.imports.len(),
+            0,
+            "{}: expected zero imports",
+            test_case.lang
+        );
+    }
+}
+
+// Test file partitioning tests
+
+#[test]
+fn test_format_structure_partitions_test_files() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create production and test files
+    fs::create_dir(root.join("src")).unwrap();
+    fs::create_dir(root.join("tests")).unwrap();
+    fs::write(root.join("src/lib.rs"), "fn production_fn() {}").unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("tests/test_utils.rs"), "fn test_helper() {}").unwrap();
+
+    // Act: Analyze directory
+    let output = analyze_directory(root, None).unwrap();
+
+    // Assert: Output contains TEST FILES section
+    assert!(
+        output.formatted.contains("TEST FILES"),
+        "Output should contain TEST FILES section when test files are present"
+    );
+
+    // Assert: Test files are listed in TEST FILES section
+    assert!(
+        output.formatted.contains("test_utils.rs"),
+        "Test file should be listed in TEST FILES section"
+    );
+
+    // Assert: Production files are listed in PATH section (before TEST FILES)
+    assert!(
+        output.formatted.contains("lib.rs"),
+        "Production file should be listed in PATH section"
+    );
+    assert!(
+        output.formatted.contains("main.rs"),
+        "Production file should be listed in PATH section"
+    );
+}

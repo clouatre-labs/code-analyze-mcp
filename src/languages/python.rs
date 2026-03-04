@@ -21,3 +21,9 @@ pub const REFERENCE_QUERY: &str = r#"
 (type (identifier) @type_ref)
 (generic_type (identifier) @type_ref)
 "#;
+
+/// Tree-sitter query for extracting Python imports.
+pub const IMPORT_QUERY: &str = r#"
+(import_statement) @import_path
+(import_from_statement) @import_path
+"#;
