@@ -2,6 +2,7 @@ use crate::formatter::{format_file_details, format_focused, format_structure};
 use crate::graph::CallGraph;
 use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
+use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
 use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis};
 use rayon::prelude::*;
@@ -108,12 +109,15 @@ pub fn analyze_directory_with_progress(
 
             progress.fetch_add(1, Ordering::Relaxed);
 
+            let is_test = is_test_file(&entry.path);
+
             Some(FileInfo {
                 path: path_str,
                 line_count,
                 function_count,
                 class_count,
                 language,
+                is_test,
             })
         })
         .collect();
@@ -191,8 +195,11 @@ pub fn analyze_file(
         r.location = path.to_string();
     }
 
+    // Detect if this is a test file
+    let is_test = is_test_file(Path::new(path));
+
     // Format output
-    let formatted = format_file_details(path, &semantic, line_count);
+    let formatted = format_file_details(path, &semantic, line_count, is_test);
 
     tracing::debug!(path = %path, language = %ext, functions = semantic.functions.len(), classes = semantic.classes.len(), imports = semantic.imports.len(), duration_ms = start.elapsed().as_millis() as u64, "file analysis complete");
 

@@ -1,4 +1,5 @@
 use crate::graph::CallGraph;
+use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
 use crate::types::{FileInfo, SemanticAnalysis};
 use std::collections::{HashMap, HashSet};
@@ -27,6 +28,10 @@ pub fn format_structure(
         .map(|a| (a.path.clone(), a))
         .collect();
 
+    // Partition files into production and test
+    let (prod_files, test_files): (Vec<_>, Vec<_>) =
+        analysis_results.iter().partition(|a| !a.is_test);
+
     // Calculate totals
     let total_loc: usize = analysis_results.iter().map(|a| a.line_count).sum();
     let total_functions: usize = analysis_results.iter().map(|a| a.function_count).sum();
@@ -46,8 +51,14 @@ pub fn format_structure(
         _ => String::new(),
     };
     output.push_str(&format!(
-        "Shown: {} files, {}L, {}F, {}C{}\n",
-        total_files, total_loc, total_functions, total_classes, depth_label
+        "Shown: {} files ({} prod, {} test), {}L, {}F, {}C{}\n",
+        total_files,
+        prod_files.len(),
+        test_files.len(),
+        total_loc,
+        total_functions,
+        total_classes,
+        depth_label
     ));
 
     if !lang_counts.is_empty() {
@@ -71,7 +82,7 @@ pub fn format_structure(
 
     output.push('\n');
 
-    // PATH block - tree structure
+    // PATH block - tree structure (production files only)
     output.push_str("PATH [LOC, FUNCTIONS, CLASSES]\n");
 
     for entry in entries {
@@ -93,6 +104,11 @@ pub fn format_structure(
         // For files, append analysis info
         if !entry.is_dir {
             if let Some(analysis) = analysis_map.get(&entry.path.display().to_string()) {
+                // Skip test files in production section
+                if analysis.is_test {
+                    continue;
+                }
+
                 let mut info_parts = Vec::new();
 
                 if analysis.line_count > 0 {
@@ -117,23 +133,89 @@ pub fn format_structure(
         }
     }
 
+    // TEST FILES section (if any test files exist)
+    if !test_files.is_empty() {
+        output.push_str("\nTEST FILES [LOC, FUNCTIONS, CLASSES]\n");
+
+        for entry in entries {
+            // Skip the root directory itself
+            if entry.depth == 0 {
+                continue;
+            }
+
+            // Calculate indentation
+            let indent = "  ".repeat(entry.depth - 1);
+
+            // Get just the filename/dirname
+            let name = entry
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?");
+
+            // For files, append analysis info
+            if !entry.is_dir
+                && let Some(analysis) = analysis_map.get(&entry.path.display().to_string())
+            {
+                // Only show test files in test section
+                if !analysis.is_test {
+                    continue;
+                }
+
+                let mut info_parts = Vec::new();
+
+                if analysis.line_count > 0 {
+                    info_parts.push(format!("{}L", analysis.line_count));
+                }
+                if analysis.function_count > 0 {
+                    info_parts.push(format!("{}F", analysis.function_count));
+                }
+                if analysis.class_count > 0 {
+                    info_parts.push(format!("{}C", analysis.class_count));
+                }
+
+                if info_parts.is_empty() {
+                    output.push_str(&format!("{}{}\n", indent, name));
+                } else {
+                    output.push_str(&format!("{}{} [{}]\n", indent, name, info_parts.join(", ")));
+                }
+            }
+        }
+    }
+
     output
 }
 
 /// Format file-level semantic analysis results.
 #[instrument(skip_all)]
-pub fn format_file_details(path: &str, analysis: &SemanticAnalysis, line_count: usize) -> String {
+pub fn format_file_details(
+    path: &str,
+    analysis: &SemanticAnalysis,
+    line_count: usize,
+    is_test: bool,
+) -> String {
     let mut output = String::new();
 
-    // FILE: header with counts
-    output.push_str(&format!(
-        "FILE: {} ({}L, {}F, {}C, {}I)\n",
-        path,
-        line_count,
-        analysis.functions.len(),
-        analysis.classes.len(),
-        analysis.imports.len()
-    ));
+    // FILE: header with counts, prepend [TEST] if applicable
+    if is_test {
+        output.push_str(&format!(
+            "FILE [TEST] {}({}L, {}F, {}C, {}I)\n",
+            path,
+            line_count,
+            analysis.functions.len(),
+            analysis.classes.len(),
+            analysis.imports.len()
+        ));
+    } else {
+        output.push_str(&format!(
+            "FILE: {}({}L, {}F, {}C, {}I)\n",
+            path,
+            line_count,
+            analysis.functions.len(),
+            analysis.classes.len(),
+            analysis.imports.len()
+        ));
+    }
 
     // C: section with classes
     if !analysis.classes.is_empty() {
@@ -293,14 +375,31 @@ pub fn format_focused(
         }
     }
 
+    // Partition files into production and test
+    let (prod_files, test_files): (Vec<_>, Vec<_>) =
+        files.into_iter().partition(|path| !is_test_file(path));
+
     output.push_str("FILES:\n");
-    if files.is_empty() {
+    if prod_files.is_empty() && test_files.is_empty() {
         output.push_str("  (none)\n");
     } else {
-        let mut sorted_files: Vec<_> = files.into_iter().collect();
-        sorted_files.sort();
-        for file in sorted_files {
-            output.push_str(&format!("  {}\n", file.display()));
+        // Show production files first
+        if !prod_files.is_empty() {
+            let mut sorted_files = prod_files;
+            sorted_files.sort();
+            for file in sorted_files {
+                output.push_str(&format!("  {}\n", file.display()));
+            }
+        }
+
+        // Show test files in separate subsection
+        if !test_files.is_empty() {
+            output.push_str("  TEST FILES:\n");
+            let mut sorted_files = test_files;
+            sorted_files.sort();
+            for file in sorted_files {
+                output.push_str(&format!("    {}\n", file.display()));
+            }
         }
     }
 

@@ -1522,3 +1522,43 @@ export class MyClass {
     // Verify no imports extracted
     assert_eq!(output.semantic.imports.len(), 0);
 }
+
+// Test file partitioning tests
+
+#[test]
+fn test_format_structure_partitions_test_files() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create production and test files
+    fs::create_dir(root.join("src")).unwrap();
+    fs::create_dir(root.join("tests")).unwrap();
+    fs::write(root.join("src/lib.rs"), "fn production_fn() {}").unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("tests/test_utils.rs"), "fn test_helper() {}").unwrap();
+
+    // Act: Analyze directory
+    let output = analyze_directory(root, None).unwrap();
+
+    // Assert: Output contains TEST FILES section
+    assert!(
+        output.formatted.contains("TEST FILES"),
+        "Output should contain TEST FILES section when test files are present"
+    );
+
+    // Assert: Test files are listed in TEST FILES section
+    assert!(
+        output.formatted.contains("test_utils.rs"),
+        "Test file should be listed in TEST FILES section"
+    );
+
+    // Assert: Production files are listed in PATH section (before TEST FILES)
+    assert!(
+        output.formatted.contains("lib.rs"),
+        "Production file should be listed in PATH section"
+    );
+    assert!(
+        output.formatted.contains("main.rs"),
+        "Production file should be listed in PATH section"
+    );
+}
