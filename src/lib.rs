@@ -13,12 +13,13 @@ pub mod types;
 use cache::AnalysisCache;
 use logging::LogEvent;
 use rmcp::handler::server::tool::ToolRouter;
-use rmcp::handler::server::wrapper::{Json, Parameters};
+use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CancelledNotificationParam, CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData,
-    Implementation, InitializeResult, LoggingLevel, LoggingMessageNotificationParam, Notification,
-    NumberOrString, ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
-    ServerNotification, SetLevelRequestParams,
+    Annotated, CallToolResult, CancelledNotificationParam, CompleteRequestParams, CompleteResult,
+    CompletionInfo, ErrorData, Implementation, InitializeResult, LoggingLevel,
+    LoggingMessageNotificationParam, Notification, NumberOrString, ProgressNotificationParam,
+    ProgressToken, ProtocolVersion, RawContent, ServerCapabilities, ServerNotification,
+    SetLevelRequestParams,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
@@ -28,7 +29,7 @@ use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
-use types::{AnalysisMode, AnalysisResult, AnalyzeParams};
+use types::{AnalysisMode, AnalyzeParams};
 
 #[derive(Clone)]
 pub struct CodeAnalyzer {
@@ -93,7 +94,7 @@ impl CodeAnalyzer {
         &self,
         params: Parameters<AnalyzeParams>,
         context: RequestContext<RoleServer>,
-    ) -> Result<Json<AnalysisResult>, ErrorData> {
+    ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
 
@@ -358,52 +359,12 @@ impl CodeAnalyzer {
             }
         };
 
-        // Extract fields from ModeResult
-        let (formatted_output, files, functions, classes, references, import_count) =
-            match mode_result {
-                types::ModeResult::Overview(output) => {
-                    (output.formatted, output.files, vec![], vec![], vec![], 0)
-                }
-                types::ModeResult::FileDetails(output) => {
-                    let import_count = output.semantic.imports.len();
-                    let functions = output
-                        .semantic
-                        .functions
-                        .iter()
-                        .map(|f| types::FunctionInfo {
-                            name: f.name.clone(),
-                            line: f.line,
-                            end_line: f.end_line,
-                            parameters: f.parameters.clone(),
-                            return_type: f.return_type.clone(),
-                        })
-                        .collect();
-                    let classes = output
-                        .semantic
-                        .classes
-                        .iter()
-                        .map(|c| types::ClassInfo {
-                            name: c.name.clone(),
-                            line: c.line,
-                            end_line: c.end_line,
-                            methods: c.methods.clone(),
-                            fields: c.fields.clone(),
-                        })
-                        .collect();
-                    let references = output.semantic.references.clone();
-                    (
-                        output.formatted,
-                        vec![],
-                        functions,
-                        classes,
-                        references,
-                        import_count,
-                    )
-                }
-                types::ModeResult::SymbolFocus(output) => {
-                    (output.formatted, vec![], vec![], vec![], vec![], 0)
-                }
-            };
+        // Extract formatted_output from ModeResult
+        let formatted_output = match mode_result {
+            types::ModeResult::Overview(output) => output.formatted,
+            types::ModeResult::FileDetails(output) => output.formatted,
+            types::ModeResult::SymbolFocus(output) => output.formatted,
+        };
 
         // Apply output size limiting
         let line_count = formatted_output.lines().count();
@@ -424,18 +385,10 @@ impl CodeAnalyzer {
             ));
         }
 
-        let result = AnalysisResult {
-            path: params.path.clone(),
-            mode,
-            import_count,
-            main_line: None,
-            files,
-            functions,
-            classes,
-            references,
-        };
-
-        Ok(Json(result))
+        Ok(CallToolResult::success(vec![Annotated {
+            raw: RawContent::text(formatted_output),
+            annotations: None,
+        }]))
     }
 }
 
