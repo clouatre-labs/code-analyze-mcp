@@ -1,126 +1,111 @@
 {
-  "metadata": {
-    "benchmark_version": "v3",
-    "scoring_date": "",
-    "scorer": "",
-    "blinding_procedure": "Runs scored as R1-R10 without condition labels; unblinded after scoring",
-    "randomization_seed": 42
-  },
-  "scoring_order": [
-    "R1",
-    "R2",
-    "R3",
-    "R4",
-    "R5",
-    "R6",
-    "R7",
-    "R8",
-    "R9",
-    "R10"
-  ],
-  "scores": [
+  "experiment": "benchmark-v3",
+  "scorer": "orchestrator-agent",
+  "scoring_date": "2026-03-04",
+  "blinding_seed": 42,
+  "blinded_scores": [
     {
       "run_id": "R1",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total_score": 9,
+      "notes": "Identifies 17 modules with correct roles. Controller as orchestrator, both printer types mentioned. HtmlPrinter implementing Printer trait explicitly proposed. Missing Decoration trait by name but decorations module well-described. 16 cross-module interactions, all accurate."
     },
     {
       "run_id": "R2",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 2,
+      "total_score": 7,
+      "notes": "15 modules identified correctly. Controller, printer (both types), decorations, output all present. Extension proposes output_formatter.rs with new trait rather than identifying existing Printer trait as extension point. 12 cross-module interactions."
     },
     {
       "run_id": "R3",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 1,
+      "tool_efficiency": 2,
+      "total_score": 8,
+      "notes": "16 modules, excellent tracing with 16 interactions including lessopen and theme detection. Both SimplePrinter and InteractivePrinter identified. Extension proposes Formatter trait abstraction but does not identify existing Printer trait as the extension point."
     },
     {
       "run_id": "R4",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 2,
+      "tool_efficiency": 2,
+      "total_score": 8,
+      "notes": "18 modules, comprehensive. JsonPrinter implementing Printer trait proposed but framed as modifying printer.rs rather than clean new implementation. Some fabricated function names (DecorationManager, PagerOutput). 19 cross-module interactions but some are speculative."
     },
     {
       "run_id": "R5",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 2,
+      "total_score": 7,
+      "notes": "16 modules, good structure. 8 pipeline stages is more granular than needed. Extension proposes OutputFormatter trait and formatters.rs module, does not identify Printer trait. 16 cross-module interactions."
     },
     {
       "run_id": "R6",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total_score": 9,
+      "notes": "17 modules identified. Explicitly proposes HtmlPrinter implementing the Printer trait in printer.rs. Controller selects printer based on output format. Clean, minimal proposal matching ground truth. 14 cross-module interactions, accurate."
     },
     {
       "run_id": "R7",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 2,
+      "total_score": 7,
+      "notes": "14 modules, slightly fewer than others. Good pipeline description. Extension proposes output_formatter.rs with trait-based formatters and intermediate representation, does not identify Printer trait. 14 cross-module interactions."
     },
     {
       "run_id": "R8",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 2,
+      "total_score": 7,
+      "notes": "17 modules, good coverage including clap_app.rs. Extension proposes custom filter/transform stage (piping through external commands) rather than HTML output via Printer trait. Different feature entirely. 16 cross-module interactions."
     },
     {
       "run_id": "R9",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 2,
+      "total_score": 7,
+      "notes": "16 modules, good structure. Extension proposes plugin system for custom syntax highlighting and output formatters, modifying assets.rs and printer.rs inline rather than using Printer trait. 15 cross-module interactions."
     },
     {
       "run_id": "R10",
-      "structural_accuracy": null,
-      "cross_module_tracing": null,
-      "approach_quality": null,
-      "tool_efficiency": null,
-      "total_score": null,
-      "notes": ""
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 1,
+      "tool_efficiency": 2,
+      "total_score": 7,
+      "notes": "14 modules. Good pipeline with 6 stages. Extension proposes OutputFormatter trait and formatter-agnostic events, does not identify Printer trait as extension point. 13 cross-module interactions."
     }
   ],
   "unblinding_mapping": {
-    "note": "This mapping is kept confidential until after all scoring is complete",
-    "R1": null,
-    "R2": null,
-    "R3": null,
-    "R4": null,
-    "R5": null,
-    "R6": null,
-    "R7": null,
-    "R8": null,
-    "R9": null,
-    "R10": null
+    "note": "Mapping revealed after all scoring complete",
+    "R1": "A5",
+    "R2": "B4",
+    "R3": "A3",
+    "R4": "A1",
+    "R5": "B2",
+    "R6": "B5",
+    "R7": "A2",
+    "R8": "B1",
+    "R9": "B3",
+    "R10": "A4"
   }
 }
