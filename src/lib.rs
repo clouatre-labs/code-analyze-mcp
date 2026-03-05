@@ -26,6 +26,7 @@ use rmcp::model::{
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
+use serde_json::Value;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{Mutex as TokioMutex, mpsc};
@@ -35,6 +36,63 @@ use traversal::walk_directory;
 use types::{AnalysisMode, AnalyzeParams};
 
 const SIZE_LIMIT: usize = 50_000;
+
+/// Helper function to create the output schema for the analyze tool
+fn create_analyze_output_schema() -> std::sync::Arc<serde_json::Map<String, Value>> {
+    use serde_json::json;
+    let schema = json!({
+        "type": "object",
+        "properties": {
+            "mode": {
+                "type": "string",
+                "enum": ["overview", "file_details", "symbol_focus"],
+                "description": "The analysis mode used"
+            },
+            "formatted": {
+                "type": "string",
+                "description": "Formatted text output of the analysis"
+            },
+            "files": {
+                "type": "array",
+                "description": "List of files analyzed (overview mode only)",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string" },
+                        "language": { "type": "string" },
+                        "loc": { "type": "integer" },
+                        "functions": { "type": "integer" },
+                        "classes": { "type": "integer" }
+                    }
+                }
+            },
+            "semantic": {
+                "type": "object",
+                "description": "Semantic analysis data (file_details mode only)",
+                "properties": {
+                    "functions": { "type": "array" },
+                    "classes": { "type": "array" },
+                    "imports": { "type": "array" }
+                }
+            },
+            "line_count": {
+                "type": "integer",
+                "description": "Total line count (file_details mode only)"
+            },
+            "next_cursor": {
+                "type": ["string", "null"],
+                "description": "Pagination cursor for next page of results"
+            }
+        },
+        "required": ["formatted"]
+    });
+
+    if let Value::Object(map) = schema {
+        std::sync::Arc::new(map)
+    } else {
+        std::sync::Arc::new(serde_json::Map::new())
+    }
+}
 
 #[derive(Clone)]
 pub struct CodeAnalyzer {
@@ -87,7 +145,9 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, context))]
     #[tool(
+        title = "Code Structure Analyzer",
         description = "Analyze code structure in 3 modes: 1) Directory overview - file tree with LOC/function/class counts to max_depth. 2) File details - functions, classes, imports. 3) Symbol focus - call graphs across directory to max_depth (requires directory path, case-sensitive). Typical flow: directory → files → symbols. Functions called >3x show •N.",
+        output_schema = create_analyze_output_schema(),
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -385,8 +445,8 @@ impl CodeAnalyzer {
             0
         };
 
-        // Convert ModeResult to text-only content with pagination
-        let (formatted_text, next_cursor) = match mode_result {
+        // Convert ModeResult to text-only content with pagination and capture structured JSON
+        let (formatted_text, next_cursor, structured_value) = match mode_result {
             types::ModeResult::Overview(mut output) => {
                 // Apply summary/output size limiting logic
                 // Determine if we should use summary
@@ -418,9 +478,14 @@ impl CodeAnalyzer {
                     );
                 }
 
-                (output.formatted, paginated.next_cursor)
+                // Update next_cursor in output after pagination
+                output.next_cursor = paginated.next_cursor.clone();
+
+                // Serialize after all mutations
+                let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+                (output.formatted, paginated.next_cursor, structured)
             }
-            types::ModeResult::FileDetails(output) => {
+            types::ModeResult::FileDetails(mut output) => {
                 // Apply output size limiting
                 if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
                     let estimated_tokens = output.formatted.len() / 4;
@@ -446,7 +511,12 @@ impl CodeAnalyzer {
                         ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
                     })?;
 
-                (output.formatted, paginated.next_cursor)
+                // Update next_cursor in output after pagination
+                output.next_cursor = paginated.next_cursor.clone();
+
+                // Serialize after all mutations
+                let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+                (output.formatted, paginated.next_cursor, structured)
             }
             types::ModeResult::SymbolFocus(output) => {
                 // Apply output size limiting
@@ -468,7 +538,8 @@ impl CodeAnalyzer {
                     ));
                 }
                 // SymbolFocus: no semantic data to paginate
-                (output.formatted, output.next_cursor)
+                let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+                (output.formatted, output.next_cursor, structured)
             }
         };
 
@@ -479,7 +550,12 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        Ok(CallToolResult::success(vec![Content::text(final_text)]))
+        Ok(CallToolResult {
+            content: vec![Content::text(final_text)],
+            structured_content: Some(structured_value),
+            is_error: Some(false),
+            meta: None,
+        })
     }
 }
 
@@ -491,6 +567,7 @@ impl ServerHandler for CodeAnalyzer {
             capabilities: ServerCapabilities::builder()
                 .enable_logging()
                 .enable_tools()
+                .enable_tool_list_changed()
                 .enable_completions()
                 .build(),
             server_info: Implementation {
