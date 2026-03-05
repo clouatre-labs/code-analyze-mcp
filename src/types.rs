@@ -40,7 +40,7 @@ pub struct AnalyzeParams {
     pub force: Option<bool>,
 
     #[schemars(
-        description = "Generate compact summary instead of full output. true=force summary, false=force full, unset=auto-detect on large output"
+        description = "Generate compact summary instead of full output. true=force summary, false=force full, unset=auto-detect when output exceeds 50K chars"
     )]
     pub summary: Option<bool>,
 
