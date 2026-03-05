@@ -543,3 +543,61 @@ pub fn format_summary(
 
     output
 }
+
+/// Format a paginated subset of files for Overview mode.
+#[instrument(skip_all)]
+pub fn format_structure_paginated(
+    paginated_files: &[FileInfo],
+    total_files: usize,
+    max_depth: Option<u32>,
+) -> String {
+    let mut output = String::new();
+
+    let depth_label = match max_depth {
+        Some(n) if n > 0 => format!(" (max_depth={})", n),
+        _ => String::new(),
+    };
+    output.push_str(&format!(
+        "PAGINATED: showing {} of {} files{}\n\n",
+        paginated_files.len(),
+        total_files,
+        depth_label
+    ));
+
+    let prod_files: Vec<&FileInfo> = paginated_files.iter().filter(|f| !f.is_test).collect();
+    let test_files: Vec<&FileInfo> = paginated_files.iter().filter(|f| f.is_test).collect();
+
+    if !prod_files.is_empty() {
+        output.push_str("FILES [LOC, FUNCTIONS, CLASSES]\n");
+        for file in &prod_files {
+            output.push_str(&format_file_entry(file));
+        }
+    }
+
+    if !test_files.is_empty() {
+        output.push_str("\nTEST FILES [LOC, FUNCTIONS, CLASSES]\n");
+        for file in &test_files {
+            output.push_str(&format_file_entry(file));
+        }
+    }
+
+    output
+}
+
+fn format_file_entry(file: &FileInfo) -> String {
+    let mut parts = Vec::new();
+    if file.line_count > 0 {
+        parts.push(format!("{}L", file.line_count));
+    }
+    if file.function_count > 0 {
+        parts.push(format!("{}F", file.function_count));
+    }
+    if file.class_count > 0 {
+        parts.push(format!("{}C", file.class_count));
+    }
+    if parts.is_empty() {
+        format!("{}\n", file.path)
+    } else {
+        format!("{} [{}]\n", file.path, parts.join(", "))
+    }
+}

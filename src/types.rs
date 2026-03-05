@@ -59,6 +59,14 @@ pub struct AnalyzeParams {
         description = "Generate compact summary instead of full output. true=force summary, false=force full, unset=auto-detect on large output"
     )]
     pub summary: Option<bool>,
+
+    #[schemars(
+        description = "Opaque cursor token for pagination (from previous response's next_cursor)"
+    )]
+    pub cursor: Option<String>,
+
+    #[schemars(description = "Number of items per page (default: 100)")]
+    pub page_size: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

@@ -1770,3 +1770,49 @@ struct Point {
     assert!(json_value.get("line_count").is_some());
     assert!(json_value.get("line_count").unwrap().is_number());
 }
+
+// Pagination integration tests
+
+#[test]
+fn test_overview_pagination_multi_page() {
+    use code_analyze_mcp::pagination::{decode_cursor, paginate_slice};
+
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    for i in 0..150 {
+        fs::write(root.join(format!("file_{:03}.rs", i)), "fn f() {}").unwrap();
+    }
+
+    let output = analyze_directory(root, None).unwrap();
+    assert_eq!(output.files.len(), 150);
+
+    let result = paginate_slice(&output.files, 0, 100).expect("paginate failed");
+    assert_eq!(result.items.len(), 100);
+    assert!(result.next_cursor.is_some());
+    assert_eq!(result.total, 150);
+
+    let cursor = result.next_cursor.unwrap();
+    let cursor_data = decode_cursor(&cursor).expect("decode failed");
+    let result2 = paginate_slice(&output.files, cursor_data.offset, 100).expect("paginate failed");
+    assert_eq!(result2.items.len(), 50);
+    assert!(result2.next_cursor.is_none());
+}
+
+#[test]
+fn test_single_page_no_cursor() {
+    use code_analyze_mcp::pagination::paginate_slice;
+
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    for i in 0..50 {
+        fs::write(root.join(format!("file_{:03}.rs", i)), "fn f() {}").unwrap();
+    }
+
+    let output = analyze_directory(root, None).unwrap();
+    let result = paginate_slice(&output.files, 0, 100).expect("paginate failed");
+    assert_eq!(result.items.len(), 50);
+    assert!(result.next_cursor.is_none());
+    assert_eq!(result.total, 50);
+}

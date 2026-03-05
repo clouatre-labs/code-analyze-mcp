@@ -6,14 +6,16 @@ pub mod graph;
 pub mod lang;
 pub mod languages;
 pub mod logging;
+pub mod pagination;
 pub mod parser;
 pub mod test_detection;
 pub mod traversal;
 pub mod types;
 
 use cache::AnalysisCache;
-use formatter::format_summary;
+use formatter::{format_structure_paginated, format_summary};
 use logging::LogEvent;
+use pagination::{DEFAULT_PAGE_SIZE, decode_cursor, paginate_slice};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
@@ -183,6 +185,7 @@ impl CodeAnalyzer {
                             formatted: "Analysis cancelled".to_string(),
                             files: vec![],
                             entries: vec![],
+                            next_cursor: None,
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -191,6 +194,7 @@ impl CodeAnalyzer {
                             formatted: format!("Error analyzing directory: {}", e),
                             files: vec![],
                             entries: vec![],
+                            next_cursor: None,
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -199,6 +203,7 @@ impl CodeAnalyzer {
                             formatted: format!("Task join error: {}", e),
                             files: vec![],
                             entries: vec![],
+                            next_cursor: None,
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -251,6 +256,7 @@ impl CodeAnalyzer {
                                 calls: vec![],
                             },
                             line_count: 0,
+                            next_cursor: None,
                         };
                         types::ModeResult::FileDetails(output)
                     }
@@ -344,18 +350,21 @@ impl CodeAnalyzer {
                     Ok(Err(analyze::AnalyzeError::Cancelled)) => {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: "Analysis cancelled".to_string(),
+                            next_cursor: None,
                         };
                         types::ModeResult::SymbolFocus(output)
                     }
                     Ok(Err(e)) => {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: format!("Error analyzing symbol focus: {}", e),
+                            next_cursor: None,
                         };
                         types::ModeResult::SymbolFocus(output)
                     }
                     Err(e) => {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: format!("Task join error: {}", e),
+                            next_cursor: None,
                         };
                         types::ModeResult::SymbolFocus(output)
                     }
@@ -363,7 +372,18 @@ impl CodeAnalyzer {
             }
         };
 
-        // Convert ModeResult to AnalysisResponse
+        // Decode pagination cursor if provided
+        let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+        let offset = if let Some(ref cursor_str) = params.cursor {
+            let cursor_data = decode_cursor(cursor_str).map_err(|e| {
+                ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
+            })?;
+            cursor_data.offset
+        } else {
+            0
+        };
+
+        // Convert ModeResult to AnalysisResponse with pagination
         let response = match mode_result {
             types::ModeResult::Overview(mut output) => {
                 // Apply summary/output size limiting logic
@@ -371,20 +391,13 @@ impl CodeAnalyzer {
 
                 // Determine if we should use summary
                 let use_summary = if params.force == Some(true) {
-                    // force=true: return full output
                     false
                 } else if params.summary == Some(true) {
-                    // summary=true: always generate summary
                     true
                 } else if params.summary == Some(false) {
-                    // summary=false: return full output regardless of size
                     false
-                } else if line_count > 1000 {
-                    // summary=None and large output: auto-detect and generate summary
-                    true
                 } else {
-                    // summary=None and small output: return full output
-                    false
+                    line_count > 1000
                 };
 
                 if use_summary {
@@ -392,9 +405,24 @@ impl CodeAnalyzer {
                         format_summary(&output.entries, &output.files, params.max_depth);
                 }
 
+                // Apply pagination to files
+                let paginated = paginate_slice(&output.files, offset, page_size).map_err(|e| {
+                    ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+                })?;
+
+                if paginated.next_cursor.is_some() || offset > 0 {
+                    output.formatted = format_structure_paginated(
+                        &paginated.items,
+                        paginated.total,
+                        params.max_depth,
+                    );
+                }
+                output.files = paginated.items;
+                output.next_cursor = paginated.next_cursor;
+
                 AnalysisResponse::Overview(output)
             }
-            types::ModeResult::FileDetails(output) => {
+            types::ModeResult::FileDetails(mut output) => {
                 // Apply output size limiting
                 let line_count = output.formatted.lines().count();
                 if line_count > 1000 && params.force != Some(true) {
@@ -413,6 +441,15 @@ impl CodeAnalyzer {
                         None,
                     ));
                 }
+
+                // Paginate functions (typically the largest collection)
+                let paginated = paginate_slice(&output.semantic.functions, offset, page_size)
+                    .map_err(|e| {
+                        ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+                    })?;
+                output.semantic.functions = paginated.items;
+                output.next_cursor = paginated.next_cursor;
+
                 AnalysisResponse::FileDetails(output)
             }
             types::ModeResult::SymbolFocus(output) => {
@@ -434,6 +471,7 @@ impl CodeAnalyzer {
                         None,
                     ));
                 }
+                // SymbolFocus: no semantic data to paginate
                 AnalysisResponse::SymbolFocus(output)
             }
         };
