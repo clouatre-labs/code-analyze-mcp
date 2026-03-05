@@ -140,6 +140,9 @@ pub struct CallInfo {
     pub callee: String,
     pub line: usize,
     pub column: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(description = "Number of arguments passed at the call site")]
+    pub arg_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

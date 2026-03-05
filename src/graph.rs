@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::instrument;
 
+/// Type info for a function: (path, line, parameters, return_type)
+type FunctionTypeInfo = (PathBuf, usize, Vec<String>, Option<String>);
+
 #[derive(Debug, Error)]
 pub enum GraphError {
     #[error("Symbol not found: {0}")]
@@ -33,6 +36,8 @@ pub struct CallGraph {
     pub callers: HashMap<String, Vec<(PathBuf, usize, String)>>,
     pub callees: HashMap<String, Vec<(PathBuf, usize, String)>>,
     pub definitions: HashMap<String, Vec<(PathBuf, usize)>>,
+    // Internal: maps function name to type info for type-aware disambiguation
+    function_types: HashMap<String, Vec<FunctionTypeInfo>>,
 }
 
 impl CallGraph {
@@ -41,14 +46,93 @@ impl CallGraph {
             callers: HashMap::new(),
             callees: HashMap::new(),
             definitions: HashMap::new(),
+            function_types: HashMap::new(),
         }
     }
 
-    /// Resolve a callee name using three strategies:
+    /// Count parameters in a parameter string.
+    /// Handles: "(x: i32, y: String)" -> 2, "(&self, x: i32)" -> 2, "()" -> 0, "(&self)" -> 1
+    fn count_parameters(params_str: &str) -> usize {
+        if params_str.is_empty() || params_str == "()" {
+            return 0;
+        }
+        // Remove outer parens and trim
+        let inner = params_str
+            .trim_start_matches('(')
+            .trim_end_matches(')')
+            .trim();
+        if inner.is_empty() {
+            return 0;
+        }
+        // Count commas + 1 to get parameter count
+        inner.split(',').count()
+    }
+
+    /// Match a callee by parameter count and return type.
+    /// Returns the index of the best match in the candidates list, or None if no good match.
+    /// Strategy: prefer candidates with matching param count, then by return type match.
+    fn match_by_type(
+        &self,
+        candidates: &[FunctionTypeInfo],
+        expected_param_count: Option<usize>,
+        expected_return_type: Option<&str>,
+    ) -> Option<usize> {
+        if candidates.is_empty() {
+            return None;
+        }
+
+        // If we have no type info to match against, return None (fallback to line proximity)
+        if expected_param_count.is_none() && expected_return_type.is_none() {
+            return None;
+        }
+
+        let mut best_idx = 0;
+        let mut best_score = 0;
+
+        for (idx, (_path, _line, params, ret_type)) in candidates.iter().enumerate() {
+            let mut score = 0;
+
+            // Score parameter count match
+            if let Some(expected_count) = expected_param_count
+                && !params.is_empty()
+            {
+                let actual_count = Self::count_parameters(&params[0]);
+                if actual_count == expected_count {
+                    score += 2;
+                }
+            }
+
+            // Score return type match
+            if let Some(expected_ret) = expected_return_type
+                && let Some(actual_ret) = ret_type
+                && actual_ret == expected_ret
+            {
+                score += 1;
+            }
+
+            // Prefer candidates with more type info
+            if !params.is_empty() {
+                score += 1;
+            }
+            if ret_type.is_some() {
+                score += 1;
+            }
+
+            if score > best_score {
+                best_score = score;
+                best_idx = idx;
+            }
+        }
+
+        // Only return a match if we found a meaningful score
+        (best_score > 0).then_some(best_idx)
+    }
+
+    /// Resolve a callee name using four strategies:
     /// 1. Try the raw callee name first in definitions
     /// 2. If not found, try the stripped name (via strip_scope_prefix)
     /// 3. If multiple definitions exist, prefer same-file candidates
-    /// 4. Among same-file candidates, pick the one closest by line number
+    /// 4. Among same-file candidates, use type info as tiebreaker, then line proximity
     /// 5. If no same-file candidates, use any definition (first one)
     ///
     /// Returns the resolved callee name (which may be the stripped version).
@@ -57,11 +141,20 @@ impl CallGraph {
         callee: &str,
         call_file: &Path,
         call_line: usize,
+        arg_count: Option<usize>,
         definitions: &HashMap<String, Vec<(PathBuf, usize)>>,
+        function_types: &HashMap<String, Vec<FunctionTypeInfo>>,
     ) -> String {
         // Try raw callee name first
         if let Some(defs) = definitions.get(callee) {
-            return self.pick_best_definition(defs, call_file, call_line, callee);
+            return self.pick_best_definition(
+                defs,
+                call_file,
+                call_line,
+                arg_count,
+                callee,
+                function_types,
+            );
         }
 
         // Try stripped name
@@ -69,26 +162,96 @@ impl CallGraph {
         if stripped != callee
             && let Some(defs) = definitions.get(stripped)
         {
-            return self.pick_best_definition(defs, call_file, call_line, stripped);
+            return self.pick_best_definition(
+                defs,
+                call_file,
+                call_line,
+                arg_count,
+                stripped,
+                function_types,
+            );
         }
 
         // No definition found; return the original callee
         callee.to_string()
     }
 
-    /// Pick the best definition from a list based on same-file preference and line proximity.
+    /// Pick the best definition from a list based on same-file preference, type matching, and line proximity.
     fn pick_best_definition(
         &self,
         defs: &[(PathBuf, usize)],
         call_file: &Path,
         call_line: usize,
+        arg_count: Option<usize>,
         resolved_name: &str,
+        function_types: &HashMap<String, Vec<FunctionTypeInfo>>,
     ) -> String {
         // Filter to same-file candidates
         let same_file_defs: Vec<_> = defs.iter().filter(|(path, _)| path == call_file).collect();
 
         if !same_file_defs.is_empty() {
-            // Pick the one closest by line number
+            // Try type-aware disambiguation if we have type info
+            if let Some(type_info) = function_types.get(resolved_name) {
+                let same_file_types: Vec<_> = type_info
+                    .iter()
+                    .filter(|(path, _, _, _)| path == call_file)
+                    .cloned()
+                    .collect();
+
+                if !same_file_types.is_empty() && same_file_types.len() > 1 {
+                    // Group candidates by line proximity (within 5 lines)
+                    let mut proximity_groups: Vec<Vec<usize>> = vec![];
+                    for (idx, (_, def_line, _, _)) in same_file_types.iter().enumerate() {
+                        let mut placed = false;
+                        for group in &mut proximity_groups {
+                            if let Some((_, first_line, _, _)) = same_file_types.get(group[0])
+                                && first_line.abs_diff(*def_line) <= 5
+                            {
+                                group.push(idx);
+                                placed = true;
+                                break;
+                            }
+                        }
+                        if !placed {
+                            proximity_groups.push(vec![idx]);
+                        }
+                    }
+
+                    // Find the closest proximity group
+                    let closest_group = proximity_groups.iter().min_by_key(|group| {
+                        group
+                            .iter()
+                            .map(|idx| {
+                                if let Some((_, def_line, _, _)) = same_file_types.get(*idx) {
+                                    def_line.abs_diff(call_line)
+                                } else {
+                                    usize::MAX
+                                }
+                            })
+                            .min()
+                            .unwrap_or(usize::MAX)
+                    });
+
+                    if let Some(group) = closest_group {
+                        // Within the closest group, try type matching
+                        if group.len() > 1 {
+                            // Collect candidates for type matching
+                            let candidates: Vec<_> = group
+                                .iter()
+                                .filter_map(|idx| same_file_types.get(*idx).cloned())
+                                .collect();
+                            // Try to match by type using argument count from call site
+                            if let Some(_best_idx) =
+                                self.match_by_type(&candidates, arg_count, None)
+                            {
+                                return resolved_name.to_string();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fallback to line proximity
             let _best = same_file_defs
                 .iter()
                 .min_by_key(|(_, def_line)| (*def_line).abs_diff(call_line));
@@ -105,7 +268,7 @@ impl CallGraph {
     ) -> Result<Self, GraphError> {
         let mut graph = CallGraph::new();
 
-        // Build definitions map first
+        // Build definitions and function_types maps first
         for (path, analysis) in &results {
             for func in &analysis.functions {
                 graph
@@ -113,6 +276,16 @@ impl CallGraph {
                     .entry(func.name.clone())
                     .or_default()
                     .push((path.clone(), func.line));
+                graph
+                    .function_types
+                    .entry(func.name.clone())
+                    .or_default()
+                    .push((
+                        path.clone(),
+                        func.line,
+                        func.parameters.clone(),
+                        func.return_type.clone(),
+                    ));
             }
             for class in &analysis.classes {
                 graph
@@ -120,14 +293,25 @@ impl CallGraph {
                     .entry(class.name.clone())
                     .or_default()
                     .push((path.clone(), class.line));
+                graph
+                    .function_types
+                    .entry(class.name.clone())
+                    .or_default()
+                    .push((path.clone(), class.line, vec![], None));
             }
         }
 
         // Process calls with resolved callee names
         for (path, analysis) in &results {
             for call in &analysis.calls {
-                let resolved_callee =
-                    graph.resolve_callee(&call.callee, path, call.line, &graph.definitions);
+                let resolved_callee = graph.resolve_callee(
+                    &call.callee,
+                    path,
+                    call.line,
+                    call.arg_count,
+                    &graph.definitions,
+                    &graph.function_types,
+                );
 
                 graph.callees.entry(call.caller.clone()).or_default().push((
                     path.clone(),
@@ -288,6 +472,39 @@ mod tests {
                     callee: e.to_string(),
                     line: l,
                     column: 0,
+                    arg_count: None,
+                })
+                .collect(),
+        }
+    }
+
+    fn make_typed_analysis(
+        funcs: Vec<(&str, usize, Vec<String>, Option<&str>)>,
+        calls: Vec<(&str, &str, usize, Option<usize>)>,
+    ) -> SemanticAnalysis {
+        SemanticAnalysis {
+            functions: funcs
+                .into_iter()
+                .map(|(n, l, params, ret_type)| FunctionInfo {
+                    name: n.to_string(),
+                    line: l,
+                    end_line: l + 5,
+                    parameters: params,
+                    return_type: ret_type.map(|s| s.to_string()),
+                })
+                .collect(),
+            classes: vec![],
+            imports: vec![],
+            references: vec![],
+            call_frequency: Default::default(),
+            calls: calls
+                .into_iter()
+                .map(|(c, e, l, arg_count)| CallInfo {
+                    caller: c.to_string(),
+                    callee: e.to_string(),
+                    line: l,
+                    column: 0,
+                    arg_count,
                 })
                 .collect(),
         }
@@ -474,6 +691,74 @@ mod tests {
             helper_callers
                 .iter()
                 .any(|(path, _, caller)| { path == &PathBuf::from("a.rs") && caller == "main" })
+        );
+    }
+
+    #[test]
+    fn test_type_disambiguation_by_params() {
+        // Two functions named 'process' in the same file with different parameter counts.
+        // process(x: i32) at line 10, process(x: i32, y: String) at line 12.
+        // Call from main at line 11 is equidistant from both (1 line away).
+        // Type matching should prefer the 2-param version since arg_count=2.
+        let analysis = make_typed_analysis(
+            vec![
+                ("process", 10, vec!["(x: i32)".to_string()], Some("i32")),
+                (
+                    "process",
+                    12,
+                    vec!["(x: i32, y: String)".to_string()],
+                    Some("String"),
+                ),
+                ("main", 1, vec![], None),
+            ],
+            vec![("main", "process", 11, Some(2))],
+        );
+
+        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
+            .expect("Failed to build graph");
+
+        // Check that main calls process
+        assert!(graph.callees.contains_key("main"));
+        let main_callees = &graph.callees["main"];
+        assert_eq!(main_callees.len(), 1);
+        assert_eq!(main_callees[0].2, "process");
+
+        // Check that process has a caller from main at line 11
+        assert!(graph.callers.contains_key("process"));
+        let process_callers = &graph.callers["process"];
+        assert!(
+            process_callers
+                .iter()
+                .any(|(_, line, caller)| *line == 11 && caller == "main")
+        );
+    }
+
+    #[test]
+    fn test_type_disambiguation_fallback() {
+        // Two functions named 'process' with no type info (empty parameters, None return_type).
+        // Call from main at line 12 should resolve using line proximity (no regression).
+        // arg_count=None means type matching won't fire, fallback to line proximity.
+        let analysis = make_analysis(
+            vec![("process", 10), ("process", 50), ("main", 1)],
+            vec![("main", "process", 12)],
+        );
+
+        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
+            .expect("Failed to build graph");
+
+        // Check that main calls process
+        assert!(graph.callees.contains_key("main"));
+        let main_callees = &graph.callees["main"];
+        assert_eq!(main_callees.len(), 1);
+        assert_eq!(main_callees[0].2, "process");
+
+        // Check that process has a caller from main
+        assert!(graph.callers.contains_key("process"));
+        let process_callers = &graph.callers["process"];
+        assert!(
+            process_callers
+                .iter()
+                .any(|(_, line, caller)| *line == 12 && caller == "main")
         );
     }
 }
