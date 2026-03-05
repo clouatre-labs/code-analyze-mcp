@@ -156,13 +156,15 @@ code-analyze-mcp must work seamlessly across Goose, fast-agent, mcp-agent, Claud
 
 ### Testing Matrix
 
-| Client | Transport | Status |
-|--------|-----------|--------|
-| Goose | stdio | Tested, production use |
-| Claude Code | stdio | Untested, should work |
-| Cursor | stdio | Untested |
-| fast-agent | stdio/HTTP | Untested |
-| mcp-agent | stdio/HTTP | Untested |
+| Client | Transport | Status | Test Method |
+|--------|-----------|--------|-------------|
+| Raw stdio (JSON-RPC) | stdio | Tested | McpStdioClient helper; test_initialize, test_tools_list, test_analyze_overview, test_analyze_file_details, test_analyze_error_invalid_path |
+| MCP Inspector CLI | stdio | Tested | npx @modelcontextprotocol/inspector --cli; test_inspector_tools_list, test_inspector_analyze_file |
+| Goose CLI | stdio | Tested | goose run --with-extension; test_goose_tool_discovery, test_goose_analyze_file |
+| Claude Code | stdio | Untested, should work | Requires IDE extension |
+| Cursor | stdio | Untested | Requires IDE extension |
+| fast-agent | stdio/HTTP | Untested | Requires separate HTTP transport |
+| mcp-agent | stdio/HTTP | Untested | Requires separate HTTP transport |
 
 *Table 6: Cross-client compatibility testing matrix.*
 
