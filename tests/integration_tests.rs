@@ -99,6 +99,13 @@ fn world() {
     let output = analyze_directory(root, None).unwrap();
 
     // Check that output contains expected sections with new format
+    // Verify leading summary line is present
+    assert!(
+        output.formatted.contains("1 files, ")
+            && output.formatted.contains("L, ")
+            && output.formatted.contains("F, ")
+            && output.formatted.contains("C (")
+    );
     assert!(output.formatted.contains("SUMMARY:"));
     assert!(output.formatted.contains("Shown:"));
     assert!(output.formatted.contains("PATH [LOC, FUNCTIONS, CLASSES]"));
@@ -114,6 +121,8 @@ fn test_analyze_directory_empty_directory() {
     let output = analyze_directory(root, None).unwrap();
 
     // Should still have SUMMARY and PATH sections with new format
+    // Verify leading summary line is present for empty directory
+    assert!(output.formatted.contains("0 files, 0L, 0F, 0C ("));
     assert!(output.formatted.contains("SUMMARY:"));
     assert!(output.formatted.contains("Shown: 0 files"));
     assert!(output.formatted.contains("PATH [LOC, FUNCTIONS, CLASSES]"));
