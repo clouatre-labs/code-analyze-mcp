@@ -475,6 +475,8 @@ mod tests {
                     arg_count: None,
                 })
                 .collect(),
+            assignments: vec![],
+            field_accesses: vec![],
         }
     }
 
@@ -507,6 +509,8 @@ mod tests {
                     arg_count,
                 })
                 .collect(),
+            assignments: vec![],
+            field_accesses: vec![],
         }
     }
 

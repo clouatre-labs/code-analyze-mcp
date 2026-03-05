@@ -1,3 +1,4 @@
+use crate::dataflow::DataflowGraph;
 use crate::formatter::{format_file_details, format_focused, format_structure};
 use crate::graph::CallGraph;
 use crate::lang::language_from_extension;
@@ -330,10 +331,11 @@ pub fn analyze_focused_with_progress(
     }
 
     // Build call graph
+    let dataflow = DataflowGraph::build_from_results(&analysis_results);
     let graph = CallGraph::build_from_results(analysis_results)?;
 
     // Format output
-    let formatted = format_focused(&graph, focus, follow_depth)?;
+    let formatted = format_focused(&graph, &dataflow, focus, follow_depth)?;
 
     Ok(FocusedAnalysisOutput {
         formatted,

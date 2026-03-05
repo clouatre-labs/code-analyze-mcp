@@ -1,6 +1,7 @@
 pub mod analyze;
 pub mod cache;
 pub mod completion;
+pub mod dataflow;
 pub mod formatter;
 pub mod graph;
 pub mod lang;
@@ -316,6 +317,8 @@ impl CodeAnalyzer {
                                 references: vec![],
                                 call_frequency: std::collections::HashMap::new(),
                                 calls: vec![],
+                                assignments: vec![],
+                                field_accesses: vec![],
                             },
                             line_count: 0,
                             next_cursor: None,

@@ -1,3 +1,4 @@
+use crate::dataflow::DataflowGraph;
 use crate::graph::CallGraph;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
@@ -354,6 +355,7 @@ pub fn format_file_details(
 #[instrument(skip_all)]
 pub fn format_focused(
     graph: &CallGraph,
+    dataflow: &DataflowGraph,
     symbol: &str,
     follow_depth: u32,
 ) -> Result<String, FormatterError> {
@@ -459,6 +461,40 @@ pub fn format_focused(
             for file in sorted_files {
                 output.push_str(&format!("    {}\n", file.display()));
             }
+        }
+    }
+
+    // DATAFLOW section
+    output.push_str("DATAFLOW:\n");
+    let assignments = dataflow.find_assignments(symbol);
+    if assignments.is_empty() {
+        output.push_str("  ASSIGNMENTS: (none)\n");
+    } else {
+        output.push_str("  ASSIGNMENTS:\n");
+        for (file, line, scope) in &assignments {
+            output.push_str(&format!(
+                "    {} = ... (scope: {}) {}:{}\n",
+                symbol,
+                scope,
+                file.display(),
+                line
+            ));
+        }
+    }
+
+    let field_accesses = dataflow.find_field_accesses(symbol);
+    if field_accesses.is_empty() {
+        output.push_str("  FIELD_ACCESSES: (none)\n");
+    } else {
+        output.push_str("  FIELD_ACCESSES:\n");
+        for (file, line, scope) in &field_accesses {
+            output.push_str(&format!(
+                "    {}.* (scope: {}) {}:{}\n",
+                symbol,
+                scope,
+                file.display(),
+                line
+            ));
         }
     }
 
