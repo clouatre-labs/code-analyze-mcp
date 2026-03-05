@@ -5,7 +5,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 /// Cache key combining path, modification time, and analysis mode.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -53,14 +53,40 @@ impl AnalysisCache {
     /// Get a cached analysis result if it exists.
     #[instrument(skip(self), fields(path = ?key.path))]
     pub fn get(&self, key: &CacheKey) -> Option<Arc<FileAnalysisOutput>> {
-        lock_or_recover(&self.cache, |guard| guard.get(key).cloned())
+        lock_or_recover(&self.cache, |guard| {
+            let result = guard.get(key).cloned();
+            let cache_size = guard.len();
+            match result {
+                Some(v) => {
+                    debug!(cache_event = "hit", cache_size = cache_size, path = ?key.path);
+                    Some(v)
+                }
+                None => {
+                    debug!(cache_event = "miss", cache_size = cache_size, path = ?key.path);
+                    None
+                }
+            }
+        })
     }
 
     /// Store an analysis result in the cache.
     #[instrument(skip(self, value), fields(path = ?key.path))]
     pub fn put(&self, key: CacheKey, value: Arc<FileAnalysisOutput>) {
         lock_or_recover(&self.cache, |guard| {
-            guard.put(key, value);
+            let push_result = guard.push(key.clone(), value);
+            let cache_size = guard.len();
+            match push_result {
+                None => {
+                    debug!(cache_event = "insert", cache_size = cache_size, path = ?key.path);
+                }
+                Some((returned_key, _)) => {
+                    if returned_key == key {
+                        debug!(cache_event = "update", cache_size = cache_size, path = ?key.path);
+                    } else {
+                        debug!(cache_event = "eviction", cache_size = cache_size, path = ?key.path, evicted_path = ?returned_key.path);
+                    }
+                }
+            }
         });
     }
 }
