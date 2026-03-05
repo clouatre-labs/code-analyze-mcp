@@ -34,6 +34,8 @@ use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
 use types::{AnalysisMode, AnalyzeParams};
 
+const SIZE_LIMIT: usize = 50_000;
+
 #[derive(Clone)]
 pub struct CodeAnalyzer {
     tool_router: ToolRouter<Self>,
@@ -387,8 +389,6 @@ impl CodeAnalyzer {
         let (formatted_text, next_cursor) = match mode_result {
             types::ModeResult::Overview(mut output) => {
                 // Apply summary/output size limiting logic
-                let line_count = output.formatted.lines().count();
-
                 // Determine if we should use summary
                 let use_summary = if params.force == Some(true) {
                     false
@@ -397,7 +397,7 @@ impl CodeAnalyzer {
                 } else if params.summary == Some(false) {
                     false
                 } else {
-                    line_count > 1000
+                    output.formatted.len() > SIZE_LIMIT
                 };
 
                 if use_summary {
@@ -422,16 +422,16 @@ impl CodeAnalyzer {
             }
             types::ModeResult::FileDetails(output) => {
                 // Apply output size limiting
-                let line_count = output.formatted.lines().count();
-                if line_count > 1000 && params.force != Some(true) {
-                    let estimated_tokens = line_count * 40;
+                if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
+                    let estimated_tokens = output.formatted.len() / 4;
                     let message = format!(
-                        "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
+                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
                          - force=true to return full output\n\
                          - Narrow your scope (smaller directory, specific file)\n\
                          - Use symbol_focus mode for targeted analysis\n\
                          - Reduce max_depth parameter",
-                        line_count, estimated_tokens
+                        output.formatted.len(),
+                        estimated_tokens
                     );
                     return Err(ErrorData::new(
                         rmcp::model::ErrorCode::INVALID_REQUEST,
@@ -450,16 +450,16 @@ impl CodeAnalyzer {
             }
             types::ModeResult::SymbolFocus(output) => {
                 // Apply output size limiting
-                let line_count = output.formatted.lines().count();
-                if line_count > 1000 && params.force != Some(true) {
-                    let estimated_tokens = line_count * 40;
+                if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
+                    let estimated_tokens = output.formatted.len() / 4;
                     let message = format!(
-                        "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
+                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
                          - force=true to return full output\n\
                          - Narrow your scope (smaller directory, specific file)\n\
                          - Use symbol_focus mode for targeted analysis\n\
                          - Reduce max_depth parameter",
-                        line_count, estimated_tokens
+                        output.formatted.len(),
+                        estimated_tokens
                     );
                     return Err(ErrorData::new(
                         rmcp::model::ErrorCode::INVALID_REQUEST,

@@ -829,7 +829,7 @@ fn test_output_limiting_below_threshold() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("small.rs");
 
-    // Create a file with <1000 lines
+    // Create a file with output < 50K chars
     let mut small_code = String::new();
     for i in 0..50 {
         small_code.push_str(&format!("fn func_{}() {{}}\n", i));
@@ -839,10 +839,11 @@ fn test_output_limiting_below_threshold() {
     let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
 
     // Verify output is returned normally (not limited)
-    let line_count = output.formatted.lines().count();
+    let char_count = output.formatted.len();
     assert!(
-        line_count < 1000,
-        "Generated output should be under 1000 lines"
+        char_count < 50_000,
+        "Generated output should be under 50K chars, got {} chars",
+        char_count
     );
     assert!(
         output.formatted.contains("FILE:"),
@@ -2034,4 +2035,87 @@ impl Drawable for Point {
             class.name
         );
     }
+}
+
+#[test]
+fn test_format_symbol_list_inline() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("inline.rs");
+
+    // Create a file with exactly 10 classes (at threshold for inline format)
+    let mut code = String::new();
+    for i in 0..10 {
+        code.push_str(&format!("struct Class{} {{}}\n", i));
+    }
+    fs::write(&file_path, code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify 10 classes are extracted
+    assert_eq!(output.semantic.classes.len(), 10);
+
+    // Verify inline format: classes should be on one line separated by semicolons
+    let formatted = output.formatted;
+    assert!(formatted.contains("C:"), "Should contain C: section");
+
+    // Extract the C: section
+    let c_section = formatted
+        .split("C:")
+        .nth(1)
+        .unwrap_or("")
+        .split("F:")
+        .next()
+        .unwrap_or("");
+
+    // For inline format with 10 items, should have semicolons separating classes
+    let semicolon_count = c_section.matches(';').count();
+    assert!(
+        semicolon_count >= 9,
+        "Inline format with 10 classes should have at least 9 semicolons, got {}",
+        semicolon_count
+    );
+}
+
+#[test]
+fn test_format_symbol_list_multiline() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("multiline.rs");
+
+    // Create a file with 11 classes (exceeds threshold for multiline format)
+    let mut code = String::new();
+    for i in 0..11 {
+        code.push_str(&format!("struct Class{} {{}}\n", i));
+    }
+    fs::write(&file_path, code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify 11 classes are extracted
+    assert_eq!(output.semantic.classes.len(), 11);
+
+    // Verify multiline format: classes should be on separate lines
+    let formatted = output.formatted;
+    assert!(formatted.contains("C:"), "Should contain C: section");
+
+    // Extract the C: section
+    let c_section = formatted
+        .split("C:")
+        .nth(1)
+        .unwrap_or("")
+        .split("F:")
+        .next()
+        .unwrap_or("");
+
+    // For multiline format, each class should be on its own line with indentation
+    // Count lines that start with "  " (indentation) in the C section
+    let indented_lines = c_section
+        .lines()
+        .filter(|line| line.starts_with("  ") && !line.trim().is_empty())
+        .count();
+
+    assert!(
+        indented_lines >= 11,
+        "Multiline format with 11 classes should have at least 11 indented lines, got {}",
+        indented_lines
+    );
 }

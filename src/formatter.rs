@@ -7,6 +7,8 @@ use std::fmt::Write;
 use thiserror::Error;
 use tracing::instrument;
 
+const MULTILINE_THRESHOLD: usize = 10;
+
 #[derive(Debug, Error)]
 pub enum FormatterError {
     #[error("Graph error: {0}")]
@@ -239,16 +241,40 @@ pub fn format_file_details(
     // C: section with classes
     if !analysis.classes.is_empty() {
         output.push_str("C:\n");
-        for class in &analysis.classes {
-            if class.inherits.is_empty() {
-                output.push_str(&format!("  {}:{}\n", class.name, class.line));
-            } else {
-                output.push_str(&format!(
-                    "  {}:{} ({})\n",
-                    class.name,
-                    class.line,
-                    class.inherits.join(", ")
-                ));
+        if analysis.classes.len() <= MULTILINE_THRESHOLD {
+            // Inline format for <= 10 classes
+            let class_strs: Vec<String> = analysis
+                .classes
+                .iter()
+                .map(|class| {
+                    if class.inherits.is_empty() {
+                        format!("{}:{}", class.name, class.line)
+                    } else {
+                        format!(
+                            "{}:{} ({})",
+                            class.name,
+                            class.line,
+                            class.inherits.join(", ")
+                        )
+                    }
+                })
+                .collect();
+            output.push_str("  ");
+            output.push_str(&class_strs.join("; "));
+            output.push('\n');
+        } else {
+            // Multiline format for > 10 classes
+            for class in &analysis.classes {
+                if class.inherits.is_empty() {
+                    output.push_str(&format!("  {}:{}\n", class.name, class.line));
+                } else {
+                    output.push_str(&format!(
+                        "  {}:{} ({})\n",
+                        class.name,
+                        class.line,
+                        class.inherits.join(", ")
+                    ));
+                }
             }
         }
     }
@@ -297,11 +323,27 @@ pub fn format_file_details(
                 .or_insert(1);
         }
 
-        let mut modules: Vec<_> = module_map.keys().collect();
+        let mut modules: Vec<_> = module_map.keys().cloned().collect();
         modules.sort();
-        for module in modules {
-            let count = module_map[module];
-            output.push_str(&format!("  {} ({})\n", module, count));
+
+        // Format modules with count notation
+        let formatted_modules: Vec<String> = modules
+            .iter()
+            .map(|module| format!("{}({})", module, module_map[module]))
+            .collect();
+
+        if formatted_modules.len() <= MULTILINE_THRESHOLD {
+            // Inline format for <= 10 modules
+            output.push_str("  ");
+            output.push_str(&formatted_modules.join("; "));
+            output.push('\n');
+        } else {
+            // Multiline format for > 10 modules
+            for module_str in formatted_modules {
+                output.push_str("  ");
+                output.push_str(&module_str);
+                output.push('\n');
+            }
         }
     }
 
