@@ -37,6 +37,23 @@ pub const IMPL_QUERY: &str = r#"
       parameters: (parameters) @method_params) @method))
 "#;
 
+/// Tree-sitter query for extracting variable assignments and reassignments.
+pub const ASSIGNMENT_QUERY: &str = r#"
+(let_declaration
+  pattern: (identifier) @variable
+  value: (_) @value) @assignment
+(assignment_expression
+  left: (identifier) @variable
+  right: (_) @value) @assignment
+"#;
+
+/// Tree-sitter query for extracting field access patterns.
+pub const FIELD_QUERY: &str = r#"
+(field_expression
+  value: (_) @object
+  field: (field_identifier) @field) @field_access
+"#;
+
 /// Extract function name from a function node.
 pub fn extract_function_name(node: &Node, source: &str, _query_name: &str) -> Option<String> {
     if node.kind() != "function_item" {

@@ -146,6 +146,30 @@ pub struct CallInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AssignmentInfo {
+    #[schemars(description = "Variable name being assigned")]
+    pub variable: String,
+    #[schemars(description = "Value expression being assigned")]
+    pub value: String,
+    #[schemars(description = "Line number where assignment occurs")]
+    pub line: usize,
+    #[schemars(description = "Enclosing function scope or 'global'")]
+    pub scope: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct FieldAccessInfo {
+    #[schemars(description = "Object expression being accessed")]
+    pub object: String,
+    #[schemars(description = "Field name being accessed")]
+    pub field: String,
+    #[schemars(description = "Line number where field access occurs")]
+    pub line: usize,
+    #[schemars(description = "Enclosing function scope or 'global'")]
+    pub scope: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReferenceInfo {
     pub symbol: String,
     pub reference_type: ReferenceType,
@@ -231,6 +255,12 @@ pub struct SemanticAnalysis {
     pub call_frequency: HashMap<String, usize>,
     #[schemars(description = "Caller-callee pairs extracted from call expressions")]
     pub calls: Vec<CallInfo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(description = "Variable assignments and reassignments")]
+    pub assignments: Vec<AssignmentInfo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(description = "Field access patterns")]
+    pub field_accesses: Vec<FieldAccessInfo>,
 }
 
 #[cfg(test)]

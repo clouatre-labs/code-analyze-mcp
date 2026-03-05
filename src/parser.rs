@@ -1,6 +1,7 @@
 use crate::languages::get_language_info;
 use crate::types::{
-    CallInfo, ClassInfo, FunctionInfo, ImportInfo, ReferenceInfo, ReferenceType, SemanticAnalysis,
+    AssignmentInfo, CallInfo, ClassInfo, FieldAccessInfo, FunctionInfo, ImportInfo, ReferenceInfo,
+    ReferenceType, SemanticAnalysis,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -29,6 +30,8 @@ struct CompiledQueries {
     import: Option<Query>,
     impl_block: Option<Query>,
     reference: Option<Query>,
+    assignment: Option<Query>,
+    field: Option<Query>,
 }
 
 /// Build compiled queries for a given language.
@@ -86,12 +89,40 @@ fn build_compiled_queries(
         None
     };
 
+    let assignment = if let Some(assignment_query_str) = lang_info.assignment_query {
+        Some(
+            Query::new(&lang_info.language, assignment_query_str).map_err(|e| {
+                ParserError::QueryError(format!(
+                    "Failed to compile assignment query for {}: {}",
+                    lang_info.name, e
+                ))
+            })?,
+        )
+    } else {
+        None
+    };
+
+    let field = if let Some(field_query_str) = lang_info.field_query {
+        Some(
+            Query::new(&lang_info.language, field_query_str).map_err(|e| {
+                ParserError::QueryError(format!(
+                    "Failed to compile field query for {}: {}",
+                    lang_info.name, e
+                ))
+            })?,
+        )
+    } else {
+        None
+    };
+
     Ok(CompiledQueries {
         element,
         call,
         import,
         impl_block,
         reference,
+        assignment,
+        field,
     })
 }
 
@@ -346,6 +377,8 @@ impl SemanticExtractor {
         let mut references = Vec::new();
         let mut call_frequency = HashMap::new();
         let mut calls = Vec::new();
+        let mut assignments: Vec<AssignmentInfo> = Vec::new();
+        let mut field_accesses: Vec<FieldAccessInfo> = Vec::new();
 
         // Validate and convert ast_recursion_limit once
         let max_depth: Option<u32> = ast_recursion_limit
@@ -592,6 +625,110 @@ impl SemanticExtractor {
             }
         }
 
+        // Extract assignments
+        if let Some(ref assignment_query) = compiled.assignment {
+            let mut cursor = QueryCursor::new();
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
+            }
+
+            let mut matches = cursor.matches(assignment_query, tree.root_node(), source.as_bytes());
+            while let Some(mat) = matches.next() {
+                let mut variable = String::new();
+                let mut value = String::new();
+                let mut line = 0usize;
+
+                for capture in mat.captures {
+                    let capture_name = assignment_query.capture_names()[capture.index as usize];
+                    let node = capture.node;
+                    match capture_name {
+                        "variable" => {
+                            variable = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "value" => {
+                            value = source[node.start_byte()..node.end_byte()].to_string();
+                            line = node.start_position().row + 1;
+                        }
+                        _ => {}
+                    }
+                }
+
+                if !variable.is_empty() && !value.is_empty() {
+                    let mut current = mat.captures[0].node;
+                    let mut scope = "global".to_string();
+                    while let Some(parent) = current.parent() {
+                        if parent.kind() == "function_item"
+                            && let Some(name_node) = parent.child_by_field_name("name")
+                        {
+                            scope =
+                                source[name_node.start_byte()..name_node.end_byte()].to_string();
+                            break;
+                        }
+                        current = parent;
+                    }
+
+                    assignments.push(AssignmentInfo {
+                        variable,
+                        value,
+                        line,
+                        scope,
+                    });
+                }
+            }
+        }
+
+        // Extract field accesses
+        if let Some(ref field_query) = compiled.field {
+            let mut cursor = QueryCursor::new();
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
+            }
+
+            let mut matches = cursor.matches(field_query, tree.root_node(), source.as_bytes());
+            while let Some(mat) = matches.next() {
+                let mut object = String::new();
+                let mut field = String::new();
+                let mut line = 0usize;
+
+                for capture in mat.captures {
+                    let capture_name = field_query.capture_names()[capture.index as usize];
+                    let node = capture.node;
+                    match capture_name {
+                        "object" => {
+                            object = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "field" => {
+                            field = source[node.start_byte()..node.end_byte()].to_string();
+                            line = node.start_position().row + 1;
+                        }
+                        _ => {}
+                    }
+                }
+
+                if !object.is_empty() && !field.is_empty() {
+                    let mut current = mat.captures[0].node;
+                    let mut scope = "global".to_string();
+                    while let Some(parent) = current.parent() {
+                        if parent.kind() == "function_item"
+                            && let Some(name_node) = parent.child_by_field_name("name")
+                        {
+                            scope =
+                                source[name_node.start_byte()..name_node.end_byte()].to_string();
+                            break;
+                        }
+                        current = parent;
+                    }
+
+                    field_accesses.push(FieldAccessInfo {
+                        object,
+                        field,
+                        line,
+                        scope,
+                    });
+                }
+            }
+        }
+
         tracing::debug!(language = %language, functions = functions.len(), classes = classes.len(), imports = imports.len(), references = references.len(), calls = calls.len(), "extraction complete");
 
         Ok(SemanticAnalysis {
@@ -601,6 +738,51 @@ impl SemanticExtractor {
             references,
             call_frequency,
             calls,
+            assignments,
+            field_accesses,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_assignments() {
+        let source = r#"
+fn main() {
+    let x = 42;
+    let y = x + 1;
+}
+"#;
+        let result = SemanticExtractor::extract(source, "rust", None);
+        assert!(result.is_ok());
+        let analysis = result.unwrap();
+        assert!(!analysis.assignments.is_empty());
+        assert_eq!(analysis.assignments[0].variable, "x");
+        assert_eq!(analysis.assignments[0].value, "42");
+        assert_eq!(analysis.assignments[0].scope, "main");
+    }
+
+    #[test]
+    fn test_extract_field_accesses() {
+        let source = r#"
+fn process(user: &User) {
+    let name = user.name;
+    let age = user.age;
+}
+"#;
+        let result = SemanticExtractor::extract(source, "rust", None);
+        assert!(result.is_ok());
+        let analysis = result.unwrap();
+        assert!(!analysis.field_accesses.is_empty());
+        assert!(
+            analysis
+                .field_accesses
+                .iter()
+                .any(|fa| fa.object == "user" && fa.field == "name")
+        );
+        assert_eq!(analysis.field_accesses[0].scope, "process");
     }
 }
