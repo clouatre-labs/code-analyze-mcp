@@ -41,6 +41,11 @@ pub struct AnalysisOutput {
     #[serde(skip)]
     #[schemars(skip)]
     pub entries: Vec<WalkEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(
+        description = "Opaque cursor token for the next page of results (absent when no more results)"
+    )]
+    pub next_cursor: Option<String>,
 }
 
 /// Result of file-level semantic analysis.
@@ -52,6 +57,11 @@ pub struct FileAnalysisOutput {
     pub semantic: SemanticAnalysis,
     #[schemars(description = "Total line count of the analyzed file")]
     pub line_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(
+        description = "Opaque cursor token for the next page of results (absent when no more results)"
+    )]
+    pub next_cursor: Option<String>,
 }
 
 /// Analyze a directory structure with progress tracking.
@@ -151,6 +161,7 @@ pub fn analyze_directory_with_progress(
         formatted,
         files: analysis_results,
         entries,
+        next_cursor: None,
     })
 }
 
@@ -219,6 +230,7 @@ pub fn analyze_file(
         formatted,
         semantic,
         line_count,
+        next_cursor: None,
     })
 }
 
@@ -227,6 +239,11 @@ pub fn analyze_file(
 pub struct FocusedAnalysisOutput {
     #[schemars(description = "Formatted text representation of the call graph analysis")]
     pub formatted: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(
+        description = "Opaque cursor token for the next page of results (absent when no more results)"
+    )]
+    pub next_cursor: Option<String>,
 }
 
 /// Analyze a symbol's call graph across a directory with progress tracking.
@@ -250,7 +267,10 @@ pub fn analyze_focused_with_progress(
         let formatted =
             "Single-file focus not supported. Please provide a directory path for cross-file call graph analysis.\n"
                 .to_string();
-        return Ok(FocusedAnalysisOutput { formatted });
+        return Ok(FocusedAnalysisOutput {
+            formatted,
+            next_cursor: None,
+        });
     }
 
     // Walk the directory
@@ -315,7 +335,10 @@ pub fn analyze_focused_with_progress(
     // Format output
     let formatted = format_focused(&graph, focus, follow_depth)?;
 
-    Ok(FocusedAnalysisOutput { formatted })
+    Ok(FocusedAnalysisOutput {
+        formatted,
+        next_cursor: None,
+    })
 }
 
 /// Analyze a symbol's call graph across a directory.
