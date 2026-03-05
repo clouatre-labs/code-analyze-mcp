@@ -460,11 +460,25 @@ impl SemanticExtractor {
                         current = parent;
                     }
 
+                    // Extract argument count from call_expression
+                    let mut arg_count = None;
+                    let mut arg_node = node;
+                    while let Some(parent) = arg_node.parent() {
+                        if parent.kind() == "call_expression" {
+                            if let Some(args) = parent.child_by_field_name("arguments") {
+                                arg_count = Some(args.named_child_count());
+                            }
+                            break;
+                        }
+                        arg_node = parent;
+                    }
+
                     calls.push(CallInfo {
                         caller,
                         callee: call_name,
                         line: node.start_position().row + 1,
                         column: node.start_position().column,
+                        arg_count,
                     });
                 }
             }
