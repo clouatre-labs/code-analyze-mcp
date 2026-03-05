@@ -17,12 +17,12 @@ use formatter::{format_structure_paginated, format_summary};
 use logging::LogEvent;
 use pagination::{DEFAULT_PAGE_SIZE, decode_cursor, paginate_slice};
 use rmcp::handler::server::tool::ToolRouter;
-use rmcp::handler::server::wrapper::{Json, Parameters};
+use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CancelledNotificationParam, CompleteRequestParams, CompleteResult, CompletionInfo, ErrorData,
-    Implementation, InitializeResult, LoggingLevel, LoggingMessageNotificationParam, Notification,
-    NumberOrString, ProgressNotificationParam, ProgressToken, ProtocolVersion, ServerCapabilities,
-    ServerNotification, SetLevelRequestParams,
+    CallToolResult, CancelledNotificationParam, CompleteRequestParams, CompleteResult,
+    CompletionInfo, Content, ErrorData, Implementation, InitializeResult, LoggingLevel,
+    LoggingMessageNotificationParam, Notification, NumberOrString, ProgressNotificationParam,
+    ProgressToken, ProtocolVersion, ServerCapabilities, ServerNotification, SetLevelRequestParams,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
@@ -32,7 +32,7 @@ use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
-use types::{AnalysisMode, AnalysisResponse, AnalyzeParams};
+use types::{AnalysisMode, AnalyzeParams};
 
 #[derive(Clone)]
 pub struct CodeAnalyzer {
@@ -97,7 +97,7 @@ impl CodeAnalyzer {
         &self,
         params: Parameters<AnalyzeParams>,
         context: RequestContext<RoleServer>,
-    ) -> Result<Json<AnalysisResponse>, ErrorData> {
+    ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
 
@@ -383,8 +383,8 @@ impl CodeAnalyzer {
             0
         };
 
-        // Convert ModeResult to AnalysisResponse with pagination
-        let response = match mode_result {
+        // Convert ModeResult to text-only content with pagination
+        let (formatted_text, next_cursor) = match mode_result {
             types::ModeResult::Overview(mut output) => {
                 // Apply summary/output size limiting logic
                 let line_count = output.formatted.lines().count();
@@ -417,12 +417,10 @@ impl CodeAnalyzer {
                         params.max_depth,
                     );
                 }
-                output.files = paginated.items;
-                output.next_cursor = paginated.next_cursor;
 
-                AnalysisResponse::Overview(output)
+                (output.formatted, paginated.next_cursor)
             }
-            types::ModeResult::FileDetails(mut output) => {
+            types::ModeResult::FileDetails(output) => {
                 // Apply output size limiting
                 let line_count = output.formatted.lines().count();
                 if line_count > 1000 && params.force != Some(true) {
@@ -447,10 +445,8 @@ impl CodeAnalyzer {
                     .map_err(|e| {
                         ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
                     })?;
-                output.semantic.functions = paginated.items;
-                output.next_cursor = paginated.next_cursor;
 
-                AnalysisResponse::FileDetails(output)
+                (output.formatted, paginated.next_cursor)
             }
             types::ModeResult::SymbolFocus(output) => {
                 // Apply output size limiting
@@ -472,11 +468,18 @@ impl CodeAnalyzer {
                     ));
                 }
                 // SymbolFocus: no semantic data to paginate
-                AnalysisResponse::SymbolFocus(output)
+                (output.formatted, output.next_cursor)
             }
         };
 
-        Ok(Json(response))
+        // Build final text output with pagination cursor if present
+        let mut final_text = formatted_text;
+        if let Some(cursor) = next_cursor {
+            final_text.push('\n');
+            final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
+        }
+
+        Ok(CallToolResult::success(vec![Content::text(final_text)]))
     }
 }
 

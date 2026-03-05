@@ -6,7 +6,7 @@ use code_analyze_mcp::analyze::{
 use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
 use code_analyze_mcp::completion::{path_completions, symbol_completions};
 use code_analyze_mcp::traversal::walk_directory;
-use code_analyze_mcp::types::{AnalysisMode, AnalysisResponse};
+use code_analyze_mcp::types::AnalysisMode;
 use std::fs;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1695,7 +1695,7 @@ fn test_format_structure_partitions_test_files() {
 // AnalysisResponse serialization tests
 
 #[test]
-fn test_analysis_response_overview_serialization() {
+fn test_analysis_output_overview_fields() {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
 
@@ -1705,32 +1705,16 @@ fn test_analysis_response_overview_serialization() {
     // Act: Analyze directory to get AnalysisOutput
     let analysis_output = analyze_directory(root, None).unwrap();
 
-    // Convert to AnalysisResponse
-    let response = AnalysisResponse::Overview(analysis_output);
+    // Assert: AnalysisOutput has formatted text
+    assert!(!analysis_output.formatted.is_empty());
+    assert!(analysis_output.formatted.contains("SUMMARY:"));
 
-    // Serialize to JSON
-    let json_value = serde_json::to_value(&response).unwrap();
-
-    // Assert: JSON has mode tag
-    assert_eq!(
-        json_value.get("mode").and_then(|v| v.as_str()),
-        Some("overview")
-    );
-
-    // Assert: JSON contains files array
-    assert!(json_value.get("files").is_some());
-    let files = json_value.get("files").unwrap();
-    assert!(files.is_array());
-
-    // Assert: JSON contains formatted field
-    assert!(json_value.get("formatted").is_some());
-    let formatted = json_value.get("formatted").unwrap();
-    assert!(formatted.is_string());
-    assert!(formatted.as_str().unwrap().contains("SUMMARY:"));
+    // Assert: AnalysisOutput has files array
+    assert!(!analysis_output.files.is_empty());
 }
 
 #[test]
-fn test_analysis_response_file_details_serialization() {
+fn test_analysis_output_file_details_fields() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("test.rs");
 
@@ -1752,32 +1736,15 @@ struct Point {
     // Act: Analyze file to get FileAnalysisOutput
     let analysis_output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
 
-    // Convert to AnalysisResponse
-    let response = AnalysisResponse::FileDetails(analysis_output);
+    // Assert: FileAnalysisOutput has formatted text
+    assert!(!analysis_output.formatted.is_empty());
+    assert!(analysis_output.formatted.contains("FILE:"));
 
-    // Serialize to JSON
-    let json_value = serde_json::to_value(&response).unwrap();
+    // Assert: FileAnalysisOutput has semantic data with functions
+    assert!(!analysis_output.semantic.functions.is_empty());
 
-    // Assert: JSON has mode tag
-    assert_eq!(
-        json_value.get("mode").and_then(|v| v.as_str()),
-        Some("file_details")
-    );
-
-    // Assert: JSON contains semantic field with functions
-    assert!(json_value.get("semantic").is_some());
-    let semantic = json_value.get("semantic").unwrap();
-    assert!(semantic.get("functions").is_some());
-
-    // Assert: JSON contains formatted field
-    assert!(json_value.get("formatted").is_some());
-    let formatted = json_value.get("formatted").unwrap();
-    assert!(formatted.is_string());
-    assert!(formatted.as_str().unwrap().contains("FILE:"));
-
-    // Assert: JSON contains line_count field
-    assert!(json_value.get("line_count").is_some());
-    assert!(json_value.get("line_count").unwrap().is_number());
+    // Assert: FileAnalysisOutput has line_count
+    assert!(analysis_output.line_count > 0);
 }
 
 // Pagination integration tests
