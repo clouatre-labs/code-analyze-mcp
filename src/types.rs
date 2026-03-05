@@ -130,6 +130,8 @@ pub struct ClassInfo {
     pub end_line: usize,
     pub methods: Vec<FunctionInfo>,
     pub fields: Vec<String>,
+    #[schemars(description = "Inherited types (parent classes, interfaces, trait bounds)")]
+    pub inherits: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

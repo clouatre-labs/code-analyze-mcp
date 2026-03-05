@@ -240,7 +240,16 @@ pub fn format_file_details(
     if !analysis.classes.is_empty() {
         output.push_str("C:\n");
         for class in &analysis.classes {
-            output.push_str(&format!("  {}:{}\n", class.name, class.line));
+            if class.inherits.is_empty() {
+                output.push_str(&format!("  {}:{}\n", class.name, class.line));
+            } else {
+                output.push_str(&format!(
+                    "  {}:{} ({})\n",
+                    class.name,
+                    class.line,
+                    class.inherits.join(", ")
+                ));
+            }
         }
     }
 

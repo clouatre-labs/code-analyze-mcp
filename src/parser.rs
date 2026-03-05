@@ -411,12 +411,18 @@ impl SemanticExtractor {
                         if let Some(name_node) = node.child_by_field_name("name") {
                             let name =
                                 source[name_node.start_byte()..name_node.end_byte()].to_string();
+                            let inherits = if let Some(handler) = lang_info.extract_inheritance {
+                                handler(&node, source)
+                            } else {
+                                Vec::new()
+                            };
                             classes.push(ClassInfo {
                                 name,
                                 line: node.start_position().row + 1,
                                 end_line: node.end_position().row + 1,
                                 methods: Vec::new(),
                                 fields: Vec::new(),
+                                inherits,
                             });
                         }
                     }

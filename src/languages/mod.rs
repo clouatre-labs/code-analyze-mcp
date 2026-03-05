@@ -15,6 +15,9 @@ pub type FindMethodForReceiverHandler = fn(&Node, &str, Option<usize>) -> Option
 /// Handler to find receiver type for a method.
 pub type FindReceiverTypeHandler = fn(&Node, &str) -> Option<String>;
 
+/// Handler to extract inheritance information from a class node.
+pub type ExtractInheritanceHandler = fn(&Node, &str) -> Vec<String>;
+
 /// Information about a supported language for code analysis.
 pub struct LanguageInfo {
     pub name: &'static str,
@@ -27,6 +30,7 @@ pub struct LanguageInfo {
     pub extract_function_name: Option<ExtractFunctionNameHandler>,
     pub find_method_for_receiver: Option<FindMethodForReceiverHandler>,
     pub find_receiver_type: Option<FindReceiverTypeHandler>,
+    pub extract_inheritance: Option<ExtractInheritanceHandler>,
 }
 
 /// Get language information by language name.
@@ -43,6 +47,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             extract_function_name: Some(rust::extract_function_name),
             find_method_for_receiver: Some(rust::find_method_for_receiver),
             find_receiver_type: Some(rust::find_receiver_type),
+            extract_inheritance: Some(rust::extract_inheritance),
         }),
         "python" => Some(LanguageInfo {
             name: "python",
@@ -55,6 +60,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             extract_function_name: None,
             find_method_for_receiver: None,
             find_receiver_type: None,
+            extract_inheritance: Some(python::extract_inheritance),
         }),
         "typescript" => Some(LanguageInfo {
             name: "typescript",
@@ -67,6 +73,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             extract_function_name: None,
             find_method_for_receiver: None,
             find_receiver_type: None,
+            extract_inheritance: Some(typescript::extract_inheritance),
         }),
         "tsx" => Some(LanguageInfo {
             name: "tsx",
@@ -79,6 +86,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             extract_function_name: None,
             find_method_for_receiver: None,
             find_receiver_type: None,
+            extract_inheritance: Some(typescript::extract_inheritance),
         }),
         "go" => Some(LanguageInfo {
             name: "go",
@@ -91,6 +99,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             extract_function_name: None,
             find_method_for_receiver: Some(go::find_method_for_receiver),
             find_receiver_type: None,
+            extract_inheritance: Some(go::extract_inheritance),
         }),
         "java" => Some(LanguageInfo {
             name: "java",
@@ -103,6 +112,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             extract_function_name: None,
             find_method_for_receiver: None,
             find_receiver_type: None,
+            extract_inheritance: Some(java::extract_inheritance),
         }),
         _ => None,
     }

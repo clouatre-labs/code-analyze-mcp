@@ -27,3 +27,25 @@ pub const IMPORT_QUERY: &str = r#"
 (import_statement) @import_path
 (import_from_statement) @import_path
 "#;
+
+use tree_sitter::Node;
+
+/// Extract inheritance information from a Python class node.
+pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
+    let mut inherits = Vec::new();
+
+    // Get superclasses field from class_definition
+    if let Some(superclasses) = node.child_by_field_name("superclasses") {
+        // superclasses contains an argument_list
+        for i in 0..superclasses.named_child_count() {
+            if let Some(child) = superclasses.named_child(i as u32)
+                && matches!(child.kind(), "identifier" | "attribute")
+            {
+                let text = &source[child.start_byte()..child.end_byte()];
+                inherits.push(text.to_string());
+            }
+        }
+    }
+
+    inherits
+}
