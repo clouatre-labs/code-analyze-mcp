@@ -26,3 +26,42 @@ pub const REFERENCE_QUERY: &str = r#"
 pub const IMPORT_QUERY: &str = r#"
 (import_statement) @import_path
 "#;
+
+use tree_sitter::Node;
+
+/// Extract inheritance information from a TypeScript class node.
+pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
+    let mut inherits = Vec::new();
+
+    // Walk children to find class_heritage node
+    for i in 0..node.named_child_count() {
+        if let Some(child) = node.named_child(i as u32)
+            && child.kind() == "class_heritage"
+        {
+            // Walk class_heritage children for extends_clause and implements_clause
+            for j in 0..child.named_child_count() {
+                if let Some(clause) = child.named_child(j as u32) {
+                    if clause.kind() == "extends_clause" {
+                        // Extract extends type
+                        if let Some(value) = clause.child_by_field_name("value") {
+                            let text = &source[value.start_byte()..value.end_byte()];
+                            inherits.push(format!("extends {}", text));
+                        }
+                    } else if clause.kind() == "implements_clause" {
+                        // Extract implements types
+                        for k in 0..clause.named_child_count() {
+                            if let Some(type_node) = clause.named_child(k as u32)
+                                && type_node.kind() == "type_identifier"
+                            {
+                                let text = &source[type_node.start_byte()..type_node.end_byte()];
+                                inherits.push(format!("implements {}", text));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    inherits
+}

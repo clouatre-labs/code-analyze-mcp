@@ -1792,3 +1792,246 @@ fn test_single_page_no_cursor() {
     assert!(result.next_cursor.is_none());
     assert_eq!(result.total, 50);
 }
+
+// Inheritance extraction tests
+
+#[test]
+fn test_java_inheritance_extraction() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("Test.java");
+
+    let java_code = r#"
+public class Animal {
+    public void speak() {}
+}
+
+public class Dog extends Animal implements Comparable {
+    public int compareTo(Object o) {
+        return 0;
+    }
+}
+"#;
+
+    fs::write(&file_path, java_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify classes extracted
+    assert_eq!(output.semantic.classes.len(), 2);
+
+    // Find Dog class and verify inheritance
+    let dog_class = output
+        .semantic
+        .classes
+        .iter()
+        .find(|c| c.name == "Dog")
+        .expect("Dog class should be extracted");
+
+    assert!(
+        !dog_class.inherits.is_empty(),
+        "Dog should have inheritance info"
+    );
+    assert!(
+        dog_class
+            .inherits
+            .iter()
+            .any(|i| i.contains("extends Animal")),
+        "Dog should extend Animal"
+    );
+    assert!(
+        dog_class
+            .inherits
+            .iter()
+            .any(|i| i.contains("implements Comparable")),
+        "Dog should implement Comparable"
+    );
+}
+
+#[test]
+fn test_typescript_inheritance_extraction() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.ts");
+
+    let ts_code = r#"
+class Animal {
+    name: string;
+}
+
+interface Movable {
+    move(): void;
+}
+
+class Dog extends Animal implements Movable {
+    move(): void {}
+}
+"#;
+
+    fs::write(&file_path, ts_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Find Dog class and verify inheritance
+    let dog_class = output
+        .semantic
+        .classes
+        .iter()
+        .find(|c| c.name == "Dog")
+        .expect("Dog class should be extracted");
+
+    assert!(
+        !dog_class.inherits.is_empty(),
+        "Dog should have inheritance info"
+    );
+    assert!(
+        dog_class
+            .inherits
+            .iter()
+            .any(|i| i.contains("extends Animal")),
+        "Dog should extend Animal"
+    );
+    assert!(
+        dog_class
+            .inherits
+            .iter()
+            .any(|i| i.contains("implements Movable")),
+        "Dog should implement Movable"
+    );
+}
+
+#[test]
+fn test_python_inheritance_extraction() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.py");
+
+    let python_code = r#"
+class Animal:
+    pass
+
+class Dog(Animal):
+    pass
+"#;
+
+    fs::write(&file_path, python_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Find Dog class and verify inheritance
+    let dog_class = output
+        .semantic
+        .classes
+        .iter()
+        .find(|c| c.name == "Dog")
+        .expect("Dog class should be extracted");
+
+    assert!(
+        !dog_class.inherits.is_empty(),
+        "Dog should have inheritance info"
+    );
+    assert!(
+        dog_class.inherits.iter().any(|i| i.contains("Animal")),
+        "Dog should inherit from Animal"
+    );
+}
+
+#[test]
+fn test_go_inheritance_extraction() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.go");
+
+    let go_code = r#"
+package main
+
+type Reader interface {
+    Read() error
+}
+
+type Writer interface {
+    Write() error
+}
+
+type ReadWriter struct {
+    Reader
+    Writer
+}
+
+type MyInterface interface {
+    Reader
+    Writer
+}
+"#;
+
+    fs::write(&file_path, go_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Find ReadWriter struct and verify embedded types
+    let rw_struct = output
+        .semantic
+        .classes
+        .iter()
+        .find(|c| c.name == "ReadWriter")
+        .expect("ReadWriter struct should be extracted");
+
+    assert!(
+        !rw_struct.inherits.is_empty(),
+        "ReadWriter should have embedded types"
+    );
+    assert!(
+        rw_struct.inherits.iter().any(|i| i.contains("Reader")),
+        "ReadWriter should embed Reader"
+    );
+    assert!(
+        rw_struct.inherits.iter().any(|i| i.contains("Writer")),
+        "ReadWriter should embed Writer"
+    );
+
+    // Find MyInterface and verify embedded interfaces
+    let my_iface = output
+        .semantic
+        .classes
+        .iter()
+        .find(|c| c.name == "MyInterface")
+        .expect("MyInterface should be extracted");
+
+    assert!(
+        !my_iface.inherits.is_empty(),
+        "MyInterface should have embedded interfaces"
+    );
+}
+
+#[test]
+fn test_rust_no_syntactic_inheritance() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.rs");
+
+    let rust_code = r#"
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+trait Drawable {
+    fn draw(&self);
+}
+
+impl Drawable for Point {
+    fn draw(&self) {}
+}
+"#;
+
+    fs::write(&file_path, rust_code).unwrap();
+
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Verify classes extracted
+    assert_eq!(output.semantic.classes.len(), 2);
+
+    // Verify all Rust classes have empty inherits (no syntactic inheritance)
+    for class in &output.semantic.classes {
+        assert!(
+            class.inherits.is_empty(),
+            "Rust {} should have empty inherits (inheritance is via impl blocks)",
+            class.name
+        );
+    }
+}

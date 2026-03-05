@@ -51,3 +51,51 @@ pub fn find_method_for_receiver(
         }
     })
 }
+
+/// Extract inheritance information from a Go type node.
+pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
+    let mut inherits = Vec::new();
+
+    // Get the type field from type_spec
+    if let Some(type_field) = node.child_by_field_name("type") {
+        match type_field.kind() {
+            "struct_type" => {
+                // For struct embedding, walk children for field_declaration_list
+                for i in 0..type_field.named_child_count() {
+                    if let Some(field_list) = type_field.named_child(i as u32)
+                        && field_list.kind() == "field_declaration_list"
+                    {
+                        // Walk field_declaration_list for field_declaration without name
+                        for j in 0..field_list.named_child_count() {
+                            if let Some(field) = field_list.named_child(j as u32)
+                                && field.kind() == "field_declaration"
+                                && field.child_by_field_name("name").is_none()
+                            {
+                                // Embedded type has no name field
+                                if let Some(type_node) = field.child_by_field_name("type") {
+                                    let text =
+                                        &source[type_node.start_byte()..type_node.end_byte()];
+                                    inherits.push(text.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "interface_type" => {
+                // For interface embedding, walk children for type_elem
+                for i in 0..type_field.named_child_count() {
+                    if let Some(elem) = type_field.named_child(i as u32)
+                        && elem.kind() == "type_elem"
+                    {
+                        let text = &source[elem.start_byte()..elem.end_byte()];
+                        inherits.push(text.to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    inherits
+}
