@@ -37,6 +37,10 @@ pub struct AnalysisOutput {
     pub formatted: String,
     #[schemars(description = "List of files analyzed in the directory")]
     pub files: Vec<FileInfo>,
+    /// Walk entries used internally for summary generation; not serialized.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub entries: Vec<WalkEntry>,
 }
 
 /// Result of file-level semantic analysis.
@@ -146,6 +150,7 @@ pub fn analyze_directory_with_progress(
     Ok(AnalysisOutput {
         formatted,
         files: analysis_results,
+        entries,
     })
 }
 

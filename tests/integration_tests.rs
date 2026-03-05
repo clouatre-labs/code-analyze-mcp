@@ -1299,6 +1299,64 @@ async fn test_channel_closed_exits_consumer() {
     assert!(buffer.is_empty());
 }
 
+#[test]
+fn test_summary_auto_detect_large_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create src/ subdirectory with 1100 .rs files
+    fs::create_dir(root.join("src")).unwrap();
+    for i in 0..1100 {
+        fs::write(root.join(format!("src/file_{:04}.rs", i)), "fn func() {}").unwrap();
+    }
+
+    // Analyze directory
+    let output = analyze_directory(root, None).unwrap();
+
+    // Generate summary
+    let summary = code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None);
+
+    // Assert summary contains expected sections
+    assert!(summary.contains("SUMMARY:"));
+    assert!(summary.contains("STRUCTURE (depth 1):"));
+    assert!(summary.contains("SUGGESTION:"));
+    assert!(summary.contains("1100 files"));
+    assert!(summary.contains("Languages:"));
+
+    // Assert summary is shorter than full output
+    let summary_lines = summary.lines().count();
+    let full_lines = output.formatted.lines().count();
+    assert!(
+        summary_lines < full_lines,
+        "Summary ({} lines) should be shorter than full output ({} lines)",
+        summary_lines,
+        full_lines
+    );
+}
+
+#[test]
+fn test_summary_explicit_on_small_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create src/ subdirectory with 2 files
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("src/lib.rs"), "fn lib_fn() {}").unwrap();
+
+    // Analyze directory
+    let output = analyze_directory(root, None).unwrap();
+
+    // Generate summary
+    let summary = code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None);
+
+    // Assert summary contains expected sections
+    assert!(summary.contains("SUMMARY:"));
+    assert!(summary.contains("STRUCTURE (depth 1):"));
+    assert!(summary.contains("SUGGESTION:"));
+    assert!(summary.contains("2 files"));
+}
+
 // Reference extraction tests for Python, Java, and TypeScript
 
 #[test]
