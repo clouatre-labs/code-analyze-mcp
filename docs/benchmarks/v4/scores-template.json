@@ -1,0 +1,150 @@
+{
+  "experiment": "v4-benchmark-optimization-validation",
+  "design": "Condition B-only replication measuring output verbosity optimization impact",
+  "conditions": {
+    "B-treatment": "code-analyze-mcp__analyze (post-optimization: PRs #82, #83, #109, #112)"
+  },
+  "model": "claude-haiku-4-5",
+  "temperature": 0.5,
+  "target_repo": "lsd-rs/lsd",
+  "v3_baselines": {
+    "condition_A_control": {
+      "description": "developer__analyze (goose built-in)",
+      "n": 5,
+      "quality_median": 10,
+      "tokens_median": 23969,
+      "wall_seconds_median": 61,
+      "total_calls_median": 14
+    },
+    "condition_B_unoptimized": {
+      "description": "code-analyze-mcp__analyze (v3, pre-optimization)",
+      "n": 5,
+      "quality_median": 10,
+      "tokens_median": 31005,
+      "wall_seconds_median": 80,
+      "total_calls_median": 18
+    }
+  },
+  "per_run_scores": {
+    "B1": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B2": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B3": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B4": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B5": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    }
+  },
+  "efficiency": {
+    "per_run": {
+      "B1": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B2": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B3": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B4": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B5": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      }
+    }
+  },
+  "summary": {
+    "condition_B": {
+      "totals": [],
+      "median": null,
+      "range": [null, null]
+    }
+  },
+  "statistics": {
+    "quality": {
+      "B_median": null,
+      "B_vs_v3A_delta": null,
+      "B_vs_v3B_delta": null,
+      "note": "n=5 is underpowered for statistical inference; results are descriptive"
+    },
+    "efficiency": {
+      "tokens": {
+        "B_median": null,
+        "v3A_median": 23969,
+        "v3B_median": 31005,
+        "B_vs_v3B_delta_pct": null,
+        "target_threshold": 28000,
+        "target_met": null
+      },
+      "wall_time": {
+        "B_median": null,
+        "v3A_median": 61,
+        "v3B_median": 80,
+        "B_vs_v3B_delta_pct": null,
+        "target_threshold": 75,
+        "target_met": null
+      },
+      "total_calls": {
+        "B_median": null,
+        "v3A_median": 14,
+        "v3B_median": 18,
+        "B_vs_v3B_delta": null
+      }
+    }
+  },
+  "verdict": null,
+  "notes": "Template for v4 benchmark results. Fill in per_run_scores and efficiency.per_run after runs complete. Statistics will be computed from filled data."
+}

@@ -1,0 +1,5 @@
+1. Condition B, rep 4
+2. Condition B, rep 2
+3. Condition B, rep 3
+4. Condition B, rep 5
+5. Condition B, rep 1
