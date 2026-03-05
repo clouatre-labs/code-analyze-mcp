@@ -12,6 +12,7 @@ pub mod traversal;
 pub mod types;
 
 use cache::AnalysisCache;
+use formatter::format_summary;
 use logging::LogEvent;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -181,6 +182,7 @@ impl CodeAnalyzer {
                         let output = analyze::AnalysisOutput {
                             formatted: "Analysis cancelled".to_string(),
                             files: vec![],
+                            entries: vec![],
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -188,6 +190,7 @@ impl CodeAnalyzer {
                         let output = analyze::AnalysisOutput {
                             formatted: format!("Error analyzing directory: {}", e),
                             files: vec![],
+                            entries: vec![],
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -195,6 +198,7 @@ impl CodeAnalyzer {
                         let output = analyze::AnalysisOutput {
                             formatted: format!("Task join error: {}", e),
                             files: vec![],
+                            entries: vec![],
                         };
                         types::ModeResult::Overview(output)
                     }
@@ -361,25 +365,33 @@ impl CodeAnalyzer {
 
         // Convert ModeResult to AnalysisResponse
         let response = match mode_result {
-            types::ModeResult::Overview(output) => {
-                // Apply output size limiting
+            types::ModeResult::Overview(mut output) => {
+                // Apply summary/output size limiting logic
                 let line_count = output.formatted.lines().count();
-                if line_count > 1000 && params.force != Some(true) {
-                    let estimated_tokens = line_count * 40;
-                    let message = format!(
-                        "Output exceeds 1000 lines ({} lines, ~{} tokens). Use one of:\n\
-                         - force=true to return full output\n\
-                         - Narrow your scope (smaller directory, specific file)\n\
-                         - Use symbol_focus mode for targeted analysis\n\
-                         - Reduce max_depth parameter",
-                        line_count, estimated_tokens
-                    );
-                    return Err(ErrorData::new(
-                        rmcp::model::ErrorCode::INVALID_REQUEST,
-                        message,
-                        None,
-                    ));
+
+                // Determine if we should use summary
+                let use_summary = if params.force == Some(true) {
+                    // force=true: return full output
+                    false
+                } else if params.summary == Some(true) {
+                    // summary=true: always generate summary
+                    true
+                } else if params.summary == Some(false) {
+                    // summary=false: return full output regardless of size
+                    false
+                } else if line_count > 1000 {
+                    // summary=None and large output: auto-detect and generate summary
+                    true
+                } else {
+                    // summary=None and small output: return full output
+                    false
+                };
+
+                if use_summary {
+                    output.formatted =
+                        format_summary(&output.entries, &output.files, params.max_depth);
                 }
+
                 AnalysisResponse::Overview(output)
             }
             types::ModeResult::FileDetails(output) => {
