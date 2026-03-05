@@ -13,22 +13,6 @@ pub enum ModeResult {
     SymbolFocus(FocusedAnalysisOutput),
 }
 
-/// Response envelope for analysis results, tagged by mode.
-/// Wraps the three analysis output types with a mode discriminator.
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(tag = "mode")]
-pub enum AnalysisResponse {
-    #[serde(rename = "overview")]
-    #[schemars(description = "Directory overview analysis")]
-    Overview(AnalysisOutput),
-    #[serde(rename = "file_details")]
-    #[schemars(description = "File-level semantic analysis")]
-    FileDetails(FileAnalysisOutput),
-    #[serde(rename = "symbol_focus")]
-    #[schemars(description = "Symbol call graph analysis")]
-    SymbolFocus(FocusedAnalysisOutput),
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeParams {
     #[schemars(description = "Path to the file or directory to analyze")]
