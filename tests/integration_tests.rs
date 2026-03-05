@@ -2119,3 +2119,128 @@ fn test_format_symbol_list_multiline() {
         indented_lines
     );
 }
+
+#[test]
+fn test_structured_content_present_overview() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create a simple Rust file for analysis
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/main.rs"),
+        "fn main() { println!(\"Hello\"); }",
+    )
+    .unwrap();
+
+    // Analyze the directory
+    let output = analyze_directory(root, None).unwrap();
+
+    // Serialize the output to JSON (simulating what the tool would do)
+    let structured = serde_json::to_value(&output).expect("Failed to serialize output");
+
+    // Verify structured_content is a valid JSON object
+    assert!(
+        structured.is_object(),
+        "Structured content should be a JSON object"
+    );
+
+    // Verify it contains the expected fields
+    let obj = structured.as_object().unwrap();
+    assert!(
+        obj.contains_key("formatted"),
+        "Structured content should contain 'formatted' field"
+    );
+    assert!(
+        obj.contains_key("files"),
+        "Structured content should contain 'files' field for overview mode"
+    );
+
+    // Verify files array is present and valid
+    let files = obj.get("files").expect("files field should exist");
+    assert!(
+        files.is_array(),
+        "files field should be an array in overview mode"
+    );
+}
+
+#[test]
+fn test_text_content_not_json_when_structured() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create a simple Rust file
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        "pub fn add(a: i32, b: i32) -> i32 { a + b }",
+    )
+    .unwrap();
+
+    // Analyze the directory
+    let output = analyze_directory(root, None).unwrap();
+
+    // The formatted text should be human-readable, not raw JSON
+    let formatted = &output.formatted;
+
+    // Verify it's not JSON (doesn't start with '{' or '[')
+    assert!(
+        !formatted.trim().starts_with('{') && !formatted.trim().starts_with('['),
+        "Formatted text should not be raw JSON, should be human-readable"
+    );
+
+    // Verify it contains expected text content (file paths, metrics, etc.)
+    assert!(!formatted.is_empty(), "Formatted text should not be empty");
+    assert!(
+        formatted.contains("lib.rs") || formatted.contains("src"),
+        "Formatted text should contain file information"
+    );
+}
+
+#[test]
+fn test_tool_metadata_title_and_schema() {
+    // This test verifies that the output schema is properly defined
+    // by checking that the analyze output structs serialize to valid JSON
+    // that matches the expected schema structure
+
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create a simple Rust file
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "pub fn test() {}").unwrap();
+
+    // Analyze the directory to get an AnalysisOutput
+    let output = analyze_directory(root, None).unwrap();
+
+    // Serialize to JSON (this is what would be in structured_content)
+    let serialized = serde_json::to_value(&output).expect("Failed to serialize output");
+
+    // Verify the serialized output matches the expected schema structure
+    let obj = serialized.as_object().expect("Should be a JSON object");
+
+    // Verify required fields from the schema
+    assert!(
+        obj.contains_key("formatted"),
+        "Output should contain 'formatted' field"
+    );
+    assert!(
+        obj.contains_key("files"),
+        "Output should contain 'files' field"
+    );
+
+    // Verify the structure matches the schema definition
+    let formatted = obj.get("formatted").expect("formatted field should exist");
+    assert!(formatted.is_string(), "formatted field should be a string");
+
+    let files = obj.get("files").expect("files field should exist");
+    assert!(files.is_array(), "files field should be an array");
+
+    // Verify next_cursor is either absent (skipped if None) or a string
+    if let Some(next_cursor) = obj.get("next_cursor") {
+        assert!(
+            next_cursor.is_null() || next_cursor.is_string(),
+            "next_cursor should be null or string"
+        );
+    }
+}
