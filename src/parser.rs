@@ -4,6 +4,7 @@ use crate::types::{
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use thiserror::Error;
 use tracing::instrument;
 use tree_sitter::{Node, Parser, Query, QueryCursor, StreamingIterator};
@@ -18,6 +19,116 @@ pub enum ParserError {
     InvalidUtf8,
     #[error("Query error: {0}")]
     QueryError(String),
+}
+
+/// Compiled tree-sitter queries for a language.
+/// Stores all query types: mandatory (element, call) and optional (import, impl, reference).
+struct CompiledQueries {
+    element: Query,
+    call: Query,
+    import: Option<Query>,
+    impl_block: Option<Query>,
+    reference: Option<Query>,
+}
+
+/// Build compiled queries for a given language.
+fn build_compiled_queries(
+    lang_info: &crate::languages::LanguageInfo,
+) -> Result<CompiledQueries, ParserError> {
+    let element = Query::new(&lang_info.language, lang_info.element_query).map_err(|e| {
+        ParserError::QueryError(format!(
+            "Failed to compile element query for {}: {}",
+            lang_info.name, e
+        ))
+    })?;
+
+    let call = Query::new(&lang_info.language, lang_info.call_query).map_err(|e| {
+        ParserError::QueryError(format!(
+            "Failed to compile call query for {}: {}",
+            lang_info.name, e
+        ))
+    })?;
+
+    let import = if let Some(import_query_str) = lang_info.import_query {
+        Some(
+            Query::new(&lang_info.language, import_query_str).map_err(|e| {
+                ParserError::QueryError(format!(
+                    "Failed to compile import query for {}: {}",
+                    lang_info.name, e
+                ))
+            })?,
+        )
+    } else {
+        None
+    };
+
+    let impl_block = if let Some(impl_query_str) = lang_info.impl_query {
+        Some(
+            Query::new(&lang_info.language, impl_query_str).map_err(|e| {
+                ParserError::QueryError(format!(
+                    "Failed to compile impl query for {}: {}",
+                    lang_info.name, e
+                ))
+            })?,
+        )
+    } else {
+        None
+    };
+
+    let reference = if let Some(ref_query_str) = lang_info.reference_query {
+        Some(Query::new(&lang_info.language, ref_query_str).map_err(|e| {
+            ParserError::QueryError(format!(
+                "Failed to compile reference query for {}: {}",
+                lang_info.name, e
+            ))
+        })?)
+    } else {
+        None
+    };
+
+    Ok(CompiledQueries {
+        element,
+        call,
+        import,
+        impl_block,
+        reference,
+    })
+}
+
+/// Initialize the query cache with compiled queries for all supported languages.
+fn init_query_cache() -> HashMap<&'static str, CompiledQueries> {
+    let supported_languages = ["rust", "python", "typescript", "tsx", "go", "java"];
+    let mut cache = HashMap::new();
+
+    for lang_name in &supported_languages {
+        if let Some(lang_info) = get_language_info(lang_name) {
+            match build_compiled_queries(&lang_info) {
+                Ok(compiled) => {
+                    cache.insert(*lang_name, compiled);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to compile queries for language {}: {}",
+                        lang_name,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    cache
+}
+
+/// Lazily initialized cache of compiled queries per language.
+static QUERY_CACHE: LazyLock<HashMap<&'static str, CompiledQueries>> =
+    LazyLock::new(init_query_cache);
+
+/// Get compiled queries for a language from the cache.
+fn get_compiled_queries(language: &str) -> Result<&'static CompiledQueries, ParserError> {
+    QUERY_CACHE
+        .get(language)
+        .ok_or_else(|| ParserError::UnsupportedLanguage(language.to_string()))
 }
 
 thread_local! {
@@ -44,17 +155,16 @@ impl ElementExtractor {
                 .ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))
         })?;
 
-        let query = Query::new(&lang_info.language, lang_info.element_query)
-            .map_err(|e| ParserError::QueryError(e.to_string()))?;
+        let compiled = get_compiled_queries(language)?;
 
         let mut cursor = QueryCursor::new();
         let mut function_count = 0;
         let mut class_count = 0;
 
-        let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+        let mut matches = cursor.matches(&compiled.element, tree.root_node(), source.as_bytes());
         while let Some(mat) = matches.next() {
             for capture in mat.captures {
-                let capture_name = query.capture_names()[capture.index as usize];
+                let capture_name = compiled.element.capture_names()[capture.index as usize];
                 match capture_name {
                     "function" => function_count += 1,
                     "class" => class_count += 1,
@@ -251,19 +361,18 @@ impl SemanticExtractor {
             .transpose()?;
 
         // Extract functions and classes
-        let element_query = Query::new(&lang_info.language, lang_info.element_query)
-            .map_err(|e| ParserError::QueryError(e.to_string()))?;
+        let compiled = get_compiled_queries(language)?;
         let mut cursor = QueryCursor::new();
         if let Some(depth) = max_depth {
             cursor.set_max_start_depth(Some(depth));
         }
 
-        let mut matches = cursor.matches(&element_query, tree.root_node(), source.as_bytes());
+        let mut matches = cursor.matches(&compiled.element, tree.root_node(), source.as_bytes());
         let mut seen_functions = std::collections::HashSet::new();
 
         while let Some(mat) = matches.next() {
             for capture in mat.captures {
-                let capture_name = element_query.capture_names()[capture.index as usize];
+                let capture_name = compiled.element.capture_names()[capture.index as usize];
                 let node = capture.node;
 
                 match capture_name {
@@ -317,17 +426,15 @@ impl SemanticExtractor {
         }
 
         // Extract calls
-        let call_query = Query::new(&lang_info.language, lang_info.call_query)
-            .map_err(|e| ParserError::QueryError(e.to_string()))?;
         let mut cursor = QueryCursor::new();
         if let Some(depth) = max_depth {
             cursor.set_max_start_depth(Some(depth));
         }
 
-        let mut matches = cursor.matches(&call_query, tree.root_node(), source.as_bytes());
+        let mut matches = cursor.matches(&compiled.call, tree.root_node(), source.as_bytes());
         while let Some(mat) = matches.next() {
             for capture in mat.captures {
-                let capture_name = call_query.capture_names()[capture.index as usize];
+                let capture_name = compiled.call.capture_names()[capture.index as usize];
                 if capture_name == "call" {
                     let node = capture.node;
                     let call_name = source[node.start_byte()..node.end_byte()].to_string();
@@ -358,15 +465,13 @@ impl SemanticExtractor {
         }
 
         // Extract imports
-        if let Some(import_query_str) = lang_info.import_query {
-            let import_query = Query::new(&lang_info.language, import_query_str)
-                .map_err(|e| ParserError::QueryError(e.to_string()))?;
+        if let Some(ref import_query) = compiled.import {
             let mut cursor = QueryCursor::new();
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
 
-            let mut matches = cursor.matches(&import_query, tree.root_node(), source.as_bytes());
+            let mut matches = cursor.matches(import_query, tree.root_node(), source.as_bytes());
             while let Some(mat) = matches.next() {
                 for capture in mat.captures {
                     let capture_name = import_query.capture_names()[capture.index as usize];
@@ -380,15 +485,13 @@ impl SemanticExtractor {
         }
 
         // Populate class methods from impl blocks
-        if let Some(impl_query_str) = lang_info.impl_query {
-            let impl_query = Query::new(&lang_info.language, impl_query_str)
-                .map_err(|e| ParserError::QueryError(e.to_string()))?;
+        if let Some(ref impl_query) = compiled.impl_block {
             let mut cursor = QueryCursor::new();
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
 
-            let mut matches = cursor.matches(&impl_query, tree.root_node(), source.as_bytes());
+            let mut matches = cursor.matches(impl_query, tree.root_node(), source.as_bytes());
             while let Some(mat) = matches.next() {
                 let mut impl_type_name = String::new();
                 let mut method_name = String::new();
@@ -441,16 +544,14 @@ impl SemanticExtractor {
         }
 
         // Extract references with line numbers
-        if let Some(ref_query_str) = lang_info.reference_query {
-            let ref_query = Query::new(&lang_info.language, ref_query_str)
-                .map_err(|e| ParserError::QueryError(e.to_string()))?;
+        if let Some(ref ref_query) = compiled.reference {
             let mut cursor = QueryCursor::new();
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
 
             let mut seen_refs = std::collections::HashSet::new();
-            let mut matches = cursor.matches(&ref_query, tree.root_node(), source.as_bytes());
+            let mut matches = cursor.matches(ref_query, tree.root_node(), source.as_bytes());
             while let Some(mat) = matches.next() {
                 for capture in mat.captures {
                     let capture_name = ref_query.capture_names()[capture.index as usize];
