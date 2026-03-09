@@ -1,0 +1,314 @@
+{
+  "experiment": "v5-benchmark",
+  "conditions": {
+    "A-control": "developer__analyze (goose built-in)",
+    "B-treatment": "code-analyze-mcp__analyze with rg-blocking constraint"
+  },
+  "model": "claude-haiku-4-5",
+  "temperature": 0.5,
+  "target_repo": "lsd-rs/lsd",
+  "tool_isolation_verified": true,
+  "blinding": {
+    "method": "Random shuffle with seed=124, condition labels stripped before scoring",
+    "mapping": {
+      "R01": "B5",
+      "R02": "B1",
+      "R03": "B2",
+      "R04": "A3",
+      "R05": "A4",
+      "R06": "B3",
+      "R07": "A2",
+      "R08": "A1",
+      "R09": "B4",
+      "R10": "A5"
+    }
+  },
+  "rubric": {
+    "structural_accuracy": {
+      "3": "Correctly identifies all major modules, responsibilities, and data types; traces match codebase structure",
+      "2": "Identifies most modules and responsibilities; minor omissions or generalization errors",
+      "1": "Partial module identification; significant structural gaps or confusions",
+      "0": "Misses major components; fundamentally incorrect structure"
+    },
+    "cross_module_tracing": {
+      "3": "Complete cross-module trace with intermediate types; call chains are accurate and detailed",
+      "2": "Traces key call chains; minor gaps or simplifications in type flow",
+      "1": "Partial trace; missing intermediate steps or types",
+      "0": "No meaningful trace or entirely incorrect"
+    },
+    "approach_quality": {
+      "3": "Well-reasoned change proposal; identifies all affected files, new types, and integration points; realistic risks",
+      "2": "Reasonable proposal; most files and types identified; risks partially addressed",
+      "1": "Incomplete or partially reasoned proposal; missing files or risk analysis",
+      "0": "Superficial or incorrect proposal; major gaps"
+    },
+    "tool_efficiency": {
+      "3": "5 or fewer analysis tool calls; focused exploration, clear path to synthesis",
+      "2": "6-10 analysis tool calls; somewhat exploratory but reaches conclusions",
+      "1": "11-20 analysis tool calls; extensive exploration; delayed synthesis",
+      "0": "More than 20 analysis tool calls; inefficient, redundant, exploration-heavy"
+    }
+  },
+  "per_run_scores": {
+    "A1": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 10
+    },
+    "A2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 11
+    },
+    "A3": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 8
+    },
+    "A4": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 11
+    },
+    "A5": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 9
+    },
+    "B1": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 10
+    },
+    "B2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 11
+    },
+    "B3": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 9
+    },
+    "B4": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 10
+    },
+    "B5": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 10
+    }
+  },
+  "v3_baselines": {
+    "A_condition": {
+      "per_run": {
+        "A1": 10,
+        "A2": 9,
+        "A3": 10,
+        "A4": 10,
+        "A5": 9
+      },
+      "median": 10,
+      "range": [
+        9,
+        10
+      ],
+      "efficiency_median_calls": 14
+    },
+    "B_condition": {
+      "per_run": {
+        "B1": 10,
+        "B2": 11,
+        "B3": 9,
+        "B4": 9,
+        "B5": 10
+      },
+      "median": 10,
+      "range": [
+        9,
+        11
+      ],
+      "efficiency_median_calls": 18
+    }
+  },
+  "cross_version_comparisons": {
+    "v5B_vs_v3B": {
+      "quality_delta": 0,
+      "efficiency_delta_tokens": null,
+      "efficiency_delta_wall_time": null,
+      "efficiency_delta_calls": -4,
+      "optimization_achieved": true,
+      "notes": "v5B median quality=10, v3B=10; v5B median calls=14, v3B=18"
+    },
+    "v5B_vs_v3A": {
+      "quality_gap": 0,
+      "efficiency_gap_tokens": null,
+      "efficiency_gap_calls": 0,
+      "gap_closed": true,
+      "notes": "v5B median quality=10, v3A=10; v5B median calls=14, v3A=14"
+    }
+  },
+  "efficiency": {
+    "per_run": {
+      "A1": {
+        "tokens": 27203,
+        "wall_seconds": 74,
+        "analyze_calls": 8,
+        "shell_calls": 7,
+        "editor_calls": 1,
+        "total_calls": 16
+      },
+      "A2": {
+        "tokens": 26667,
+        "wall_seconds": 75,
+        "analyze_calls": 9,
+        "shell_calls": 4,
+        "editor_calls": 1,
+        "total_calls": 14
+      },
+      "A3": {
+        "tokens": 21969,
+        "wall_seconds": 70,
+        "analyze_calls": 12,
+        "shell_calls": 2,
+        "editor_calls": 1,
+        "total_calls": 15
+      },
+      "A4": {
+        "tokens": 25818,
+        "wall_seconds": 68,
+        "analyze_calls": 10,
+        "shell_calls": 4,
+        "editor_calls": 1,
+        "total_calls": 15
+      },
+      "A5": {
+        "tokens": 22150,
+        "wall_seconds": 70,
+        "analyze_calls": 9,
+        "shell_calls": 8,
+        "editor_calls": 1,
+        "total_calls": 18
+      },
+      "B1": {
+        "tokens": 29039,
+        "wall_seconds": 61,
+        "analyze_calls": 12,
+        "shell_calls": 1,
+        "editor_calls": 1,
+        "total_calls": 14
+      },
+      "B2": {
+        "tokens": 31620,
+        "wall_seconds": 79,
+        "analyze_calls": 10,
+        "shell_calls": 0,
+        "editor_calls": 1,
+        "total_calls": 11
+      },
+      "B3": {
+        "tokens": 31836,
+        "wall_seconds": 70,
+        "analyze_calls": 11,
+        "shell_calls": 0,
+        "editor_calls": 1,
+        "total_calls": 12
+      },
+      "B4": {
+        "tokens": 30287,
+        "wall_seconds": 73,
+        "analyze_calls": 11,
+        "shell_calls": 1,
+        "editor_calls": 1,
+        "total_calls": 14
+      },
+      "B5": {
+        "tokens": 33046,
+        "wall_seconds": 85,
+        "analyze_calls": 13,
+        "shell_calls": 1,
+        "editor_calls": 1,
+        "total_calls": 16
+      }
+    },
+    "statistics": {
+      "tokens": {
+        "U": 0.0,
+        "z": -2.611,
+        "p": 0.0079,
+        "r": 1.0,
+        "significant": true,
+        "A_median": 25818,
+        "B_median": 31620
+      },
+      "wall_time": {
+        "U": 10.0,
+        "z": -0.522,
+        "p": 0.6723,
+        "r": 0.2,
+        "significant": false,
+        "A_median": 70,
+        "B_median": 73
+      },
+      "total_calls": {
+        "U": 20.5,
+        "z": 1.671,
+        "p": 0.1105,
+        "r": -0.64,
+        "significant": false,
+        "A_median": 15,
+        "B_median": 14
+      },
+      "analyze_calls": {
+        "U": 4.0,
+        "z": -1.776,
+        "p": 0.0907,
+        "r": 0.68,
+        "significant": false,
+        "A_median": 9,
+        "B_median": 11
+      },
+      "shell_calls": {
+        "U": 25.0,
+        "z": 2.611,
+        "p": 0.0107,
+        "r": -1.0,
+        "significant": true,
+        "A_median": 4,
+        "B_median": 1
+      }
+    },
+    "derived": {
+      "tokens_per_quality_point": {
+        "A_median": 2582,
+        "B_median": 3162
+      },
+      "quality_per_tool_call": {
+        "A_median": 0.67,
+        "B_median": 0.71
+      }
+    }
+  }
+}

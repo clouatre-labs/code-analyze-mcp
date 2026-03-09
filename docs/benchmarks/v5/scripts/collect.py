@@ -53,26 +53,49 @@ def get_session_messages(conn: sqlite3.Connection, session_id: str) -> list:
 def extract_tool_calls(messages: list) -> Dict[str, int]:
     """
     Extract tool calls from message content and count by tool name.
-    
-    Looks for tool_use blocks in assistant messages.
+
+    Handles two message formats:
+    - Anthropic-style: {"type": "tool_use", "name": "tool_name", ...}
+    - Goose-style: {"type": "toolRequest", "toolCall": {"value": {"name": "tool_name"}},
+                     "_meta": {"goose_extension": "ext_name"}}
+
+    For goose-style, the canonical tool name is "{extension}__{name}" when extension
+    differs from name, matching how goose exposes tools to the model.
     """
     counts = {}
-    
+
     for msg in messages:
         if msg['role'] != 'assistant':
             continue
-        
+
         try:
             content = json.loads(msg['content_json'])
         except (json.JSONDecodeError, TypeError):
             continue
-        
+
         if isinstance(content, list):
             for block in content:
-                if isinstance(block, dict) and block.get('type') == 'tool_use':
+                if not isinstance(block, dict):
+                    continue
+
+                tool_name = None
+
+                if block.get('type') == 'tool_use':
                     tool_name = block.get('name', 'unknown')
+                elif block.get('type') == 'toolRequest':
+                    tool_call = block.get('toolCall', {})
+                    value = tool_call.get('value', {}) if isinstance(tool_call, dict) else {}
+                    name = value.get('name', 'unknown')
+                    meta = block.get('_meta', {})
+                    ext = meta.get('goose_extension', '')
+                    if ext and ext != name:
+                        tool_name = f'{ext}__{name}'
+                    else:
+                        tool_name = name
+
+                if tool_name:
                     counts[tool_name] = counts.get(tool_name, 0) + 1
-    
+
     return counts
 
 
@@ -101,28 +124,39 @@ def calculate_wall_time(messages: list) -> Optional[int]:
 
 def categorize_tool_calls(tool_counts: Dict[str, int]) -> Dict[str, int]:
     """
-    Categorize tools into analyze_calls, shell_calls, editor_calls.
-    
-    Returns dict with keys: analyze_calls, shell_calls, editor_calls, total_calls
+    Categorize tools into analyze_calls, shell_calls, editor_calls, tree_calls.
+
+    Handles goose-style names like:
+    - analyze, code-analyze-mcp__code-analyze-mcp__analyze -> analyze
+    - developer__shell, shell -> shell
+    - developer__write, developer__edit, write, edit -> editor
+    - developer__tree, tree -> tree
+
+    Returns dict with keys: analyze_calls, shell_calls, editor_calls, tree_calls, total_calls
     """
     analyze_calls = 0
     shell_calls = 0
     editor_calls = 0
-    
+    tree_calls = 0
+
     for tool_name, count in tool_counts.items():
-        if 'analyze' in tool_name.lower():
+        base = tool_name.rsplit('__', 1)[-1] if '__' in tool_name else tool_name
+        if 'analyze' in base.lower():
             analyze_calls += count
-        elif 'shell' in tool_name.lower():
+        elif base == 'shell':
             shell_calls += count
-        elif 'editor' in tool_name.lower() or 'text_editor' in tool_name.lower():
+        elif base in ('write', 'edit', 'text_editor'):
             editor_calls += count
-    
-    total = analyze_calls + shell_calls + editor_calls
-    
+        elif base == 'tree':
+            tree_calls += count
+
+    total = analyze_calls + shell_calls + editor_calls + tree_calls
+
     return {
         'analyze_calls': analyze_calls,
         'shell_calls': shell_calls,
         'editor_calls': editor_calls,
+        'tree_calls': tree_calls,
         'total_calls': total
     }
 

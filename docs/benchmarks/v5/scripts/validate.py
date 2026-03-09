@@ -62,32 +62,48 @@ def get_session_messages(conn: sqlite3.Connection, session_id: str) -> List[Dict
 def extract_tool_calls(messages: List[Dict]) -> List[Dict]:
     """
     Extract tool calls from message content.
-    
-    Messages with role 'assistant' contain tool_use blocks:
-    {
-        "content": [
-            {"type": "tool_use", "name": "tool_name", "input": {...}},
-            ...
-        ]
-    }
-    
-    Returns list of dicts: [{"tool": "name", "input": {...}}, ...]
+
+    Handles two message formats:
+    - Anthropic-style: {"type": "tool_use", "name": "tool_name", "input": {...}}
+    - Goose-style: {"type": "toolRequest", "toolCall": {"value": {"name": "tool_name", "arguments": {...}}},
+                     "_meta": {"goose_extension": "ext_name"}}
+
+    Returns list of dicts: [{"tool": "canonical_name", "input": {...}}, ...]
+    The canonical name uses "{extension}__{name}" when extension differs from name.
     """
     tools = []
-    
+
     for msg in messages:
         if msg['role'] != 'assistant':
             continue
-        
+
         content = msg.get('content', [])
         if isinstance(content, list):
             for block in content:
-                if isinstance(block, dict) and block.get('type') == 'tool_use':
+                if not isinstance(block, dict):
+                    continue
+
+                if block.get('type') == 'tool_use':
                     tools.append({
                         'tool': block.get('name', 'unknown'),
                         'input': block.get('input', {})
                     })
-    
+                elif block.get('type') == 'toolRequest':
+                    tool_call = block.get('toolCall', {})
+                    value = tool_call.get('value', {}) if isinstance(tool_call, dict) else {}
+                    name = value.get('name', 'unknown')
+                    arguments = value.get('arguments', {})
+                    meta = block.get('_meta', {})
+                    ext = meta.get('goose_extension', '')
+                    if ext and ext != name:
+                        canonical = f'{ext}__{name}'
+                    else:
+                        canonical = name
+                    tools.append({
+                        'tool': canonical,
+                        'input': arguments
+                    })
+
     return tools
 
 
@@ -124,15 +140,22 @@ def has_rg_structural_patterns(tools: List[Dict]) -> bool:
 def validate_condition_a(tools_by_name: Dict[str, int], tools_list: List[Dict]) -> Tuple[bool, List[str]]:
     """
     Validate Condition A:
-    - developer__analyze must be used
-    - code-analyze-mcp__analyze must NOT be used
+    - Native analyze must be used (goose name: "analyze" with extension "analyze")
+    - code-analyze-mcp must NOT be used
+    
+    Goose canonical names:
+    - Native analyze: "analyze" (extension == name, no prefix)
+    - MCP analyze: "code-analyze-mcp__code-analyze-mcp__analyze" or contains "code-analyze-mcp"
     """
     issues = []
     
-    # Check for developer__analyze
-    has_analyze = any('analyze' in name and 'code-analyze-mcp' not in name for name in tools_by_name)
-    if not has_analyze:
-        issues.append("ERROR: developer__analyze not used (required for Condition A)")
+    # Check for native analyze (name is "analyze" without code-analyze-mcp prefix)
+    has_native = any(
+        name == 'analyze' or (name.endswith('__analyze') and 'code-analyze-mcp' not in name)
+        for name in tools_by_name
+    )
+    if not has_native:
+        issues.append("ERROR: native analyze not used (required for Condition A)")
     
     # Check for code-analyze-mcp
     has_mcp = any('code-analyze-mcp' in name for name in tools_by_name)
@@ -146,9 +169,13 @@ def validate_condition_a(tools_by_name: Dict[str, int], tools_list: List[Dict]) 
 def validate_condition_b(tools_by_name: Dict[str, int], tools_list: List[Dict]) -> Tuple[bool, List[str]]:
     """
     Validate Condition B:
-    - code-analyze-mcp__analyze must be used
-    - developer__analyze must NOT be used
+    - code-analyze-mcp must be used
+    - Native analyze must NOT be used (should be disabled in config)
     - rg structural patterns must NOT be present
+    
+    Goose canonical names:
+    - Native analyze: "analyze" (extension == name, no prefix)
+    - MCP analyze: contains "code-analyze-mcp"
     """
     issues = []
     
@@ -157,10 +184,13 @@ def validate_condition_b(tools_by_name: Dict[str, int], tools_list: List[Dict]) 
     if not has_mcp:
         issues.append("ERROR: code-analyze-mcp__analyze not used (required for Condition B)")
     
-    # Check for developer__analyze
-    has_analyze = any('developer__analyze' in name for name in tools_by_name)
-    if has_analyze:
-        issues.append("ERROR: developer__analyze used (forbidden for Condition B; native extension should be disabled)")
+    # Check for native analyze (name == "analyze" without code-analyze-mcp)
+    has_native = any(
+        name == 'analyze' and 'code-analyze-mcp' not in name
+        for name in tools_by_name
+    )
+    if has_native:
+        issues.append("ERROR: native analyze used (forbidden for Condition B; native extension should be disabled)")
     
     # Check for rg structural patterns
     if has_rg_structural_patterns(tools_list):
