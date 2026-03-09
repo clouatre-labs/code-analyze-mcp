@@ -1,0 +1,252 @@
+{
+  "experiment": "v5-benchmark",
+  "conditions": {
+    "A-control": "developer__analyze (goose built-in)",
+    "B-treatment": "code-analyze-mcp__analyze with rg-blocking constraint"
+  },
+  "model": "claude-haiku-4-5",
+  "temperature": 0.5,
+  "target_repo": "lsd-rs/lsd",
+  "tool_isolation_verified": false,
+  "blinding": {
+    "method": "Random shuffle with seed=124, condition labels stripped before scoring",
+    "mapping": {
+      "R01": null,
+      "R02": null,
+      "R03": null,
+      "R04": null,
+      "R05": null,
+      "R06": null,
+      "R07": null,
+      "R08": null,
+      "R09": null,
+      "R10": null
+    }
+  },
+  "rubric": {
+    "structural_accuracy": {
+      "3": "Correctly identifies all major modules, responsibilities, and data types; traces match codebase structure",
+      "2": "Identifies most modules and responsibilities; minor omissions or generalization errors",
+      "1": "Partial module identification; significant structural gaps or confusions",
+      "0": "Misses major components; fundamentally incorrect structure"
+    },
+    "cross_module_tracing": {
+      "3": "Complete cross-module trace with intermediate types; call chains are accurate and detailed",
+      "2": "Traces key call chains; minor gaps or simplifications in type flow",
+      "1": "Partial trace; missing intermediate steps or types",
+      "0": "No meaningful trace or entirely incorrect"
+    },
+    "approach_quality": {
+      "3": "Well-reasoned change proposal; identifies all affected files, new types, and integration points; realistic risks",
+      "2": "Reasonable proposal; most files and types identified; risks partially addressed",
+      "1": "Incomplete or partially reasoned proposal; missing files or risk analysis",
+      "0": "Superficial or incorrect proposal; major gaps"
+    },
+    "tool_efficiency": {
+      "3": "5 or fewer analysis tool calls; focused exploration, clear path to synthesis",
+      "2": "6-10 analysis tool calls; somewhat exploratory but reaches conclusions",
+      "1": "11-20 analysis tool calls; extensive exploration; delayed synthesis",
+      "0": "More than 20 analysis tool calls; inefficient, redundant, exploration-heavy"
+    }
+  },
+  "per_run_scores": {
+    "A1": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "A2": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "A3": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "A4": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "A5": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B1": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B2": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B3": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B4": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    },
+    "B5": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "total": null
+    }
+  },
+  "v3_baselines": {
+    "A_condition": {
+      "per_run": {
+        "A1": 10,
+        "A2": 9,
+        "A3": 10,
+        "A4": 10,
+        "A5": 9
+      },
+      "median": 10,
+      "range": [9, 10],
+      "efficiency_median_calls": 14
+    },
+    "B_condition": {
+      "per_run": {
+        "B1": 10,
+        "B2": 11,
+        "B3": 9,
+        "B4": 9,
+        "B5": 10
+      },
+      "median": 10,
+      "range": [9, 11],
+      "efficiency_median_calls": 18
+    }
+  },
+  "cross_version_comparisons": {
+    "v5B_vs_v3B": {
+      "quality_delta": null,
+      "efficiency_delta_tokens": null,
+      "efficiency_delta_wall_time": null,
+      "efficiency_delta_calls": null,
+      "optimization_achieved": null,
+      "notes": "Measure whether v5B (with rg-blocking constraint) maintains v3B quality while reducing tool calls"
+    },
+    "v5B_vs_v3A": {
+      "quality_gap": null,
+      "efficiency_gap_tokens": null,
+      "efficiency_gap_calls": null,
+      "gap_closed": null,
+      "notes": "Measure whether v5B (code-analyze-mcp-focused) can match v3A (native analyze) baseline"
+    }
+  },
+  "efficiency": {
+    "per_run": {
+      "A1": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "A2": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "A3": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "A4": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "A5": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B1": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B2": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B3": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B4": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      },
+      "B5": {
+        "tokens": null,
+        "wall_seconds": null,
+        "analyze_calls": null,
+        "shell_calls": null,
+        "editor_calls": null,
+        "total_calls": null
+      }
+    },
+    "statistics": null
+  }
+}
