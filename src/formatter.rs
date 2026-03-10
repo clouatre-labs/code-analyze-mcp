@@ -383,6 +383,50 @@ pub fn format_file_details(
     output
 }
 
+/// Format chains as a tree-indented output, grouped by depth-1 symbol.
+/// Groups chains by their first symbol (depth-1), deduplicates and sorts depth-2 children,
+/// then renders with 2-space indentation using the provided arrow.
+/// focus_symbol is the name of the depth-0 symbol (focus point) to prepend on depth-1 lines.
+///
+/// Indentation rules:
+/// - Depth-1: `  {focus} {arrow} {parent}` (2-space indent)
+/// - Depth-2: `    {arrow} {child}` (4-space indent)
+/// - Empty:   `  (none)` (2-space indent)
+fn format_chains_as_tree(chains: &[(&str, &str)], arrow: &str, focus_symbol: &str) -> String {
+    use std::collections::BTreeMap;
+
+    if chains.is_empty() {
+        return "  (none)\n".to_string();
+    }
+
+    let mut output = String::new();
+
+    // Group chains by depth-1 symbol
+    let mut groups: BTreeMap<String, std::collections::BTreeSet<String>> = BTreeMap::new();
+    for (parent, child) in chains {
+        // Only insert non-empty children into the set
+        if !child.is_empty() {
+            groups
+                .entry(parent.to_string())
+                .or_default()
+                .insert(child.to_string());
+        } else {
+            // Ensure parent is in groups even if no children
+            groups.entry(parent.to_string()).or_default();
+        }
+    }
+
+    // Render grouped tree
+    for (parent, children) in groups {
+        let _ = writeln!(output, "  {} {} {}", focus_symbol, arrow, parent);
+        for child in children {
+            let _ = writeln!(output, "    {} {}", arrow, child);
+        }
+    }
+
+    output
+}
+
 /// Format focused symbol analysis with call graph.
 #[instrument(skip_all)]
 pub fn format_focused(
@@ -417,41 +461,59 @@ pub fn format_focused(
     // CALLERS section - who calls this symbol
     let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
     output.push_str("CALLERS:\n");
-    if incoming_chains.is_empty() {
+    let incoming_refs: Vec<_> = incoming_chains
+        .iter()
+        .filter_map(|chain| {
+            if chain.chain.len() >= 2 {
+                Some((chain.chain[0].0.as_str(), chain.chain[1].0.as_str()))
+            } else if chain.chain.len() == 1 {
+                Some((chain.chain[0].0.as_str(), ""))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if incoming_refs.is_empty() {
         output.push_str("  (none)\n");
     } else {
-        for chain in &incoming_chains {
-            let chain_str = chain
-                .chain
-                .iter()
-                .map(|(name, _, _)| name.as_str())
-                .collect::<Vec<_>>()
-                .join(" <- ");
-            output.push_str(&format!("  {}\n", chain_str));
-        }
+        output.push_str(&format_chains_as_tree(&incoming_refs, "<-", symbol));
     }
 
     // CALLEES section - what this symbol calls
     let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
     output.push_str("CALLEES:\n");
-    if outgoing_chains.is_empty() {
+    let outgoing_refs: Vec<_> = outgoing_chains
+        .iter()
+        .filter_map(|chain| {
+            if chain.chain.len() >= 2 {
+                Some((chain.chain[0].0.as_str(), chain.chain[1].0.as_str()))
+            } else if chain.chain.len() == 1 {
+                Some((chain.chain[0].0.as_str(), ""))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if outgoing_refs.is_empty() {
         output.push_str("  (none)\n");
     } else {
-        for chain in &outgoing_chains {
-            let chain_str = chain
-                .chain
-                .iter()
-                .map(|(name, _, _)| name.as_str())
-                .collect::<Vec<_>>()
-                .join(" -> ");
-            output.push_str(&format!("  {}\n", chain_str));
-        }
+        output.push_str(&format_chains_as_tree(&outgoing_refs, "->", symbol));
     }
 
     // STATISTICS section
     output.push_str("STATISTICS:\n");
-    let incoming_count = incoming_chains.len();
-    let outgoing_count = outgoing_chains.len();
+    let incoming_count = incoming_refs
+        .iter()
+        .map(|(p, _)| p)
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    let outgoing_count = outgoing_refs
+        .iter()
+        .map(|(p, _)| p)
+        .collect::<std::collections::HashSet<_>>()
+        .len();
     output.push_str(&format!("  Incoming calls: {}\n", incoming_count));
     output.push_str(&format!("  Outgoing calls: {}\n", outgoing_count));
 

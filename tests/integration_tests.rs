@@ -1,7 +1,8 @@
 mod fixtures;
 
 use code_analyze_mcp::analyze::{
-    AnalyzeError, analyze_directory, analyze_directory_with_progress, analyze_file, determine_mode,
+    AnalyzeError, analyze_directory, analyze_directory_with_progress, analyze_file,
+    analyze_focused, determine_mode,
 };
 use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
 use code_analyze_mcp::completion::{path_completions, symbol_completions};
@@ -2245,4 +2246,123 @@ fn test_tool_metadata_title_and_schema() {
             "next_cursor should be null or string"
         );
     }
+}
+
+#[test]
+fn test_format_focused_tree_indent_callees() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a crate with multi-depth call chains
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn main_func() {
+    helper_a();
+    helper_b();
+}
+
+pub fn helper_a() {
+    leaf_1();
+    leaf_2();
+}
+
+pub fn helper_b() {
+    leaf_1();
+}
+
+pub fn leaf_1() {}
+pub fn leaf_2() {}
+"#,
+    )
+    .unwrap();
+
+    // Act: Format focused output with depth 2
+    let output = analyze_focused(root, "main_func", 1, None, None).unwrap();
+
+    // Assert: Verify tree-indented CALLEES section with proper grouping
+    assert!(
+        output.formatted.contains("CALLEES:"),
+        "Should have CALLEES section"
+    );
+
+    // Check that callees are grouped under parent symbols
+    let lines: Vec<&str> = output.formatted.lines().collect();
+
+    // Find CALLEES section and verify it has properly indented entries
+    if let Some(callees_idx) = lines.iter().position(|l| l.contains("CALLEES:")) {
+        let callees_lines: Vec<&str> = lines[callees_idx + 1..]
+            .iter()
+            .take_while(|l| !l.is_empty() && !l.starts_with("STATISTICS:"))
+            .copied()
+            .collect();
+
+        // Should have depth-1 entries with focus symbol prefix: "  main_func -> helper_a"
+        assert!(
+            callees_lines
+                .iter()
+                .any(|l| l.contains("main_func -> helper_a")),
+            "Should have depth-1 entry with focus symbol and arrow: 'main_func -> helper_a'"
+        );
+
+        // Should have depth-2 children indented with 4 spaces: "    -> leaf_1"
+        assert!(
+            callees_lines
+                .iter()
+                .any(|l| l.trim().starts_with("-> leaf_1")),
+            "Should have depth-2 child with indentation: '    -> leaf_1'"
+        );
+
+        // Should have depth-2 children: "    -> leaf_2"
+        assert!(
+            callees_lines
+                .iter()
+                .any(|l| l.trim().starts_with("-> leaf_2")),
+            "Should have depth-2 child with indentation: '    -> leaf_2'"
+        );
+
+        // Should have second parent: "  main_func -> helper_b"
+        assert!(
+            callees_lines
+                .iter()
+                .any(|l| l.contains("main_func -> helper_b")),
+            "Should have second depth-1 entry: 'main_func -> helper_b'"
+        );
+    }
+}
+
+#[test]
+fn test_format_focused_empty_chains() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create isolated function with no callers or callees
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn isolated() {
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Format focused output for isolated function
+    let output = analyze_focused(root, "isolated", 2, None, None).unwrap();
+
+    // Assert: Both CALLERS and CALLEES should show (none)
+    assert!(
+        output.formatted.contains("CALLERS:"),
+        "Should have CALLERS section"
+    );
+    assert!(
+        output.formatted.contains("CALLEES:"),
+        "Should have CALLEES section"
+    );
+
+    // Verify (none) appears for empty chains
+    let lines: Vec<&str> = output.formatted.lines().collect();
+    let has_none = lines.iter().any(|l| l.trim() == "(none)");
+    assert!(has_none, "Empty chains should render (none)");
 }
