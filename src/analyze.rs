@@ -156,7 +156,7 @@ pub fn analyze_directory_with_progress(
     );
 
     // Format output
-    let formatted = format_structure(&entries, &analysis_results, max_depth);
+    let formatted = format_structure(&entries, &analysis_results, max_depth, Some(root));
 
     Ok(AnalysisOutput {
         formatted,
@@ -222,8 +222,11 @@ pub fn analyze_file(
     // Detect if this is a test file
     let is_test = is_test_file(Path::new(path));
 
+    // Extract parent directory for relative path display
+    let parent_dir = Path::new(path).parent();
+
     // Format output
-    let formatted = format_file_details(path, &semantic, line_count, is_test);
+    let formatted = format_file_details(path, &semantic, line_count, is_test, parent_dir);
 
     tracing::debug!(path = %path, language = %ext, functions = semantic.functions.len(), classes = semantic.classes.len(), imports = semantic.imports.len(), duration_ms = start.elapsed().as_millis() as u64, "file analysis complete");
 
@@ -335,7 +338,7 @@ pub fn analyze_focused_with_progress(
     let graph = CallGraph::build_from_results(analysis_results)?;
 
     // Format output
-    let formatted = format_focused(&graph, &dataflow, focus, follow_depth)?;
+    let formatted = format_focused(&graph, &dataflow, focus, follow_depth, Some(root))?;
 
     Ok(FocusedAnalysisOutput {
         formatted,
