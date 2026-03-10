@@ -2366,3 +2366,173 @@ pub fn isolated() {
     let has_none = lines.iter().any(|l| l.trim() == "(none)");
     assert!(has_none, "Empty chains should render (none)");
 }
+
+#[test]
+fn test_callers_mixed_prod_and_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a crate with mixed production and test callers
+    fs::create_dir(root.join("src")).unwrap();
+    fs::create_dir(root.join("tests")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn target() {}
+
+pub fn prod_caller_a() {
+    target();
+}
+
+pub fn prod_caller_b() {
+    target();
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("tests/test_module.rs"),
+        r#"
+use code_analyze_mcp::*;
+
+#[test]
+fn test_target() {
+    target();
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Format focused output
+    let output = analyze_focused(root, "target", 1, None, None).unwrap();
+
+    // Assert: Production callers in CALLERS section, test summary in CALLERS (test)
+    let lines: Vec<&str> = output.formatted.lines().collect();
+
+    // Find CALLERS section
+    let callers_idx = lines
+        .iter()
+        .position(|l| l.contains("CALLERS:"))
+        .expect("Should have CALLERS section");
+
+    // Verify production callers are shown
+    let callers_content = &lines[callers_idx + 1..];
+    let has_prod_caller = callers_content
+        .iter()
+        .take_while(|l| {
+            !l.starts_with("STATISTICS:") && !l.starts_with("CALLERS (test):") && !l.is_empty()
+        })
+        .any(|l| l.contains("prod_caller_a") || l.contains("prod_caller_b"));
+    assert!(
+        has_prod_caller,
+        "Should have production callers in CALLERS section"
+    );
+
+    // Verify test callers summary line exists
+    let has_test_summary = output.formatted.contains("CALLERS (test):");
+    assert!(has_test_summary, "Should have CALLERS (test): summary line");
+
+    // Verify test summary contains file reference
+    let has_test_file_ref = output.formatted.contains("test_module.rs");
+    assert!(has_test_file_ref, "Test summary should reference test file");
+}
+
+#[test]
+fn test_callers_all_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a crate with only test callers
+    fs::create_dir(root.join("src")).unwrap();
+    fs::create_dir(root.join("tests")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn target() {}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("tests/test_all.rs"),
+        r#"
+use code_analyze_mcp::*;
+
+#[test]
+fn test_target_a() {
+    target();
+}
+
+#[test]
+fn test_target_b() {
+    target();
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Format focused output
+    let output = analyze_focused(root, "target", 1, None, None).unwrap();
+
+    // Assert: CALLERS shows (none), CALLERS (test) shows test summary
+    let lines: Vec<&str> = output.formatted.lines().collect();
+
+    let callers_idx = lines
+        .iter()
+        .position(|l| l.contains("CALLERS:"))
+        .expect("Should have CALLERS section");
+
+    // Check that production callers show (none)
+    let callers_section: Vec<&str> = lines[callers_idx + 1..]
+        .iter()
+        .take_while(|l| !l.starts_with("STATISTICS:") && !l.starts_with("CALLERS (test):"))
+        .copied()
+        .collect();
+
+    let has_none = callers_section.iter().any(|l| l.trim() == "(none)");
+    assert!(has_none, "Production callers should show (none)");
+
+    // Verify test summary exists
+    let has_test_summary = output.formatted.contains("CALLERS (test):");
+    assert!(has_test_summary, "Should have CALLERS (test): summary line");
+}
+
+#[test]
+fn test_callers_all_prod_no_test_line() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a crate with only production callers
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn target() {}
+
+pub fn caller_one() {
+    target();
+}
+
+pub fn caller_two() {
+    target();
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Format focused output
+    let output = analyze_focused(root, "target", 1, None, None).unwrap();
+
+    // Assert: CALLERS section shows callers, no CALLERS (test) line
+    assert!(
+        output.formatted.contains("CALLERS:"),
+        "Should have CALLERS section"
+    );
+    assert!(
+        output.formatted.contains("caller_one") || output.formatted.contains("caller_two"),
+        "Should have production callers"
+    );
+    assert!(
+        !output.formatted.contains("CALLERS (test):"),
+        "Should NOT have CALLERS (test) line with only production callers"
+    );
+}
