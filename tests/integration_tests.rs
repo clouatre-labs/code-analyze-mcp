@@ -2368,6 +2368,58 @@ pub fn isolated() {
 }
 
 #[test]
+fn test_focus_header_includes_counts() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a crate with known call graph for counting
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn main_func() {
+    helper_a();
+}
+
+pub fn helper_a() {
+    helper_b();
+}
+
+pub fn helper_b() {}
+"#,
+    )
+    .unwrap();
+
+    // Act: Format focused output for main_func with depth 2
+    let output = analyze_focused(root, "main_func", 2, None, None).unwrap();
+
+    // Assert: Header should contain counts
+    assert!(
+        output.formatted.starts_with("FOCUS: main_func (1 defs, "),
+        "Header should start with symbol name and def count: {}",
+        output.formatted.lines().next().unwrap()
+    );
+
+    // Verify the exact format: "FOCUS: main_func (1 defs, N callers, N callees)"
+    let first_line = output.formatted.lines().next().unwrap();
+    assert!(
+        first_line.contains("defs,"),
+        "Header should contain 'defs,': {}",
+        first_line
+    );
+    assert!(
+        first_line.contains("callers,"),
+        "Header should contain 'callers,': {}",
+        first_line
+    );
+    assert!(
+        first_line.contains("callees"),
+        "Header should contain 'callees': {}",
+        first_line
+    );
+}
+
+#[test]
 fn test_callers_mixed_prod_and_test() {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
