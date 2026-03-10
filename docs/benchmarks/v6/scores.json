@@ -1,0 +1,265 @@
+{
+  "experiment": "v6-benchmark",
+  "conditions": {
+    "A-control": "developer__analyze (goose built-in)",
+    "B-treatment": "code-analyze-mcp__analyze with rg-blocking constraint + 5 compaction changes"
+  },
+  "model": "claude-haiku-4-5",
+  "temperature": 0.5,
+  "target_repo": "lsd-rs/lsd",
+  "compaction_context": {
+    "goal": "Measure impact of 5 lossless formatting changes on token overhead",
+    "changes": [
+      "#129: Relative paths in all output modes (PR #135)",
+      "#130: Tree-indent callees and callers in focus mode (PR #137)",
+      "#132: Separate test callers into counted summary (PR #139)",
+      "#133: Add summary counts to FOCUS header (PR #140)",
+      "#134: Deduplicate repeated callee chains with (xN) annotation (PR #141)"
+    ],
+    "hypothesis": "Lossless formatting improvements reduce v6B token overhead to <10% above v6A without quality regression"
+  },
+  "tool_isolation_verified": true,
+  "blinding": {
+    "method": "Random shuffle with seed=128, condition labels stripped before scoring",
+    "mapping": {
+      "R01": "A5",
+      "R02": "A3",
+      "R03": "B3",
+      "R04": "B4",
+      "R05": "A1",
+      "R06": "B5",
+      "R07": "A2",
+      "R08": "B1",
+      "R09": "B2",
+      "R10": "A4"
+    }
+  },
+  "v5_baselines": {
+    "conditions": {
+      "A": {
+        "median_total_score": 10,
+        "per_run": {
+          "A1": 10,
+          "A2": 11,
+          "A3": 8,
+          "A4": 11,
+          "A5": 9
+        }
+      },
+      "B": {
+        "median_total_score": 10,
+        "per_run": {
+          "B1": 10,
+          "B2": 11,
+          "B3": 9,
+          "B4": 10,
+          "B5": 10
+        }
+      }
+    },
+    "note": "v5 showed no quality regression (median A=10, median B=10) but 22% token overhead (B tokens / A tokens). v6 tests whether compaction closes this gap."
+  },
+  "rubric": {
+    "structural_accuracy": {
+      "3": "Correctly identifies all major modules, responsibilities, and data types; traces match codebase structure",
+      "2": "Identifies most modules and responsibilities; minor omissions or generalization errors",
+      "1": "Partial module identification; significant structural gaps or confusions",
+      "0": "Misses major components; fundamentally incorrect structure"
+    },
+    "cross_module_tracing": {
+      "3": "Complete cross-module trace with intermediate types; call chains are accurate and detailed",
+      "2": "Traces key call chains; minor gaps or simplifications in type flow",
+      "1": "Partial trace; missing intermediate steps or types",
+      "0": "No meaningful trace or entirely incorrect"
+    },
+    "approach_quality": {
+      "3": "Well-reasoned change proposal; identifies all affected files, new types, and integration points; realistic risks",
+      "2": "Reasonable proposal; most files and types identified; risks partially addressed",
+      "1": "Incomplete or partially reasoned proposal; missing files or risk analysis",
+      "0": "Superficial or incorrect proposal; major gaps"
+    },
+    "tool_efficiency": {
+      "3": "5 or fewer analysis tool calls; focused exploration, clear path to synthesis",
+      "2": "6-10 analysis tool calls; somewhat exploratory but reaches conclusions",
+      "1": "11-20 analysis tool calls; extensive exploration; delayed synthesis",
+      "0": "More than 20 analysis tool calls; inefficient, redundant, exploration-heavy"
+    }
+  },
+  "per_run_scores": {
+    "A1": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 11
+    },
+    "A2": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 9
+    },
+    "A3": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 2,
+      "tool_efficiency": 2,
+      "total": 8
+    },
+    "A4": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 2,
+      "tool_efficiency": 2,
+      "total": 9
+    },
+    "A5": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 11
+    },
+    "B1": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 1,
+      "total": 9
+    },
+    "B2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 10
+    },
+    "B3": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 10
+    },
+    "B4": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 8
+    },
+    "B5": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 8
+    }
+  },
+  "analysis_notes": {
+    "primary_outcome": "Token reduction (v6B vs v5B) and token gap closure (v6B vs v6A)",
+    "secondary_outcome": "Quality maintenance (no regression in total scores)",
+    "cross_version_comparisons": [
+      "v6B vs v5B: compaction delta (token count reduction)",
+      "v6B vs v6A: gap closure (percentage reduction from 22% baseline)"
+    ]
+  },
+  "metrics": {
+    "A1": {
+      "tokens": 31438,
+      "accumulated_tokens": 171718,
+      "wall_seconds": 70,
+      "analyze_calls": 10,
+      "shell_calls": 1,
+      "total_calls": 12
+    },
+    "A2": {
+      "tokens": 23688,
+      "accumulated_tokens": 188586,
+      "wall_seconds": 68,
+      "analyze_calls": 7,
+      "shell_calls": 4,
+      "total_calls": 13
+    },
+    "A3": {
+      "tokens": 20981,
+      "accumulated_tokens": 234290,
+      "wall_seconds": 80,
+      "analyze_calls": 9,
+      "shell_calls": 7,
+      "total_calls": 18
+    },
+    "A4": {
+      "tokens": 24745,
+      "accumulated_tokens": 179743,
+      "wall_seconds": 71,
+      "analyze_calls": 6,
+      "shell_calls": 5,
+      "total_calls": 12
+    },
+    "A5": {
+      "tokens": 20319,
+      "accumulated_tokens": 195947,
+      "wall_seconds": 81,
+      "analyze_calls": 8,
+      "shell_calls": 7,
+      "total_calls": 16
+    },
+    "B1": {
+      "tokens": 24735,
+      "accumulated_tokens": 187894,
+      "wall_seconds": 79,
+      "analyze_calls": 12,
+      "shell_calls": 0,
+      "total_calls": 13
+    },
+    "B2": {
+      "tokens": 23416,
+      "accumulated_tokens": 174101,
+      "wall_seconds": 69,
+      "analyze_calls": 11,
+      "shell_calls": 0,
+      "total_calls": 12
+    },
+    "B3": {
+      "tokens": 22213,
+      "accumulated_tokens": 134232,
+      "wall_seconds": 76,
+      "analyze_calls": 9,
+      "shell_calls": 0,
+      "total_calls": 10
+    },
+    "B4": {
+      "tokens": 23897,
+      "accumulated_tokens": 176814,
+      "wall_seconds": 92,
+      "analyze_calls": 12,
+      "shell_calls": 0,
+      "total_calls": 13
+    },
+    "B5": {
+      "tokens": 22379,
+      "accumulated_tokens": 192691,
+      "wall_seconds": 66,
+      "analyze_calls": 13,
+      "shell_calls": 0,
+      "total_calls": 14
+    }
+  },
+  "blinding_verification": {
+    "R01": "A5",
+    "R02": "A3",
+    "R03": "B3",
+    "R04": "B4",
+    "R05": "A1",
+    "R06": "B5",
+    "R07": "A2",
+    "R08": "B1",
+    "R09": "B2",
+    "R10": "A4"
+  },
+  "all_runs_passed_validation": true,
+  "provider": "aws_bedrock",
+  "model_id": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+}

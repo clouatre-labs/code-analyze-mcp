@@ -1,0 +1,212 @@
+{
+  "run_id": "R06",
+  "condition": "B-treatment",
+  "analysis_date": "2026-03-10",
+  "module_map": [
+    {
+      "module": "core.rs",
+      "responsibility": "Orchestration layer. Coordinates file discovery, sorting, and display. Main entry point for the CLI flow.",
+      "submodules": [],
+      "key_types": ["Core", "Flags", "Meta", "Colors"]
+    },
+    {
+      "module": "meta/",
+      "responsibility": "File metadata extraction and representation. Collects all file attributes (permissions, size, owner, timestamps, git status, symlinks).",
+      "submodules": [
+        "mod.rs (Meta struct, from_path entry point)",
+        "size.rs (Size representation and formatting)",
+        "name.rs (Filename with display handling)",
+        "permissions.rs (Unix permissions)",
+        "date.rs (Modification/access times)",
+        "owner.rs (User/group ownership)",
+        "filetype.rs (File type detection)",
+        "symlink.rs (Symlink target handling)",
+        "git_file_status.rs (Git status integration)",
+        "inode.rs, links.rs, indicator.rs (Additional attributes)"
+      ],
+      "key_types": [
+        "Meta (main struct holding all file attributes)",
+        "Size, Owner, Permissions, Date, FileType"
+      ]
+    },
+    {
+      "module": "flags/",
+      "responsibility": "CLI argument parsing and configuration. Defines all display options (blocks, colors, icons, sorting, layout).",
+      "submodules": [
+        "blocks.rs (Display block selection and ordering)",
+        "color.rs (Color mode flags)",
+        "icons.rs (Icon display configuration)",
+        "sorting.rs (Sort order and methods)",
+        "layout.rs (Grid vs tree display)",
+        "display.rs (Display width/pagination flags)",
+        "date.rs (Date format configuration)",
+        "size.rs (Size unit and formatting)",
+        "permission.rs (Permission display format)"
+      ],
+      "key_types": ["Flags (aggregates all flag types)", "Block (columns to display)"]
+    },
+    {
+      "module": "display.rs",
+      "responsibility": "Rendering layer. Converts Meta + Flags + Colors into formatted output strings. Handles grid/tree layout, column alignment, colorization.",
+      "submodules": [],
+      "key_types": ["Grid (term_grid crate)", "Cell", "DisplayOption"]
+    },
+    {
+      "module": "color.rs",
+      "responsibility": "Color mapping from file attributes to terminal styles. Integrates lscolors, theme system, and crossterm styling.",
+      "submodules": [],
+      "key_types": ["Colors", "Elem (color element types)", "ColorTheme"]
+    },
+    {
+      "module": "theme/",
+      "responsibility": "Visual theming for icons and colors. Loads from config files or defaults.",
+      "submodules": ["color.rs (Color theme)", "icon.rs (Icon theme)", "git.rs (Git symbol theme)"],
+      "key_types": ["ColorTheme", "IconTheme"]
+    },
+    {
+      "module": "sort.rs",
+      "responsibility": "Sorting logic for file listing. Implements multiple sort orders (name, size, date, extension, version).",
+      "submodules": [],
+      "key_types": ["SortFn (function type for sorting)"]
+    },
+    {
+      "module": "icon.rs + theme/icon.rs",
+      "responsibility": "Icon resolution for files. Maps file properties (extension, name, type) to terminal symbols or unicode characters.",
+      "submodules": [],
+      "key_types": ["IconTheme", "Icon"]
+    }
+  ],
+  "data_flow": [
+    {
+      "stage": "1. Metadata Collection",
+      "module": "meta/mod.rs",
+      "key_function": "from_path(path, dereference, permission_flag, ...) -> Result<Meta>",
+      "description": "Calls specialized functions in meta/* to extract: file_type, size, owner, permissions, dates, symlink targets, git status, indicators.",
+      "types_produced": [
+        "Meta { name, size, owner, permissions, date, filetype, inode, symlink, git_file_status, ... }"
+      ],
+      "called_by": "Core::fetch()"
+    },
+    {
+      "stage": "2. Sorting",
+      "module": "core.rs",
+      "key_function": "Core::sort(&mut metas: Vec<Meta>)",
+      "description": "Applies configured sort orders (name, size, date, etc.) to the Vec<Meta> collection.",
+      "types_produced": ["Vec<Meta> (sorted)"],
+      "dependencies": ["sort.rs (SortFn)", "flags::SortOrder"]
+    },
+    {
+      "stage": "3. Icon Resolution",
+      "module": "icon.rs + theme/icon.rs",
+      "key_function": "Icons::get_icon(&meta: &Meta) -> String",
+      "description": "During display, icon module resolves file icons based on Meta::name (extension, filename) and Meta::filetype. Theme provides the icon mapping.",
+      "types_produced": ["String (icon symbol or unicode char)"],
+      "called_by": "display.rs::get_output()"
+    },
+    {
+      "stage": "4. Color Resolution",
+      "module": "color.rs",
+      "key_function": "Colors::get_color(&elem: &Elem, theme: &ColorTheme) -> Color",
+      "description": "Maps file attributes (permissions, filetype, git status from Meta) to terminal colors via lscolors or theme rules.",
+      "types_produced": ["ContentStyle (crossterm)"],
+      "called_by": "display.rs::get_output(), display.rs::render_*()"
+    },
+    {
+      "stage": "5. Block/Column Rendering",
+      "module": "display.rs",
+      "key_function": "get_output(&meta: &Meta, flags: &Flags, colors: &Colors, icons: &Icons) -> Vec<String>",
+      "description": "For each Block in Flags::blocks, renders the corresponding column (name, size, date, owner, etc.). Each column is colorized and formatted.",
+      "types_produced": ["Vec<String> (one string per column/block)"],
+      "dependencies": ["meta::size::render()", "meta::owner::render()", "meta::date::render()"]
+    },
+    {
+      "stage": "6. Grid/Tree Assembly",
+      "module": "display.rs",
+      "key_function": "grid() -> String or tree() -> String",
+      "description": "Aggregates all rendered rows into final output. Grid layout uses term_grid for alignment; tree layout adds indentation and tree lines.",
+      "types_produced": ["String (final formatted output)"],
+      "dependencies": ["term_grid", "get_output()"]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "flags/",
+      "inbound_deps": 12,
+      "outbound_deps": 0,
+      "reason": "Central configuration hub. Every module imports from flags/ to access Flags, Block, SortOrder, ColorMode, IconOption, PermissionFormat, LayoutFormat. Acts as the glue between CLI args and core logic."
+    },
+    {
+      "module": "meta/",
+      "inbound_deps": 8,
+      "outbound_deps": 3,
+      "reason": "Data model hub. Core imports to fetch metadata, display imports to render it, sort imports to compare Meta fields. Meta/* submodules do not cross-import (well-layered)."
+    },
+    {
+      "module": "color.rs",
+      "inbound_deps": 6,
+      "outbound_deps": 4,
+      "reason": "Styling hub. Imports from theme/ (color theme data), flags/ (color mode), meta/ (file attributes for color mapping), and exports colorized strings to display/. Bridges configuration + rendering."
+    }
+  ],
+  "change_proposal": {
+    "objective": "Add a SHA-256 checksum display column.",
+    "files_to_modify": [
+      "src/flags/blocks.rs (add Checksum variant to Block enum)",
+      "src/meta/mod.rs (add checksum field to Meta struct)",
+      "src/meta/checksum.rs (new file: Checksum type with compute/render methods)",
+      "src/display.rs (add checksum rendering in get_output match statement)",
+      "src/color.rs (optional: add Elem::Checksum color mapping)",
+      "src/flags.rs (optional: add checksum flag parsing in Configurable trait)"
+    ],
+    "new_types": [
+      "Checksum { value: String, computed: bool } - holds SHA-256 hex string and computation status",
+      "Block::Checksum - variant in flags/blocks.rs Block enum",
+      "Elem::Checksum - variant in color.rs Elem enum (for optional coloring)"
+    ],
+    "pattern_to_follow": "Follow meta/size.rs and meta/date.rs patterns:\n1. Struct holds the attribute (Checksum { value, computed })\n2. from(Metadata) constructor computes/extracts the value\n3. render() method formats for display, accepting Colors, Flags for styling\n4. In display.rs::get_output(), add Block::Checksum arm that calls checksum.render(...)\n5. In flags/blocks.rs, add Checksum to Block enum and get_header() match statement",
+    "integration_point": "1. Meta::from_path() adds: `checksum: Checksum::from_path(path)` (compute SHA-256 on file read)\n2. flags/blocks.rs::Block enum extended with Checksum variant\n3. display.rs::get_output() adds arm: `Block::Checksum => { checksum.render(colors, flags) }`\n4. Terminal output columns automatically align via grid.rs (no changes needed)",
+    "risks": [
+      "Performance: Computing SHA-256 for every file on large directories will block listing. Mitigation: Add --no-checksum flag or lazy-compute on demand; consider parallel hashing with rayon.",
+      "Consistency: Different hash algorithms in future. Mitigation: Embed algorithm name in Checksum struct (e.g., Checksum { algorithm: \"sha256\", value: String }).",
+      "Symlink handling: Should checksum follow symlinks or hash the link itself? Mitigation: Respect --dereference flag; add conditional in Checksum::from_path().",
+      "Windows compatibility: File I/O may differ. Mitigation: Use std::fs::read() which works cross-platform; test on Windows.",
+      "Coloring complexity: Adding Elem::Checksum requires theme updates. Mitigation: Reuse Elem::Size color or default neutral color if not configured."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "overview",
+      "path": "src/",
+      "params": "max_depth=2",
+      "result": "52 files, 13223L, 672F. Identified module structure: core.rs, display.rs, flags/, meta/, color.rs, theme/, sort.rs, icon.rs"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "files": ["core.rs", "display.rs", "meta/mod.rs", "flags/blocks.rs", "color.rs", "flags.rs", "meta/size.rs"],
+      "result": "Mapped function signatures, imports, and key types. Identified data flow entry points."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "from_path",
+      "follow_depth": 2,
+      "result": "Traced metadata collection: from_path() calls 22 sub-functions spanning meta/* and calls 15 callers (Core::fetch, tests). Maps start of data flow."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "grid",
+      "follow_depth": 1,
+      "result": "Display pipeline: grid() -> inner_display_grid() -> get_output(). Identified rendering layer structure."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "get_output",
+      "follow_depth": 1,
+      "result": "Column rendering: get_output() calls render_*() from meta/ (size, owner, permissions, date), colorizes with color.rs. Key integration point for checksum column."
+    }
+  ]
+}
