@@ -1,0 +1,207 @@
+{
+  "run_id": "R08",
+  "condition": "B-treatment",
+  "module_map": [
+    {
+      "module": "core.rs",
+      "responsibility": "Orchestrator: entry point for fetch, sort, display pipeline. Coordinates between metadata collection, sorting, and rendering.",
+      "submodules": [],
+      "key_types": ["Core", "Flags", "ExitCode"]
+    },
+    {
+      "module": "meta/",
+      "responsibility": "Metadata collection and representation. Extracts file properties (permissions, owner, size, date, type, symlink, git status, etc.) via Meta::from_path.",
+      "submodules": ["mod.rs", "permissions.rs", "owner.rs", "size.rs", "date.rs", "filetype.rs", "name.rs", "symlink.rs", "inode.rs", "links.rs", "indicator.rs", "access_control.rs", "git_file_status.rs", "windows_attributes.rs"],
+      "key_types": ["Meta", "FileType", "Permissions", "Owner", "Size", "Date", "Name"]
+    },
+    {
+      "module": "display.rs",
+      "responsibility": "Rendering engine. Converts Meta structs into displayable strings using grid or tree layout. Orchestrates output formatting via get_output() which calls Block renderers.",
+      "submodules": [],
+      "key_types": ["grid", "tree", "get_output", "DisplayOption", "Cell"]
+    },
+    {
+      "module": "flags/",
+      "responsibility": "CLI argument parsing and configuration flags. blocks.rs defines the Block enum controlling which columns appear.",
+      "submodules": ["blocks.rs", "color.rs", "display.rs", "icons.rs", "permission.rs", "size.rs", "date.rs", "sorting.rs", "layout.rs", "ignore_globs.rs", "symlink_arrow.rs"],
+      "key_types": ["Block", "Flags", "Blocks", "Color", "Icons"]
+    },
+    {
+      "module": "theme/",
+      "responsibility": "Colors and icon mappings. theme/color.rs applies ANSI colors; theme/icon.rs provides file type icons.",
+      "submodules": ["color.rs", "icon.rs", "git.rs"],
+      "key_types": ["Colors", "Icons", "AnsiValue", "ColoredString"]
+    },
+    {
+      "module": "sort.rs",
+      "responsibility": "Sorting logic. Defines SortFn function pointers and comparison logic for Meta sorting.",
+      "submodules": [],
+      "key_types": ["SortFn", "SortOrder"]
+    },
+    {
+      "module": "config_file.rs",
+      "responsibility": "Configuration file loading. Reads lsd.yaml from XDG config paths. Provides Config struct with Color, Icons, Blocks, Sorting configs.",
+      "submodules": [],
+      "key_types": ["Config", "Colors", "Icons", "Blocks"]
+    },
+    {
+      "module": "color.rs, icon.rs, git.rs",
+      "responsibility": "Global color and icon resolution. Provides helpers for color and icon lookup by file type, permission, or git status.",
+      "submodules": [],
+      "key_types": ["style_from_path", "get_icon", "GitFileStatus"]
+    }
+  ],
+  "data_flow": [
+    {
+      "stage": "1. Metadata collection",
+      "module": "meta/mod.rs",
+      "key_function": "Meta::from_path(path: &Path, ...) -> io::Result<Self>",
+      "description": "Reads file metadata using std::fs::metadata, symlink_metadata. Calls submodule from_path functions (permissions::from_path, owner::from_path, size::from_path, date::from_path, filetype::from_path, name::from_path, symlink::from_path, inode::from_path, etc.) to populate Meta fields.",
+      "types_produced": ["Meta struct with all fields populated: permissions, owner, group, size, date_time, file_type, name, symlink, inode, links, git_file_status, etc."]
+    },
+    {
+      "stage": "2. Sorting",
+      "module": "core.rs, sort.rs",
+      "key_function": "Core::sort(&self, metas: &mut Vec<Meta>)",
+      "description": "Calls sort::sort with Vec<Meta> and SortFn comparators. Uses SortOrder flags to determine sort direction and priority.",
+      "types_produced": ["Vec<Meta> ordered by sort key"]
+    },
+    {
+      "stage": "3. Display layout selection",
+      "module": "display.rs",
+      "key_function": "grid(metas: &[Meta], flags: &Flags, colors: &Colors, icons: &Icons) -> String or tree(...) -> String",
+      "description": "Entry point for rendering. Selects grid or tree layout. Calls inner_display_grid or inner_display_tree.",
+      "types_produced": ["String with ANSI-colored output"]
+    },
+    {
+      "stage": "4. Row rendering (per-file)",
+      "module": "display.rs",
+      "key_function": "get_output(meta: &Meta, owner_cache: &OwnerCache, colors: &Colors, icons: &Icons, flags: &Flags) -> Vec<String>",
+      "description": "For each Meta, iterates over Blocks (defined in flags/blocks.rs). For each Block, calls appropriate renderer: render_permission, render_user, render_group, render_size, render_date, render_name, render_symlink, render_indicator, render_links, render_inode, render_git_status, render_context. Each renderer calls color.rs::style_from_path to colorize output.",
+      "types_produced": ["Vec<String> representing cells for one row, one string per Block"]
+    },
+    {
+      "stage": "5. Color resolution",
+      "module": "color.rs, theme/color.rs",
+      "key_function": "color::colorize_using_path(path: &Path, content: &str) -> String or style_from_path(meta: &Meta, colors: &Colors) -> Style",
+      "description": "Determines ANSI color codes based on file type, permissions, git status. Applies style to cell content.",
+      "types_produced": ["ColoredString (String with ANSI codes)"]
+    },
+    {
+      "stage": "6. Icon resolution",
+      "module": "icon.rs, theme/icon.rs",
+      "key_function": "get_icon(meta: &Meta, icons: &Icons) called from meta/name.rs::Name::render",
+      "description": "Determines icon by file type, extension, or name. Called during name rendering. Returns icon string or empty.",
+      "types_produced": ["Icon string (unicode or emoji)"]
+    },
+    {
+      "stage": "7. Grid layout and terminal formatting",
+      "module": "display.rs via term_grid crate",
+      "key_function": "inner_display_grid constructs term_grid::Grid, populates cells, calls fit_into_columns or fit_into_width",
+      "description": "Assembles cells into Grid, applies padding rules, column width detection. Terminal width from terminal_size crate.",
+      "types_produced": ["String with tab/space-delimited columns, newline-separated rows"]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "meta/mod.rs",
+      "inbound_deps": 12,
+      "outbound_deps": 14,
+      "reason": "Central data structure. Core::fetch calls Meta::from_path. Display.rs, sort.rs, color.rs, icon.rs all consume Meta. Meta::from_path calls 14 submodules (permissions, owner, size, date, filetype, name, symlink, inode, links, indicator, access_control, git_file_status, windows_attributes, etc.). Meta is the hub connecting metadata collection (input) to sorting and rendering (output)."
+    },
+    {
+      "module": "display.rs",
+      "inbound_deps": 5,
+      "outbound_deps": 15,
+      "reason": "Rendering hub. Core::display calls grid/tree. get_output calls 10+ rendering functions, each calling color.rs, icon.rs, theme modules. Imports meta (5 submodules), flags/blocks (for Block iteration), color (3), icons (2). Orchestrates output formatting across all rendering concerns."
+    },
+    {
+      "module": "flags/blocks.rs",
+      "inbound_deps": 8,
+      "outbound_deps": 3,
+      "reason": "Configuration hub. Defines Block enum controlling displayable columns. display.rs iterates over Blocks to render each column. config_file.rs loads Block config. Core uses Blocks from flags. Dependency on flags/blocks controls what data reaches display. Central to feature gating (which columns to show)."
+    }
+  ],
+  "change_proposal": {
+    "title": "Add SHA-256 checksum column to lsd output",
+    "files_to_modify": [
+      "src/meta/mod.rs (add checksum field to Meta struct)",
+      "src/meta/checksum.rs (new: implement checksum calculation)",
+      "src/flags/blocks.rs (add Checksum variant to Block enum, update headers, rendering)",
+      "src/display.rs (add render_checksum case in get_output loop, call checksum renderer)",
+      "src/Cargo.toml (add sha2 dependency for hash computation)"
+    ],
+    "new_types": [
+      "meta::Checksum struct: { algorithm: String (e.g. 'sha256'), value: String (hex-encoded hash) }",
+      "Modify Meta struct to include: checksum: Option<Checksum>",
+      "Add Block::Checksum variant to flags/blocks.rs Block enum"
+    ],
+    "pattern_to_follow": "Follow existing meta submodule pattern: create src/meta/checksum.rs with pub fn from_path(path: &Path) -> io::Result<Option<Checksum>>. Use sha2 crate. Lazy-load checksum only if Block::Checksum is in flags.blocks (avoid computing hash for all files by default). Follow render pattern in display.rs: add render_checksum(meta: &Meta, colors: &Colors) -> String similar to render_size, render_date. Call colorize_using_path on hash value to apply color. Add Checksum to Block::get_header() match, Block::try_from match for parsing CLI arg.",
+    "integration_point": "Block/display integration: (1) Update Meta::from_path to call meta::checksum::from_path if needed. (2) Update display.rs get_output to handle Block::Checksum in the block iteration loop, calling render_checksum. (3) Modify flags/blocks.rs Block enum and configure_from to allow --blocks=checksum CLI arg. (4) Add checksum to default blocks if user requests (via Config or CLI). (5) Update theme/color.rs to define color for checksums (probably same as size, neutral color). (6) Add test in meta/checksum.rs and display.rs for checksum rendering.",
+    "risks": [
+      "Performance: SHA-256 computation on large files is expensive. Mitigation: make checksum lazy (only compute if block is requested), consider caching computed hashes per session, add --no-checksum to skip.",
+      "Platform compatibility: Windows file I/O may differ. Mitigation: use std::fs::File which abstracts platform differences; test on Windows.",
+      "Configuration complexity: users may not expect --blocks=checksum to trigger hash computation. Mitigation: document in README, add deprecation warning if checksum block requested but not explicitly enabled.",
+      "Sorting by checksum: sorting by hash value is unusual and may confuse users. Mitigation: add to sort.rs but document that sorting by checksum is case-insensitive hexadecimal string comparison, not meaningful.",
+      "Dependency size: sha2 crate adds dependency. Mitigation: it is small and audited; acceptable."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "overview",
+      "params": "path=/Users/hugues.clouatre/git/lsd-rs/lsd/src, max_depth=2"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "params": "path=core.rs"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "params": "path=meta/mod.rs"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "params": "path=display.rs"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "params": "path=flags/blocks.rs"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "params": "path=meta/name.rs"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "params": "path=config_file.rs"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "from_path",
+      "follow_depth": 3,
+      "params": "Traced metadata collection entry point, 15 callers, 27 callees across meta submodules"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "grid",
+      "follow_depth": 2,
+      "params": "Traced display entry point, 3 callers (display, main, run), 16 callees (grid layout, header, padding, output rendering)"
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "get_output",
+      "follow_depth": 2,
+      "params": "Traced cell rendering, 5 callers (grid, tree, inner_display_grid, inner_display_tree), 26 callees (permission, user, group, size, date, name, symlink, indicator, links, context rendering)"
+    }
+  ]
+}

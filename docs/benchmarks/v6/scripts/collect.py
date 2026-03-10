@@ -4,6 +4,7 @@ collect.py: Extract session metrics from goose sessions database.
 
 Queries a goose session by name, extracts:
 - total_tokens, input_tokens, output_tokens from sessions table
+- accumulated_total_tokens, accumulated_input_tokens, accumulated_output_tokens from sessions table
 - wall time (last message timestamp - first message timestamp)
 - tool call counts by tool name from messages.content_json
 
@@ -33,7 +34,7 @@ def get_session_info(conn: sqlite3.Connection, session_name: str) -> Optional[Di
     """Fetch session info from sessions table"""
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, total_tokens, input_tokens, output_tokens FROM sessions WHERE name = ?",
+        "SELECT id, total_tokens, input_tokens, output_tokens, accumulated_total_tokens, accumulated_input_tokens, accumulated_output_tokens FROM sessions WHERE name = ?",
         (session_name,)
     )
     row = cursor.fetchone()
@@ -207,6 +208,9 @@ def main():
         'tokens': session_info['total_tokens'],
         'input_tokens': session_info['input_tokens'],
         'output_tokens': session_info['output_tokens'],
+        'accumulated_total_tokens': session_info['accumulated_total_tokens'],
+        'accumulated_input_tokens': session_info['accumulated_input_tokens'],
+        'accumulated_output_tokens': session_info['accumulated_output_tokens'],
         'wall_seconds': wall_time,
         'tool_calls_detail': tool_counts,
         'analyze_calls': tool_categories['analyze_calls'],

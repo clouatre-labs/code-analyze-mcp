@@ -1,0 +1,286 @@
+{
+  "run_id": "R04",
+  "condition": "B-treatment",
+  "analysis_date": "2026-03-10",
+  "module_map": [
+    {
+      "module": "core",
+      "responsibility": "Main orchestrator; runs CLI entry point, coordinates fetch→sort→display pipeline",
+      "submodules": [],
+      "key_types": ["Core struct", "Flags", "ExitCode"],
+      "imports_count": 12,
+      "functions": ["new", "run", "fetch", "sort", "display"]
+    },
+    {
+      "module": "meta",
+      "responsibility": "File metadata extraction; collects filesystem attributes, permissions, git status, size, ownership",
+      "submodules": ["access_control", "date", "filetype", "git_file_status", "indicator", "inode", "links", "name", "owner", "permissions", "permissions_or_attributes", "size", "symlink", "windows_attributes", "windows_utils"],
+      "key_types": ["Meta struct", "AccessControl", "FileType", "Owner", "Permissions", "Size"],
+      "imports_count": 34,
+      "functions": ["from_path", "recurse_into", "calculate_total_size"]
+    },
+    {
+      "module": "flags",
+      "responsibility": "Configuration management; parses CLI args and config files into display/behavior flags",
+      "submodules": ["blocks", "color", "date", "dereference", "display", "header", "hyperlink", "icons", "ignore_globs", "indicators", "layout", "literal", "permission", "recursion", "size", "sorting", "symlink_arrow", "symlinks", "total_size", "truncate_owner"],
+      "key_types": ["Flags struct", "Configurable trait", "Block enum", "BlocksBuilder"],
+      "imports_count": 31,
+      "functions": ["configure_from", "from_cli", "from_config"]
+    },
+    {
+      "module": "display",
+      "responsibility": "Output formatting and rendering; converts Meta + Flags to grid/tree output strings",
+      "submodules": [],
+      "key_types": ["Grid (term_grid)", "Cell"],
+      "imports_count": 39,
+      "functions": ["grid", "tree", "get_output", "inner_display_grid", "inner_display_tree", "get_padding_rules", "detect_size_lengths"]
+    },
+    {
+      "module": "color",
+      "responsibility": "Color resolution; maps file attributes to terminal styles using themes (LS_COLORS)",
+      "submodules": [],
+      "key_types": ["Colors struct", "Elem enum", "ContentStyle"],
+      "imports_count": 20,
+      "functions": ["new", "get_color", "colorize", "colorize_using_path", "style", "style_from_path", "get_indicator_from_elem"]
+    },
+    {
+      "module": "theme",
+      "responsibility": "Theme loading and parsing; reads YAML theme definitions for colors and icons",
+      "submodules": ["color", "icon", "git"],
+      "key_types": ["Theme generic struct", "ColorTheme", "IconTheme"],
+      "imports_count": 11,
+      "functions": ["from_path", "with_yaml"]
+    },
+    {
+      "module": "icon",
+      "responsibility": "Icon resolution; maps files to icons by name/extension; loads from theme registry",
+      "submodules": [],
+      "key_types": ["Icons struct", "IconTheme"],
+      "imports_count": 15,
+      "functions": ["new", "get_icon_for_name", "get_icon"]
+    },
+    {
+      "module": "git",
+      "responsibility": "Git repository and file status integration; queries git to get file status and repo context",
+      "submodules": [],
+      "key_types": ["GitRepository struct", "GitFileStatus"],
+      "imports_count": 12,
+      "functions": ["new", "discover", "status", "statuses"]
+    }
+  ],
+  "data_flow": [
+    {
+      "stage": "1. Entry & Initialization",
+      "module": "main / core",
+      "key_function": "Core::new, Core::run",
+      "description": "Parse CLI args via clap, load config file, assemble Flags struct with all options",
+      "types_produced": ["Flags", "Cli struct from clap"],
+      "types_consumed": ["Command-line arguments", "Config file (YAML)"]
+    },
+    {
+      "stage": "2. Metadata Collection",
+      "module": "meta/mod.rs, meta/* submodules",
+      "key_function": "Meta::from_path → core::fetch",
+      "description": "For each input path, call from_path to collect: size, permissions, ownership, git status, file type, links, date, indicators. Recursively collect child metas if needed.",
+      "types_produced": ["Vec<Meta>", "Meta struct (contains 15+ field types from submodules)"],
+      "types_consumed": ["Path, Flags (dereference, permission_flag), GitRepository"]
+    },
+    {
+      "stage": "3. Sorting",
+      "module": "sort.rs, flags/sorting.rs",
+      "key_function": "Core::sort → assemble_sorters",
+      "description": "Build sort function chain from Flags::sorting. Apply comparators to Meta vector in-place.",
+      "types_produced": ["Sorted Vec<Meta>"],
+      "types_consumed": ["Vec<Meta>", "SortOrder enum"]
+    },
+    {
+      "stage": "4. Color Resolution",
+      "module": "color.rs, theme/color.rs",
+      "key_function": "Colors::new → Colors::style_from_path",
+      "description": "For each Meta, resolve file path to color theme using LS_COLORS or custom theme. Build ContentStyle mapping.",
+      "types_produced": ["ContentStyle (crossterm::style)", "Color mapping cache"],
+      "types_consumed": ["Meta (path)", "ThemeOption", "LS_COLORS env var"]
+    },
+    {
+      "stage": "5. Icon Resolution",
+      "module": "icon.rs, theme/icon.rs, flags/icons.rs",
+      "key_function": "Icons::new → Icons::get_icon_for_path",
+      "description": "For each Meta, resolve file name/extension to icon glyph. Fallback: file type indicator. Respects --icons flag.",
+      "types_produced": ["Icon string (emoji or ascii)", "IconTheme mapping"],
+      "types_consumed": ["Meta (name, file type)", "IconTheme"]
+    },
+    {
+      "stage": "6. Output Rendering",
+      "module": "display.rs, flags/blocks.rs",
+      "key_function": "display::get_output → display::render (per block)",
+      "description": "For each Meta, render each configured Block (name, size, date, permissions, owner, git status, etc.) to string. Apply colors. Render is recursive for Tree layout.",
+      "types_produced": ["Vec<String> (one entry per block per file)", "Grid or Tree ASCII art"],
+      "types_consumed": ["Meta", "Flags (blocks, layout)", "Colors", "Icons", "OwnerCache"]
+    },
+    {
+      "stage": "7. Display Output",
+      "module": "display.rs",
+      "key_function": "display::grid → term_grid::Grid::fmt",
+      "description": "Assemble Cell matrix into grid layout using term_grid. Add header row if --header. Format and print to stdout.",
+      "types_produced": ["String (formatted output)"],
+      "types_consumed": ["Vec<Cell>", "terminal_size", "DisplayOption"]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "display.rs",
+      "inbound_dependencies": 0,
+      "outbound_dependencies": 8,
+      "depends_on": ["meta", "flags", "color", "icon", "git_theme", "sort", "app", "term_grid"],
+      "reason": "Final output stage; must aggregate data from all analysis modules (metadata, colors, icons) and formatting configuration (flags) to produce formatted strings. Imports term_grid for layout."
+    },
+    {
+      "module": "meta/mod.rs",
+      "inbound_dependencies": 2,
+      "outbound_dependencies": 15,
+      "depends_on": ["self::access_control", "self::date", "self::filetype", "self::git_file_status", "self::indicator", "self::inode", "self::links", "self::name", "self::owner", "self::permissions", "self::permissions_or_attributes", "self::size", "self::symlink", "self::windows_attributes", "crate::git", "crate::flags"],
+      "reason": "Central metadata aggregator; from_path orchestrates all submodule extractors to build complete Meta struct. Each submodule is a specialized attribute extractor."
+    },
+    {
+      "module": "flags/blocks.rs",
+      "inbound_dependencies": 3,
+      "outbound_dependencies": 4,
+      "depends_on": ["clap", "crate::app", "crate::config_file"],
+      "reason": "Hub for block-level configuration; Block enum is central to display pipeline. Manages which columns render (name, size, date, permissions, owner, git, inode, etc.). Parsed from CLI and config."
+    },
+    {
+      "module": "color.rs",
+      "inbound_dependencies": 2,
+      "outbound_dependencies": 5,
+      "depends_on": ["crate::theme::color", "crate::git", "lscolors", "crossterm::style"],
+      "reason": "Style resolution hub; called from display::get_output for every block render. Maps filesystem attributes to color themes. Integrates git status coloring and LS_COLORS parsing."
+    },
+    {
+      "module": "flags.rs",
+      "inbound_dependencies": 2,
+      "outbound_dependencies": 24,
+      "depends_on": ["blocks", "color", "date", "dereference", "display", "header", "hyperlink", "icons", "ignore_globs", "indicators", "layout", "literal", "permission", "recursion", "size", "sorting", "symlink_arrow", "symlinks", "total_size", "truncate_owner", "clap", "config_file"],
+      "reason": "Master configuration aggregator; imports all flag submodules and coordinates their enable/disable via CLI args and config. Flags struct is passed to all downstream stages (fetch, sort, display, color, icon)."
+    }
+  ],
+  "change_proposal": {
+    "title": "Add SHA-256 Checksum Display Column",
+    "objective": "Enable users to display file checksums (SHA-256) as a new Block in the output grid/tree, similar to name, size, date, permissions.",
+    "files_to_modify": [
+      "src/flags/blocks.rs - Add Checksum variant to Block enum, update get_header, try_from",
+      "src/meta/mod.rs - Add checksum field to Meta struct",
+      "src/meta/checksum.rs - NEW FILE: extract SHA-256 hash from file",
+      "src/display.rs - Handle Checksum block in get_output render dispatch",
+      "src/flags.rs - Re-export checksum module (if needed for doc generation)",
+      "docs/ - Update README with new --blocks checksum option"
+    ],
+    "new_types": [
+      "meta::Checksum enum { Sha256(String), Unavailable(String) } - result of SHA-256 compute, storing hex digest or error reason",
+      "ChecksumError (thiserror) - IO errors during file read for hashing"
+    ],
+    "pattern_to_follow": {
+      "metadata_extraction": "Follow meta/size.rs or meta/date.rs pattern: (1) define custom type, (2) implement From<fs::Metadata> or custom extraction fn, (3) handle platform diffs (Windows attributes), (4) add field to Meta struct in meta/mod.rs, (5) initialize in Meta::from_path via self::checksum::extract_checksum(path).",
+      "block_configuration": "Follow flags/blocks.rs Block enum: (1) add Checksum variant with Display impl, (2) add case to get_header, (3) add case to try_from for CLI parsing (e.g., 'checksum' string), (4) add to default Blocks or optional_prepend_inode logic if checksum is expensive.",
+      "display_rendering": "Follow display.rs get_output fn: (1) add case to block match statement, (2) call meta.checksum.render(&colors, &flags) or inline render (color + format hex), (3) handle Unavailable variant gracefully (show '-' or error reason).",
+      "color_integration": "Integrate via color.rs Elem enum: (1) optionally add Elem::Checksum variant, (2) map to theme color via Colors::style_from_path, or (3) use default Elem::File color if checksums don't merit special styling."
+    },
+    "integration_point": "Blocks/display subsystem: (1) Block enum is dispatch hub in display::get_output; (2) each Block case calls specialized render fn (render_permissions, render_size, render_user, etc.); (3) add render_checksum case; (4) Checksum will be computed once in Meta::from_path (not lazily) to avoid repeated I/O on large files.",
+    "risks": [
+      "Performance: SHA-256 hashing large files (GB+) on every ls invocation is slow; mitigate with lazy computation or caching, or document as opt-in via --blocks checksum only.",
+      "Disk I/O: Reading entire file for hash conflicts with typical lsd speed expectations (ls --dereference + fast metadata). Consider skipping for directories or symlinks.",
+      "Cross-platform: Windows file locking may prevent read during active use. Unix symlinks should hash target, not link itself (follow dereference flag).",
+      "Breaking change: Adding a new Block variant may affect scripts parsing column order; document in CHANGELOG.",
+      "Memory: Storing 64-char SHA-256 string per file is negligible, but hashing strategy (buffered reads vs mmap) affects memory use on large files."
+    ],
+    "implementation_stages": [
+      "Stage 1: Add Checksum type to meta/ submodule; compute SHA-256 in from_path",
+      "Stage 2: Add Checksum variant to Block enum; wire into display::get_output",
+      "Stage 3: Add CLI flag --checksum or extend --blocks to accept 'checksum'; update docs",
+      "Stage 4: Add config file support (yaml blocks: [checksum])",
+      "Stage 5: Test performance on large files; consider async compute or opt-in-only behavior"
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "overview",
+      "path": "src/",
+      "params": "max_depth=2",
+      "result": "Identified 52 files across 8 major modules; 13223L, 672F. Located core.rs (5F), display.rs (25F), meta/ (15 submodules), flags/ (20 submodules)."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "path": "src/core.rs",
+      "params": "none",
+      "result": "Found Core struct with run→fetch→sort→display pipeline. Imports: flags, meta, color, git, icon, terminal_size."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "path": "src/display.rs",
+      "params": "none",
+      "result": "Identified grid/tree entry functions and get_output dispatch (25 functions, 990L). Imports: meta, flags, color, icon, term_grid, term_grid::Grid (5 uses)."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "path": "src/meta/mod.rs",
+      "params": "none",
+      "result": "Meta struct with from_path fn (261-367L, 6 internal calls). Imports 15+ submodules; key fn calls: extract metadata via self::access_control, ::filetype, ::owner, ::size, ::date, ::permissions."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "from_path",
+      "follow_depth": 2,
+      "params": "Traced Meta::from_path (definition in meta/mod.rs) with 15 inbound callers and 22 outbound calls. Callees include: new, from, extension, file_name, canonicalize, symlink_metadata, read_to_string, get_attributes (Windows), lookup_account_sid. Shows integration with all meta/* submodules."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "symbol_focus",
+      "focus": "get_output",
+      "follow_depth": 2,
+      "params": "Traced display::get_output (definition in display.rs, 325-431L) with 5 inbound callers (grid, tree, inner_display_grid, inner_display_tree) and 26 outbound calls. Callees: render (permissions/date/size/owner), colorize, style, paint, render_unit, render_value, render_context, render_group, render_user, symlink_string, truncate, date_string. Shows dispatch to all block renderers."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "path": "src/flags.rs",
+      "params": "none",
+      "result": "Flags struct with 31 imports from flag submodules (blocks, color, date, icons, sorting, etc.). Configurable trait for centralized CLI+Config parsing."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "path": "src/flags/blocks.rs",
+      "params": "none",
+      "result": "Block enum with 186L of variants (permission, user, group, size, date, name, inode, links, context, git_status, size_value). Methods: get_header, try_from for CLI parsing, configure_from for config file."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "path": "src/color.rs",
+      "params": "none",
+      "result": "Colors struct with get_color, colorize, style, style_from_path fns. Elem enum represents display element type (File, Directory, Symlink, Permission, Owner, etc.). Integrates lscolors and crossterm::style."
+    },
+    {
+      "tool": "code-analyze-mcp__analyze",
+      "mode": "file_details",
+      "path": "src/theme.rs",
+      "params": "none",
+      "result": "Theme generic type with from_path and with_yaml fns. Loads ColorTheme and IconTheme from YAML config files."
+    }
+  ],
+  "conclusion": {
+    "summary": "lsd is a structured list/display utility with clear separation of concerns: metadata extraction (meta/), configuration (flags/), styling (color/, theme/), and output formatting (display.rs). The data flow is linear: fetch → sort → display, with cross-cutting concerns (color, icons) applied during rendering.",
+    "key_insights": [
+      "display.rs is the central render hub; it orchestrates all block rendering and integrates metadata, colors, and icons into formatted output strings.",
+      "meta/mod.rs is the metadata hub; from_path calls 15+ submodules to extract specialized file attributes into a unified Meta struct.",
+      "flags/ is the configuration hub; Flags struct with 20+ submodules controls all behavior; flags/blocks.rs Block enum is the column dispatch center.",
+      "Color and icon resolution are decoupled from metadata extraction; they are applied at render time (display stage) not collection time, allowing flexible theming.",
+      "Adding a new column (e.g., checksum) requires: (1) new Meta field, (2) Block variant, (3) render case in get_output, (4) CLI/config parsing. No changes needed to core fetch→sort→display flow."
+    ],
+    "checksum_proposal_feasibility": "High. Follows established pattern: meta/size.rs and meta/date.rs show field extraction and rendering. Block enum is extensible. get_output dispatch is already modular. Main risk is performance (file I/O); recommend lazy/opt-in computation."
+  }
+}
