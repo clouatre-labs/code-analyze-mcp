@@ -460,8 +460,20 @@ pub fn format_focused(
 
     // CALLERS section - who calls this symbol
     let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
+
+    // Partition incoming_chains into production and test callers
+    let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
+        incoming_chains.into_iter().partition(|chain| {
+            chain
+                .chain
+                .first()
+                .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
+        });
+
     output.push_str("CALLERS:\n");
-    let incoming_refs: Vec<_> = incoming_chains
+
+    // Render production callers
+    let prod_refs: Vec<_> = prod_chains
         .iter()
         .filter_map(|chain| {
             if chain.chain.len() >= 2 {
@@ -474,10 +486,38 @@ pub fn format_focused(
         })
         .collect();
 
-    if incoming_refs.is_empty() {
+    if prod_refs.is_empty() {
         output.push_str("  (none)\n");
     } else {
-        output.push_str(&format_chains_as_tree(&incoming_refs, "<-", symbol));
+        output.push_str(&format_chains_as_tree(&prod_refs, "<-", symbol));
+    }
+
+    // Render test callers summary if any
+    if !test_chains.is_empty() {
+        let mut test_files: Vec<_> = test_chains
+            .iter()
+            .filter_map(|chain| {
+                chain
+                    .chain
+                    .first()
+                    .map(|(_, path, _)| path.to_string_lossy().into_owned())
+            })
+            .collect();
+        test_files.sort();
+        test_files.dedup();
+
+        // Strip base path for display
+        let display_files: Vec<_> = test_files
+            .iter()
+            .map(|f| strip_base_path_buf(Path::new(f), base_path))
+            .collect();
+
+        let file_list = display_files.join(", ");
+        output.push_str(&format!(
+            "CALLERS (test): {} test functions (in {})\n",
+            test_chains.len(),
+            file_list
+        ));
     }
 
     // CALLEES section - what this symbol calls
@@ -504,7 +544,7 @@ pub fn format_focused(
 
     // STATISTICS section
     output.push_str("STATISTICS:\n");
-    let incoming_count = incoming_refs
+    let incoming_count = prod_refs
         .iter()
         .map(|(p, _)| p)
         .collect::<std::collections::HashSet<_>>()
@@ -517,9 +557,9 @@ pub fn format_focused(
     output.push_str(&format!("  Incoming calls: {}\n", incoming_count));
     output.push_str(&format!("  Outgoing calls: {}\n", outgoing_count));
 
-    // FILES section - collect unique files from chains
+    // FILES section - collect unique files from production chains
     let mut files = HashSet::new();
-    for chain in &incoming_chains {
+    for chain in &prod_chains {
         for (_, path, _) in &chain.chain {
             files.insert(path.clone());
         }
