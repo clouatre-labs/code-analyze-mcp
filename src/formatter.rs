@@ -401,15 +401,16 @@ fn format_chains_as_tree(chains: &[(&str, &str)], arrow: &str, focus_symbol: &st
 
     let mut output = String::new();
 
-    // Group chains by depth-1 symbol
-    let mut groups: BTreeMap<String, std::collections::BTreeSet<String>> = BTreeMap::new();
+    // Group chains by depth-1 symbol, counting duplicate children
+    let mut groups: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     for (parent, child) in chains {
-        // Only insert non-empty children into the set
+        // Only count non-empty children
         if !child.is_empty() {
-            groups
+            *groups
                 .entry(parent.to_string())
                 .or_default()
-                .insert(child.to_string());
+                .entry(child.to_string())
+                .or_insert(0) += 1;
         } else {
             // Ensure parent is in groups even if no children
             groups.entry(parent.to_string()).or_default();
@@ -419,8 +420,15 @@ fn format_chains_as_tree(chains: &[(&str, &str)], arrow: &str, focus_symbol: &st
     // Render grouped tree
     for (parent, children) in groups {
         let _ = writeln!(output, "  {} {} {}", focus_symbol, arrow, parent);
-        for child in children {
-            let _ = writeln!(output, "    {} {}", arrow, child);
+        // Sort children by count descending, then alphabetically
+        let mut sorted: Vec<_> = children.into_iter().collect();
+        sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        for (child, count) in sorted {
+            if count > 1 {
+                let _ = writeln!(output, "    {} {} (x{})", arrow, child, count);
+            } else {
+                let _ = writeln!(output, "    {} {}", arrow, child);
+            }
         }
     }
 

@@ -2588,3 +2588,63 @@ pub fn caller_two() {
         "Should NOT have CALLERS (test) line with only production callers"
     );
 }
+
+#[test]
+fn test_format_focused_dedup_callees() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a crate where caller invokes same callee multiple times
+    // and also calls other callees once
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn caller() {
+    repeated_callee();
+    repeated_callee();
+    repeated_callee();
+    single_callee();
+}
+
+pub fn repeated_callee() {
+}
+
+pub fn single_callee() {
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Format focused output with depth 1
+    let output = analyze_focused(root, "caller", 1, None, None).unwrap();
+
+    // Assert: Verify dedup annotation (xN) appears for repeated edges
+    assert!(
+        output.formatted.contains("CALLEES:"),
+        "Should have CALLEES section"
+    );
+
+    // Check that repeated_callee shows (x3) annotation
+    assert!(
+        output.formatted.contains("repeated_callee (x3)"),
+        "Repeated callee with 3 occurrences should show (x3) annotation"
+    );
+
+    // Check that single_callee does NOT show (x1) annotation
+    let has_single_annotation = output.formatted.contains("single_callee (x1)");
+    assert!(
+        !has_single_annotation,
+        "Single-occurrence callee should NOT show (x1) annotation"
+    );
+
+    // Verify single_callee still appears without annotation
+    assert!(
+        output.formatted.contains("-> single_callee")
+            || output
+                .formatted
+                .lines()
+                .any(|l| l.trim().ends_with("single_callee")),
+        "Single-occurrence callee should appear without annotation"
+    );
+}
