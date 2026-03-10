@@ -464,8 +464,12 @@ impl CodeAnalyzer {
                 };
 
                 if use_summary {
-                    output.formatted =
-                        format_summary(&output.entries, &output.files, params.max_depth);
+                    output.formatted = format_summary(
+                        &output.entries,
+                        &output.files,
+                        params.max_depth,
+                        Some(Path::new(&params.path)),
+                    );
                 }
 
                 // Apply pagination to files
@@ -478,6 +482,7 @@ impl CodeAnalyzer {
                         &paginated.items,
                         paginated.total,
                         params.max_depth,
+                        Some(Path::new(&params.path)),
                     );
                 }
 

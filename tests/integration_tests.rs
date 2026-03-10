@@ -1324,7 +1324,8 @@ fn test_summary_auto_detect_large_directory() {
     let output = analyze_directory(root, None).unwrap();
 
     // Generate summary
-    let summary = code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None);
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));
@@ -1358,7 +1359,8 @@ fn test_summary_explicit_on_small_directory() {
     let output = analyze_directory(root, None).unwrap();
 
     // Generate summary
-    let summary = code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None);
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));

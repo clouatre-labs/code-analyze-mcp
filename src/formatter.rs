@@ -5,10 +5,39 @@ use crate::traversal::WalkEntry;
 use crate::types::{FileInfo, SemanticAnalysis};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::path::Path;
 use thiserror::Error;
 use tracing::instrument;
 
 const MULTILINE_THRESHOLD: usize = 10;
+
+/// Strip a base path from a path string, returning a relative path or the original on failure.
+fn strip_base_path(path_str: &str, base_path: Option<&Path>) -> String {
+    match base_path {
+        Some(base) => {
+            if let Ok(rel_path) = Path::new(path_str).strip_prefix(base) {
+                rel_path.display().to_string()
+            } else {
+                path_str.to_string()
+            }
+        }
+        None => path_str.to_string(),
+    }
+}
+
+/// Strip a base path from a PathBuf, returning a relative path or the original on failure.
+fn strip_base_path_buf(path: &Path, base_path: Option<&Path>) -> String {
+    match base_path {
+        Some(base) => {
+            if let Ok(rel_path) = path.strip_prefix(base) {
+                rel_path.display().to_string()
+            } else {
+                path.display().to_string()
+            }
+        }
+        None => path.display().to_string(),
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum FormatterError {
@@ -22,6 +51,7 @@ pub fn format_structure(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
     max_depth: Option<u32>,
+    _base_path: Option<&Path>,
 ) -> String {
     let mut output = String::new();
 
@@ -215,14 +245,16 @@ pub fn format_file_details(
     analysis: &SemanticAnalysis,
     line_count: usize,
     is_test: bool,
+    base_path: Option<&Path>,
 ) -> String {
     let mut output = String::new();
 
     // FILE: header with counts, prepend [TEST] if applicable
+    let display_path = strip_base_path(path, base_path);
     if is_test {
         output.push_str(&format!(
             "FILE [TEST] {}({}L, {}F, {}C, {}I)\n",
-            path,
+            display_path,
             line_count,
             analysis.functions.len(),
             analysis.classes.len(),
@@ -231,7 +263,7 @@ pub fn format_file_details(
     } else {
         output.push_str(&format!(
             "FILE: {}({}L, {}F, {}C, {}I)\n",
-            path,
+            display_path,
             line_count,
             analysis.functions.len(),
             analysis.classes.len(),
@@ -358,6 +390,7 @@ pub fn format_focused(
     dataflow: &DataflowGraph,
     symbol: &str,
     follow_depth: u32,
+    base_path: Option<&Path>,
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
@@ -371,7 +404,11 @@ pub fn format_focused(
     if let Some(definitions) = graph.definitions.get(symbol) {
         output.push_str("DEFINED:\n");
         for (path, line) in definitions {
-            output.push_str(&format!("  {}:{}\n", path.display(), line));
+            output.push_str(&format!(
+                "  {}:{}\n",
+                strip_base_path_buf(path, base_path),
+                line
+            ));
         }
     } else {
         output.push_str("DEFINED: (not found)\n");
@@ -449,7 +486,7 @@ pub fn format_focused(
             let mut sorted_files = prod_files;
             sorted_files.sort();
             for file in sorted_files {
-                output.push_str(&format!("  {}\n", file.display()));
+                output.push_str(&format!("  {}\n", strip_base_path_buf(&file, base_path)));
             }
         }
 
@@ -459,7 +496,7 @@ pub fn format_focused(
             let mut sorted_files = test_files;
             sorted_files.sort();
             for file in sorted_files {
-                output.push_str(&format!("    {}\n", file.display()));
+                output.push_str(&format!("    {}\n", strip_base_path_buf(&file, base_path)));
             }
         }
     }
@@ -476,7 +513,7 @@ pub fn format_focused(
                 "    {} = ... (scope: {}) {}:{}\n",
                 symbol,
                 scope,
-                file.display(),
+                strip_base_path_buf(file, base_path),
                 line
             ));
         }
@@ -492,7 +529,7 @@ pub fn format_focused(
                 "    {}.* (scope: {}) {}:{}\n",
                 symbol,
                 scope,
-                file.display(),
+                strip_base_path_buf(file, base_path),
                 line
             ));
         }
@@ -508,6 +545,7 @@ pub fn format_summary(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
     max_depth: Option<u32>,
+    _base_path: Option<&Path>,
 ) -> String {
     let mut output = String::new();
 
@@ -664,6 +702,7 @@ pub fn format_structure_paginated(
     paginated_files: &[FileInfo],
     total_files: usize,
     max_depth: Option<u32>,
+    base_path: Option<&Path>,
 ) -> String {
     let mut output = String::new();
 
@@ -684,21 +723,21 @@ pub fn format_structure_paginated(
     if !prod_files.is_empty() {
         output.push_str("FILES [LOC, FUNCTIONS, CLASSES]\n");
         for file in &prod_files {
-            output.push_str(&format_file_entry(file));
+            output.push_str(&format_file_entry(file, base_path));
         }
     }
 
     if !test_files.is_empty() {
         output.push_str("\nTEST FILES [LOC, FUNCTIONS, CLASSES]\n");
         for file in &test_files {
-            output.push_str(&format_file_entry(file));
+            output.push_str(&format_file_entry(file, base_path));
         }
     }
 
     output
 }
 
-fn format_file_entry(file: &FileInfo) -> String {
+fn format_file_entry(file: &FileInfo, base_path: Option<&Path>) -> String {
     let mut parts = Vec::new();
     if file.line_count > 0 {
         parts.push(format!("{}L", file.line_count));
@@ -709,9 +748,38 @@ fn format_file_entry(file: &FileInfo) -> String {
     if file.class_count > 0 {
         parts.push(format!("{}C", file.class_count));
     }
+    let display_path = strip_base_path(&file.path, base_path);
     if parts.is_empty() {
-        format!("{}\n", file.path)
+        format!("{}\n", display_path)
     } else {
-        format!("{} [{}]\n", file.path, parts.join(", "))
+        format!("{} [{}]\n", display_path, parts.join(", "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_base_path_relative() {
+        let path_str = "/home/user/project/src/main.rs";
+        let base = Path::new("/home/user/project");
+        let result = strip_base_path(path_str, Some(base));
+        assert_eq!(result, "src/main.rs");
+    }
+
+    #[test]
+    fn test_strip_base_path_fallback_absolute() {
+        let path_str = "/other/project/src/main.rs";
+        let base = Path::new("/home/user/project");
+        let result = strip_base_path(path_str, Some(base));
+        assert_eq!(result, "/other/project/src/main.rs");
+    }
+
+    #[test]
+    fn test_strip_base_path_none() {
+        let path_str = "/home/user/project/src/main.rs";
+        let result = strip_base_path(path_str, None);
+        assert_eq!(result, "/home/user/project/src/main.rs");
     }
 }
