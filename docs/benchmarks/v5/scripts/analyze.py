@@ -238,8 +238,10 @@ def print_cross_version_comparison(scores_data: Dict):
     # v5B vs v3B
     print("### v5B vs v3B (Optimization Delta)\n")
     
-    v5b_quality, _ = extract_condition_scores(scores_data, 'tool_efficiency')
-    v5b_eff, _ = extract_efficiency_metric(scores_data, 'total_calls')
+    # Use quality totals (0-12), not individual dimension scores, for cross-version comparison.
+    # v3 baselines store median of total quality score (sum of 4 dimensions).
+    _, v5b_quality = extract_condition_scores(scores_data, 'total')
+    _, v5b_eff = extract_efficiency_metric(scores_data, 'total_calls')
     
     v3b_median_quality = v3_baselines.get('B_condition', {}).get('median')
     v3b_median_calls = v3_baselines.get('B_condition', {}).get('efficiency_median_calls')
@@ -248,7 +250,7 @@ def print_cross_version_comparison(scores_data: Dict):
         v5b_med_quality = statistics.median(v5b_quality)
         print(f"| Metric | v3B | v5B | Delta |")
         print("|--------|-----|-----|-------|")
-        print(f"| Quality (tool_efficiency) | {v3b_median_quality} | {v5b_med_quality} | {v5b_med_quality - v3b_median_quality:+.1f} |")
+        print(f"| Quality (total) | {v3b_median_quality} | {v5b_med_quality} | {v5b_med_quality - v3b_median_quality:+.1f} |")
     
     if v5b_eff and v3b_median_calls:
         v5b_med_calls = statistics.median(v5b_eff)

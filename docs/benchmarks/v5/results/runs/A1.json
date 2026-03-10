@@ -1,0 +1,300 @@
+{
+  "run_id": "A1",
+  "condition": "A-control",
+  "module_map": [
+    {
+      "module": "meta/",
+      "responsibility": "File metadata collection and representation. Constructs rich file metadata structs from filesystem paths.",
+      "submodules": [
+        "mod.rs (Meta struct, from_path orchestrator)",
+        "name.rs (file/dir names with display options)",
+        "size.rs (file sizes with formatting)",
+        "date.rs (modification/access times)",
+        "permissions.rs (Unix permissions)",
+        "owner.rs (user/group IDs)",
+        "filetype.rs (regular file, directory, symlink detection)",
+        "inode.rs (inode numbers)",
+        "links.rs (hard link counts)",
+        "symlink.rs (symlink targets)",
+        "access_control.rs (SELinux contexts)",
+        "git_file_status.rs (git status integration)",
+        "indicator.rs (file type indicators)"
+      ],
+      "key_types": [
+        "Meta (14 fields, central data struct)",
+        "Name, Size, Date, Owner, Permissions",
+        "FileType, INode, Links, SymLink"
+      ]
+    },
+    {
+      "module": "flags/",
+      "responsibility": "Command-line flags and configuration options. Defines which metadata blocks to display and how.",
+      "submodules": [
+        "blocks.rs (Block enum: which columns to show)",
+        "sorting.rs (sort columns, sort order, dir grouping)",
+        "display.rs (layout: OneLine/Grid/Tree)",
+        "icons.rs (icon display options)",
+        "color.rs (color/theme options)",
+        "size.rs (size display format: Bytes/Short/Full)",
+        "permission.rs (permission format)",
+        "date.rs (date display format)",
+        "recursion.rs (max recursion depth)",
+        "hyperlink.rs (hyperlink option)",
+        "symlinks.rs (follow symlinks)",
+        "dereference.rs (dereference on output)",
+        "ignore_globs.rs (glob patterns to ignore)"
+      ],
+      "key_types": [
+        "Blocks (Vec<Block>, column configuration)",
+        "Block (enum: INode, Permission, User, Group, Size, Date, Name, GitStatus)",
+        "Flags (central flag aggregator)",
+        "SortColumn, SizeFlag, ColorOption, IconOption"
+      ]
+    },
+    {
+      "module": "theme/",
+      "responsibility": "Visual rendering configuration. Defines colors and icon themes, loaded from config files.",
+      "submodules": [
+        "color.rs (color palette for different elements)",
+        "icon.rs (icon associations by file type/extension)",
+        "git.rs (git status symbols)"
+      ],
+      "key_types": [
+        "ColorTheme, IconTheme, GitThemeSymbols",
+        "Elem (enum for color categories: Permission, Date, Size, etc.)"
+      ]
+    },
+    {
+      "module": "display.rs",
+      "responsibility": "Formats Meta structs into colored, aligned output for grid/tree/one-line layouts.",
+      "submodules": [],
+      "key_types": [
+        "grid() entry point for grid layout",
+        "tree() entry point for tree layout",
+        "inner_display_grid/tree() layout engines",
+        "get_output() block-by-block rendering",
+        "get_visible_width() terminal width calculation"
+      ]
+    },
+    {
+      "module": "core.rs",
+      "responsibility": "Main orchestrator. Manages program flow: fetch metadata, sort, display.",
+      "submodules": [],
+      "key_types": [
+        "Core struct (flags, icons, colors, git_theme, git_cache)",
+        "run() main entry",
+        "fetch() collects metadata from paths",
+        "sort() applies sort rules",
+        "display() calls display.rs functions"
+      ]
+    },
+    {
+      "module": "color.rs",
+      "responsibility": "Color application and ANSI code generation. Maps Elem categories to crossterm colors.",
+      "submodules": [],
+      "key_types": [
+        "Colors struct (color palette)",
+        "ColoredString (text + style)",
+        "Elem enum (Permission, Date, Size, Name, Directory, etc.)"
+      ]
+    },
+    {
+      "module": "icon.rs",
+      "responsibility": "Icon resolution for file types and extensions. Integrates with theme icons.",
+      "submodules": [],
+      "key_types": [
+        "Icons struct",
+        "IconOption, IconTheme flags"
+      ]
+    },
+    {
+      "module": "sort.rs",
+      "responsibility": "Sorting implementation. Assembles sorters from flags and applies them to Meta vectors.",
+      "submodules": [],
+      "key_types": [
+        "SortColumn enum (Name, Size, Date, Version, Extension, DirGrouping)",
+        "assemble_sorters() -> Vec<Box<dyn Fn>>",
+        "Ordering-based comparison"
+      ]
+    },
+    {
+      "module": "git.rs",
+      "responsibility": "Git status caching and querying. Determines if files are tracked/modified/untracked.",
+      "submodules": [],
+      "key_types": [
+        "GitCache, GitStatus enum",
+        "get() for path-based lookups"
+      ]
+    },
+    {
+      "module": "config_file.rs",
+      "responsibility": "Configuration file parsing (YAML). Provides defaults for flags and themes.",
+      "submodules": [],
+      "key_types": [
+        "Config struct (deserializes to Blocks, Colors, etc.)",
+        "Configurable trait (convert CLI/Config to typed flags)"
+      ]
+    },
+    {
+      "module": "app.rs",
+      "responsibility": "Command-line interface definition. Defines CLI arguments via clap.",
+      "submodules": [],
+      "key_types": [
+        "Cli struct (clap-derived)",
+        "defines all --flags and positional arguments"
+      ]
+    }
+  ],
+  "data_flow": [
+    {
+      "stage": "1. Metadata collection",
+      "module": "meta/",
+      "key_function": "Meta::from_path(path, depth, flags, git_cache) -> io::Result<Meta>",
+      "description": "Reads file via std::fs::metadata, constructs Name, Size, Date, Owner, Permissions, FileType, SymLink, GitStatus. Recursively calls recurse_into() for directories if depth < max.",
+      "types_produced": [
+        "Meta { name, size, date, owner, permissions, file_type, inode, links, symlink, access_control, git_status, indicator }"
+      ]
+    },
+    {
+      "stage": "2. Sorting",
+      "module": "sort.rs",
+      "key_function": "assemble_sorters(flags) -> Vec<Box<dyn Fn>>; applied to Meta vectors via Vec::sort_by",
+      "description": "Inspects flags.sort_column, sort_order, dir_grouping. Builds sort predicates comparing Meta fields (name, size, date, ext, version). Sorts metas in-place.",
+      "types_produced": [
+        "Vec<Meta> (sorted)"
+      ]
+    },
+    {
+      "stage": "3. Icon resolution",
+      "module": "icon.rs",
+      "key_function": "Icons::get(file_type, name) -> String",
+      "description": "Looks up Meta.file_type and Meta.name.extension in IconTheme (from config). Returns emoji or unicode glyph. Used during display rendering.",
+      "types_produced": [
+        "String (icon character)"
+      ]
+    },
+    {
+      "stage": "4. Color resolution",
+      "module": "color.rs",
+      "key_function": "Colors::colorize(text, elem) -> ColoredString",
+      "description": "Maps Elem (Permission, Date, Size, Directory, etc.) to crossterm Color. Applies color + style to text. Used in every Meta field's render() call.",
+      "types_produced": [
+        "ColoredString { content, style: ContentStyle }"
+      ]
+    },
+    {
+      "stage": "5. Block rendering",
+      "module": "display.rs",
+      "key_function": "get_output(meta, owner_cache, colors, icons, git_theme, flags, ...) -> Vec<String>",
+      "description": "Iterates flags.blocks.0 (Vec<Block>). For each Block variant (Permission, Size, Date, Name, GitStatus, etc.), calls meta field's render() method. Constructs one output cell per block.",
+      "types_produced": [
+        "Vec<String> { one string per block (column) }"
+      ]
+    },
+    {
+      "stage": "6. Layout engine",
+      "module": "display.rs",
+      "key_function": "grid(metas, flags, colors, icons, git_theme) or tree(...) -> String",
+      "description": "Uses term_grid crate to arrange cells into columns/rows (grid) or tree structure. Applies padding rules for alignment. Calls get_output() for each meta.",
+      "types_produced": [
+        "String (ANSI-colored terminal output)"
+      ]
+    },
+    {
+      "stage": "7. Display output",
+      "module": "core.rs",
+      "key_function": "Core::display(&self, metas: &[Meta]) -> prints to stdout",
+      "description": "Calls display.rs::grid() or tree() based on flags.layout. Prints result string to stdout.",
+      "types_produced": [
+        "stdout (final terminal output)"
+      ]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "meta/",
+      "inbound_deps": 11,
+      "outbound_deps": 5,
+      "reason": "Produced by core.rs::fetch(). Consumed by display.rs::get_output() (block rendering), sort.rs (sorting), core.rs::display(), git.rs (status lookup). Exports 14 submodules (Name, Size, Owner, etc.) used everywhere for field-level rendering."
+    },
+    {
+      "module": "display.rs",
+      "inbound_deps": 1,
+      "outbound_deps": 8,
+      "reason": "Single entry point from core.rs::display(). Imports from meta/, flags/blocks, colors, icons, git_theme. Calls Meta.* render methods. Orchestrates the final output pipeline."
+    },
+    {
+      "module": "flags/",
+      "inbound_deps": 6,
+      "outbound_deps": 3,
+      "reason": "Central configuration hub. Consumed by core.rs (controls fetch/sort/display), display.rs (layout/blocks), sort.rs (sort columns), meta/blocks.rs (recursion depth). Defines what gets shown and how."
+    }
+  ],
+  "change_proposal": {
+    "summary": "Add a file checksum display column (SHA-256 hash)",
+    "files_to_modify": [
+      "src/flags/blocks.rs - Add Block::Checksum variant, header string, try_from mapping",
+      "src/meta/mod.rs - Add checksum field to Meta struct, initialize in from_path()",
+      "src/meta/checksum.rs (new) - Checksum struct with render() method, SHA-256 computation",
+      "src/display.rs - Add Block::Checksum case in get_output() match statement",
+      "src/flags/mod.rs - Re-export checksum module if needed"
+    ],
+    "new_types": [
+      "Checksum struct { hash: String } with render(colors: &Colors) -> ColoredString and from_path(path: &Path) -> io::Result<Self>",
+      "Block::Checksum enum variant (placed after Block::GitStatus)"
+    ],
+    "pattern_to_follow": "Follow meta/size.rs pattern: struct with From<&Metadata> trait (though Checksum requires file I/O beyond Metadata), render() method returning ColoredString with appropriate Elem color (e.g., Elem::Size or new Elem::Checksum). Follow meta/name.rs for optional field pattern (Option<Checksum>) in Meta if checksums can fail silently.",
+    "integration_point": "Block::Checksum is rendered via get_output() at display.rs:380ish (in the match on block). The Checksum value is stored in Meta struct (meta/mod.rs:45+14 fields), initialized in Meta::from_path() during metadata collection phase (stage 1). Optionally added to Blocks::long() default if desired. Colored via colors.colorize(hash, &Elem::Size) or new Elem::Checksum.",
+    "risks": [
+      "Performance: SHA-256 requires reading entire file. For large files or recursive listings, this adds I/O overhead. Mitigation: make checksum optional (not in default long() blocks), allow users to --blocks checksum.",
+      "Async I/O: Current Meta::from_path() is sync. If files are large, may block terminal. Consider caching checksums or lazy computation.",
+      "Permissions: Files may not be readable (permission denied). Pattern: catch errors in from_path(), return Option<Checksum> or empty string (colorize as Elem::NoAccess).",
+      "Namespace collision: 'hash' or 'sha256' field names already used in some contexts. Suggest field: checksum or hash_sha256.",
+      "API stability: meta/ submodules are internal. Adding Checksum is localized. Low risk if not exported in public API."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "analyze",
+      "params": "path=/Users/hugues.clouatre/git/lsd-rs/lsd/src, max_depth=2 - Overview of directory structure with function/class counts per file"
+    },
+    {
+      "tool": "analyze",
+      "params": "path=/Users/hugues.clouatre/git/lsd-rs/lsd/src/core.rs - Functions (new, run, fetch, sort, display), imports, key types"
+    },
+    {
+      "tool": "analyze",
+      "params": "path=/Users/hugues.clouatre/git/lsd-rs/lsd/src/display.rs - Functions (grid, tree, inner_display_grid, get_output), imports from meta/flags/color/icons"
+    },
+    {
+      "tool": "analyze",
+      "params": "path=/Users/hugues.clouatre/git/lsd-rs/lsd/src/meta/mod.rs - Meta struct (14 fields), from_path orchestrator, key submodule re-exports"
+    },
+    {
+      "tool": "analyze",
+      "params": "path=/Users/hugues.clouatre/git/lsd-rs/lsd/src/flags/blocks.rs - Block enum, Blocks struct, configure_from(), long() default"
+    },
+    {
+      "tool": "analyze",
+      "params": "focus=from_path, follow_depth=2 - Call graph: Meta::from_path -> core.rs::fetch, icon resolution, field construction via meta/* modules"
+    },
+    {
+      "tool": "analyze",
+      "params": "focus=grid, follow_depth=1 - Call graph: grid -> core.rs::display (inbound), inner_display_grid (outbound)"
+    },
+    {
+      "tool": "shell",
+      "params": "rg '^use ' src/*.rs - Top-level imports in core modules to identify cross-module dependencies"
+    },
+    {
+      "tool": "shell",
+      "params": "rg 'use crate::' src/display.rs - Detailed imports in display.rs to map its hub status"
+    },
+    {
+      "tool": "shell",
+      "params": "sed commands to sample code from core.rs, display.rs, meta/mod.rs, flags/blocks.rs for concrete data flow examples"
+    }
+  ],
+  "methodology_notes": "Used developer__analyze on directory, key files, and focus symbols to build a call graph. Cross-referenced imports to identify hub modules (meta, flags, display are most connected). Traced data flow from Meta::from_path through render methods to output. Examined Block enum pattern in blocks.rs and Size struct in meta/size.rs as templates for Checksum implementation. Identified display.rs::get_output() as the integration point for new columns.",
+  "timestamp": "2026-03-09T17:38:00Z"
+}
