@@ -438,8 +438,39 @@ pub fn format_focused(
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
-    // FOCUS section
-    output.push_str(&format!("FOCUS: {}\n", symbol));
+    // Compute all counts BEFORE output begins
+    let def_count = graph.definitions.get(symbol).map_or(0, |d| d.len());
+    let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
+    let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
+
+    // Partition incoming_chains into production and test callers
+    let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
+        incoming_chains.clone().into_iter().partition(|chain| {
+            chain
+                .chain
+                .first()
+                .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
+        });
+
+    // Count unique callers
+    let callers_count = prod_chains
+        .iter()
+        .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+
+    // Count unique callees
+    let callees_count = outgoing_chains
+        .iter()
+        .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+
+    // FOCUS section - with inline counts
+    output.push_str(&format!(
+        "FOCUS: {} ({} defs, {} callers, {} callees)\n",
+        symbol, def_count, callers_count, callees_count
+    ));
 
     // DEPTH section
     output.push_str(&format!("DEPTH: {}\n", follow_depth));
@@ -459,17 +490,6 @@ pub fn format_focused(
     }
 
     // CALLERS section - who calls this symbol
-    let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
-
-    // Partition incoming_chains into production and test callers
-    let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
-        incoming_chains.into_iter().partition(|chain| {
-            chain
-                .chain
-                .first()
-                .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
-        });
-
     output.push_str("CALLERS:\n");
 
     // Render production callers
@@ -521,7 +541,6 @@ pub fn format_focused(
     }
 
     // CALLEES section - what this symbol calls
-    let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
     output.push_str("CALLEES:\n");
     let outgoing_refs: Vec<_> = outgoing_chains
         .iter()
