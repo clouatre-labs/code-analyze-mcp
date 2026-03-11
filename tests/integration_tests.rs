@@ -3051,7 +3051,7 @@ fn test_symbol_focus_callers_pagination_second_page() {
         let formatted = format_focused_paginated(
             &p2.items,
             total_prod,
-            "callers",
+            PaginationMode::Callers,
             "target",
             &output.prod_chains,
             &output.test_chains,
@@ -3100,7 +3100,7 @@ fn test_symbol_focus_callees_pagination() {
         let formatted = format_focused_paginated(
             &paginated.items,
             total_callees,
-            "callees",
+            PaginationMode::Callees,
             "target",
             &output.prod_chains,
             &output.test_chains,
@@ -3233,6 +3233,7 @@ fn test_format_file_details_paginated_unit() {
 fn test_format_focused_paginated_unit() {
     use code_analyze_mcp::formatter::format_focused_paginated;
     use code_analyze_mcp::graph::CallChain;
+    use code_analyze_mcp::pagination::PaginationMode;
     use std::path::PathBuf;
 
     // Arrange: create mock caller chains
@@ -3254,7 +3255,7 @@ fn test_format_focused_paginated_unit() {
     let formatted = format_focused_paginated(
         page,
         8,
-        "callers",
+        PaginationMode::Callers,
         "target",
         &prod_chains,
         &[],

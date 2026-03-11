@@ -714,7 +714,7 @@ impl CodeAnalyzer {
                             output.formatted = format_focused_paginated(
                                 &paginated_items,
                                 output.prod_chains.len(),
-                                "callers",
+                                PaginationMode::Callers,
                                 focus_symbol,
                                 &output.prod_chains,
                                 &output.test_chains,
@@ -742,7 +742,7 @@ impl CodeAnalyzer {
                             output.formatted = format_focused_paginated(
                                 &paginated_items,
                                 output.outgoing_chains.len(),
-                                "callees",
+                                PaginationMode::Callees,
                                 focus_symbol,
                                 &output.prod_chains,
                                 &output.test_chains,
