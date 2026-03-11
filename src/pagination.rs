@@ -5,12 +5,17 @@ use thiserror::Error;
 
 pub const DEFAULT_PAGE_SIZE: usize = 100;
 
-pub const SYMBOL_FOCUS_CALLERS_MODE: &str = "symbol_focus_callers";
-pub const SYMBOL_FOCUS_CALLEES_MODE: &str = "symbol_focus_callees";
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PaginationMode {
+    Default,
+    Callers,
+    Callees,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CursorData {
-    pub mode: String,
+    pub mode: PaginationMode,
     pub offset: usize,
 }
 
@@ -55,6 +60,7 @@ pub fn paginate_slice<T: Clone>(
     items: &[T],
     offset: usize,
     page_size: usize,
+    mode: PaginationMode,
 ) -> Result<PaginationResult<T>, PaginationError> {
     let total = items.len();
 
@@ -70,10 +76,7 @@ pub fn paginate_slice<T: Clone>(
     let page_items = items[offset..end].to_vec();
 
     let next_cursor = if end < total {
-        let cursor_data = CursorData {
-            mode: "default".to_string(),
-            offset: end,
-        };
+        let cursor_data = CursorData { mode, offset: end };
         Some(encode_cursor(&cursor_data)?)
     } else {
         None
@@ -93,7 +96,7 @@ mod tests {
     #[test]
     fn test_cursor_encode_decode_roundtrip() {
         let original = CursorData {
-            mode: "overview".to_string(),
+            mode: PaginationMode::Default,
             offset: 42,
         };
 
@@ -105,9 +108,30 @@ mod tests {
     }
 
     #[test]
+    fn test_pagination_mode_wire_format() {
+        let cursor_data = CursorData {
+            mode: PaginationMode::Callers,
+            offset: 0,
+        };
+
+        let encoded = encode_cursor(&cursor_data).expect("encode failed");
+        let decoded = decode_cursor(&encoded).expect("decode failed");
+
+        assert_eq!(decoded.mode, PaginationMode::Callers);
+
+        let json_str = serde_json::to_string(&cursor_data).expect("serialize failed");
+        assert!(
+            json_str.contains("\"mode\":\"callers\""),
+            "expected lowercase 'callers' in JSON, got: {}",
+            json_str
+        );
+    }
+
+    #[test]
     fn test_paginate_slice_middle_page() {
         let items: Vec<i32> = (0..250).collect();
-        let result = paginate_slice(&items, 100, 100).expect("paginate failed");
+        let result =
+            paginate_slice(&items, 100, 100, PaginationMode::Default).expect("paginate failed");
 
         assert_eq!(result.items.len(), 100);
         assert_eq!(result.items[0], 100);
@@ -119,13 +143,15 @@ mod tests {
     #[test]
     fn test_paginate_slice_empty_and_beyond() {
         let empty: Vec<i32> = vec![];
-        let result = paginate_slice(&empty, 0, 100).expect("paginate failed");
+        let result =
+            paginate_slice(&empty, 0, 100, PaginationMode::Default).expect("paginate failed");
         assert_eq!(result.items.len(), 0);
         assert!(result.next_cursor.is_none());
         assert_eq!(result.total, 0);
 
         let items: Vec<i32> = (0..50).collect();
-        let result = paginate_slice(&items, 100, 100).expect("paginate failed");
+        let result =
+            paginate_slice(&items, 100, 100, PaginationMode::Default).expect("paginate failed");
         assert_eq!(result.items.len(), 0);
         assert!(result.next_cursor.is_none());
         assert_eq!(result.total, 50);
@@ -134,7 +160,8 @@ mod tests {
     #[test]
     fn test_paginate_slice_exact_boundary() {
         let items: Vec<i32> = (0..200).collect();
-        let result = paginate_slice(&items, 100, 100).expect("paginate failed");
+        let result =
+            paginate_slice(&items, 100, 100, PaginationMode::Default).expect("paginate failed");
 
         assert_eq!(result.items.len(), 100);
         assert_eq!(result.items[0], 100);

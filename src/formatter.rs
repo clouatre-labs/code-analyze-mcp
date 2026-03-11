@@ -1,6 +1,7 @@
 use crate::dataflow::DataflowGraph;
 use crate::graph::CallChain;
 use crate::graph::CallGraph;
+use crate::pagination::PaginationMode;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
 use crate::types::{ClassInfo, FileInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
@@ -1114,7 +1115,7 @@ pub fn format_file_details_paginated(
 pub struct FocusedPaginatedParams<'a> {
     pub paginated_chains: &'a [CallChain],
     pub total: usize,
-    pub mode: &'a str,
+    pub mode: PaginationMode,
     pub symbol: &'a str,
     pub prod_chains: &'a [CallChain],
     pub test_chains: &'a [CallChain],
@@ -1126,14 +1127,14 @@ pub struct FocusedPaginatedParams<'a> {
 
 /// Format a paginated subset of callers or callees for SymbolFocus mode.
 /// Mode is determined by the `mode` parameter:
-/// - `SYMBOL_FOCUS_CALLERS_MODE`: paginate production callers; show test callers summary and callees summary.
-/// - `SYMBOL_FOCUS_CALLEES_MODE`: paginate callees; show callers summary and test callers summary.
+/// - `PaginationMode::Callers`: paginate production callers; show test callers summary and callees summary.
+/// - `PaginationMode::Callees`: paginate callees; show callers summary and test callers summary.
 #[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
 pub fn format_focused_paginated(
     paginated_chains: &[CallChain],
     total: usize,
-    mode: &str,
+    mode: PaginationMode,
     symbol: &str,
     prod_chains: &[CallChain],
     test_chains: &[CallChain],
@@ -1164,103 +1165,108 @@ pub fn format_focused_paginated(
         symbol, def_count, callers_count, callees_count
     ));
 
-    if crate::pagination::SYMBOL_FOCUS_CALLERS_MODE == mode {
-        // Paginate production callers
-        output.push_str(&format!("CALLERS ({}-{} of {}):\n", start, end, total));
+    match mode {
+        PaginationMode::Callers => {
+            // Paginate production callers
+            output.push_str(&format!("CALLERS ({}-{} of {}):\n", start, end, total));
 
-        let page_refs: Vec<_> = paginated_chains
-            .iter()
-            .filter_map(|chain| {
-                if chain.chain.len() >= 2 {
-                    Some((chain.chain[0].0.as_str(), chain.chain[1].0.as_str()))
-                } else if chain.chain.len() == 1 {
-                    Some((chain.chain[0].0.as_str(), ""))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if page_refs.is_empty() {
-            output.push_str("  (none)\n");
-        } else {
-            output.push_str(&format_chains_as_tree(&page_refs, "<-", symbol));
-        }
-
-        // Test callers summary
-        if !test_chains.is_empty() {
-            let mut test_files: Vec<_> = test_chains
+            let page_refs: Vec<_> = paginated_chains
                 .iter()
                 .filter_map(|chain| {
-                    chain
-                        .chain
-                        .first()
-                        .map(|(_, path, _)| path.to_string_lossy().into_owned())
+                    if chain.chain.len() >= 2 {
+                        Some((chain.chain[0].0.as_str(), chain.chain[1].0.as_str()))
+                    } else if chain.chain.len() == 1 {
+                        Some((chain.chain[0].0.as_str(), ""))
+                    } else {
+                        None
+                    }
                 })
                 .collect();
-            test_files.sort();
-            test_files.dedup();
 
-            let display_files: Vec<_> = test_files
+            if page_refs.is_empty() {
+                output.push_str("  (none)\n");
+            } else {
+                output.push_str(&format_chains_as_tree(&page_refs, "<-", symbol));
+            }
+
+            // Test callers summary
+            if !test_chains.is_empty() {
+                let mut test_files: Vec<_> = test_chains
+                    .iter()
+                    .filter_map(|chain| {
+                        chain
+                            .chain
+                            .first()
+                            .map(|(_, path, _)| path.to_string_lossy().into_owned())
+                    })
+                    .collect();
+                test_files.sort();
+                test_files.dedup();
+
+                let display_files: Vec<_> = test_files
+                    .iter()
+                    .map(|f| strip_base_path_buf(std::path::Path::new(f), base_path))
+                    .collect();
+
+                output.push_str(&format!(
+                    "CALLERS (test): {} test functions (in {})\n",
+                    test_chains.len(),
+                    display_files.join(", ")
+                ));
+            }
+
+            // Callees summary
+            let callee_names: Vec<_> = outgoing_chains
                 .iter()
-                .map(|f| strip_base_path_buf(std::path::Path::new(f), base_path))
+                .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p.clone()))
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+            if callee_names.is_empty() {
+                output.push_str("CALLEES: (none)\n");
+            } else {
+                output.push_str(&format!(
+                    "CALLEES: {} (use cursor for callee pagination)\n",
+                    callees_count
+                ));
+            }
+        }
+        PaginationMode::Callees => {
+            // Callers summary
+            output.push_str(&format!("CALLERS: {} production callers\n", callers_count));
+
+            // Test callers summary
+            if !test_chains.is_empty() {
+                output.push_str(&format!(
+                    "CALLERS (test): {} test functions\n",
+                    test_chains.len()
+                ));
+            }
+
+            // Paginate callees
+            output.push_str(&format!("CALLEES ({}-{} of {}):\n", start, end, total));
+
+            let page_refs: Vec<_> = paginated_chains
+                .iter()
+                .filter_map(|chain| {
+                    if chain.chain.len() >= 2 {
+                        Some((chain.chain[0].0.as_str(), chain.chain[1].0.as_str()))
+                    } else if chain.chain.len() == 1 {
+                        Some((chain.chain[0].0.as_str(), ""))
+                    } else {
+                        None
+                    }
+                })
                 .collect();
 
-            output.push_str(&format!(
-                "CALLERS (test): {} test functions (in {})\n",
-                test_chains.len(),
-                display_files.join(", ")
-            ));
+            if page_refs.is_empty() {
+                output.push_str("  (none)\n");
+            } else {
+                output.push_str(&format_chains_as_tree(&page_refs, "->", symbol));
+            }
         }
-
-        // Callees summary
-        let callee_names: Vec<_> = outgoing_chains
-            .iter()
-            .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p.clone()))
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-        if callee_names.is_empty() {
-            output.push_str("CALLEES: (none)\n");
-        } else {
-            output.push_str(&format!(
-                "CALLEES: {} (use cursor for callee pagination)\n",
-                callees_count
-            ));
-        }
-    } else {
-        // SYMBOL_FOCUS_CALLEES_MODE: paginate callees
-        // Callers summary
-        output.push_str(&format!("CALLERS: {} production callers\n", callers_count));
-
-        // Test callers summary
-        if !test_chains.is_empty() {
-            output.push_str(&format!(
-                "CALLERS (test): {} test functions\n",
-                test_chains.len()
-            ));
-        }
-
-        // Paginate callees
-        output.push_str(&format!("CALLEES ({}-{} of {}):\n", start, end, total));
-
-        let page_refs: Vec<_> = paginated_chains
-            .iter()
-            .filter_map(|chain| {
-                if chain.chain.len() >= 2 {
-                    Some((chain.chain[0].0.as_str(), chain.chain[1].0.as_str()))
-                } else if chain.chain.len() == 1 {
-                    Some((chain.chain[0].0.as_str(), ""))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if page_refs.is_empty() {
-            output.push_str("  (none)\n");
-        } else {
-            output.push_str(&format_chains_as_tree(&page_refs, "->", symbol));
+        PaginationMode::Default => {
+            unreachable!("format_focused_paginated called with PaginationMode::Default")
         }
     }
 

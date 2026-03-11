@@ -1755,7 +1755,7 @@ struct Point {
 
 #[test]
 fn test_overview_pagination_multi_page() {
-    use code_analyze_mcp::pagination::{decode_cursor, paginate_slice};
+    use code_analyze_mcp::pagination::{PaginationMode, decode_cursor, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
@@ -1767,21 +1767,28 @@ fn test_overview_pagination_multi_page() {
     let output = analyze_directory(root, None).unwrap();
     assert_eq!(output.files.len(), 150);
 
-    let result = paginate_slice(&output.files, 0, 100).expect("paginate failed");
+    let result =
+        paginate_slice(&output.files, 0, 100, PaginationMode::Default).expect("paginate failed");
     assert_eq!(result.items.len(), 100);
     assert!(result.next_cursor.is_some());
     assert_eq!(result.total, 150);
 
     let cursor = result.next_cursor.unwrap();
     let cursor_data = decode_cursor(&cursor).expect("decode failed");
-    let result2 = paginate_slice(&output.files, cursor_data.offset, 100).expect("paginate failed");
+    let result2 = paginate_slice(
+        &output.files,
+        cursor_data.offset,
+        100,
+        PaginationMode::Default,
+    )
+    .expect("paginate failed");
     assert_eq!(result2.items.len(), 50);
     assert!(result2.next_cursor.is_none());
 }
 
 #[test]
 fn test_single_page_no_cursor() {
-    use code_analyze_mcp::pagination::paginate_slice;
+    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
@@ -1791,7 +1798,8 @@ fn test_single_page_no_cursor() {
     }
 
     let output = analyze_directory(root, None).unwrap();
-    let result = paginate_slice(&output.files, 0, 100).expect("paginate failed");
+    let result =
+        paginate_slice(&output.files, 0, 100, PaginationMode::Default).expect("paginate failed");
     assert_eq!(result.items.len(), 50);
     assert!(result.next_cursor.is_none());
     assert_eq!(result.total, 50);
@@ -2806,7 +2814,7 @@ fn test_format_file_details_summary_many_classes() {
 #[test]
 fn test_file_details_pagination_first_page() {
     use code_analyze_mcp::formatter::format_file_details_paginated;
-    use code_analyze_mcp::pagination::{decode_cursor, paginate_slice};
+    use code_analyze_mcp::pagination::{PaginationMode, decode_cursor, paginate_slice};
     use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
     use std::collections::HashMap;
 
@@ -2833,7 +2841,8 @@ fn test_file_details_pagination_first_page() {
     };
 
     // Act: paginate first page
-    let paginated = paginate_slice(&functions, 0, 10).expect("paginate failed");
+    let paginated =
+        paginate_slice(&functions, 0, 10, PaginationMode::Default).expect("paginate failed");
     assert_eq!(paginated.items.len(), 10);
     assert!(paginated.next_cursor.is_some());
     assert_eq!(paginated.total, 25);
@@ -2868,7 +2877,7 @@ fn test_file_details_pagination_first_page() {
 #[test]
 fn test_file_details_pagination_last_page() {
     use code_analyze_mcp::formatter::format_file_details_paginated;
-    use code_analyze_mcp::pagination::paginate_slice;
+    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
     use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
     use std::collections::HashMap;
 
@@ -2895,7 +2904,8 @@ fn test_file_details_pagination_last_page() {
     };
 
     // Act: paginate last page (offset=10, page_size=20 -> items 10..25)
-    let paginated = paginate_slice(&functions, 10, 20).expect("paginate failed");
+    let paginated =
+        paginate_slice(&functions, 10, 20, PaginationMode::Default).expect("paginate failed");
     assert_eq!(paginated.items.len(), 15);
     assert!(
         paginated.next_cursor.is_none(),
@@ -2929,7 +2939,7 @@ fn test_file_details_pagination_last_page() {
 
 #[test]
 fn test_file_details_single_page_no_cursor() {
-    use code_analyze_mcp::pagination::paginate_slice;
+    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
     use code_analyze_mcp::types::FunctionInfo;
 
     // Arrange: 5 functions, page_size=100
@@ -2944,7 +2954,8 @@ fn test_file_details_single_page_no_cursor() {
         .collect();
 
     // Act
-    let paginated = paginate_slice(&functions, 0, 100).expect("paginate failed");
+    let paginated =
+        paginate_slice(&functions, 0, 100, PaginationMode::Default).expect("paginate failed");
 
     // Assert: single page, no cursor
     assert_eq!(paginated.items.len(), 5);
@@ -2971,7 +2982,7 @@ fn test_file_details_invalid_cursor() {
 #[test]
 fn test_symbol_focus_callers_pagination_first_page() {
     use code_analyze_mcp::analyze::analyze_focused;
-    use code_analyze_mcp::pagination::{SYMBOL_FOCUS_CALLERS_MODE, paginate_slice};
+    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
 
@@ -2986,7 +2997,8 @@ fn test_symbol_focus_callers_pagination_first_page() {
     let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
 
     // Paginate prod callers with page_size=5
-    let paginated = paginate_slice(&output.prod_chains, 0, 5).expect("paginate failed");
+    let paginated = paginate_slice(&output.prod_chains, 0, 5, PaginationMode::Callers)
+        .expect("paginate failed");
     assert!(
         paginated.total >= 5,
         "should have enough callers to paginate"
@@ -2997,7 +3009,6 @@ fn test_symbol_focus_callers_pagination_first_page() {
     );
 
     // Verify cursor encodes callers mode
-    let _ = SYMBOL_FOCUS_CALLERS_MODE; // used to verify constant exists
     assert_eq!(paginated.items.len(), 5);
 }
 
@@ -3005,7 +3016,7 @@ fn test_symbol_focus_callers_pagination_first_page() {
 fn test_symbol_focus_callers_pagination_second_page() {
     use code_analyze_mcp::analyze::analyze_focused;
     use code_analyze_mcp::formatter::format_focused_paginated;
-    use code_analyze_mcp::pagination::{SYMBOL_FOCUS_CALLERS_MODE, decode_cursor, paginate_slice};
+    use code_analyze_mcp::pagination::{PaginationMode, decode_cursor, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
 
@@ -3020,21 +3031,27 @@ fn test_symbol_focus_callers_pagination_second_page() {
 
     if total_prod > 5 {
         // Get page 1 cursor
-        let p1 = paginate_slice(&output.prod_chains, 0, 5).expect("paginate failed");
+        let p1 = paginate_slice(&output.prod_chains, 0, 5, PaginationMode::Callers)
+            .expect("paginate failed");
         assert!(p1.next_cursor.is_some());
 
         let cursor_str = p1.next_cursor.unwrap();
         let cursor_data = decode_cursor(&cursor_str).expect("decode failed");
 
         // Get page 2
-        let p2 =
-            paginate_slice(&output.prod_chains, cursor_data.offset, 5).expect("paginate failed");
+        let p2 = paginate_slice(
+            &output.prod_chains,
+            cursor_data.offset,
+            5,
+            PaginationMode::Callers,
+        )
+        .expect("paginate failed");
 
         // Format paginated output
         let formatted = format_focused_paginated(
             &p2.items,
             total_prod,
-            SYMBOL_FOCUS_CALLERS_MODE,
+            PaginationMode::Callers,
             "target",
             &output.prod_chains,
             &output.test_chains,
@@ -3058,7 +3075,7 @@ fn test_symbol_focus_callers_pagination_second_page() {
 fn test_symbol_focus_callees_pagination() {
     use code_analyze_mcp::analyze::analyze_focused;
     use code_analyze_mcp::formatter::format_focused_paginated;
-    use code_analyze_mcp::pagination::{SYMBOL_FOCUS_CALLEES_MODE, paginate_slice};
+    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
 
@@ -3077,12 +3094,13 @@ fn test_symbol_focus_callees_pagination() {
     let total_callees = output.outgoing_chains.len();
 
     if total_callees > 3 {
-        let paginated = paginate_slice(&output.outgoing_chains, 0, 3).expect("paginate failed");
+        let paginated = paginate_slice(&output.outgoing_chains, 0, 3, PaginationMode::Callees)
+            .expect("paginate failed");
 
         let formatted = format_focused_paginated(
             &paginated.items,
             total_callees,
-            SYMBOL_FOCUS_CALLEES_MODE,
+            PaginationMode::Callees,
             "target",
             &output.prod_chains,
             &output.test_chains,
@@ -3107,7 +3125,7 @@ fn test_symbol_focus_callees_pagination() {
 #[test]
 fn test_symbol_focus_empty_prod_callers() {
     use code_analyze_mcp::analyze::analyze_focused;
-    use code_analyze_mcp::pagination::paginate_slice;
+    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
 
@@ -3127,7 +3145,8 @@ mod tests {
     let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
 
     // prod_chains may be empty; pagination should handle it gracefully
-    let paginated = paginate_slice(&output.prod_chains, 0, 100).expect("paginate failed");
+    let paginated = paginate_slice(&output.prod_chains, 0, 100, PaginationMode::Callers)
+        .expect("paginate failed");
     assert_eq!(paginated.items.len(), output.prod_chains.len());
     assert!(
         paginated.next_cursor.is_none(),
@@ -3214,7 +3233,7 @@ fn test_format_file_details_paginated_unit() {
 fn test_format_focused_paginated_unit() {
     use code_analyze_mcp::formatter::format_focused_paginated;
     use code_analyze_mcp::graph::CallChain;
-    use code_analyze_mcp::pagination::SYMBOL_FOCUS_CALLERS_MODE;
+    use code_analyze_mcp::pagination::PaginationMode;
     use std::path::PathBuf;
 
     // Arrange: create mock caller chains
@@ -3236,7 +3255,7 @@ fn test_format_focused_paginated_unit() {
     let formatted = format_focused_paginated(
         page,
         8,
-        SYMBOL_FOCUS_CALLERS_MODE,
+        PaginationMode::Callers,
         "target",
         &prod_chains,
         &[],
