@@ -44,6 +44,41 @@ use types::{AnalysisMode, AnalyzeParams};
 
 const SIZE_LIMIT: usize = 50_000;
 
+/// Helper function for paginating focus chains (callers or callees).
+/// Returns (items, re-encoded_cursor_option).
+fn paginate_focus_chains(
+    chains: &[graph::CallChain],
+    mode: &str,
+    offset: usize,
+    page_size: usize,
+) -> Result<(Vec<graph::CallChain>, Option<String>), ErrorData> {
+    let paginated = paginate_slice(chains, offset, page_size)
+        .map_err(|e| ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
+
+    if paginated.next_cursor.is_none() && offset == 0 {
+        return Ok((paginated.items, None));
+    }
+
+    let next = if let Some(raw_cursor) = paginated.next_cursor {
+        let decoded = decode_cursor(&raw_cursor).map_err(|e| {
+            ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+        })?;
+        Some(
+            encode_cursor(&CursorData {
+                mode: mode.to_string(),
+                offset: decoded.offset,
+            })
+            .map_err(|e| {
+                ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+            })?,
+        )
+    } else {
+        None
+    };
+
+    Ok((paginated.items, next))
+}
+
 /// Helper function to create the output schema for the analyze tool
 fn create_analyze_output_schema() -> std::sync::Arc<serde_json::Map<String, Value>> {
     use serde_json::json;
@@ -568,7 +603,6 @@ impl CodeAnalyzer {
                         &params.path,
                         output.line_count,
                         offset,
-                        page_size,
                     );
                 }
 
@@ -656,48 +690,19 @@ impl CodeAnalyzer {
                 };
 
                 let paginated_next_cursor = if cursor_mode == SYMBOL_FOCUS_CALLERS_MODE {
-                    // Paginate production callers
-                    let paginated = paginate_slice(&output.prod_chains, offset, page_size)
-                        .map_err(|e| {
-                            ErrorData::new(
-                                rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                e.to_string(),
-                                None,
-                            )
-                        })?;
+                    let (paginated_items, paginated_next) = paginate_focus_chains(
+                        &output.prod_chains,
+                        SYMBOL_FOCUS_CALLERS_MODE,
+                        offset,
+                        page_size,
+                    )?;
 
-                    if paginated.next_cursor.is_some() || offset > 0 {
-                        // Re-encode cursor with correct mode
-                        let next = if let Some(raw_cursor) = paginated.next_cursor {
-                            let decoded = decode_cursor(&raw_cursor).map_err(|e| {
-                                ErrorData::new(
-                                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                    e.to_string(),
-                                    None,
-                                )
-                            })?;
-                            Some(
-                                encode_cursor(&CursorData {
-                                    mode: SYMBOL_FOCUS_CALLERS_MODE.to_string(),
-                                    offset: decoded.offset,
-                                })
-                                .map_err(|e| {
-                                    ErrorData::new(
-                                        rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                        e.to_string(),
-                                        None,
-                                    )
-                                })?,
-                            )
-                        } else {
-                            None
-                        };
-
+                    if paginated_next.is_some() || offset > 0 {
                         let focus_symbol = params.focus.as_deref().unwrap_or("");
                         let base_path = Path::new(&params.path);
                         output.formatted = format_focused_paginated(
-                            &paginated.items,
-                            paginated.total,
+                            &paginated_items,
+                            output.prod_chains.len(),
                             SYMBOL_FOCUS_CALLERS_MODE,
                             focus_symbol,
                             &output.prod_chains,
@@ -707,52 +712,24 @@ impl CodeAnalyzer {
                             offset,
                             Some(base_path),
                         );
-                        next
+                        paginated_next
                     } else {
                         None
                     }
                 } else {
-                    // Paginate callees (SYMBOL_FOCUS_CALLEES_MODE)
-                    let paginated = paginate_slice(&output.outgoing_chains, offset, page_size)
-                        .map_err(|e| {
-                            ErrorData::new(
-                                rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                e.to_string(),
-                                None,
-                            )
-                        })?;
+                    let (paginated_items, paginated_next) = paginate_focus_chains(
+                        &output.outgoing_chains,
+                        SYMBOL_FOCUS_CALLEES_MODE,
+                        offset,
+                        page_size,
+                    )?;
 
-                    if paginated.next_cursor.is_some() || offset > 0 {
-                        let next = if let Some(raw_cursor) = paginated.next_cursor {
-                            let decoded = decode_cursor(&raw_cursor).map_err(|e| {
-                                ErrorData::new(
-                                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                    e.to_string(),
-                                    None,
-                                )
-                            })?;
-                            Some(
-                                encode_cursor(&CursorData {
-                                    mode: SYMBOL_FOCUS_CALLEES_MODE.to_string(),
-                                    offset: decoded.offset,
-                                })
-                                .map_err(|e| {
-                                    ErrorData::new(
-                                        rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                        e.to_string(),
-                                        None,
-                                    )
-                                })?,
-                            )
-                        } else {
-                            None
-                        };
-
+                    if paginated_next.is_some() || offset > 0 {
                         let focus_symbol = params.focus.as_deref().unwrap_or("");
                         let base_path = Path::new(&params.path);
                         output.formatted = format_focused_paginated(
-                            &paginated.items,
-                            paginated.total,
+                            &paginated_items,
+                            output.outgoing_chains.len(),
                             SYMBOL_FOCUS_CALLEES_MODE,
                             focus_symbol,
                             &output.prod_chains,
@@ -762,7 +739,7 @@ impl CodeAnalyzer {
                             offset,
                             Some(base_path),
                         );
-                        next
+                        paginated_next
                     } else {
                         None
                     }

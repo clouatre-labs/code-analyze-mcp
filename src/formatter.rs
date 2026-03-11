@@ -3,7 +3,7 @@ use crate::graph::CallChain;
 use crate::graph::CallGraph;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
-use crate::types::{FileInfo, FunctionInfo, SemanticAnalysis};
+use crate::types::{ClassInfo, FileInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::path::Path;
@@ -273,45 +273,7 @@ pub fn format_file_details(
     }
 
     // C: section with classes
-    if !analysis.classes.is_empty() {
-        output.push_str("C:\n");
-        if analysis.classes.len() <= MULTILINE_THRESHOLD {
-            // Inline format for <= 10 classes
-            let class_strs: Vec<String> = analysis
-                .classes
-                .iter()
-                .map(|class| {
-                    if class.inherits.is_empty() {
-                        format!("{}:{}", class.name, class.line)
-                    } else {
-                        format!(
-                            "{}:{} ({})",
-                            class.name,
-                            class.line,
-                            class.inherits.join(", ")
-                        )
-                    }
-                })
-                .collect();
-            output.push_str("  ");
-            output.push_str(&class_strs.join("; "));
-            output.push('\n');
-        } else {
-            // Multiline format for > 10 classes
-            for class in &analysis.classes {
-                if class.inherits.is_empty() {
-                    output.push_str(&format!("  {}:{}\n", class.name, class.line));
-                } else {
-                    output.push_str(&format!(
-                        "  {}:{} ({})\n",
-                        class.name,
-                        class.line,
-                        class.inherits.join(", ")
-                    ));
-                }
-            }
-        }
-    }
+    output.push_str(&format_classes_section(&analysis.classes));
 
     // F: section with functions, parameters, return types and call frequency
     if !analysis.functions.is_empty() {
@@ -347,39 +309,7 @@ pub fn format_file_details(
     }
 
     // I: section with imports grouped by module
-    if !analysis.imports.is_empty() {
-        output.push_str("I:\n");
-        let mut module_map: HashMap<String, usize> = HashMap::new();
-        for import in &analysis.imports {
-            module_map
-                .entry(import.module.clone())
-                .and_modify(|count| *count += 1)
-                .or_insert(1);
-        }
-
-        let mut modules: Vec<_> = module_map.keys().cloned().collect();
-        modules.sort();
-
-        // Format modules with count notation
-        let formatted_modules: Vec<String> = modules
-            .iter()
-            .map(|module| format!("{}({})", module, module_map[module]))
-            .collect();
-
-        if formatted_modules.len() <= MULTILINE_THRESHOLD {
-            // Inline format for <= 10 modules
-            output.push_str("  ");
-            output.push_str(&formatted_modules.join("; "));
-            output.push('\n');
-        } else {
-            // Multiline format for > 10 modules
-            for module_str in formatted_modules {
-                output.push_str("  ");
-                output.push_str(&module_str);
-                output.push('\n');
-            }
-        }
-    }
+    output.push_str(&format_imports_section(&analysis.imports));
 
     output
 }
@@ -1121,9 +1051,7 @@ pub fn format_file_details_paginated(
     path: &str,
     line_count: usize,
     offset: usize,
-    page_size: usize,
 ) -> String {
-    let _ = page_size; // kept for API symmetry; end is derived from slice length
     let mut output = String::new();
 
     let start = offset + 1; // 1-indexed for display
@@ -1142,76 +1070,8 @@ pub fn format_file_details_paginated(
 
     // Classes and imports sections only on first page
     if offset == 0 {
-        // C: section with classes
-        if !semantic.classes.is_empty() {
-            output.push_str("C:\n");
-            if semantic.classes.len() <= MULTILINE_THRESHOLD {
-                let class_strs: Vec<String> = semantic
-                    .classes
-                    .iter()
-                    .map(|class| {
-                        if class.inherits.is_empty() {
-                            format!("{}:{}", class.name, class.line)
-                        } else {
-                            format!(
-                                "{}:{} ({})",
-                                class.name,
-                                class.line,
-                                class.inherits.join(", ")
-                            )
-                        }
-                    })
-                    .collect();
-                output.push_str("  ");
-                output.push_str(&class_strs.join("; "));
-                output.push('\n');
-            } else {
-                for class in &semantic.classes {
-                    if class.inherits.is_empty() {
-                        output.push_str(&format!("  {}:{}\n", class.name, class.line));
-                    } else {
-                        output.push_str(&format!(
-                            "  {}:{} ({})\n",
-                            class.name,
-                            class.line,
-                            class.inherits.join(", ")
-                        ));
-                    }
-                }
-            }
-        }
-
-        // I: section with imports
-        if !semantic.imports.is_empty() {
-            output.push_str("I:\n");
-            let mut module_map: HashMap<String, usize> = HashMap::new();
-            for import in &semantic.imports {
-                module_map
-                    .entry(import.module.clone())
-                    .and_modify(|count| *count += 1)
-                    .or_insert(1);
-            }
-
-            let mut modules: Vec<_> = module_map.keys().cloned().collect();
-            modules.sort();
-
-            let formatted_modules: Vec<String> = modules
-                .iter()
-                .map(|module| format!("{}({})", module, module_map[module]))
-                .collect();
-
-            if formatted_modules.len() <= MULTILINE_THRESHOLD {
-                output.push_str("  ");
-                output.push_str(&formatted_modules.join("; "));
-                output.push('\n');
-            } else {
-                for module_str in formatted_modules {
-                    output.push_str("  ");
-                    output.push_str(&module_str);
-                    output.push('\n');
-                }
-            }
-        }
+        output.push_str(&format_classes_section(&semantic.classes));
+        output.push_str(&format_imports_section(&semantic.imports));
     }
 
     // F: section with paginated function slice
@@ -1540,4 +1400,79 @@ mod tests {
         // Should contain import count
         assert!(result.contains("Imports: 0"));
     }
+}
+
+fn format_classes_section(classes: &[ClassInfo]) -> String {
+    let mut output = String::new();
+    if classes.is_empty() {
+        return output;
+    }
+    output.push_str("C:\n");
+    if classes.len() <= MULTILINE_THRESHOLD {
+        let class_strs: Vec<String> = classes
+            .iter()
+            .map(|class| {
+                if class.inherits.is_empty() {
+                    format!("{}:{}", class.name, class.line)
+                } else {
+                    format!(
+                        "{}:{} ({})",
+                        class.name,
+                        class.line,
+                        class.inherits.join(", ")
+                    )
+                }
+            })
+            .collect();
+        output.push_str("  ");
+        output.push_str(&class_strs.join("; "));
+        output.push('\n');
+    } else {
+        for class in classes {
+            if class.inherits.is_empty() {
+                output.push_str(&format!("  {}:{}\n", class.name, class.line));
+            } else {
+                output.push_str(&format!(
+                    "  {}:{} ({})\n",
+                    class.name,
+                    class.line,
+                    class.inherits.join(", ")
+                ));
+            }
+        }
+    }
+    output
+}
+
+fn format_imports_section(imports: &[ImportInfo]) -> String {
+    let mut output = String::new();
+    if imports.is_empty() {
+        return output;
+    }
+    output.push_str("I:\n");
+    let mut module_map: HashMap<String, usize> = HashMap::new();
+    for import in imports {
+        module_map
+            .entry(import.module.clone())
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
+    }
+    let mut modules: Vec<_> = module_map.keys().cloned().collect();
+    modules.sort();
+    let formatted_modules: Vec<String> = modules
+        .iter()
+        .map(|module| format!("{}({})", module, module_map[module]))
+        .collect();
+    if formatted_modules.len() <= MULTILINE_THRESHOLD {
+        output.push_str("  ");
+        output.push_str(&formatted_modules.join("; "));
+        output.push('\n');
+    } else {
+        for module_str in formatted_modules {
+            output.push_str("  ");
+            output.push_str(&module_str);
+            output.push('\n');
+        }
+    }
+    output
 }
