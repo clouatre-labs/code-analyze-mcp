@@ -1,0 +1,271 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip publish, release creation, homebrew)'
+        required: true
+        type: boolean
+        default: true
+      version:
+        description: 'Version to simulate (e.g., 0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+
+jobs:
+  verify-tag-signature:
+    name: Verify Tag Signature
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify tag is signed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Verifying signature for tag: $TAG"
+          
+          # Get tag ref to find the tag object SHA
+          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.sha')
+          TAG_TYPE=$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.type')
+          
+          if [ "$TAG_TYPE" != "tag" ]; then
+            echo "ERROR: $TAG is a lightweight tag (type: $TAG_TYPE), not an annotated/signed tag"
+            exit 1
+          fi
+          
+          # Verify the tag signature via GitHub API
+          VERIFIED=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.verification.verified')
+          REASON=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.verification.reason')
+          
+          echo "Tag verification: verified=$VERIFIED, reason=$REASON"
+          
+          if [ "$VERIFIED" != "true" ]; then
+            echo "ERROR: Tag $TAG signature is not valid (reason: $REASON)"
+            exit 1
+          fi
+          
+          echo "Tag $TAG is signed and verified by GitHub"
+
+  create-release:
+    name: Create Release
+    needs: [verify-tag-signature]
+    if: always() && (needs.verify-tag-signature.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ env.VERSION }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Extract version from tag or input
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Validate version matches Cargo.toml
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "Tag version $VERSION does not match Cargo.toml version $CARGO_VERSION"
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        if: ${{ env.DRY_RUN != 'true' }}
+        id: create_release
+        uses: taiki-e/create-gh-release-action@c5baa0b5dc700cf06439d87935e130220a6882d9 # v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+
+      - name: Dry run - skip release creation
+        if: ${{ env.DRY_RUN == 'true' }}
+        run: echo "DRY RUN - Would create release for v$VERSION"
+
+  build-and-attest:
+    name: Build ${{ matrix.target }}
+    needs: create-release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
+    uses: ./.github/workflows/build-and-attest.yml
+    with:
+      target: ${{ matrix.target }}
+      os: ${{ matrix.os }}
+      cross: ${{ matrix.cross }}
+      version: ${{ needs.create-release.outputs.version }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+    secrets: inherit
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: build-and-attest
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-tap repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          repository: clouatre-labs/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Download SHA256 checksums
+        run: |
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_URL="https://api.github.com/repos/clouatre-labs/code-analyze-mcp/releases/tags/${RELEASE_TAG}"
+          
+          # Get release assets
+          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
+          
+          # Download each asset and compute SHA256
+          echo "$ASSETS" | jq -r '.url' | while read -r url; do
+            filename=$(basename "$url")
+            curl -sL "$url" -o "/tmp/$filename"
+            sha256=$(sha256sum "/tmp/$filename" | cut -d' ' -f1)
+            echo "$filename:$sha256" >> /tmp/checksums.txt
+          done
+
+      - name: Update formula with SHA256 values
+        run: |
+          cd homebrew-tap
+          
+          # Read checksums
+          declare -A shas
+          while IFS=':' read -r filename sha; do
+            shas["$filename"]="$sha"
+          done < /tmp/checksums.txt
+          
+          # Update formula with if/elsif syntax
+          FORMULA="Formula/code-analyze-mcp.rb"
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          VERSION_NUMBER="${RELEASE_TAG#v}"
+          
+          # Generate formula content with if/elsif for architecture detection
+          cat > "$FORMULA" << 'FORMULA_EOF'
+          class CodeAnalyzeMcp < Formula
+            desc "MCP server for code structure analysis using tree-sitter"
+            homepage "https://github.com/clouatre-labs/code-analyze-mcp"
+            license "Apache-2.0"
+            
+            if OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/TAG_PLACEHOLDER/code-analyze-mcp-VERSION_NUMBER_PLACEHOLDER-aarch64-apple-darwin.tar.gz"
+              sha256 "SHA256_MACOS_ARM_PLACEHOLDER"
+            elsif OS.linux? && Hardware::CPU.arm?
+              url "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/TAG_PLACEHOLDER/code-analyze-mcp-VERSION_NUMBER_PLACEHOLDER-aarch64-unknown-linux-musl.tar.gz"
+              sha256 "SHA256_LINUX_ARM_PLACEHOLDER"
+            elsif OS.linux? && Hardware::CPU.intel?
+              url "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/TAG_PLACEHOLDER/code-analyze-mcp-VERSION_NUMBER_PLACEHOLDER-x86_64-unknown-linux-musl.tar.gz"
+              sha256 "SHA256_LINUX_INTEL_PLACEHOLDER"
+            end
+            
+            def install
+              bin.install "code-analyze-mcp"
+            end
+            
+            test do
+              assert_match version.to_s, shell_output("#{bin}/code-analyze-mcp --version")
+            end
+          end
+          FORMULA_EOF
+          
+          # Replace placeholders with actual values
+          sed -i "s/VERSION_NUMBER_PLACEHOLDER/${VERSION_NUMBER}/g" "$FORMULA"
+          sed -i "s/TAG_PLACEHOLDER/${RELEASE_TAG}/g" "$FORMULA"
+          sed -i "s/SHA256_MACOS_ARM_PLACEHOLDER/${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz"]}/g" "$FORMULA"
+          sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
+          sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["code-analyze-mcp-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
+
+      - name: Create feature branch and commit formula update
+        run: |
+          cd homebrew-tap
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          BRANCH_NAME="update-code-analyze-mcp-${RELEASE_TAG}"
+          
+          git config user.email "hugues@linux.com"
+          git config user.name "Hugues Clouatre"
+          git checkout -b "$BRANCH_NAME"
+          git add Formula/code-analyze-mcp.rb
+          git commit --signoff -m "Update code-analyze-mcp formula for ${RELEASE_TAG}"
+          git push origin "$BRANCH_NAME"
+
+      - name: Create pull request with auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          cd homebrew-tap
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          BRANCH_NAME="update-code-analyze-mcp-${RELEASE_TAG}"
+          
+          gh pr create \
+            --title "Update code-analyze-mcp formula for ${RELEASE_TAG}" \
+            --body "Automated formula update with SHA256 checksums for release ${RELEASE_TAG}" \
+            --head "$BRANCH_NAME" \
+            --base main
+          
+          # Auto-merge after Audit check passes (ruleset requires status checks)
+          gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
+
+  publish:
+    name: Publish to crates.io
+    needs: create-release
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: stable
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish

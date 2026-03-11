@@ -1,0 +1,89 @@
+name: Build and Attest
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+        description: "Rust target triple (e.g., x86_64-unknown-linux-musl)"
+      os:
+        required: true
+        type: string
+        description: "Runner OS (ubuntu-latest, macos-latest)"
+      cross:
+        required: true
+        type: boolean
+        description: "Use cross-compilation toolchain"
+      version:
+        required: true
+        type: string
+        description: "Release version tag"
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+        description: "Dry run (skip uploads and signatures)"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-attest:
+    runs-on: ${{ inputs.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          targets: ${{ inputs.target }}
+
+      - name: Setup cross-compilation toolchain
+        if: ${{ inputs.cross }}
+        uses: taiki-e/setup-cross-toolchain-action@20dbac418ca692fd1a9377acf2cec38161169a39 # v1
+        with:
+          target: ${{ inputs.target }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: code-analyze-mcp
+          key: ${{ inputs.target }}
+
+      - name: Upload Rust binary
+        if: ${{ !inputs.dry_run }}
+        id: upload
+        uses: taiki-e/upload-rust-binary-action@381995c84a8e242b8736ec80211c563d7bd07ce7 # v1
+        with:
+          bin: code-analyze-mcp
+          target: ${{ inputs.target }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checksum: sha256
+          archive: code-analyze-mcp-${{ inputs.version }}-${{ inputs.target }}
+
+      - name: Build binary (dry-run)
+        if: ${{ inputs.dry_run }}
+        run: cargo build --release --target ${{ inputs.target }}
+
+      - name: Sign tarball with cosign
+        if: ${{ !inputs.dry_run }}
+        run: cosign sign-blob --yes --bundle "${{ steps.upload.outputs.tar }}.bundle" "${{ steps.upload.outputs.tar }}"
+
+      - name: Upload bundle to release
+        if: ${{ !inputs.dry_run }}
+        run: gh release upload ${{ github.ref_name }} "${{ steps.upload.outputs.tar }}.bundle" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest build provenance
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
+        with:
+          subject-path: ${{ steps.upload.outputs.tar }}
