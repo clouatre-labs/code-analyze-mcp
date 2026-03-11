@@ -2,9 +2,10 @@
 
 ## Design Goals
 
-- **Goose analyze parity in standalone binary**: Replicate goose's code analysis capabilities as a standalone MCP server, enabling integration with any MCP client
-- **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system, avoiding language-specific parsers
+- **Minimize token usage**: Return only structured, relevant context - no prose, no noise
+- **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system
 - **Single MCP tool with auto-detected modes**: One `analyze` tool that automatically detects analysis mode (overview, file details, symbol focus) based on input parameters
+- **Compatible with any MCP orchestrator**: Claude Code, Kiro, Fast-Agent, MCP-Agent, and others
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
 
 ## Module Map
@@ -243,9 +244,9 @@ pub struct CacheEntry {
 - Max cache size: 1000 entries (configurable)
 - TTL: 1 hour (optional, for safety)
 
-## MCP Protocol (Planned)
+## MCP Protocol
 
-Issues #42, #43, and #44 will bring the server to full MCP 2025-06-18 compliance.
+Issues #42, #43, and #44 brought the server to full MCP 2025-06-18 compliance.
 
 **Protocol Version and Capabilities (#42):**
 - Bump from `V_2024_11_05` to `V_2025_06_18` (rmcp `ProtocolVersion::LATEST`)
@@ -324,34 +325,28 @@ pub enum AnalyzeError {
 - force flag bypasses warning
 - Prevents MCP client from being overwhelmed
 
-## Improvements Over Goose
+## Design Highlights
 
-- **Proper TypeScript support**: Uses tree-sitter-typescript, not JavaScript fallback
+- **Proper TypeScript support**: Uses tree-sitter-typescript, not a JavaScript fallback
 - **JSX and TSX**: Dedicated file mappings and queries
 - **Language-specific handlers**: extract_function_name, find_method_for_receiver, find_receiver_type for semantic accuracy
 - **Call graph with sentinel values**: `<module>` and `<reference>` for cross-file analysis
 - **Parallel file processing**: rayon for faster analysis on large codebases
 - **Nested .gitignore support**: ignore crate respects directory-specific ignore rules
-- **Standalone binary**: Not integrated into goose; can be used with any MCP client
+- **Standalone binary**: Works with any MCP-compatible orchestrator
 
 ## Current Status
 
-The project is approximately 90% complete:
+All planned waves are complete. One open issue remains: [#169](https://github.com/clouatre-labs/code-analyze-mcp/issues/169) - strengthen CI test coverage (semantic correctness, MCP smoke test, summary mode).
 
-- **Complete (Waves 0-4a):**
-  - Project skeleton (main.rs, lib.rs, types.rs, lang.rs)
-  - CI pipeline (format, lint, commitlint, check-base)
-  - Structure mode (directory overview with file tree)
-  - Semantic mode (file-level analysis with functions, classes, imports)
-  - Symbol focus mode (call graphs with BFS traversal)
-  - All 5 language modules (Rust, Python, TypeScript, Go, Java)
-  - LRU caching with mtime invalidation
-  - Output size limiting and force flag
-
-- **Planned (Waves 4b-4c):**
-  - MCP protocol compliance: version bump, capabilities, annotations, structured output (#42)
-  - MCP progress notifications during directory analysis (#43)
-  - MCP logging notifications: tracing-to-client bridge (#44)
-  - Performance testing and tuning (#7)
-
-See [issue #1](https://github.com/clouatre-labs/code-analyze-mcp/issues/1) for the complete roadmap and wave-based merge plan.
+- Project skeleton (main.rs, lib.rs, types.rs, lang.rs)
+- CI pipeline (format, lint, commitlint, check-base)
+- Structure mode (directory overview with file tree)
+- Semantic mode (file-level analysis with functions, classes, imports)
+- Symbol focus mode (call graphs with BFS traversal)
+- All 5 language modules (Rust, Python, TypeScript, Go, Java)
+- LRU caching with mtime invalidation
+- Output size limiting, force flag, summary mode, pagination
+- MCP protocol compliance (version, capabilities, annotations, structured output)
+- MCP progress notifications during directory analysis
+- MCP logging notifications: tracing-to-client bridge

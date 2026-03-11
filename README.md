@@ -13,7 +13,7 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It provides three analysis modes: directory overview (file tree with metrics), file-level semantic analysis (functions, classes, imports), and symbol-focused call graphs. Unlike goose's built-in analyze command, this is a standalone binary that can be integrated into any MCP client, with proper TypeScript support, JSX/TSX handling, and language-specific semantic extraction.
+code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It provides three analysis modes: directory overview (file tree with metrics), file-level semantic analysis (functions, classes, imports), and symbol-focused call graphs. It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ The binary is at `target/release/code-analyze-mcp`.
 
 ### Configure MCP Client
 
-Add to your MCP client configuration (e.g., Claude Desktop):
+Add to `.mcp.json` at your project root (shared with your team via version control):
 
 ```json
 {
@@ -38,6 +38,12 @@ Add to your MCP client configuration (e.g., Claude Desktop):
     }
   }
 }
+```
+
+Or add via the Claude Code CLI:
+
+```bash
+claude mcp add code-analyze /path/to/code-analyze-mcp
 ```
 
 ## Tool Interface
