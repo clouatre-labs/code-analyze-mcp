@@ -254,104 +254,8 @@ pub struct FocusedAnalysisOutput {
 
 /// Analyze a symbol's call graph across a directory with progress tracking.
 #[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
-pub fn analyze_focused_with_progress(
-    root: &Path,
-    focus: &str,
-    follow_depth: u32,
-    max_depth: Option<u32>,
-    ast_recursion_limit: Option<usize>,
-    progress: Arc<AtomicUsize>,
-    ct: CancellationToken,
-) -> Result<FocusedAnalysisOutput, AnalyzeError> {
-    // Check if already cancelled
-    if ct.is_cancelled() {
-        return Err(AnalyzeError::Cancelled);
-    }
-
-    // Check if path is a file (hint to use directory)
-    if root.is_file() {
-        let formatted =
-            "Single-file focus not supported. Please provide a directory path for cross-file call graph analysis.\n"
-                .to_string();
-        return Ok(FocusedAnalysisOutput {
-            formatted,
-            next_cursor: None,
-        });
-    }
-
-    // Walk the directory
-    let entries = walk_directory(root, max_depth)?;
-
-    // Collect semantic analysis for all files in parallel
-    let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
-
-    let analysis_results: Vec<(PathBuf, SemanticAnalysis)> = file_entries
-        .par_iter()
-        .filter_map(|entry| {
-            // Check cancellation per file
-            if ct.is_cancelled() {
-                return None;
-            }
-
-            let ext = entry.path.extension().and_then(|e| e.to_str());
-
-            // Try to read file content
-            let source = match std::fs::read_to_string(&entry.path) {
-                Ok(content) => content,
-                Err(_) => {
-                    progress.fetch_add(1, Ordering::Relaxed);
-                    return None;
-                }
-            };
-
-            // Detect language and extract semantic information
-            let language = if let Some(ext_str) = ext {
-                language_from_extension(ext_str)
-                    .map(|l| l.to_string())
-                    .unwrap_or_else(|| "unknown".to_string())
-            } else {
-                "unknown".to_string()
-            };
-
-            match SemanticExtractor::extract(&source, &language, ast_recursion_limit) {
-                Ok(mut semantic) => {
-                    // Populate file path on references
-                    for r in &mut semantic.references {
-                        r.location = entry.path.display().to_string();
-                    }
-                    progress.fetch_add(1, Ordering::Relaxed);
-                    Some((entry.path.clone(), semantic))
-                }
-                Err(_) => {
-                    progress.fetch_add(1, Ordering::Relaxed);
-                    None
-                }
-            }
-        })
-        .collect();
-
-    // Check if cancelled after parallel processing
-    if ct.is_cancelled() {
-        return Err(AnalyzeError::Cancelled);
-    }
-
-    // Build call graph
-    let dataflow = DataflowGraph::build_from_results(&analysis_results);
-    let graph = CallGraph::build_from_results(analysis_results)?;
-
-    // Format output
-    let formatted = format_focused(&graph, &dataflow, focus, follow_depth, Some(root))?;
-
-    Ok(FocusedAnalysisOutput {
-        formatted,
-        next_cursor: None,
-    })
-}
-
-/// Analyze a symbol's call graph with use_summary parameter (internal).
-#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
 #[allow(clippy::too_many_arguments)]
-pub fn analyze_focused_with_progress_internal(
+pub fn analyze_focused_with_progress(
     root: &Path,
     focus: &str,
     follow_depth: u32,
@@ -361,6 +265,7 @@ pub fn analyze_focused_with_progress_internal(
     ct: CancellationToken,
     use_summary: bool,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    #[allow(clippy::too_many_arguments)]
     // Check if already cancelled
     if ct.is_cancelled() {
         return Err(AnalyzeError::Cancelled);
@@ -450,6 +355,9 @@ pub fn analyze_focused_with_progress_internal(
     })
 }
 
+/// Analyze a symbol's call graph with use_summary parameter (internal).
+#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
+#[allow(clippy::too_many_arguments)]
 /// Analyze a symbol's call graph across a directory.
 #[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
 pub fn analyze_focused(
@@ -469,5 +377,6 @@ pub fn analyze_focused(
         ast_recursion_limit,
         counter,
         ct,
+        false,
     )
 }
