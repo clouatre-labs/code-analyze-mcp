@@ -2,7 +2,7 @@ use crate::dataflow::DataflowGraph;
 use crate::formatter::{
     format_file_details, format_focused, format_focused_summary, format_structure,
 };
-use crate::graph::CallGraph;
+use crate::graph::{CallChain, CallGraph};
 use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
@@ -250,6 +250,23 @@ pub struct FocusedAnalysisOutput {
         description = "Opaque cursor token for the next page of results (absent when no more results)"
     )]
     pub next_cursor: Option<String>,
+    /// Production caller chains (partitioned from incoming chains, excluding test callers).
+    /// Not serialized; used for pagination in lib.rs.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub prod_chains: Vec<CallChain>,
+    /// Test caller chains. Not serialized; used for pagination summary in lib.rs.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub test_chains: Vec<CallChain>,
+    /// Outgoing (callee) chains. Not serialized; used for pagination in lib.rs.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub outgoing_chains: Vec<CallChain>,
+    /// Number of definitions for the symbol. Not serialized; used for pagination headers.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub def_count: usize,
 }
 
 /// Analyze a symbol's call graph across a directory with progress tracking.
@@ -279,6 +296,10 @@ pub fn analyze_focused_with_progress(
         return Ok(FocusedAnalysisOutput {
             formatted,
             next_cursor: None,
+            prod_chains: vec![],
+            test_chains: vec![],
+            outgoing_chains: vec![],
+            def_count: 0,
         });
     }
 
@@ -342,6 +363,19 @@ pub fn analyze_focused_with_progress(
     let dataflow = DataflowGraph::build_from_results(&analysis_results);
     let graph = CallGraph::build_from_results(analysis_results)?;
 
+    // Compute chain data for pagination (always, regardless of summary mode)
+    let def_count = graph.definitions.get(focus).map_or(0, |d| d.len());
+    let incoming_chains = graph.find_incoming_chains(focus, follow_depth)?;
+    let outgoing_chains = graph.find_outgoing_chains(focus, follow_depth)?;
+
+    let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
+        incoming_chains.into_iter().partition(|chain| {
+            chain
+                .chain
+                .first()
+                .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
+        });
+
     // Format output
     let formatted = if use_summary {
         format_focused_summary(&graph, &dataflow, focus, follow_depth, Some(root))?
@@ -352,6 +386,10 @@ pub fn analyze_focused_with_progress(
     Ok(FocusedAnalysisOutput {
         formatted,
         next_cursor: None,
+        prod_chains,
+        test_chains,
+        outgoing_chains,
+        def_count,
     })
 }
 
