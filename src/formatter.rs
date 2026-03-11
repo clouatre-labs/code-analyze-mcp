@@ -825,6 +825,98 @@ pub fn format_summary(
     output
 }
 
+/// Format a compact summary of file details for large FileDetails output.
+///
+/// Returns FILE header with path/LOC/counts, top 10 functions by line span descending,
+/// classes inline if <=10, import count, and suggestion block.
+#[instrument(skip_all)]
+pub fn format_file_details_summary(
+    semantic: &SemanticAnalysis,
+    path: &str,
+    line_count: usize,
+) -> String {
+    let mut output = String::new();
+
+    // FILE header
+    output.push_str("FILE:\n");
+    output.push_str(&format!("  path: {}\n", path));
+    output.push_str(&format!(
+        "  {}L, {}F, {}C\n",
+        line_count,
+        semantic.functions.len(),
+        semantic.classes.len()
+    ));
+    output.push('\n');
+
+    // Top 10 functions by line span (end_line - start_line) descending
+    if !semantic.functions.is_empty() {
+        output.push_str("TOP FUNCTIONS BY SIZE:\n");
+        let mut funcs: Vec<&crate::types::FunctionInfo> = semantic.functions.iter().collect();
+        let k = funcs.len().min(10);
+        if k > 0 {
+            funcs.select_nth_unstable_by(k.saturating_sub(1), |a, b| {
+                let a_span = a.end_line.saturating_sub(a.line);
+                let b_span = b.end_line.saturating_sub(b.line);
+                b_span.cmp(&a_span)
+            });
+            funcs[..k].sort_by(|a, b| {
+                let a_span = a.end_line.saturating_sub(a.line);
+                let b_span = b.end_line.saturating_sub(b.line);
+                b_span.cmp(&a_span)
+            });
+        }
+
+        for func in &funcs[..k] {
+            let span = func.end_line.saturating_sub(func.line);
+            let params = if func.parameters.is_empty() {
+                String::new()
+            } else {
+                format!("({})", func.parameters.join(", "))
+            };
+            output.push_str(&format!(
+                "  {}:{}: {} {} [{}L]\n",
+                func.line, func.end_line, func.name, params, span
+            ));
+        }
+        output.push('\n');
+    }
+
+    // Classes inline if <=10, else multiline with method count
+    if !semantic.classes.is_empty() {
+        output.push_str("CLASSES:\n");
+        if semantic.classes.len() <= 10 {
+            // Inline format: one class per line with method count
+            for class in &semantic.classes {
+                let methods_count = class.methods.len();
+                output.push_str(&format!("  {}: {}M\n", class.name, methods_count));
+            }
+        } else {
+            // Multiline format with summary
+            output.push_str(&format!("  {} classes total\n", semantic.classes.len()));
+            for class in semantic.classes.iter().take(5) {
+                output.push_str(&format!("    {}\n", class.name));
+            }
+            if semantic.classes.len() > 5 {
+                output.push_str(&format!(
+                    "    ... and {} more\n",
+                    semantic.classes.len() - 5
+                ));
+            }
+        }
+        output.push('\n');
+    }
+
+    // Import count only
+    output.push_str(&format!("Imports: {}\n", semantic.imports.len()));
+    output.push('\n');
+
+    // SUGGESTION block
+    output.push_str("SUGGESTION:\n");
+    output.push_str("Use force=true for full output, or narrow your scope\n");
+
+    output
+}
+
 /// Format a paginated subset of files for Overview mode.
 #[instrument(skip_all)]
 pub fn format_structure_paginated(
@@ -910,5 +1002,93 @@ mod tests {
         let path_str = "/home/user/project/src/main.rs";
         let result = strip_base_path(path_str, None);
         assert_eq!(result, "/home/user/project/src/main.rs");
+    }
+
+    #[test]
+    fn test_format_file_details_summary_empty() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let semantic = SemanticAnalysis {
+            functions: vec![],
+            classes: vec![],
+            imports: vec![],
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
+
+        let result = format_file_details_summary(&semantic, "src/main.rs", 100);
+
+        // Should contain FILE header, Imports count, and SUGGESTION
+        assert!(result.contains("FILE:"));
+        assert!(result.contains("100L, 0F, 0C"));
+        assert!(result.contains("src/main.rs"));
+        assert!(result.contains("Imports: 0"));
+        assert!(result.contains("SUGGESTION:"));
+    }
+
+    #[test]
+    fn test_format_file_details_summary_with_functions() {
+        use crate::types::{ClassInfo, FunctionInfo, SemanticAnalysis};
+        use std::collections::HashMap;
+
+        let semantic = SemanticAnalysis {
+            functions: vec![
+                FunctionInfo {
+                    name: "short".to_string(),
+                    line: 10,
+                    end_line: 12,
+                    parameters: vec![],
+                    return_type: None,
+                },
+                FunctionInfo {
+                    name: "long_function".to_string(),
+                    line: 20,
+                    end_line: 50,
+                    parameters: vec!["x".to_string(), "y".to_string()],
+                    return_type: Some("i32".to_string()),
+                },
+            ],
+            classes: vec![ClassInfo {
+                name: "MyClass".to_string(),
+                line: 60,
+                end_line: 80,
+                methods: vec![],
+                fields: vec![],
+                inherits: vec![],
+            }],
+            imports: vec![],
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
+
+        let result = format_file_details_summary(&semantic, "src/lib.rs", 250);
+
+        // Should contain FILE header with counts
+        assert!(result.contains("FILE:"));
+        assert!(result.contains("src/lib.rs"));
+        assert!(result.contains("250L, 2F, 1C"));
+
+        // Should contain TOP FUNCTIONS BY SIZE with longest first
+        assert!(result.contains("TOP FUNCTIONS BY SIZE:"));
+        let long_idx = result.find("long_function").unwrap_or(0);
+        let short_idx = result.find("short").unwrap_or(0);
+        assert!(
+            long_idx > 0 && short_idx > 0 && long_idx < short_idx,
+            "long_function should appear before short"
+        );
+
+        // Should contain classes inline
+        assert!(result.contains("CLASSES:"));
+        assert!(result.contains("MyClass:"));
+
+        // Should contain import count
+        assert!(result.contains("Imports: 0"));
     }
 }
