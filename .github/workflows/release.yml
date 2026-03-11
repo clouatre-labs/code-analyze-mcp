@@ -103,7 +103,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ needs.create-tag.outputs.version }}"
-          if gh release view "$TAG" --json id --silent 2>/dev/null; then
+          if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG already exists, skipping creation"
           else
             gh release create "$TAG" --title "$TAG" --notes "" --draft=false
