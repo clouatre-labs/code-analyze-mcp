@@ -75,7 +75,16 @@ The `analyze` tool accepts these parameters:
 
 For large codebases, two mechanisms prevent context overflow:
 
-- **Pagination**: File details and symbol focus modes return a `next_cursor` when output is truncated. Pass it back as `cursor` to fetch the next page.
+- **Pagination**: File details and symbol focus modes append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page.
+
+```
+# Response ends with:
+NEXT_CURSOR: eyJvZmZzZXQiOjUwfQ==
+
+# Fetch next page:
+analyze path: /my/project cursor: eyJvZmZzZXQiOjUwfQ==
+```
+
 - **Summary mode**: When output exceeds 50K chars, the server auto-compacts results using `(xN)` notation for repeated call chains. Override with `summary: true` (force) or `summary: false` (disable).
 
 ## Analysis Modes
