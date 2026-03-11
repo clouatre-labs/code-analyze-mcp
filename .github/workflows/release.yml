@@ -53,7 +53,6 @@ jobs:
           TAG="v${{ inputs.version }}"
           COMMIT_SHA=$(git rev-parse HEAD)
 
-          # Create annotated tag object
           TAG_SHA=$(gh api repos/${{ github.repository }}/git/tags \
             -X POST \
             -f tag="$TAG" \
@@ -62,7 +61,6 @@ jobs:
             -f type="commit" \
             --jq '.sha')
 
-          # Create the ref pointing to the tag object
           gh api repos/${{ github.repository }}/git/refs \
             -X POST \
             -f ref="refs/tags/$TAG" \
@@ -87,7 +85,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: v${{ needs.create-tag.outputs.version }}
+          ref: refs/tags/v${{ needs.create-tag.outputs.version }}
           fetch-tags: true
 
       - name: Create GitHub release
@@ -153,7 +151,8 @@ jobs:
           VERSION_NUMBER="${{ needs.create-release.outputs.version }}"
           RELEASE_URL="https://api.github.com/repos/clouatre-labs/code-analyze-mcp/releases/tags/${RELEASE_TAG}"
 
-          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
+          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" \
+            | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
 
           echo "$ASSETS" | jq -r '.url' | while read -r url; do
             filename=$(basename "$url")
@@ -162,51 +161,48 @@ jobs:
             echo "$filename:$sha256" >> /tmp/checksums.txt
           done
 
-      - name: Update formula with SHA256 values
+      - name: Generate formula
         run: |
-          cd homebrew-tap
+          VERSION_NUMBER="${{ needs.create-release.outputs.version }}"
+          RELEASE_TAG="v${VERSION_NUMBER}"
 
           declare -A shas
           while IFS=':' read -r filename sha; do
             shas["$filename"]="$sha"
           done < /tmp/checksums.txt
 
-          FORMULA="Formula/code-analyze-mcp.rb"
-          RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
-          VERSION_NUMBER="${{ needs.create-release.outputs.version }}"
+          SHA_MACOS_ARM="${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz"]}"
+          SHA_LINUX_ARM="${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}"
+          SHA_LINUX_X86="${shas["code-analyze-mcp-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}"
 
-          cat > "$FORMULA" << 'FORMULA_EOF'
-class CodeAnalyzeMcp < Formula
-  desc "MCP server for code structure analysis using tree-sitter"
-  homepage "https://github.com/clouatre-labs/code-analyze-mcp"
-  license "Apache-2.0"
+          FORMULA="homebrew-tap/Formula/code-analyze-mcp.rb"
 
-  if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/TAG_PLACEHOLDER/code-analyze-mcp-VERSION_NUMBER_PLACEHOLDER-aarch64-apple-darwin.tar.gz"
-    sha256 "SHA256_MACOS_ARM_PLACEHOLDER"
-  elsif OS.linux? && Hardware::CPU.arm?
-    url "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/TAG_PLACEHOLDER/code-analyze-mcp-VERSION_NUMBER_PLACEHOLDER-aarch64-unknown-linux-musl.tar.gz"
-    sha256 "SHA256_LINUX_ARM_PLACEHOLDER"
-  elsif OS.linux? && Hardware::CPU.intel?
-    url "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/TAG_PLACEHOLDER/code-analyze-mcp-VERSION_NUMBER_PLACEHOLDER-x86_64-unknown-linux-musl.tar.gz"
-    sha256 "SHA256_LINUX_INTEL_PLACEHOLDER"
-  end
-
-  def install
-    bin.install "code-analyze-mcp"
-  end
-
-  test do
-    assert_match version.to_s, shell_output("#{bin}/code-analyze-mcp --version")
-  end
-end
-FORMULA_EOF
-
-          sed -i "s/VERSION_NUMBER_PLACEHOLDER/${VERSION_NUMBER}/g" "$FORMULA"
-          sed -i "s/TAG_PLACEHOLDER/${RELEASE_TAG}/g" "$FORMULA"
-          sed -i "s/SHA256_MACOS_ARM_PLACEHOLDER/${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz"]}/g" "$FORMULA"
-          sed -i "s/SHA256_LINUX_ARM_PLACEHOLDER/${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
-          sed -i "s/SHA256_LINUX_INTEL_PLACEHOLDER/${shas["code-analyze-mcp-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}/g" "$FORMULA"
+          printf '%s\n' \
+            'class CodeAnalyzeMcp < Formula' \
+            '  desc "MCP server for code structure analysis using tree-sitter"' \
+            '  homepage "https://github.com/clouatre-labs/code-analyze-mcp"' \
+            '  license "Apache-2.0"' \
+            '' \
+            '  if OS.mac? && Hardware::CPU.arm?' \
+            "    url \"https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/code-analyze-mcp-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz\"" \
+            "    sha256 \"${SHA_MACOS_ARM}\"" \
+            '  elsif OS.linux? && Hardware::CPU.arm?' \
+            "    url \"https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/code-analyze-mcp-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz\"" \
+            "    sha256 \"${SHA_LINUX_ARM}\"" \
+            '  elsif OS.linux? && Hardware::CPU.intel?' \
+            "    url \"https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/code-analyze-mcp-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz\"" \
+            "    sha256 \"${SHA_LINUX_X86}\"" \
+            '  end' \
+            '' \
+            '  def install' \
+            '    bin.install "code-analyze-mcp"' \
+            '  end' \
+            '' \
+            '  test do' \
+            '    assert_match version.to_s, shell_output("#{bin}/code-analyze-mcp --version")' \
+            '  end' \
+            'end' \
+            > "$FORMULA"
 
       - name: Create feature branch and commit formula update
         run: |
@@ -246,7 +242,7 @@ FORMULA_EOF
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: v${{ needs.create-release.outputs.version }}
+          ref: refs/tags/v${{ needs.create-release.outputs.version }}
           fetch-tags: true
 
       - name: Install Rust stable
