@@ -1,0 +1,212 @@
+{
+  "experiment": "v7-benchmark",
+  "conditions": {
+    "A-control": "code-analyze-mcp__analyze (baseline from v6)",
+    "B-treatment": "code-analyze-mcp__analyze with parameter discovery (summary, cursor, page_size)"
+  },
+  "model": "claude-haiku-4-5",
+  "temperature": 0.5,
+  "target_repo": "lsd-rs/lsd",
+  "hypothesis": {
+    "primary": "Agents can discover and use new tool parameters (summary, cursor, page_size) to reduce token consumption without quality regression",
+    "mechanism": "When parameter documentation is provided in the tool description, agents learn to apply summary=true for large outputs, use cursor for pagination, and tune page_size to limit response size",
+    "outcome_success": "v7B uses new parameters in >40% of analyze calls, and token efficiency improves by >5% vs v6B with no quality loss"
+  },
+  "parameter_usage_tracking": {
+    "summary": "Detect summary=true in tool call inputs; count calls that use summary parameter",
+    "cursor": "Detect cursor presence and non-empty value in tool call inputs; counts pagination usage",
+    "page_size": "Detect page_size presence and non-null value in tool call inputs; counts size overrides",
+    "instrumentation": "validate.py and collect.py extract these from assistant message tool_use blocks"
+  },
+  "v6_baselines": {
+    "conditions": {
+      "A": {
+        "median_total_score": 10,
+        "per_run": {
+          "A1": 10,
+          "A2": 11,
+          "A3": 8,
+          "A4": 11,
+          "A5": 9
+        }
+      },
+      "B": {
+        "median_total_score": 10,
+        "per_run": {
+          "B1": 10,
+          "B2": 11,
+          "B3": 9,
+          "B4": 10,
+          "B5": 10
+        }
+      }
+    },
+    "note": "v6 showed no quality regression (median A=10, median B=10). v7 tests whether parameter discovery reduces token overhead."
+  },
+  "tool_isolation_verified": true,
+  "blinding": {
+    "method": "Random shuffle with seed=256, condition labels stripped before scoring",
+    "mapping": {
+      "R01": "B5",
+      "R02": "B4",
+      "R03": "A2",
+      "R04": "B1",
+      "R05": "A1",
+      "R06": "A4",
+      "R07": "A3",
+      "R08": "B2",
+      "R09": "A5",
+      "R10": "B3"
+    }
+  },
+  "rubric": {
+    "structural_accuracy": {
+      "3": "Correctly identifies all major modules, responsibilities, and data types; traces match codebase structure",
+      "2": "Identifies most modules and responsibilities; minor omissions or generalization errors",
+      "1": "Partial module identification; significant structural gaps or confusions",
+      "0": "Misses major components; fundamentally incorrect structure"
+    },
+    "cross_module_tracing": {
+      "3": "Complete cross-module trace with intermediate types; call chains are accurate and detailed",
+      "2": "Traces key call chains; minor gaps or simplifications in type flow",
+      "1": "Partial trace; missing intermediate steps or types",
+      "0": "No meaningful trace or entirely incorrect"
+    },
+    "approach_quality": {
+      "3": "Well-reasoned change proposal; identifies all affected files, new types, and integration points; realistic risks",
+      "2": "Reasonable proposal; most files and types identified; risks partially addressed",
+      "1": "Incomplete or partially reasoned proposal; missing files or risk analysis",
+      "0": "Superficial or incorrect proposal; major gaps"
+    },
+    "tool_efficiency": {
+      "3": "5 or fewer analysis tool calls; focused exploration, clear path to synthesis",
+      "2": "6-10 analysis tool calls; somewhat exploratory but reaches conclusions",
+      "1": "11-20 analysis tool calls; extensive exploration; delayed synthesis",
+      "0": "More than 20 analysis tool calls; inefficient, redundant, exploration-heavy"
+    }
+  },
+  "per_run_scores": {
+    "A1": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 2,
+      "tool_efficiency": 2,
+      "total": 8,
+      "run_ref": "R05"
+    },
+    "A2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 2,
+      "tool_efficiency": 2,
+      "total": 10,
+      "run_ref": "R03"
+    },
+    "A3": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 11,
+      "run_ref": "R07"
+    },
+    "A4": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 9,
+      "run_ref": "R06"
+    },
+    "A5": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 11,
+      "run_ref": "R09"
+    },
+    "B1": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 2,
+      "tool_efficiency": 2,
+      "total": 8,
+      "run_ref": "R04",
+      "parameter_usage": {
+        "summary_count": 9,
+        "cursor_calls": 0,
+        "page_size_overrides": 0,
+        "pagination_used": false
+      }
+    },
+    "B2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 10,
+      "run_ref": "R08",
+      "parameter_usage": {
+        "summary_count": 8,
+        "cursor_calls": 0,
+        "page_size_overrides": 0,
+        "pagination_used": false
+      }
+    },
+    "B3": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 8,
+      "run_ref": "R10",
+      "parameter_usage": {
+        "summary_count": 7,
+        "cursor_calls": 0,
+        "page_size_overrides": 0,
+        "pagination_used": false
+      }
+    },
+    "B4": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "total": 9,
+      "run_ref": "R02",
+      "parameter_usage": {
+        "summary_count": 9,
+        "cursor_calls": 0,
+        "page_size_overrides": 0,
+        "pagination_used": false
+      }
+    },
+    "B5": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 1,
+      "total": 10,
+      "run_ref": "R01",
+      "parameter_usage": {
+        "summary_count": 0,
+        "cursor_calls": 0,
+        "page_size_overrides": 0,
+        "pagination_used": false
+      },
+      "note": "extension registered as code-analyze (old name); summary not used; tool calls functionally equivalent"
+    }
+  },
+  "analysis_notes": {
+    "primary_outcome": "Parameter usage frequency and token reduction (v7B vs v6B)",
+    "secondary_outcome": "Quality maintenance (no regression in total scores)",
+    "parameter_usage_goal": "Target >40% of v7B runs using new parameters (summary, cursor, page_size)",
+    "cross_version_comparisons": [
+      "v7B vs v6B: parameter optimization delta (token count reduction)",
+      "v7B vs v7A: gap closure (whether parameter discovery maintains quality advantage)"
+    ]
+  },
+  "scoring_date": "2026-03-11",
+  "scorer": "orchestrator-blind"
+}

@@ -1,0 +1,25 @@
+{
+  "session_name": "v7-benchmark-R01-B5",
+  "tokens": 28589,
+  "input_tokens": 28112,
+  "output_tokens": 477,
+  "accumulated_total_tokens": 225171,
+  "accumulated_input_tokens": 219528,
+  "accumulated_output_tokens": 5643,
+  "wall_seconds": 62,
+  "tool_calls_detail": {
+    "code-analyze__code-analyze__analyze": 11,
+    "developer__shell": 1
+  },
+  "analyze_calls": 11,
+  "shell_calls": 1,
+  "editor_calls": 0,
+  "total_calls": 12,
+  "parameter_usage": {
+    "summary_count": 0,
+    "cursor_calls": 0,
+    "page_size_overrides": 0,
+    "pagination_used": false
+  },
+  "validation_note": "FAIL: tool registered as code-analyze__analyze (old extension name) instead of code-analyze-mcp__analyze; extension renamed to code-analyze-mcp for R02+; tool calls functionally equivalent"
+}
