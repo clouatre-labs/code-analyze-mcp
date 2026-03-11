@@ -1,0 +1,305 @@
+use code_analyze_mcp::analyze::analyze_focused;
+use code_analyze_mcp::dataflow::DataflowGraph;
+use code_analyze_mcp::formatter::format_focused_summary;
+use code_analyze_mcp::graph::CallGraph;
+use code_analyze_mcp::types::SemanticAnalysis;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use tempfile::TempDir;
+
+#[test]
+fn test_symbol_focus_summary_explicit_true() {
+    // Arrange: Create a fixture with a function that has callers and callees
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn target_fn() {
+    helper_fn();
+}
+
+pub fn helper_fn() {
+}
+
+pub fn caller_fn() {
+    target_fn();
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Analyze symbol with focus
+    let output = analyze_focused(root, "target_fn", 1, None, None).unwrap();
+
+    // Assert: Output should be full format (not summary, because this is small output)
+    // The summary format should have FOCUS header with counts
+    assert!(
+        output.formatted.contains("FOCUS:"),
+        "Should have FOCUS header"
+    );
+    assert!(
+        output.formatted.contains("target_fn"),
+        "Should mention the symbol name"
+    );
+}
+
+#[test]
+fn test_symbol_focus_summary_format() {
+    // Arrange: Build a small call graph manually for testing format_focused_summary
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    let test_path = root.join("test.rs");
+
+    let mut graph = CallGraph::new();
+
+    // Add a definition
+    graph
+        .definitions
+        .insert("my_func".to_string(), vec![(test_path.clone(), 10)]);
+
+    // Add some callers
+    graph.callers.insert(
+        "my_func".to_string(),
+        vec![
+            (root.join("caller1.rs"), 20, "caller_a".to_string()),
+            (root.join("caller2.rs"), 30, "caller_b".to_string()),
+        ],
+    );
+
+    // Add some callees
+    graph.callees.insert(
+        "my_func".to_string(),
+        vec![
+            (root.join("lib.rs"), 40, "std::println".to_string()),
+            (root.join("lib.rs"), 50, "helper".to_string()),
+        ],
+    );
+
+    let dataflow = DataflowGraph::new();
+
+    // Act: Format as summary
+    let summary = format_focused_summary(&graph, &dataflow, "my_func", 1, Some(root))
+        .expect("Should format summary");
+
+    // Assert: Check key sections exist
+    assert!(
+        summary.contains("FOCUS: my_func"),
+        "Should have FOCUS header"
+    );
+    assert!(summary.contains("DEPTH: 1"), "Should show depth");
+    assert!(summary.contains("DEFINED:"), "Should have DEFINED section");
+    assert!(
+        summary.contains("CALLERS (top 10):"),
+        "Should have CALLERS section"
+    );
+    assert!(
+        summary.contains("CALLEES (top 10):"),
+        "Should have CALLEES section"
+    );
+    assert!(
+        summary.contains("DATAFLOW:"),
+        "Should have DATAFLOW section"
+    );
+    assert!(
+        summary.contains("SUGGESTION:"),
+        "Should have SUGGESTION section"
+    );
+}
+
+#[test]
+fn test_symbol_focus_summary_size_limit() {
+    // Arrange: Create a small fixture
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn simple_fn() {
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Analyze symbol
+    let output = analyze_focused(root, "simple_fn", 1, None, None).unwrap();
+
+    // Assert: Output should be well under 5000 chars for small code
+    assert!(
+        output.formatted.len() < 5000,
+        "Summary output should be compact"
+    );
+}
+
+#[test]
+fn test_symbol_focus_summary_with_test_callers() {
+    // Arrange: Create fixture with both production and test callers
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(root.join("tests")).unwrap();
+
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn target_fn() {
+}
+
+pub fn prod_caller() {
+    target_fn();
+}
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        root.join("tests/test.rs"),
+        r#"
+#[test]
+fn test_target() {
+    target_fn();
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Analyze symbol
+    let output = analyze_focused(root, "target_fn", 1, None, None).unwrap();
+
+    // Assert: Should have CALLERS section showing production callers
+    assert!(
+        output.formatted.contains("CALLERS"),
+        "Should mention callers"
+    );
+    // The test caller summary should appear if there are test callers detected
+    // (exact format depends on test file detection)
+}
+
+#[test]
+fn test_use_summary_true_calls_format_focused_summary() {
+    // Arrange: Create a fixture with a Rust file that has a symbol with callers/callees
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn target_fn() {
+    helper_fn();
+}
+
+pub fn helper_fn() {
+    println!("helper");
+}
+
+pub fn caller_fn() {
+    target_fn();
+}
+
+pub fn another_caller() {
+    target_fn();
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Call analyze_focused_with_progress_internal with use_summary=true
+    use code_analyze_mcp::analyze::analyze_focused_with_progress_internal;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use tokio_util::sync::CancellationToken;
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    let ct = CancellationToken::new();
+    let output = analyze_focused_with_progress_internal(
+        root,
+        "target_fn",
+        1,
+        None,
+        None,
+        counter,
+        ct,
+        true, // use_summary=true
+    )
+    .unwrap();
+
+    // Assert: Output should contain summary format markers
+    assert!(
+        output.formatted.contains("FOCUS:"),
+        "Should have FOCUS header (summary marker)"
+    );
+    assert!(
+        output.formatted.contains("CALLERS (top 10):"),
+        "Should have 'CALLERS (top 10):' (summary marker, not full 'CALLERS:')"
+    );
+    assert!(
+        !output.formatted.contains("CALLERS:\n"),
+        "Should NOT have full format marker 'CALLERS:\\n'"
+    );
+}
+
+#[test]
+fn test_use_summary_false_calls_format_focused_full() {
+    // Arrange: Create a fixture similar to above
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn target_fn() {
+    helper_fn();
+}
+
+pub fn helper_fn() {
+    println!("helper");
+}
+
+pub fn caller_fn() {
+    target_fn();
+}
+
+pub fn another_caller() {
+    target_fn();
+}
+"#,
+    )
+    .unwrap();
+
+    // Act: Call analyze_focused_with_progress_internal with use_summary=false
+    use code_analyze_mcp::analyze::analyze_focused_with_progress_internal;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use tokio_util::sync::CancellationToken;
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    let ct = CancellationToken::new();
+    let output = analyze_focused_with_progress_internal(
+        root,
+        "target_fn",
+        1,
+        None,
+        None,
+        counter,
+        ct,
+        false, // use_summary=false
+    )
+    .unwrap();
+
+    // Assert: Output should contain full format markers
+    assert!(
+        output.formatted.contains("CALLERS:\n"),
+        "Should have full format marker 'CALLERS:\\n'"
+    );
+    assert!(
+        !output.formatted.contains("CALLERS (top 10):"),
+        "Should NOT have summary marker 'CALLERS (top 10):'"
+    );
+}

@@ -339,6 +339,11 @@ impl CodeAnalyzer {
                 let ast_recursion_limit = params.ast_recursion_limit;
                 let ct_clone = ct.clone();
 
+                // Compute use_summary before spawning: explicit params only
+                // (auto-detect requires full output first, handled after task)
+                let use_summary_for_task =
+                    params.force != Some(true) && params.summary == Some(true);
+
                 // Get total file count for progress reporting
                 let total_files = match walk_directory(path, max_depth) {
                     Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
@@ -347,7 +352,7 @@ impl CodeAnalyzer {
 
                 // Spawn blocking analysis with progress tracking
                 let handle = tokio::task::spawn_blocking(move || {
-                    analyze::analyze_focused_with_progress(
+                    analyze::analyze_focused_with_progress_internal(
                         &path_owned,
                         &focus_owned,
                         follow_depth,
@@ -355,6 +360,7 @@ impl CodeAnalyzer {
                         ast_recursion_limit,
                         counter_clone,
                         ct_clone,
+                        use_summary_for_task,
                     )
                 });
 
@@ -542,16 +548,63 @@ impl CodeAnalyzer {
                 let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
                 (output.formatted, paginated.next_cursor, structured)
             }
-            types::ModeResult::SymbolFocus(output) => {
-                // Apply output size limiting
-                if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
+            types::ModeResult::SymbolFocus(mut output) => {
+                // Auto-detect: if no explicit summary param and output exceeds limit,
+                // re-run analysis with use_summary=true (double-compute, acceptable)
+                if params.summary.is_none()
+                    && params.force != Some(true)
+                    && output.formatted.len() > SIZE_LIMIT
+                {
+                    let path_owned2 = Path::new(&params.path).to_path_buf();
+                    let focus_owned2 = params.focus.clone().unwrap_or_default();
+                    let follow_depth2 = params.follow_depth.unwrap_or(1);
+                    let max_depth2 = params.max_depth;
+                    let ast_recursion_limit2 = params.ast_recursion_limit;
+                    let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                    let ct2 = ct.clone();
+                    let summary_result = tokio::task::spawn_blocking(move || {
+                        analyze::analyze_focused_with_progress_internal(
+                            &path_owned2,
+                            &focus_owned2,
+                            follow_depth2,
+                            max_depth2,
+                            ast_recursion_limit2,
+                            counter2,
+                            ct2,
+                            true, // use_summary=true
+                        )
+                    })
+                    .await;
+                    match summary_result {
+                        Ok(Ok(summary_output)) => {
+                            output.formatted = summary_output.formatted;
+                        }
+                        _ => {
+                            // Fallback: return error (summary generation failed)
+                            let estimated_tokens = output.formatted.len() / 4;
+                            let message = format!(
+                                "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
+                                output.formatted.len(),
+                                estimated_tokens
+                            );
+                            return Err(ErrorData::new(
+                                rmcp::model::ErrorCode::INVALID_REQUEST,
+                                message,
+                                None,
+                            ));
+                        }
+                    }
+                } else if output.formatted.len() > SIZE_LIMIT
+                    && params.force != Some(true)
+                    && params.summary == Some(false)
+                {
+                    // Explicit summary=false with large output: return error
                     let estimated_tokens = output.formatted.len() / 4;
                     let message = format!(
                         "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
                          - force=true to return full output\n\
-                         - Narrow your scope (smaller directory, specific file)\n\
-                         - Use symbol_focus mode for targeted analysis\n\
-                         - Reduce max_depth parameter",
+                         - summary=true to get compact summary\n\
+                         - Narrow your scope (smaller directory, specific file)",
                         output.formatted.len(),
                         estimated_tokens
                     );
@@ -561,6 +614,7 @@ impl CodeAnalyzer {
                         None,
                     ));
                 }
+
                 // SymbolFocus: no semantic data to paginate
                 let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
                 (output.formatted, output.next_cursor, structured)

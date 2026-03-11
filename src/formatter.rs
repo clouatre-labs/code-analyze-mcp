@@ -667,6 +667,157 @@ pub fn format_focused(
     Ok(output)
 }
 
+/// Format a compact summary of focused symbol analysis.
+/// Used when output would exceed the size threshold or when explicitly requested.
+#[instrument(skip_all)]
+pub fn format_focused_summary(
+    graph: &CallGraph,
+    dataflow: &DataflowGraph,
+    symbol: &str,
+    follow_depth: u32,
+    base_path: Option<&Path>,
+) -> Result<String, FormatterError> {
+    let mut output = String::new();
+
+    // Compute all counts BEFORE output begins
+    let def_count = graph.definitions.get(symbol).map_or(0, |d| d.len());
+    let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
+    let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
+
+    // Partition incoming_chains into production and test callers
+    let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
+        incoming_chains.into_iter().partition(|chain| {
+            chain
+                .chain
+                .first()
+                .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
+        });
+
+    // Count unique production callers
+    let callers_count = prod_chains
+        .iter()
+        .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+
+    // Count unique callees
+    let callees_count = outgoing_chains
+        .iter()
+        .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+
+    // FOCUS header
+    output.push_str(&format!(
+        "FOCUS: {} ({} defs, {} callers, {} callees)\n",
+        symbol, def_count, callers_count, callees_count
+    ));
+
+    // DEPTH line
+    output.push_str(&format!("DEPTH: {}\n", follow_depth));
+
+    // DEFINED section
+    if let Some(definitions) = graph.definitions.get(symbol) {
+        output.push_str("DEFINED:\n");
+        for (path, line) in definitions {
+            output.push_str(&format!(
+                "  {}:{}\n",
+                strip_base_path_buf(path, base_path),
+                line
+            ));
+        }
+    } else {
+        output.push_str("DEFINED: (not found)\n");
+    }
+
+    // CALLERS (production, top 10 by frequency)
+    output.push_str("CALLERS (top 10):\n");
+    if prod_chains.is_empty() {
+        output.push_str("  (none)\n");
+    } else {
+        // Collect caller names with their file paths (from chain.chain.first())
+        let mut caller_freq: std::collections::HashMap<String, (usize, String)> =
+            std::collections::HashMap::new();
+        for chain in &prod_chains {
+            if let Some((name, path, _)) = chain.chain.first() {
+                let file_path = strip_base_path_buf(path, base_path);
+                caller_freq
+                    .entry(name.clone())
+                    .and_modify(|(count, _)| *count += 1)
+                    .or_insert((1, file_path));
+            }
+        }
+
+        // Sort by frequency descending, take top 10
+        let mut sorted_callers: Vec<_> = caller_freq.into_iter().collect();
+        sorted_callers.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+
+        for (name, (_, file_path)) in sorted_callers.into_iter().take(10) {
+            output.push_str(&format!("  {} {}\n", name, file_path));
+        }
+    }
+
+    // CALLERS (test) - summary only
+    if !test_chains.is_empty() {
+        let mut test_files: Vec<_> = test_chains
+            .iter()
+            .filter_map(|chain| {
+                chain
+                    .chain
+                    .first()
+                    .map(|(_, path, _)| path.to_string_lossy().into_owned())
+            })
+            .collect();
+        test_files.sort();
+        test_files.dedup();
+
+        output.push_str(&format!(
+            "CALLERS (test): {} test functions (in {} files)\n",
+            test_chains.len(),
+            test_files.len()
+        ));
+    }
+
+    // CALLEES (top 10 by frequency)
+    output.push_str("CALLEES (top 10):\n");
+    if outgoing_chains.is_empty() {
+        output.push_str("  (none)\n");
+    } else {
+        // Collect callee names and count frequency
+        let mut callee_freq: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        for chain in &outgoing_chains {
+            if let Some((name, _, _)) = chain.chain.first() {
+                *callee_freq.entry(name.clone()).or_insert(0) += 1;
+            }
+        }
+
+        // Sort by frequency descending, take top 10
+        let mut sorted_callees: Vec<_> = callee_freq.into_iter().collect();
+        sorted_callees.sort_by(|a, b| b.1.cmp(&a.1));
+
+        for (name, _) in sorted_callees.into_iter().take(10) {
+            output.push_str(&format!("  {}\n", name));
+        }
+    }
+
+    // DATAFLOW section
+    output.push_str("DATAFLOW: ");
+    let assignments = dataflow.find_assignments(symbol);
+    let field_accesses = dataflow.find_field_accesses(symbol);
+    output.push_str(&format!(
+        "{} assignments, {} field accesses\n",
+        assignments.len(),
+        field_accesses.len()
+    ));
+
+    // SUGGESTION section
+    output.push_str("SUGGESTION:\n");
+    output.push_str("Use summary=false with force=true for full output\n");
+
+    Ok(output)
+}
+
 /// Format a compact summary for large directory analysis results.
 /// Used when output would exceed the size threshold or when explicitly requested.
 #[instrument(skip_all)]
