@@ -20,8 +20,7 @@ code-analyze-mcp is a Model Context Protocol server that analyzes code structure
 ### Homebrew (macOS and Linux)
 
 ```bash
-brew tap clouatre-labs/tap
-brew install code-analyze-mcp
+brew install clouatre-labs/tap/code-analyze-mcp
 ```
 
 Update: `brew upgrade code-analyze-mcp`
