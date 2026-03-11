@@ -1,20 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices"
-  ],
+  "extends": ["config:best-practices"],
+  "labels": ["dependencies"],
   "platformAutomerge": true,
-  "labels": [
-    "dependencies"
-  ],
-  "dependencyDashboard": false,
+  "ignorePaths": ["fuzz/**"],
   "packageRules": [
     {
-      "matchUpdateTypes": [
-        "major",
-        "minor",
-        "patch"
-      ],
+      "matchUpdateTypes": ["patch", "minor", "digest", "pin", "lockFileMaintenance"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["github-actions"],
       "automerge": true
     }
   ]
