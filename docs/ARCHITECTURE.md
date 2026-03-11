@@ -310,7 +310,7 @@ pub enum AnalyzeError {
 - Scales to 100+ files efficiently
 
 **Directory Walking:**
-- ignore crate respects .gitignore and .gooseignore
+- ignore crate respects `.gitignore` rules
 - Avoids traversing excluded directories (e.g., node_modules, .git)
 - Reduces I/O by 50-80% on typical projects
 

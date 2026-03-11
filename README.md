@@ -77,7 +77,7 @@ graph TD
 
 ### Directory Overview
 
-Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` and `.gooseignore` files.
+Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules via the `ignore` crate.
 
 **Triggered when:** Path is a directory and no `focus` parameter is provided.
 
