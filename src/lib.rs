@@ -14,7 +14,7 @@ pub mod traversal;
 pub mod types;
 
 use cache::AnalysisCache;
-use formatter::{format_structure_paginated, format_summary};
+use formatter::{format_file_details_summary, format_structure_paginated, format_summary};
 use logging::LogEvent;
 use pagination::{DEFAULT_PAGE_SIZE, decode_cursor, paginate_slice};
 use rmcp::handler::server::tool::ToolRouter;
@@ -494,8 +494,24 @@ impl CodeAnalyzer {
                 (output.formatted, paginated.next_cursor, structured)
             }
             types::ModeResult::FileDetails(mut output) => {
-                // Apply output size limiting
-                if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
+                // Apply summary/output size limiting logic (same 3-way decision as Overview)
+                let use_summary = if params.force == Some(true) {
+                    false
+                } else if params.summary == Some(true) {
+                    true
+                } else if params.summary == Some(false) {
+                    false
+                } else {
+                    output.formatted.len() > SIZE_LIMIT
+                };
+
+                if use_summary {
+                    output.formatted = format_file_details_summary(
+                        &output.semantic,
+                        &params.path,
+                        output.line_count,
+                    );
+                } else if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
                     let estimated_tokens = output.formatted.len() / 4;
                     let message = format!(
                         "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\

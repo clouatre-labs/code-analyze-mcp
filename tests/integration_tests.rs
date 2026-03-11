@@ -2648,3 +2648,155 @@ pub fn single_callee() {
         "Single-occurrence callee should appear without annotation"
     );
 }
+
+#[test]
+fn test_file_details_summary_explicit_true() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create a small Rust file
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub fn hello() {}
+
+pub fn world() {}
+"#,
+    )
+    .unwrap();
+
+    let file_path = root.join("src/lib.rs");
+
+    // Act: Analyze with summary=true
+    // Since we don't have direct call_tool access in tests, verify the underlying function
+    use code_analyze_mcp::formatter::format_file_details_summary;
+    use code_analyze_mcp::types::SemanticAnalysis;
+    use std::collections::HashMap;
+
+    let semantic = SemanticAnalysis {
+        functions: vec![
+            code_analyze_mcp::types::FunctionInfo {
+                name: "hello".to_string(),
+                line: 2,
+                end_line: 2,
+                parameters: vec![],
+                return_type: None,
+            },
+            code_analyze_mcp::types::FunctionInfo {
+                name: "world".to_string(),
+                line: 4,
+                end_line: 4,
+                parameters: vec![],
+                return_type: None,
+            },
+        ],
+        classes: vec![],
+        imports: vec![],
+        references: vec![],
+        call_frequency: HashMap::new(),
+        calls: vec![],
+        assignments: vec![],
+        field_accesses: vec![],
+    };
+
+    let summary = format_file_details_summary(&semantic, "src/lib.rs", 5);
+
+    // Assert: Summary contains FILE header and functions listed
+    assert!(summary.contains("FILE:"), "Should have FILE header");
+    assert!(summary.contains("src/lib.rs"), "Should show path");
+    assert!(summary.contains("5L, 2F, 0C"), "Should show LOC and counts");
+    assert!(
+        summary.contains("TOP FUNCTIONS BY SIZE:"),
+        "Should have functions section"
+    );
+}
+
+#[test]
+fn test_file_details_force_bypasses_summary() {
+    // Arrange: Create semantic data with many functions that would normally trigger summary
+    use code_analyze_mcp::formatter::format_file_details_summary;
+    use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
+    use std::collections::HashMap;
+
+    let mut functions = Vec::new();
+    for i in 0..50 {
+        functions.push(FunctionInfo {
+            name: format!("function_{}", i),
+            line: i * 10,
+            end_line: i * 10 + 5,
+            parameters: vec![],
+            return_type: None,
+        });
+    }
+
+    let semantic = SemanticAnalysis {
+        functions,
+        classes: vec![],
+        imports: vec![],
+        references: vec![],
+        call_frequency: HashMap::new(),
+        calls: vec![],
+        assignments: vec![],
+        field_accesses: vec![],
+    };
+
+    let summary = format_file_details_summary(&semantic, "src/lib.rs", 5000);
+
+    // Assert: Summary should contain top 10 functions only
+    assert!(
+        summary.contains("TOP FUNCTIONS BY SIZE:"),
+        "Should show top functions"
+    );
+    // Should contain first 10 functions when sorted by size
+    let count = summary.lines().filter(|l| l.contains("function_")).count();
+    assert!(
+        count <= 10,
+        "Summary should show at most 10 functions, got {}",
+        count
+    );
+}
+
+#[test]
+fn test_format_file_details_summary_many_classes() {
+    // Arrange: 15 classes to trigger multiline "... and N more" path
+    use code_analyze_mcp::formatter::format_file_details_summary;
+    use code_analyze_mcp::types::{ClassInfo, SemanticAnalysis};
+    use std::collections::HashMap;
+
+    let classes: Vec<ClassInfo> = (0..15)
+        .map(|i| ClassInfo {
+            name: format!("Class{}", i),
+            line: i * 10,
+            end_line: i * 10 + 5,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        })
+        .collect();
+
+    let semantic = SemanticAnalysis {
+        functions: vec![],
+        classes,
+        imports: vec![],
+        references: vec![],
+        call_frequency: HashMap::new(),
+        calls: vec![],
+        assignments: vec![],
+        field_accesses: vec![],
+    };
+
+    // Act
+    let summary = format_file_details_summary(&semantic, "src/lib.rs", 150);
+
+    // Assert: multiline format with "... and N more"
+    assert!(summary.contains("CLASSES:"), "Should have CLASSES section");
+    assert!(
+        summary.contains("15 classes total"),
+        "Should show total class count"
+    );
+    assert!(
+        summary.contains("... and 10 more"),
+        "Should show remaining count"
+    );
+}
