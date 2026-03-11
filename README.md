@@ -237,20 +237,6 @@ analyze path: /project summary: false
 | Go | `.go` | Implemented |
 | Java | `.java` | Implemented |
 
-## Roadmap
-
-| Wave | Milestone | Status |
-|------|-----------|--------|
-| 0 | Foundation (CI, community files) | Complete |
-| 1 | Tooling (dependencies, guidelines) | Complete |
-| 2 | Core Features (semantic mode, languages) | Complete |
-| 3 | Call Graphs (symbol focus mode) | Complete |
-| 4a | Polish (caching, output limiting) | Complete |
-| 4b | MCP Protocol (version, capabilities, structured output) | Planned |
-| 4c | Performance testing and tuning | Planned |
-
-See [issue #1](https://github.com/clouatre-labs/code-analyze-mcp/issues/1) for the complete roadmap and wave-based merge plan.
-
 ## Documentation
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Design goals, module map, data flow, language handler system, caching strategy
