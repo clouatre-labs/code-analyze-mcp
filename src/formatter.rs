@@ -686,7 +686,7 @@ pub fn format_focused_summary(
 
     // Partition incoming_chains into production and test callers
     let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
-        incoming_chains.clone().into_iter().partition(|chain| {
+        incoming_chains.into_iter().partition(|chain| {
             chain
                 .chain
                 .first()
