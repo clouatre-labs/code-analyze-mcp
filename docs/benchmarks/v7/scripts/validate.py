@@ -22,7 +22,6 @@ Output: PASS/FAIL with details to stdout
 
 import argparse
 import json
-import re
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
