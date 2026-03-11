@@ -352,7 +352,7 @@ impl CodeAnalyzer {
 
                 // Spawn blocking analysis with progress tracking
                 let handle = tokio::task::spawn_blocking(move || {
-                    analyze::analyze_focused_with_progress_internal(
+                    analyze::analyze_focused_with_progress(
                         &path_owned,
                         &focus_owned,
                         follow_depth,
@@ -563,7 +563,7 @@ impl CodeAnalyzer {
                     let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
                     let ct2 = ct.clone();
                     let summary_result = tokio::task::spawn_blocking(move || {
-                        analyze::analyze_focused_with_progress_internal(
+                        analyze::analyze_focused_with_progress(
                             &path_owned2,
                             &focus_owned2,
                             follow_depth2,

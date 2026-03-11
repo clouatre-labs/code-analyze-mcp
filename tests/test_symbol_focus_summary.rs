@@ -209,15 +209,15 @@ pub fn another_caller() {
     )
     .unwrap();
 
-    // Act: Call analyze_focused_with_progress_internal with use_summary=true
-    use code_analyze_mcp::analyze::analyze_focused_with_progress_internal;
+    // Act: Call analyze_focused_with_progress with use_summary=true
+    use code_analyze_mcp::analyze::analyze_focused_with_progress;
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use tokio_util::sync::CancellationToken;
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    let output = analyze_focused_with_progress_internal(
+    let output = analyze_focused_with_progress(
         root,
         "target_fn",
         1,
@@ -273,15 +273,15 @@ pub fn another_caller() {
     )
     .unwrap();
 
-    // Act: Call analyze_focused_with_progress_internal with use_summary=false
-    use code_analyze_mcp::analyze::analyze_focused_with_progress_internal;
+    // Act: Call analyze_focused_with_progress with use_summary=false
+    use code_analyze_mcp::analyze::analyze_focused_with_progress;
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use tokio_util::sync::CancellationToken;
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    let output = analyze_focused_with_progress_internal(
+    let output = analyze_focused_with_progress(
         root,
         "target_fn",
         1,
