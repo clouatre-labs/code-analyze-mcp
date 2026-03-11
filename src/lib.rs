@@ -773,38 +773,30 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        Ok(CallToolResult {
-            content: vec![Content::text(final_text)],
-            structured_content: Some(structured_value),
-            is_error: Some(false),
-            meta: None,
-        })
+        let mut result = CallToolResult::success(vec![Content::text(final_text)]);
+        result.structured_content = Some(structured_value);
+        Ok(result)
     }
 }
 
 #[tool_handler]
 impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
-        InitializeResult {
-            protocol_version: ProtocolVersion::V_2025_06_18,
-            capabilities: ServerCapabilities::builder()
+        InitializeResult::new(
+            ServerCapabilities::builder()
                 .enable_logging()
                 .enable_tools()
                 .enable_tool_list_changed()
                 .enable_completions()
                 .build(),
-            server_info: Implementation {
-                name: "code-analyze-mcp".into(),
-                version: "0.1.0".into(),
-                description: Some(
-                    "MCP server for code structure analysis using tree-sitter".into(),
-                ),
-                title: Some("Code Analyze MCP".into()),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("Use overview mode to map a codebase (pass a directory). Use file_details mode to extract functions, classes, and imports from a specific file (pass a file path). Use symbol_focus mode to trace call graphs for a named function or class (pass a directory and set focus to the symbol name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes next_cursor, pass it back as cursor to retrieve the next page.".into()),
-        }
+        )
+        .with_protocol_version(ProtocolVersion::V_2025_06_18)
+        .with_server_info(
+            Implementation::new("code-analyze-mcp", "0.1.0")
+                .with_title("Code Analyze MCP")
+                .with_description("MCP server for code structure analysis using tree-sitter"),
+        )
+        .with_instructions("Use overview mode to map a codebase (pass a directory). Use file_details mode to extract functions, classes, and imports from a specific file (pass a file path). Use symbol_focus mode to trace call graphs for a named function or class (pass a directory and set focus to the symbol name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes next_cursor, pass it back as cursor to retrieve the next page.")
     }
 
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
@@ -919,9 +911,7 @@ impl ServerHandler for CodeAnalyzer {
                 }
             };
 
-        Ok(CompleteResult {
-            completion: completion_info,
-        })
+        Ok(CompleteResult::new(completion_info))
     }
 
     async fn set_level(
