@@ -139,3 +139,9 @@ If v7B quality drops vs v6B:
 3. Run collect.py for each session to extract metrics and parameter_usage.
 4. Run analyze.py --version v7 to generate analysis with parameter usage frequency table.
 5. Compare v7B vs v6B token delta and parameter usage frequency to test hypothesis.
+
+## References
+
+- [methodology.md](methodology.md) – Experiment design and statistical rationale
+- [docs/benchmarks/v6/](../v6) – v6 baseline and results
+- [docs/benchmarks/ISOLATION.md](../ISOLATION.md) – Tool isolation limitations and workaround strategy

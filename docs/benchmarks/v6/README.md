@@ -85,3 +85,4 @@ v6 tests whether compaction changes narrow this gap.
 - [methodology.md](methodology.md) – Experiment design and statistical rationale
 - [output-comparison.md](output-comparison.md) – Template for post-run output measurements
 - [docs/benchmarks/v5/](../v5) – v5 baseline and unchanged methodology details
+- [docs/benchmarks/ISOLATION.md](../ISOLATION.md) – Tool isolation limitations and workaround strategy
