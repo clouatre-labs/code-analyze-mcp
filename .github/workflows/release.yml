@@ -53,20 +53,24 @@ jobs:
           TAG="v${{ inputs.version }}"
           COMMIT_SHA=$(git rev-parse HEAD)
 
-          TAG_SHA=$(gh api repos/${{ github.repository }}/git/tags \
-            -X POST \
-            -f tag="$TAG" \
-            -f message="Release $TAG" \
-            -f object="$COMMIT_SHA" \
-            -f type="commit" \
-            --jq '.sha')
+          if gh api repos/${{ github.repository }}/git/refs/tags/"$TAG" --silent 2>/dev/null; then
+            echo "Tag $TAG already exists, skipping creation"
+          else
+            TAG_SHA=$(gh api repos/${{ github.repository }}/git/tags \
+              -X POST \
+              -f tag="$TAG" \
+              -f message="Release $TAG" \
+              -f object="$COMMIT_SHA" \
+              -f type="commit" \
+              --jq '.sha')
 
-          gh api repos/${{ github.repository }}/git/refs \
-            -X POST \
-            -f ref="refs/tags/$TAG" \
-            -f sha="$TAG_SHA"
+            gh api repos/${{ github.repository }}/git/refs \
+              -X POST \
+              -f ref="refs/tags/$TAG" \
+              -f sha="$TAG_SHA"
 
-          echo "Created annotated tag $TAG -> $TAG_SHA"
+            echo "Created annotated tag $TAG -> $TAG_SHA"
+          fi
 
       - name: Dry run - skip tag creation
         if: ${{ inputs.dry_run }}
@@ -79,7 +83,6 @@ jobs:
     permissions:
       contents: write
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ needs.create-tag.outputs.version }}
     steps:
       - name: Checkout repository (real run)
@@ -96,11 +99,15 @@ jobs:
       - name: Create GitHub release
         if: ${{ !inputs.dry_run }}
         id: create_release
-        uses: taiki-e/create-gh-release-action@c5baa0b5dc700cf06439d87935e130220a6882d9 # v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          draft: false
-          ref: refs/tags/v${{ needs.create-tag.outputs.version }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ needs.create-tag.outputs.version }}"
+          if gh release view "$TAG" --json id --silent 2>/dev/null; then
+            echo "Release $TAG already exists, skipping creation"
+          else
+            gh release create "$TAG" --title "$TAG" --notes "" --draft=false
+          fi
 
       - name: Dry run - skip release creation
         if: ${{ inputs.dry_run }}
