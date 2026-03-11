@@ -20,8 +20,7 @@ use formatter::{
 };
 use logging::LogEvent;
 use pagination::{
-    CursorData, DEFAULT_PAGE_SIZE, SYMBOL_FOCUS_CALLEES_MODE, SYMBOL_FOCUS_CALLERS_MODE,
-    decode_cursor, encode_cursor, paginate_slice,
+    CursorData, DEFAULT_PAGE_SIZE, PaginationMode, decode_cursor, encode_cursor, paginate_slice,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -48,11 +47,11 @@ const SIZE_LIMIT: usize = 50_000;
 /// Returns (items, re-encoded_cursor_option).
 fn paginate_focus_chains(
     chains: &[graph::CallChain],
-    mode: &str,
+    mode: PaginationMode,
     offset: usize,
     page_size: usize,
 ) -> Result<(Vec<graph::CallChain>, Option<String>), ErrorData> {
-    let paginated = paginate_slice(chains, offset, page_size)
+    let paginated = paginate_slice(chains, offset, page_size, mode)
         .map_err(|e| ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
 
     if paginated.next_cursor.is_none() && offset == 0 {
@@ -65,7 +64,7 @@ fn paginate_focus_chains(
         })?;
         Some(
             encode_cursor(&CursorData {
-                mode: mode.to_string(),
+                mode,
                 offset: decoded.offset,
             })
             .map_err(|e| {
@@ -532,9 +531,15 @@ impl CodeAnalyzer {
                 }
 
                 // Apply pagination to files
-                let paginated = paginate_slice(&output.files, offset, page_size).map_err(|e| {
-                    ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-                })?;
+                let paginated =
+                    paginate_slice(&output.files, offset, page_size, PaginationMode::Default)
+                        .map_err(|e| {
+                            ErrorData::new(
+                                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                e.to_string(),
+                                None,
+                            )
+                        })?;
 
                 if paginated.next_cursor.is_some() || offset > 0 {
                     output.formatted = format_structure_paginated(
@@ -589,10 +594,15 @@ impl CodeAnalyzer {
                 }
 
                 // Paginate functions (typically the largest collection)
-                let paginated = paginate_slice(&output.semantic.functions, offset, page_size)
-                    .map_err(|e| {
-                        ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-                    })?;
+                let paginated = paginate_slice(
+                    &output.semantic.functions,
+                    offset,
+                    page_size,
+                    PaginationMode::Default,
+                )
+                .map_err(|e| {
+                    ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+                })?;
 
                 // Regenerate formatted output from the paginated slice when pagination is active
                 if paginated.next_cursor.is_some() || offset > 0 {
@@ -684,64 +694,70 @@ impl CodeAnalyzer {
                 let cursor_mode = if let Some(ref cursor_str) = params.cursor {
                     decode_cursor(cursor_str)
                         .map(|c| c.mode)
-                        .unwrap_or_else(|_| SYMBOL_FOCUS_CALLERS_MODE.to_string())
+                        .unwrap_or(PaginationMode::Callers)
                 } else {
-                    SYMBOL_FOCUS_CALLERS_MODE.to_string()
+                    PaginationMode::Callers
                 };
 
-                let paginated_next_cursor = if cursor_mode == SYMBOL_FOCUS_CALLERS_MODE {
-                    let (paginated_items, paginated_next) = paginate_focus_chains(
-                        &output.prod_chains,
-                        SYMBOL_FOCUS_CALLERS_MODE,
-                        offset,
-                        page_size,
-                    )?;
-
-                    if paginated_next.is_some() || offset > 0 {
-                        let focus_symbol = params.focus.as_deref().unwrap_or("");
-                        let base_path = Path::new(&params.path);
-                        output.formatted = format_focused_paginated(
-                            &paginated_items,
-                            output.prod_chains.len(),
-                            SYMBOL_FOCUS_CALLERS_MODE,
-                            focus_symbol,
+                let paginated_next_cursor = match cursor_mode {
+                    PaginationMode::Callers => {
+                        let (paginated_items, paginated_next) = paginate_focus_chains(
                             &output.prod_chains,
-                            &output.test_chains,
-                            &output.outgoing_chains,
-                            output.def_count,
+                            PaginationMode::Callers,
                             offset,
-                            Some(base_path),
-                        );
-                        paginated_next
-                    } else {
-                        None
+                            page_size,
+                        )?;
+
+                        if paginated_next.is_some() || offset > 0 {
+                            let focus_symbol = params.focus.as_deref().unwrap_or("");
+                            let base_path = Path::new(&params.path);
+                            output.formatted = format_focused_paginated(
+                                &paginated_items,
+                                output.prod_chains.len(),
+                                "callers",
+                                focus_symbol,
+                                &output.prod_chains,
+                                &output.test_chains,
+                                &output.outgoing_chains,
+                                output.def_count,
+                                offset,
+                                Some(base_path),
+                            );
+                            paginated_next
+                        } else {
+                            None
+                        }
                     }
-                } else {
-                    let (paginated_items, paginated_next) = paginate_focus_chains(
-                        &output.outgoing_chains,
-                        SYMBOL_FOCUS_CALLEES_MODE,
-                        offset,
-                        page_size,
-                    )?;
-
-                    if paginated_next.is_some() || offset > 0 {
-                        let focus_symbol = params.focus.as_deref().unwrap_or("");
-                        let base_path = Path::new(&params.path);
-                        output.formatted = format_focused_paginated(
-                            &paginated_items,
-                            output.outgoing_chains.len(),
-                            SYMBOL_FOCUS_CALLEES_MODE,
-                            focus_symbol,
-                            &output.prod_chains,
-                            &output.test_chains,
+                    PaginationMode::Callees => {
+                        let (paginated_items, paginated_next) = paginate_focus_chains(
                             &output.outgoing_chains,
-                            output.def_count,
+                            PaginationMode::Callees,
                             offset,
-                            Some(base_path),
-                        );
-                        paginated_next
-                    } else {
-                        None
+                            page_size,
+                        )?;
+
+                        if paginated_next.is_some() || offset > 0 {
+                            let focus_symbol = params.focus.as_deref().unwrap_or("");
+                            let base_path = Path::new(&params.path);
+                            output.formatted = format_focused_paginated(
+                                &paginated_items,
+                                output.outgoing_chains.len(),
+                                "callees",
+                                focus_symbol,
+                                &output.prod_chains,
+                                &output.test_chains,
+                                &output.outgoing_chains,
+                                output.def_count,
+                                offset,
+                                Some(base_path),
+                            );
+                            paginated_next
+                        } else {
+                            None
+                        }
+                    }
+                    PaginationMode::Default => {
+                        unreachable!("SymbolFocus should only use Callers or Callees modes")
                     }
                 };
 

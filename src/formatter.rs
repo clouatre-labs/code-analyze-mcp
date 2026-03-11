@@ -1126,8 +1126,8 @@ pub struct FocusedPaginatedParams<'a> {
 
 /// Format a paginated subset of callers or callees for SymbolFocus mode.
 /// Mode is determined by the `mode` parameter:
-/// - `SYMBOL_FOCUS_CALLERS_MODE`: paginate production callers; show test callers summary and callees summary.
-/// - `SYMBOL_FOCUS_CALLEES_MODE`: paginate callees; show callers summary and test callers summary.
+/// - "callers": paginate production callers; show test callers summary and callees summary.
+/// - "callees": paginate callees; show callers summary and test callers summary.
 #[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
 pub fn format_focused_paginated(
@@ -1164,7 +1164,7 @@ pub fn format_focused_paginated(
         symbol, def_count, callers_count, callees_count
     ));
 
-    if crate::pagination::SYMBOL_FOCUS_CALLERS_MODE == mode {
+    if "callers" == mode {
         // Paginate production callers
         output.push_str(&format!("CALLERS ({}-{} of {}):\n", start, end, total));
 
