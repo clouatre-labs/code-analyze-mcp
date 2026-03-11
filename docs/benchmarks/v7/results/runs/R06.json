@@ -1,0 +1,25 @@
+{
+  "session_name": "v7-benchmark-R06-A4",
+  "tokens": 31054,
+  "input_tokens": 30535,
+  "output_tokens": 519,
+  "accumulated_total_tokens": 260926,
+  "accumulated_input_tokens": 255483,
+  "accumulated_output_tokens": 5443,
+  "wall_seconds": 62,
+  "tool_calls_detail": {
+    "code-analyze-mcp__code-analyze-mcp__analyze": 7,
+    "developer__shell": 4,
+    "developer__write": 1
+  },
+  "analyze_calls": 7,
+  "shell_calls": 4,
+  "editor_calls": 1,
+  "total_calls": 12,
+  "parameter_usage": {
+    "summary_count": 0,
+    "cursor_calls": 0,
+    "page_size_overrides": 0,
+    "pagination_used": false
+  }
+}
