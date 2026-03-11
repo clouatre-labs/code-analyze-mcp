@@ -14,9 +14,15 @@ pub mod traversal;
 pub mod types;
 
 use cache::AnalysisCache;
-use formatter::{format_file_details_summary, format_structure_paginated, format_summary};
+use formatter::{
+    format_file_details_paginated, format_file_details_summary, format_focused_paginated,
+    format_structure_paginated, format_summary,
+};
 use logging::LogEvent;
-use pagination::{DEFAULT_PAGE_SIZE, decode_cursor, paginate_slice};
+use pagination::{
+    CursorData, DEFAULT_PAGE_SIZE, SYMBOL_FOCUS_CALLEES_MODE, SYMBOL_FOCUS_CALLERS_MODE,
+    decode_cursor, encode_cursor, paginate_slice,
+};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -422,6 +428,10 @@ impl CodeAnalyzer {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: "Analysis cancelled".to_string(),
                             next_cursor: None,
+                            prod_chains: vec![],
+                            test_chains: vec![],
+                            outgoing_chains: vec![],
+                            def_count: 0,
                         };
                         types::ModeResult::SymbolFocus(output)
                     }
@@ -429,6 +439,10 @@ impl CodeAnalyzer {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: format!("Error analyzing symbol focus: {}", e),
                             next_cursor: None,
+                            prod_chains: vec![],
+                            test_chains: vec![],
+                            outgoing_chains: vec![],
+                            def_count: 0,
                         };
                         types::ModeResult::SymbolFocus(output)
                     }
@@ -436,6 +450,10 @@ impl CodeAnalyzer {
                         let output = analyze::FocusedAnalysisOutput {
                             formatted: format!("Task join error: {}", e),
                             next_cursor: None,
+                            prod_chains: vec![],
+                            test_chains: vec![],
+                            outgoing_chains: vec![],
+                            def_count: 0,
                         };
                         types::ModeResult::SymbolFocus(output)
                     }
@@ -541,6 +559,19 @@ impl CodeAnalyzer {
                         ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
                     })?;
 
+                // Regenerate formatted output from the paginated slice when pagination is active
+                if paginated.next_cursor.is_some() || offset > 0 {
+                    output.formatted = format_file_details_paginated(
+                        &paginated.items,
+                        paginated.total,
+                        &output.semantic,
+                        &params.path,
+                        output.line_count,
+                        offset,
+                        page_size,
+                    );
+                }
+
                 // Update next_cursor in output after pagination
                 output.next_cursor = paginated.next_cursor.clone();
 
@@ -615,9 +646,130 @@ impl CodeAnalyzer {
                     ));
                 }
 
-                // SymbolFocus: no semantic data to paginate
+                // SymbolFocus pagination: decode cursor mode to determine callers vs callees
+                let cursor_mode = if let Some(ref cursor_str) = params.cursor {
+                    decode_cursor(cursor_str)
+                        .map(|c| c.mode)
+                        .unwrap_or_else(|_| SYMBOL_FOCUS_CALLERS_MODE.to_string())
+                } else {
+                    SYMBOL_FOCUS_CALLERS_MODE.to_string()
+                };
+
+                let paginated_next_cursor = if cursor_mode == SYMBOL_FOCUS_CALLERS_MODE {
+                    // Paginate production callers
+                    let paginated = paginate_slice(&output.prod_chains, offset, page_size)
+                        .map_err(|e| {
+                            ErrorData::new(
+                                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                e.to_string(),
+                                None,
+                            )
+                        })?;
+
+                    if paginated.next_cursor.is_some() || offset > 0 {
+                        // Re-encode cursor with correct mode
+                        let next = if let Some(raw_cursor) = paginated.next_cursor {
+                            let decoded = decode_cursor(&raw_cursor).map_err(|e| {
+                                ErrorData::new(
+                                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                    e.to_string(),
+                                    None,
+                                )
+                            })?;
+                            Some(
+                                encode_cursor(&CursorData {
+                                    mode: SYMBOL_FOCUS_CALLERS_MODE.to_string(),
+                                    offset: decoded.offset,
+                                })
+                                .map_err(|e| {
+                                    ErrorData::new(
+                                        rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                        e.to_string(),
+                                        None,
+                                    )
+                                })?,
+                            )
+                        } else {
+                            None
+                        };
+
+                        let focus_symbol = params.focus.as_deref().unwrap_or("");
+                        let base_path = Path::new(&params.path);
+                        output.formatted = format_focused_paginated(
+                            &paginated.items,
+                            paginated.total,
+                            SYMBOL_FOCUS_CALLERS_MODE,
+                            focus_symbol,
+                            &output.prod_chains,
+                            &output.test_chains,
+                            &output.outgoing_chains,
+                            output.def_count,
+                            offset,
+                            Some(base_path),
+                        );
+                        next
+                    } else {
+                        None
+                    }
+                } else {
+                    // Paginate callees (SYMBOL_FOCUS_CALLEES_MODE)
+                    let paginated = paginate_slice(&output.outgoing_chains, offset, page_size)
+                        .map_err(|e| {
+                            ErrorData::new(
+                                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                e.to_string(),
+                                None,
+                            )
+                        })?;
+
+                    if paginated.next_cursor.is_some() || offset > 0 {
+                        let next = if let Some(raw_cursor) = paginated.next_cursor {
+                            let decoded = decode_cursor(&raw_cursor).map_err(|e| {
+                                ErrorData::new(
+                                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                    e.to_string(),
+                                    None,
+                                )
+                            })?;
+                            Some(
+                                encode_cursor(&CursorData {
+                                    mode: SYMBOL_FOCUS_CALLEES_MODE.to_string(),
+                                    offset: decoded.offset,
+                                })
+                                .map_err(|e| {
+                                    ErrorData::new(
+                                        rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                        e.to_string(),
+                                        None,
+                                    )
+                                })?,
+                            )
+                        } else {
+                            None
+                        };
+
+                        let focus_symbol = params.focus.as_deref().unwrap_or("");
+                        let base_path = Path::new(&params.path);
+                        output.formatted = format_focused_paginated(
+                            &paginated.items,
+                            paginated.total,
+                            SYMBOL_FOCUS_CALLEES_MODE,
+                            focus_symbol,
+                            &output.prod_chains,
+                            &output.test_chains,
+                            &output.outgoing_chains,
+                            output.def_count,
+                            offset,
+                            Some(base_path),
+                        );
+                        next
+                    } else {
+                        None
+                    }
+                };
+
                 let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
-                (output.formatted, output.next_cursor, structured)
+                (output.formatted, paginated_next_cursor, structured)
             }
         };
 

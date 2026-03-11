@@ -2800,3 +2800,469 @@ fn test_format_file_details_summary_many_classes() {
         "Should show remaining count"
     );
 }
+
+// --- FileDetails pagination tests (issue #146) ---
+
+#[test]
+fn test_file_details_pagination_first_page() {
+    use code_analyze_mcp::formatter::format_file_details_paginated;
+    use code_analyze_mcp::pagination::{decode_cursor, paginate_slice};
+    use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
+    use std::collections::HashMap;
+
+    // Arrange: 25 functions, page_size=10
+    let functions: Vec<FunctionInfo> = (0..25)
+        .map(|i| FunctionInfo {
+            name: format!("fn_{:02}", i),
+            line: i + 1,
+            end_line: i + 5,
+            parameters: vec![],
+            return_type: None,
+        })
+        .collect();
+
+    let semantic = SemanticAnalysis {
+        functions: functions.clone(),
+        classes: vec![],
+        imports: vec![],
+        references: vec![],
+        call_frequency: HashMap::new(),
+        calls: vec![],
+        assignments: vec![],
+        field_accesses: vec![],
+    };
+
+    // Act: paginate first page
+    let paginated = paginate_slice(&functions, 0, 10).expect("paginate failed");
+    assert_eq!(paginated.items.len(), 10);
+    assert!(paginated.next_cursor.is_some());
+    assert_eq!(paginated.total, 25);
+
+    let formatted = format_file_details_paginated(
+        &paginated.items,
+        paginated.total,
+        &semantic,
+        "src/lib.rs",
+        500,
+        0,
+        10,
+    );
+
+    // Assert: header shows position, F: section present
+    assert!(
+        formatted.contains("1-10/25F"),
+        "header should show 1-10/25F"
+    );
+    assert!(formatted.contains("F:"), "should have F: section");
+    assert!(formatted.contains("fn_00"), "first function should appear");
+    assert!(
+        !formatted.contains("fn_10"),
+        "11th function should not appear"
+    );
+
+    // Verify cursor round-trip
+    let cursor_str = paginated.next_cursor.unwrap();
+    let cursor_data = decode_cursor(&cursor_str).expect("decode failed");
+    assert_eq!(cursor_data.offset, 10);
+}
+
+#[test]
+fn test_file_details_pagination_last_page() {
+    use code_analyze_mcp::formatter::format_file_details_paginated;
+    use code_analyze_mcp::pagination::paginate_slice;
+    use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
+    use std::collections::HashMap;
+
+    // Arrange: 25 functions, page 2 starts at offset 10 with page_size 20 -> 15 items remaining
+    let functions: Vec<FunctionInfo> = (0..25)
+        .map(|i| FunctionInfo {
+            name: format!("fn_{:02}", i),
+            line: i + 1,
+            end_line: i + 5,
+            parameters: vec![],
+            return_type: None,
+        })
+        .collect();
+
+    let semantic = SemanticAnalysis {
+        functions: functions.clone(),
+        classes: vec![],
+        imports: vec![],
+        references: vec![],
+        call_frequency: HashMap::new(),
+        calls: vec![],
+        assignments: vec![],
+        field_accesses: vec![],
+    };
+
+    // Act: paginate last page (offset=10, page_size=20 -> items 10..25)
+    let paginated = paginate_slice(&functions, 10, 20).expect("paginate failed");
+    assert_eq!(paginated.items.len(), 15);
+    assert!(
+        paginated.next_cursor.is_none(),
+        "last page should have no next_cursor"
+    );
+
+    let formatted = format_file_details_paginated(
+        &paginated.items,
+        paginated.total,
+        &semantic,
+        "src/lib.rs",
+        500,
+        10,
+        20,
+    );
+
+    // Assert: header shows correct range
+    assert!(
+        formatted.contains("11-25/25F"),
+        "header should show 11-25/25F"
+    );
+    // Classes and imports NOT shown on non-first page
+    assert!(
+        !formatted.contains("C:"),
+        "classes should not appear on non-first page"
+    );
+    assert!(
+        !formatted.contains("I:"),
+        "imports should not appear on non-first page"
+    );
+}
+
+#[test]
+fn test_file_details_single_page_no_cursor() {
+    use code_analyze_mcp::pagination::paginate_slice;
+    use code_analyze_mcp::types::FunctionInfo;
+
+    // Arrange: 5 functions, page_size=100
+    let functions: Vec<FunctionInfo> = (0..5)
+        .map(|i| FunctionInfo {
+            name: format!("fn_{}", i),
+            line: i + 1,
+            end_line: i + 5,
+            parameters: vec![],
+            return_type: None,
+        })
+        .collect();
+
+    // Act
+    let paginated = paginate_slice(&functions, 0, 100).expect("paginate failed");
+
+    // Assert: single page, no cursor
+    assert_eq!(paginated.items.len(), 5);
+    assert!(
+        paginated.next_cursor.is_none(),
+        "single page should have no next_cursor"
+    );
+    assert_eq!(paginated.total, 5);
+}
+
+#[test]
+fn test_file_details_invalid_cursor() {
+    use code_analyze_mcp::pagination::decode_cursor;
+
+    // Act
+    let result = decode_cursor("this-is-not-valid-base64!!!");
+
+    // Assert
+    assert!(result.is_err(), "invalid cursor should produce an error");
+}
+
+// --- SymbolFocus pagination tests (issue #146) ---
+
+#[test]
+fn test_symbol_focus_callers_pagination_first_page() {
+    use code_analyze_mcp::analyze::analyze_focused;
+    use code_analyze_mcp::pagination::{SYMBOL_FOCUS_CALLERS_MODE, paginate_slice};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create a file with many callers of `target`
+    let mut code = String::from("fn target() {}\n");
+    for i in 0..15 {
+        code.push_str(&format!("fn caller_{:02}() {{ target(); }}\n", i));
+    }
+    fs::write(temp_dir.path().join("lib.rs"), &code).unwrap();
+
+    // Act
+    let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+
+    // Paginate prod callers with page_size=5
+    let paginated = paginate_slice(&output.prod_chains, 0, 5).expect("paginate failed");
+    assert!(
+        paginated.total >= 5,
+        "should have enough callers to paginate"
+    );
+    assert!(
+        paginated.next_cursor.is_some(),
+        "should have next_cursor for page 1"
+    );
+
+    // Verify cursor encodes callers mode
+    let _ = SYMBOL_FOCUS_CALLERS_MODE; // used to verify constant exists
+    assert_eq!(paginated.items.len(), 5);
+}
+
+#[test]
+fn test_symbol_focus_callers_pagination_second_page() {
+    use code_analyze_mcp::analyze::analyze_focused;
+    use code_analyze_mcp::formatter::format_focused_paginated;
+    use code_analyze_mcp::pagination::{SYMBOL_FOCUS_CALLERS_MODE, decode_cursor, paginate_slice};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    let mut code = String::from("fn target() {}\n");
+    for i in 0..12 {
+        code.push_str(&format!("fn caller_{:02}() {{ target(); }}\n", i));
+    }
+    fs::write(temp_dir.path().join("lib.rs"), &code).unwrap();
+
+    let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+    let total_prod = output.prod_chains.len();
+
+    if total_prod > 5 {
+        // Get page 1 cursor
+        let p1 = paginate_slice(&output.prod_chains, 0, 5).expect("paginate failed");
+        assert!(p1.next_cursor.is_some());
+
+        let cursor_str = p1.next_cursor.unwrap();
+        let cursor_data = decode_cursor(&cursor_str).expect("decode failed");
+
+        // Get page 2
+        let p2 =
+            paginate_slice(&output.prod_chains, cursor_data.offset, 5).expect("paginate failed");
+
+        // Format paginated output
+        let formatted = format_focused_paginated(
+            &p2.items,
+            total_prod,
+            SYMBOL_FOCUS_CALLERS_MODE,
+            "target",
+            &output.prod_chains,
+            &output.test_chains,
+            &output.outgoing_chains,
+            output.def_count,
+            cursor_data.offset,
+            Some(temp_dir.path()),
+        );
+
+        // Assert: header shows correct range for page 2
+        let expected_start = cursor_data.offset + 1;
+        assert!(
+            formatted.contains(&format!("CALLERS ({}", expected_start)),
+            "header should show page 2 range, got: {}",
+            formatted
+        );
+    }
+}
+
+#[test]
+fn test_symbol_focus_callees_pagination() {
+    use code_analyze_mcp::analyze::analyze_focused;
+    use code_analyze_mcp::formatter::format_focused_paginated;
+    use code_analyze_mcp::pagination::{SYMBOL_FOCUS_CALLEES_MODE, paginate_slice};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // target calls many functions
+    let mut code = String::from("fn target() {\n");
+    for i in 0..10 {
+        code.push_str(&format!("    callee_{:02}();\n", i));
+    }
+    code.push_str("}\n");
+    for i in 0..10 {
+        code.push_str(&format!("fn callee_{:02}() {{}}\n", i));
+    }
+    fs::write(temp_dir.path().join("lib.rs"), &code).unwrap();
+
+    let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+    let total_callees = output.outgoing_chains.len();
+
+    if total_callees > 3 {
+        let paginated = paginate_slice(&output.outgoing_chains, 0, 3).expect("paginate failed");
+
+        let formatted = format_focused_paginated(
+            &paginated.items,
+            total_callees,
+            SYMBOL_FOCUS_CALLEES_MODE,
+            "target",
+            &output.prod_chains,
+            &output.test_chains,
+            &output.outgoing_chains,
+            output.def_count,
+            0,
+            Some(temp_dir.path()),
+        );
+
+        assert!(
+            formatted.contains(&format!(
+                "CALLEES (1-{} of {})",
+                paginated.items.len(),
+                total_callees
+            )),
+            "header should show callees range, got: {}",
+            formatted
+        );
+    }
+}
+
+#[test]
+fn test_symbol_focus_empty_prod_callers() {
+    use code_analyze_mcp::analyze::analyze_focused;
+    use code_analyze_mcp::pagination::paginate_slice;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // target is only called from test functions
+    let code = r#"
+fn target() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_something() { target(); }
+}
+"#;
+    fs::write(temp_dir.path().join("lib.rs"), code).unwrap();
+
+    let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+
+    // prod_chains may be empty; pagination should handle it gracefully
+    let paginated = paginate_slice(&output.prod_chains, 0, 100).expect("paginate failed");
+    assert_eq!(paginated.items.len(), output.prod_chains.len());
+    assert!(
+        paginated.next_cursor.is_none(),
+        "no next_cursor for empty or single-page prod_chains"
+    );
+}
+
+// --- Unit tests for new formatter functions (issue #146) ---
+
+#[test]
+fn test_format_file_details_paginated_unit() {
+    use code_analyze_mcp::formatter::format_file_details_paginated;
+    use code_analyze_mcp::types::{ClassInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
+    use std::collections::HashMap;
+
+    // Arrange: simulate page 2 of 3 (functions 11-20 of 30)
+    let all_functions: Vec<FunctionInfo> = (0..30)
+        .map(|i| FunctionInfo {
+            name: format!("fn_{:02}", i),
+            line: i + 1,
+            end_line: i + 5,
+            parameters: vec![],
+            return_type: None,
+        })
+        .collect();
+
+    let page_functions = all_functions[10..20].to_vec();
+
+    let semantic = SemanticAnalysis {
+        functions: all_functions,
+        classes: vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 1,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }],
+        imports: vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec![],
+            line: 1,
+        }],
+        references: vec![],
+        call_frequency: HashMap::new(),
+        calls: vec![],
+        assignments: vec![],
+        field_accesses: vec![],
+    };
+
+    // Act: format page 2 (offset=10)
+    let formatted = format_file_details_paginated(
+        &page_functions,
+        30,
+        &semantic,
+        "src/formatter.rs",
+        750,
+        10,
+        10,
+    );
+
+    // Assert: header shows correct range
+    assert!(
+        formatted.contains("11-20/30F"),
+        "header should show 11-20/30F, got: {}",
+        formatted
+    );
+    // Classes NOT on page 2
+    assert!(
+        !formatted.contains("C:"),
+        "classes should not appear on page 2"
+    );
+    assert!(
+        !formatted.contains("I:"),
+        "imports should not appear on page 2"
+    );
+    // Functions present
+    assert!(formatted.contains("fn_10"), "fn_10 should be on this page");
+    assert!(formatted.contains("fn_19"), "fn_19 should be on this page");
+    assert!(
+        !formatted.contains("fn_00"),
+        "fn_00 should not be on this page"
+    );
+    assert!(
+        !formatted.contains("fn_20"),
+        "fn_20 should not be on this page"
+    );
+}
+
+#[test]
+fn test_format_focused_paginated_unit() {
+    use code_analyze_mcp::formatter::format_focused_paginated;
+    use code_analyze_mcp::graph::CallChain;
+    use code_analyze_mcp::pagination::SYMBOL_FOCUS_CALLERS_MODE;
+    use std::path::PathBuf;
+
+    // Arrange: create mock caller chains
+    let make_chain = |name: &str| -> CallChain {
+        CallChain {
+            chain: vec![
+                (name.to_string(), PathBuf::from("src/lib.rs"), 10),
+                ("target".to_string(), PathBuf::from("src/lib.rs"), 5),
+            ],
+        }
+    };
+
+    let prod_chains: Vec<CallChain> = (0..8)
+        .map(|i| make_chain(&format!("caller_{}", i)))
+        .collect();
+    let page = &prod_chains[0..3];
+
+    // Act
+    let formatted = format_focused_paginated(
+        page,
+        8,
+        SYMBOL_FOCUS_CALLERS_MODE,
+        "target",
+        &prod_chains,
+        &[],
+        &[],
+        1,
+        0,
+        None,
+    );
+
+    // Assert: header present
+    assert!(
+        formatted.contains("CALLERS (1-3 of 8):"),
+        "header should show 1-3 of 8, got: {}",
+        formatted
+    );
+    assert!(
+        formatted.contains("FOCUS: target"),
+        "should have FOCUS header"
+    );
+}

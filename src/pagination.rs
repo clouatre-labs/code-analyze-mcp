@@ -5,6 +5,9 @@ use thiserror::Error;
 
 pub const DEFAULT_PAGE_SIZE: usize = 100;
 
+pub const SYMBOL_FOCUS_CALLERS_MODE: &str = "symbol_focus_callers";
+pub const SYMBOL_FOCUS_CALLEES_MODE: &str = "symbol_focus_callees";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CursorData {
     pub mode: String,
