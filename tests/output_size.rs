@@ -1,0 +1,42 @@
+use code_analyze_mcp::analyze;
+use std::path::Path;
+
+#[test]
+fn test_overview_output_size() {
+    let output = analyze::analyze_directory(Path::new("src"), None).unwrap();
+    let char_count = output.formatted.len();
+
+    println!("Overview output size: {} chars", char_count);
+    assert!(
+        char_count >= 500 && char_count <= 50000,
+        "Overview output size {} out of range [500, 50000]",
+        char_count
+    );
+}
+
+#[test]
+fn test_file_details_output_size() {
+    let output = analyze::analyze_file("src/lib.rs", None).unwrap();
+    let char_count = output.formatted.len();
+
+    println!("File details output size: {} chars", char_count);
+    assert!(
+        char_count >= 500 && char_count <= 30000,
+        "File details output size {} out of range [500, 30000]",
+        char_count
+    );
+}
+
+#[test]
+fn test_symbol_focus_output_size() {
+    let output =
+        analyze::analyze_focused(Path::new("src"), "analyze_directory", 2, None, None).unwrap();
+    let char_count = output.formatted.len();
+
+    println!("Symbol focus output size: {} chars", char_count);
+    assert!(
+        char_count >= 100 && char_count <= 10000,
+        "Symbol focus output size {} out of range [100, 10000]",
+        char_count
+    );
+}

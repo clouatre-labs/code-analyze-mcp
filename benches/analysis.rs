@@ -28,9 +28,9 @@ fn file_details_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("file_details");
     group.sample_size(10);
 
-    group.bench_function("analyze_file_parser_rs", |b| {
+    group.bench_function("analyze_file_lib_rs", |b| {
         b.iter(|| {
-            let path = black_box("src/parser.rs");
+            let path = black_box("src/lib.rs");
             let ast_recursion_limit = black_box(None);
 
             code_analyze_mcp::analyze::analyze_file(path, ast_recursion_limit)
@@ -62,6 +62,7 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
                 ast_recursion_limit,
                 progress,
                 ct,
+                false,
             )
         });
     });
