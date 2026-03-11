@@ -1,10 +1,15 @@
 # code-analyze-mcp
 
+[![CI](https://github.com/clouatre-labs/code-analyze-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/clouatre-labs/code-analyze-mcp/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org)
+[![MCP](https://img.shields.io/badge/protocol-MCP-purple.svg)](https://modelcontextprotocol.io)
+
 Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 9 programming languages. It provides three analysis modes: directory overview (file tree with metrics), file-level semantic analysis (functions, classes, imports), and symbol-focused call graphs. Unlike goose's built-in analyze command, this is a standalone binary that can be integrated into any MCP client, with proper TypeScript support, JSX/TSX handling, and language-specific semantic extraction.
+code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It provides three analysis modes: directory overview (file tree with metrics), file-level semantic analysis (functions, classes, imports), and symbol-focused call graphs. Unlike goose's built-in analyze command, this is a standalone binary that can be integrated into any MCP client, with proper TypeScript support, JSX/TSX handling, and language-specific semantic extraction.
 
 ## Quick Start
 
@@ -56,11 +61,31 @@ The `analyze` tool accepts these parameters:
 | `follow_depth` | integer | No | Call graph traversal depth (default: 2) |
 | `ast_recursion_limit` | integer | No | Tree-sitter recursion limit for stack safety |
 | `force` | boolean | No | Bypass output size warning (1000 lines) |
+| `mode` | string | No | Analysis mode: 'overview', 'file_details', or 'symbol_focus' (auto-detected if not provided) |
+| `summary` | boolean | No | Generate compact output. true=force summary, false=force full, unset=auto-detect when output exceeds 50K chars |
+| `cursor` | string | No | Opaque pagination cursor token (from previous response's next_cursor) |
+| `page_size` | integer | No | Number of items per page (default: 100) |
 
 **Mode Auto-Detection:**
 - `focus` provided → Symbol focus mode
 - Path is a file → File details mode
 - Path is a directory → Directory overview mode
+
+## Output Management
+
+For large codebases, two mechanisms prevent context overflow:
+
+- **Pagination**: File details and symbol focus modes append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page.
+
+```
+# Response ends with:
+NEXT_CURSOR: eyJvZmZzZXQiOjUwfQ==
+
+# Fetch next page:
+analyze path: /my/project cursor: eyJvZmZzZXQiOjUwfQ==
+```
+
+- **Summary mode**: When output exceeds 50K chars, the server auto-compacts results using `(xN)` notation for repeated call chains. Override with `summary: true` (force) or `summary: false` (disable).
 
 ## Analysis Modes
 
