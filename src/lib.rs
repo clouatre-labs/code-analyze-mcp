@@ -187,7 +187,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         title = "Code Structure Analyzer",
-        description = "Analyze code structure in 3 modes: 1) Directory overview - file tree with LOC/function/class counts to max_depth. 2) File details - functions, classes, imports. 3) Symbol focus - call graphs across directory to max_depth (requires directory path, case-sensitive). Typical flow: directory → files → symbols. Functions called >3x show •N.",
+        description = "Analyze code structure in 3 modes: 1) Overview - directory tree with LOC/function/class counts (use max_depth to limit). 2) FileDetails - functions, classes, imports for one file. 3) SymbolFocus - call graph for a named symbol across a directory (requires focus, case-sensitive). Typical flow: directory overview -> file details -> symbol focus. For large overview output (>50K chars), use summary=true to get totals and top-level structure without per-file detail; output auto-summarizes at the 50K threshold. Use cursor/page_size to paginate files (overview) or functions (file_details) when next_cursor appears in the response. Functions called >3x show N.",
         output_schema = create_analyze_output_schema(),
         annotations(
             read_only_hint = true,
@@ -773,38 +773,30 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        Ok(CallToolResult {
-            content: vec![Content::text(final_text)],
-            structured_content: Some(structured_value),
-            is_error: Some(false),
-            meta: None,
-        })
+        let mut result = CallToolResult::success(vec![Content::text(final_text)]);
+        result.structured_content = Some(structured_value);
+        Ok(result)
     }
 }
 
 #[tool_handler]
 impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
-        InitializeResult {
-            protocol_version: ProtocolVersion::V_2025_06_18,
-            capabilities: ServerCapabilities::builder()
+        InitializeResult::new(
+            ServerCapabilities::builder()
                 .enable_logging()
                 .enable_tools()
                 .enable_tool_list_changed()
                 .enable_completions()
                 .build(),
-            server_info: Implementation {
-                name: "code-analyze-mcp".into(),
-                version: "0.1.0".into(),
-                description: Some(
-                    "MCP server for code structure analysis using tree-sitter".into(),
-                ),
-                title: Some("Code Analyze MCP".into()),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("Analyze code structure using three modes: directory overview (file tree with metrics), file details (functions/classes/imports), or symbol focus (call graphs). Provide a path and optionally specify mode and max_depth.".into()),
-        }
+        )
+        .with_protocol_version(ProtocolVersion::V_2025_06_18)
+        .with_server_info(
+            Implementation::new("code-analyze-mcp", "0.1.0")
+                .with_title("Code Analyze MCP")
+                .with_description("MCP server for code structure analysis using tree-sitter"),
+        )
+        .with_instructions("Use overview mode to map a codebase (pass a directory). Use file_details mode to extract functions, classes, and imports from a specific file (pass a file path). Use symbol_focus mode to trace call graphs for a named function or class (pass a directory and set focus to the symbol name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes next_cursor, pass it back as cursor to retrieve the next page.")
     }
 
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
@@ -919,9 +911,7 @@ impl ServerHandler for CodeAnalyzer {
                 }
             };
 
-        Ok(CompleteResult {
-            completion: completion_info,
-        })
+        Ok(CompleteResult::new(completion_info))
     }
 
     async fn set_level(

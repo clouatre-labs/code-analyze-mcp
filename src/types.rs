@@ -15,41 +15,53 @@ pub enum ModeResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeParams {
-    #[schemars(description = "Path to the file or directory to analyze")]
+    #[schemars(description = "File or directory path to analyze")]
     pub path: String,
 
     #[schemars(
-        description = "Analysis mode: 'overview', 'file_details', or 'symbol_focus' (auto-detected if not provided)"
+        description = "Analysis mode. Auto-detected: directory path without focus -> overview; file path -> file_details; focus parameter present -> symbol_focus. Override by setting explicitly."
     )]
     #[serde(default)]
     pub mode: Option<AnalysisMode>,
 
-    #[schemars(description = "Maximum recursion depth for directory traversal")]
+    #[schemars(
+        description = "Maximum directory traversal depth for overview mode. Unset means unlimited. Use 2-3 for large monorepos to limit output size."
+    )]
     pub max_depth: Option<u32>,
 
-    #[schemars(description = "Symbol to focus on for symbol_focus mode")]
+    #[schemars(
+        description = "Symbol name for symbol_focus mode (required for symbol_focus). Case-sensitive function or method name. Triggers symbol_focus auto-detection when mode is not set explicitly."
+    )]
     pub focus: Option<String>,
 
-    #[schemars(description = "Call graph depth for symbol_focus mode")]
+    #[schemars(
+        description = "Call graph traversal depth for symbol_focus mode. Default 1 (callers and callees one level out). Increase for deeper dependency traces; each level multiplies output size."
+    )]
     pub follow_depth: Option<u32>,
 
-    #[schemars(description = "Maximum AST recursion depth for tree-sitter queries")]
+    #[schemars(
+        description = "Maximum AST node recursion depth for tree-sitter queries. Default is sufficient for all standard source files; increase only for pathologically deep nesting in generated code."
+    )]
     pub ast_recursion_limit: Option<usize>,
 
-    #[schemars(description = "Bypass output size limiting (default: false)")]
+    #[schemars(
+        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true (overview) or narrowing scope over force=true; force=true can produce very large responses."
+    )]
     pub force: Option<bool>,
 
     #[schemars(
-        description = "Generate compact summary instead of full output. true=force summary, false=force full, unset=auto-detect when output exceeds 50K chars"
+        description = "Overview mode primarily; file_details has same 3-way logic (true/false/auto) but size-error still triggers if output exceeds 50K even after summary is applied. true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large codebases to avoid the size threshold and reduce token consumption."
     )]
     pub summary: Option<bool>,
 
     #[schemars(
-        description = "Opaque cursor token for pagination (from previous response's next_cursor)"
+        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page of files (overview) or functions (file_details). Omit on the first call."
     )]
     pub cursor: Option<String>,
 
-    #[schemars(description = "Number of items per page (default: 100)")]
+    #[schemars(
+        description = "Items per page for pagination (default: 100). Items are files in overview mode and functions in file_details mode. Reduce below 100 to limit response size; increase above 100 to reduce round trips."
+    )]
     pub page_size: Option<usize>,
 }
 
