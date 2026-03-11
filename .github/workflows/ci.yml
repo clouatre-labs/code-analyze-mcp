@@ -111,6 +111,29 @@ jobs:
       - name: Run tests
         run: cargo test
 
+  bench:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: stable
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Compile benchmarks (PR)
+        if: github.event_name == 'pull_request'
+        run: cargo bench --no-run
+      - name: Run benchmarks (main)
+        if: github.ref == 'refs/heads/main'
+        run: cargo bench
+
   deny:
     name: Audit Dependencies
     runs-on: ubuntu-latest
@@ -129,7 +152,7 @@ jobs:
     name: CI Result
     runs-on: ubuntu-latest
     if: always()
-    needs: [commitlint, check-base, format, lint, test, deny]
+    needs: [commitlint, check-base, format, lint, test, bench, deny]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
