@@ -30,8 +30,12 @@ permissions:
   id-token: write
   attestations: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build-and-attest:
+    name: Build ${{ inputs.target }}
     runs-on: ${{ inputs.os }}
     steps:
       - name: Checkout repository
@@ -43,6 +47,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
+          toolchain: stable
           targets: ${{ inputs.target }}
 
       - name: Setup cross-compilation toolchain
@@ -66,7 +71,7 @@ jobs:
           target: ${{ inputs.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha256
-          archive: code-analyze-mcp-${{ inputs.version }}-${{ inputs.target }}
+          archive: code-analyze-mcp-${{ inputs.version }}-$target
 
       - name: Build binary (dry-run)
         if: ${{ inputs.dry_run }}
@@ -78,9 +83,9 @@ jobs:
 
       - name: Upload bundle to release
         if: ${{ !inputs.dry_run }}
-        run: gh release upload ${{ github.ref_name }} "${{ steps.upload.outputs.tar }}.bundle" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} "${{ steps.upload.outputs.tar }}.bundle" --clobber
 
       - name: Attest build provenance
         if: ${{ !inputs.dry_run }}
