@@ -2,9 +2,10 @@
 
 ## Design Goals
 
-- **Goose analyze parity in standalone binary**: Replicate goose's code analysis capabilities as a standalone MCP server, enabling integration with any MCP client
-- **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system, avoiding language-specific parsers
+- **Minimize token usage**: Return only structured, relevant context - no prose, no noise
+- **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system
 - **Single MCP tool with auto-detected modes**: One `analyze` tool that automatically detects analysis mode (overview, file details, symbol focus) based on input parameters
+- **Compatible with any MCP orchestrator**: Claude Code, Kiro, Fast-Agent, MCP-Agent, and others
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
 
 ## Module Map
@@ -21,61 +22,31 @@
 | `lang` | `src/lang.rs` | Extension-to-language mapping |
 | `languages/mod` | `src/languages/mod.rs` | LanguageInfo registry and handler function types |
 | `languages/rust` | `src/languages/rust.rs` | Rust-specific queries and semantic handlers |
-| `cache` (planned) | `src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
-| `graph` (planned) | `src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
+| `cache` | `src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
+| `graph` | `src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
 
 ## Data Flow
 
-```
-MCP Request
-  |
-  v
-Parameter Parsing (AnalyzeParams)
-  |
-  v
-Mode Detection (focus? file? dir?)
-  |
-  +---> Overview Mode
-  |       |
-  |       v
-  |     walk_directory (ignore crate)
-  |       |
-  |       v
-  |     Parallel parse (rayon)
-  |       |
-  |       v
-  |     ElementExtractor (function/class counts)
-  |       |
-  |       v
-  |     format_structure
-  |
-  +---> File Details Mode
-  |       |
-  |       v
-  |     Read file
-  |       |
-  |       v
-  |     SemanticExtractor (functions, classes, imports, references)
-  |       |
-  |       v
-  |     format_file_details
-  |
-  +---> Symbol Focus Mode (planned)
-          |
-          v
-        walk_directory
-          |
-          v
-        Build CallGraph (BFS)
-          |
-          v
-        format_focused
-  |
-  v
-Serialize to JSON
-  |
-  v
-MCP Response (assistant + user content)
+```mermaid
+graph TD
+    A["MCP Request"] --> B["Parameter Parsing"]
+    B --> C{"Mode Detection"}
+    C -->|focus param| D["Symbol Focus Mode"]
+    C -->|file path| E["File Details Mode"]
+    C -->|directory path| F["Overview Mode"]
+    D --> G["walk_directory"]
+    G --> H["Build CallGraph BFS"]
+    H --> I["format_focused"]
+    E --> J["Read File"]
+    J --> K["SemanticExtractor"]
+    K --> L["format_file_details"]
+    F --> M["walk_directory"]
+    M --> N["Parallel Parse rayon"]
+    N --> O["ElementExtractor"]
+    O --> P["format_structure"]
+    I --> Q["MCP Response"]
+    L --> Q
+    P --> Q
 ```
 
 ## Analysis Modes
@@ -120,7 +91,7 @@ Triggered when path is a file and no focus parameter is provided.
 
 ### Focused Mode (Symbol Call Graph)
 
-Triggered when focus parameter is provided. Planned for Wave 3.
+Triggered when focus parameter is provided.
 
 **Pipeline:**
 1. Walk entire directory to build symbol index
@@ -215,7 +186,7 @@ pub type FindReceiverTypeHandler = fn(&Node, &str) -> Option<String>;
 
 ## Call Graph Design
 
-The CallGraph struct (planned for Wave 3) represents function call relationships:
+The CallGraph struct represents function call relationships:
 
 ```rust
 pub struct CallGraph {
@@ -246,7 +217,7 @@ pub struct CallGraph {
 
 ## Caching Strategy
 
-Planned for Wave 4. Uses LRU cache with mtime-based invalidation.
+Uses LRU cache with mtime-based invalidation.
 
 **Cache Key:** `(path, mtime, mode)`
 
@@ -273,9 +244,9 @@ pub struct CacheEntry {
 - Max cache size: 1000 entries (configurable)
 - TTL: 1 hour (optional, for safety)
 
-## MCP Protocol (Planned)
+## MCP Protocol
 
-Issues #42, #43, and #44 will bring the server to full MCP 2025-06-18 compliance.
+Issues #42, #43, and #44 brought the server to full MCP 2025-06-18 compliance.
 
 **Protocol Version and Capabilities (#42):**
 - Bump from `V_2024_11_05` to `V_2025_06_18` (rmcp `ProtocolVersion::LATEST`)
@@ -340,7 +311,7 @@ pub enum AnalyzeError {
 - Scales to 100+ files efficiently
 
 **Directory Walking:**
-- ignore crate respects .gitignore and .gooseignore
+- ignore crate respects `.gitignore` rules
 - Avoids traversing excluded directories (e.g., node_modules, .git)
 - Reduces I/O by 50-80% on typical projects
 
@@ -354,34 +325,28 @@ pub enum AnalyzeError {
 - force flag bypasses warning
 - Prevents MCP client from being overwhelmed
 
-## Improvements Over Goose
+## Design Highlights
 
-- **Proper TypeScript support**: Uses tree-sitter-typescript, not JavaScript fallback
+- **Proper TypeScript support**: Uses tree-sitter-typescript, not a JavaScript fallback
 - **JSX and TSX**: Dedicated file mappings and queries
 - **Language-specific handlers**: extract_function_name, find_method_for_receiver, find_receiver_type for semantic accuracy
 - **Call graph with sentinel values**: `<module>` and `<reference>` for cross-file analysis
 - **Parallel file processing**: rayon for faster analysis on large codebases
 - **Nested .gitignore support**: ignore crate respects directory-specific ignore rules
-- **Standalone binary**: Not integrated into goose; can be used with any MCP client
+- **Standalone binary**: Works with any MCP-compatible orchestrator
 
 ## Current Status
 
-The project is approximately 90% complete:
+All planned waves are complete. One open issue remains: [#169](https://github.com/clouatre-labs/code-analyze-mcp/issues/169) - strengthen CI test coverage (semantic correctness, MCP smoke test, summary mode).
 
-- **Complete (Waves 0-4a):**
-  - Project skeleton (main.rs, lib.rs, types.rs, lang.rs)
-  - CI pipeline (format, lint, commitlint, check-base)
-  - Structure mode (directory overview with file tree)
-  - Semantic mode (file-level analysis with functions, classes, imports)
-  - Symbol focus mode (call graphs with BFS traversal)
-  - All 5 language modules (Rust, Python, TypeScript, Go, Java)
-  - LRU caching with mtime invalidation
-  - Output size limiting and force flag
-
-- **Planned (Waves 4b-4c):**
-  - MCP protocol compliance: version bump, capabilities, annotations, structured output (#42)
-  - MCP progress notifications during directory analysis (#43)
-  - MCP logging notifications: tracing-to-client bridge (#44)
-  - Performance testing and tuning (#7)
-
-See [issue #1](https://github.com/clouatre-labs/code-analyze-mcp/issues/1) for the complete roadmap and wave-based merge plan.
+- Project skeleton (main.rs, lib.rs, types.rs, lang.rs)
+- CI pipeline (format, lint, commitlint, check-base)
+- Structure mode (directory overview with file tree)
+- Semantic mode (file-level analysis with functions, classes, imports)
+- Symbol focus mode (call graphs with BFS traversal)
+- All 5 language modules (Rust, Python, TypeScript, Go, Java)
+- LRU caching with mtime invalidation
+- Output size limiting, force flag, summary mode, pagination
+- MCP protocol compliance (version, capabilities, annotations, structured output)
+- MCP progress notifications during directory analysis
+- MCP logging notifications: tracing-to-client bridge
