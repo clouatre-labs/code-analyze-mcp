@@ -93,6 +93,25 @@ Ensure your commits are GPG-signed and all CI checks pass before opening a pull 
 
 By contributing, you agree your contributions are licensed under [Apache-2.0](LICENSE).
 
+## Testing Release Workflows Locally
+
+Use [`act`](https://github.com/nektos/act) to run GitHub Actions locally before pushing:
+
+```bash
+brew install act
+```
+
+Dry-run the release workflow:
+
+```bash
+act workflow_dispatch -W .github/workflows/release.yml \
+  --input version=0.1.0 --input dry_run=true \
+  --secret RELEASE_TOKEN=your_token \
+  --secret GITHUB_TOKEN=your_token
+```
+
+Note: `act` cannot run macOS runners -- `aarch64-apple-darwin` builds always require real GitHub runners. Linux jobs run fully locally.
+
 ## AI Agent Contributions
 
 This section covers workflows for using **GitHub Copilot coding agent** to implement issues.
