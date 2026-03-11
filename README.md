@@ -15,9 +15,31 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It provides three analysis modes: directory overview (file tree with metrics), file-level semantic analysis (functions, classes, imports), and symbol-focused call graphs. It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
 
+## Installation
+
+### Homebrew (macOS and Linux)
+
+```bash
+brew install clouatre-labs/tap/code-analyze-mcp
+```
+
+Update: `brew upgrade code-analyze-mcp`
+
+### cargo-binstall (no Rust required)
+
+```bash
+cargo binstall code-analyze-mcp
+```
+
+### cargo install (requires Rust toolchain)
+
+```bash
+cargo install code-analyze-mcp
+```
+
 ## Quick Start
 
-### Build
+### Build from source
 
 ```bash
 cargo build --release
