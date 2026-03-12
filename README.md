@@ -12,7 +12,12 @@ Standalone MCP server for code structure analysis using tree-sitter.
 </div>
 
 > [!NOTE]
-> Claude Code and similar agents already provide regex search, path matching, and file reading. These tools excel at targeted lookups when you know what to search for. code-analyze-mcp fills the complementary gap: it answers structural questions without prior knowledge of the codebase: what symbols a file defines, where a function is called, how a directory is composed by language. Use `analyze_file` and `analyze_symbol` for semantic exploration; use native agent tools for pattern matching.
+> Claude Code and similar agents already provide regex search, path matching, and file reading.
+> These tools excel at targeted lookups when you know what to search for.
+> code-analyze-mcp fills the complementary gap: it answers structural questions without prior knowledge of the codebase.
+> It explains what symbols a file defines, where a function is called, and how a directory is composed by language.
+> Use `analyze_directory`, `analyze_file`, and `analyze_symbol` for semantic exploration.
+> Use native agent tools for pattern matching.
 
 ## Overview
 
