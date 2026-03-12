@@ -1,3 +1,8 @@
+//! Cursor-based pagination for large result sets.
+//!
+//! Provides encoding and decoding of pagination cursors to track position within result sets,
+//! supporting different pagination modes (default, callers, callees). Uses base64-encoded JSON.
+
 use base64::engine::general_purpose::STANDARD;
 use base64::{DecodeError, engine::Engine};
 use serde::{Deserialize, Serialize};
@@ -37,11 +42,21 @@ impl From<serde_json::Error> for PaginationError {
     }
 }
 
+/// Encode a cursor into a base64-encoded JSON string.
+///
+/// # Errors
+///
+/// Returns `PaginationError::InvalidCursor` if JSON serialization fails.
 pub fn encode_cursor(data: &CursorData) -> Result<String, PaginationError> {
     let json = serde_json::to_string(data)?;
     Ok(STANDARD.encode(json))
 }
 
+/// Decode a base64-encoded JSON cursor string.
+///
+/// # Errors
+///
+/// Returns `PaginationError::InvalidCursor` if base64 decoding fails, UTF-8 conversion fails, or JSON parsing fails.
 pub fn decode_cursor(cursor: &str) -> Result<CursorData, PaginationError> {
     let decoded = STANDARD.decode(cursor)?;
     let json_str = String::from_utf8(decoded)

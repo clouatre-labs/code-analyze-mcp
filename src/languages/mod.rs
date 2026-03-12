@@ -1,3 +1,8 @@
+//! Language-specific handlers and query definitions for tree-sitter parsing.
+//!
+//! Provides query strings and extraction handlers for supported languages:
+//! Rust, Go, Java, Python, and TypeScript.
+
 pub mod go;
 pub mod java;
 pub mod python;

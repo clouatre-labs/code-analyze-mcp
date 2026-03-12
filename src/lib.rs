@@ -1,3 +1,18 @@
+//! Rust MCP server for code structure analysis using tree-sitter.
+//!
+//! This crate provides three analysis modes for multiple programming languages:
+//!
+//! - **Overview**: Directory tree with file counts and structure
+//! - **FileDetails**: Semantic extraction (functions, classes, assignments, references)
+//! - **SymbolFocus**: Call graphs and dataflow (planned)
+//!
+//! Key types:
+//! - [`analyze::analyze_directory`]: Analyze entire directory tree
+//! - [`analyze::analyze_file`]: Analyze single file
+//! - [`parser::ElementExtractor`]: Parse language-specific elements
+//!
+//! Languages supported: Rust, Go, Java, Python, TypeScript.
+
 pub mod analyze;
 pub mod cache;
 pub mod completion;

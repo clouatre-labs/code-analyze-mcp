@@ -1,3 +1,8 @@
+//! MCP logging integration via tracing.
+//!
+//! Provides a custom tracing subscriber that forwards log events to MCP clients.
+//! Maps Rust tracing levels to MCP LoggingLevel.
+
 use rmcp::model::LoggingLevel;
 use serde_json::{Map, Value};
 use std::sync::{Arc, Mutex};

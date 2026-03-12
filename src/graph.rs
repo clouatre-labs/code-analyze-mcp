@@ -1,3 +1,8 @@
+//! Call graph construction and analysis.
+//!
+//! Builds caller and callee relationships from semantic analysis results.
+//! Implements type-aware function matching to disambiguate overloads and name collisions.
+
 use crate::types::SemanticAnalysis;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -31,12 +36,16 @@ pub struct CallChain {
     pub chain: Vec<(String, PathBuf, usize)>,
 }
 
+/// Call graph storing callers, callees, and function definitions.
 #[derive(Debug, Clone)]
 pub struct CallGraph {
+    /// Callers map: function_name -> vec of (file_path, line_number, caller_name).
     pub callers: HashMap<String, Vec<(PathBuf, usize, String)>>,
+    /// Callees map: function_name -> vec of (file_path, line_number, callee_name).
     pub callees: HashMap<String, Vec<(PathBuf, usize, String)>>,
+    /// Definitions map: function_name -> vec of (file_path, line_number).
     pub definitions: HashMap<String, Vec<(PathBuf, usize)>>,
-    // Internal: maps function name to type info for type-aware disambiguation
+    /// Internal: maps function name to type info for type-aware disambiguation.
     function_types: HashMap<String, Vec<FunctionTypeInfo>>,
 }
 

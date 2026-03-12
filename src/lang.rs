@@ -1,3 +1,7 @@
+//! Language detection by file extension.
+//!
+//! Maps file extensions to supported language identifiers.
+
 const EXTENSION_MAP: &[(&str, &str)] = &[
     ("rs", "rust"),
     ("py", "python"),

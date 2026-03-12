@@ -97,7 +97,7 @@ pub struct FileInfo {
     pub line_count: usize,
     pub function_count: usize,
     pub class_count: usize,
-    /// Whether this file is a test file
+    /// Whether this file is a test file.
     pub is_test: bool,
 }
 
@@ -106,6 +106,7 @@ pub struct FunctionInfo {
     pub name: String,
     pub line: usize,
     pub end_line: usize,
+    /// Parameter list as string representations (e.g., ["x: i32", "y: String"]).
     pub parameters: Vec<String>,
     pub return_type: Option<String>,
 }
@@ -155,6 +156,7 @@ pub struct ClassInfo {
     pub end_line: usize,
     pub methods: Vec<FunctionInfo>,
     pub fields: Vec<String>,
+    /// Inherited types (parent classes, interfaces, trait bounds).
     #[schemars(description = "Inherited types (parent classes, interfaces, trait bounds)")]
     pub inherits: Vec<String>,
 }
@@ -165,8 +167,8 @@ pub struct CallInfo {
     pub callee: String,
     pub line: usize,
     pub column: usize,
+    /// Number of arguments passed at the call site.
     #[serde(skip_serializing_if = "Option::is_none")]
-    /// Number of arguments passed at the call site
     pub arg_count: Option<usize>,
 }
 
@@ -221,11 +223,15 @@ pub enum EntryType {
     Variable,
 }
 
+/// Analysis mode for generating output.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisMode {
+    /// High-level directory structure and file counts.
     Overview,
+    /// Detailed semantic analysis of functions, classes, and references within a file.
     FileDetails,
+    /// Call graph and dataflow analysis focused on a specific symbol.
     SymbolFocus,
 }
 
@@ -252,32 +258,29 @@ pub struct ElementQueryResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ImportInfo {
-    /// Full module path excluding the imported symbol (e.g., 'std::collections' for 'use std::collections::HashMap')
+    /// Full module path excluding the imported symbol (e.g., 'std::collections' for 'use std::collections::HashMap').
     pub module: String,
-    /// Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap')
+    /// Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap').
     pub items: Vec<String>,
-    /// Line number where import appears
+    /// Line number where import appears.
     pub line: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SemanticAnalysis {
-    /// Functions with parameters and return types
     pub functions: Vec<FunctionInfo>,
-    /// Classes/structs
     pub classes: Vec<ClassInfo>,
-    /// Flat list of imports; each entry carries its full module path and imported symbols
+    /// Flat list of imports; each entry carries its full module path and imported symbols.
     pub imports: Vec<ImportInfo>,
-    /// Type references with location information
     pub references: Vec<ReferenceInfo>,
-    /// Call frequency map (function name -> count)
+    /// Call frequency map (function name -> count).
     pub call_frequency: HashMap<String, usize>,
-    /// Caller-callee pairs extracted from call expressions
+    /// Caller-callee pairs extracted from call expressions.
     pub calls: Vec<CallInfo>,
-    /// Variable assignments and reassignments
+    /// Variable assignments and reassignments.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assignments: Vec<AssignmentInfo>,
-    /// Field access patterns
+    /// Field access patterns.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub field_accesses: Vec<FieldAccessInfo>,
 }
