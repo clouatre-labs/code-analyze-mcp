@@ -1,12 +1,17 @@
-# MCP, Agents, and Orchestration: Best Practices from the Anthropic Certified Architect Guide
+# MCP, Agents, and Orchestration: Best Practices
 
 ## Overview
 
-This document synthesizes the agent, orchestration, and Model Context Protocol (MCP) guidance from the *Claude Certified Architect – Foundations Certification Exam Guide* (v0.1, February 2025), cross-referenced against official Anthropic SDK documentation, the MCP specification (2025-06-18), and related security references. It is intended as a working reference for engineers building production-grade systems with Claude.
+This document is a production reference for engineers building systems with Claude and the Model Context Protocol (MCP). It covers the agentic loop, orchestration patterns, MCP tool design, memory management, safety controls, and prompt engineering for agents, cross-referenced against the MCP specification (2025-06-18), official Anthropic SDK documentation, and security references.
 
-The scope covers three interrelated areas: the mechanics of the agentic loop and how agents perceive, plan, act, and reflect; orchestration patterns for coordinating multiple agents and managing context at scale; and the Model Context Protocol as the interface layer through which agents access tools and external data. Each section translates exam guide concepts into concrete, implementable practices.
+The scope covers three interrelated areas: the mechanics of the agentic loop and how agents perceive, plan, act, and reflect; orchestration patterns for coordinating multiple agents and managing context at scale; and MCP as the interface layer through which agents access tools and external data.
 
-A senior engineer reading this document should be able to design a production agent system, write compliant MCP tool definitions, choose the right orchestration pattern for a given workload, and recognize the failure modes that make agentic systems fragile or unsafe. All claims trace to either the exam guide source material or official documentation, cited inline.
+A senior engineer reading this document should be able to design a production agent system, write compliant MCP tool definitions, choose the right orchestration pattern for a given workload, and recognize the failure modes that make agentic systems fragile or unsafe.
+
+## See Also
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) - module map and data flow for this MCP server implementation
+- [MCP Specification 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) - canonical protocol reference
 
 ---
 
@@ -14,7 +19,7 @@ A senior engineer reading this document should be able to design a production ag
 
 ### 1.1 Core Components
 
-The agentic loop is the fundamental execution model for Claude-based agents. It consists of four phases that repeat until the agent reaches a terminal state (exam guide, "Building Agents with Claude Agent SDK" domain):
+The agentic loop is the fundamental execution model for Claude-based agents. It consists of four phases that repeat until the agent reaches a terminal state:
 
 1. **Perception**: The agent receives input, which may be a user message, a tool result, or a structured handoff from another agent.
 2. **Planning**: The agent determines which action to take next, including which tool to call, whether to delegate to a subagent, or whether to escalate to a human.
@@ -60,7 +65,7 @@ Avoid an agentic architecture for simple request-response tasks, single-tool loo
 
 ### 2.1 Orchestrator / Specialist Architecture
 
-The orchestrator pattern separates coordination logic from domain execution. An orchestrator agent receives the top-level task, decomposes it, routes subtasks to specialist agents, aggregates results, and manages session state. Specialist agents focus on a single domain and operate within a narrow toolset (exam guide, "Key Concepts to Master – Agentic Patterns").
+The orchestrator pattern separates coordination logic from domain execution. An orchestrator agent receives the top-level task, decomposes it, routes subtasks to specialist agents, aggregates results, and manages session state. Specialist agents focus on a single domain and operate within a narrow toolset.
 
 This separation produces two concrete benefits. First, each specialist operates on a lean context containing only what is relevant to its domain, avoiding the token bloat that occurs when unrelated work accumulates in a single context. Second, specialist agents can be tested, versioned, and replaced independently of the orchestrator.
 
@@ -89,7 +94,7 @@ graph TD
 
 ### 2.2 Parallel vs Sequential Execution
 
-Choose between parallel and sequential delegation based on data dependencies between subtasks (exam guide, "Delegation Patterns").
+Choose between parallel and sequential delegation based on data dependencies between subtasks.
 
 **Sequential delegation** applies when each subtask depends on results from the previous one. The output of one specialist becomes the input to the next. Sequential workflows are easier to debug because the state at each step is deterministic, but they accumulate latency.
 
@@ -117,14 +122,14 @@ graph TD
 
 ### 2.3 Context Passing and Handoffs
 
-Context passing is the mechanism by which an orchestrator shares relevant state with a subagent without flooding that agent's context window with irrelevant history (exam guide, "Context Passing").
+Context passing is the mechanism by which an orchestrator shares relevant state with a subagent without flooding that agent's context window with irrelevant history.
 
 Effective handoffs follow these rules:
 
 - Pass only the information the subagent needs to complete its task. Trim conversation history to the relevant subset before constructing the subagent's message array.
 - Use structured formats (JSON objects or typed schemas) for handoffs rather than prose summaries. Structured formats are unambiguous and can be validated programmatically.
 - Include the task description, relevant prior results, and any constraints or escalation criteria explicitly in the subagent's system prompt or first user message.
-- Do not pass raw tool outputs verbatim when a summary is sufficient. Summarization reduces token consumption without losing the information the subagent requires (exam guide, "Context & Token Management – Summarization").
+- Do not pass raw tool outputs verbatim when a summary is sufficient. Summarization reduces token consumption without losing the information the subagent requires.
 
 ---
 
@@ -165,7 +170,7 @@ The server also exposes resources (arbitrary data identified by URI) and prompts
 
 ### 3.2 Tool Design Principles
 
-Three principles govern tool design at the MCP layer (exam guide, "Tool Design Principles"):
+Three principles govern tool design at the MCP layer:
 
 1. **Single responsibility**: Each tool does one thing well. A tool that searches for files and also reads their contents is harder to describe, harder to test, and harder to route correctly than two tools with distinct responsibilities.
 2. **Non-overlapping functionality**: Tools in the same server must not have overlapping behavior. When two tools can satisfy the same request, the model must guess which one to use. Ambiguous routing is a reliability failure, not a model failure.
@@ -173,7 +178,7 @@ Three principles govern tool design at the MCP layer (exam guide, "Tool Design P
 
 ### 3.3 Tool Annotations
 
-MCP tool definitions support annotations that communicate the behavioral characteristics of a tool to the client. These are not enforced at the protocol level but allow clients to present appropriate confirmation UI and apply policy rules (exam guide, "Tool Annotation Best Practices").
+MCP tool definitions support annotations that communicate the behavioral characteristics of a tool to the client. These are not enforced at the protocol level but allow clients to present appropriate confirmation UI and apply policy rules (MCP specification 2025-06-18, server/tools).
 
 | Annotation | Type | Meaning |
 |---|---|---|
@@ -264,15 +269,15 @@ The MCP specification extends this with an optional `outputSchema` field that do
 
 ### 4.2 Specificity and Naming
 
-Tool names must be unique within a server and should be action-oriented verb phrases that communicate intent without ambiguity (exam guide, "Tool Design Principles – Specificity"). Names like `process`, `handle`, or `run` are disqualifying because they provide no disambiguation signal. Prefer names like `extract_invoice_fields`, `search_knowledge_base`, or `validate_address_format`.
+Tool names must be unique within a server and should be action-oriented verb phrases that communicate intent without ambiguity. Names like `process`, `handle`, or `run` are disqualifying because they provide no disambiguation signal. Prefer names like `extract_invoice_fields`, `search_knowledge_base`, or `validate_address_format`.
 
 Write descriptions that differentiate tools from their nearest neighbors. If you have both `search_documents` and `read_document`, the description of `search_documents` must state that it returns a ranked list of document references, while `read_document` returns the full content of a single document by ID. Without this differentiation, the model will conflate them in ambiguous requests.
 
-Test tool selection reliability by constructing requests that could plausibly route to multiple tools and verifying which tool the model selects (exam guide, "Testing Strategies – Tool Selection Testing"). Edge cases and ambiguous phrasing are the highest-value test scenarios.
+Test tool selection reliability by constructing requests that could plausibly route to multiple tools and verifying which tool the model selects. Edge cases and ambiguous phrasing are the highest-value test scenarios.
 
 ### 4.3 Error Responses
 
-Structured error responses are required for reliable agentic behavior (exam guide, "Structured Error Responses"). A bare exception message or an HTTP 500 response gives the orchestrator no information about whether to retry, escalate, or take an alternative action.
+Structured error responses are required for reliable agentic behavior. A bare exception message or an HTTP 500 response gives the orchestrator no information about whether to retry, escalate, or take an alternative action.
 
 Every tool error response must include:
 
@@ -297,15 +302,15 @@ The orchestrator uses the error category and retryable flag to drive retry logic
 
 ### 4.4 Composition
 
-Tools should be designed to work together, not in isolation (exam guide, "Tool Design – Composition"). A tool that returns a document ID is useful only if another tool accepts that ID as input. When designing a toolset, model the data flow between tools explicitly: what does each tool produce, and what does each tool consume?
+Tools should be designed to work together, not in isolation. A tool that returns a document ID is useful only if another tool accepts that ID as input. When designing a toolset, model the data flow between tools explicitly: what does each tool produce, and what does each tool consume?
 
 Design schemas with composability in mind:
 
 - Use consistent identifier formats across tools (e.g., always use `document_id` as the field name for document references, never `id`, `doc_id`, or `ref`).
-- Use nullable fields and optional arrays to allow tools to return partial results rather than failing when some data is unavailable (exam guide, "Flexible Schema Design").
+- Use nullable fields and optional arrays to allow tools to return partial results rather than failing when some data is unavailable.
 - Avoid stateful tools that require calls to be made in a specific order unless that order is enforced by the schema.
 
-Stateless tool design is the default preference. A stateless tool produces the same output for the same input regardless of prior calls, which makes it safe to retry, safe to call in parallel, and easier to cache (exam guide, "Stateless Tool Design").
+Stateless tool design is the default preference. A stateless tool produces the same output for the same input regardless of prior calls, which makes it safe to retry, safe to call in parallel, and easier to cache.
 
 ---
 
@@ -325,25 +330,25 @@ Agent memory spans five types, each with distinct persistence and access charact
 
 *Table 3: Agent memory types, persistence characteristics, and access mechanisms.*
 
-**In-context memory** is transient working memory. It disappears when the session ends or when older tokens are pushed out of the window. This is where the current conversation, tool results, and intermediate state live (MongoDB, agent memory concepts).
+**In-context memory** is transient working memory. It disappears when the session ends or when older tokens are pushed out of the window. This is where the current conversation, tool results, and intermediate state live.
 
-**External memory** persists across sessions in databases or vector stores. It enables personalized experiences, cross-session continuity, and the ability to recall facts from prior interactions (MongoDB, agent memory concepts).
+**External memory** persists across sessions in databases or vector stores. It enables personalized experiences, cross-session continuity, and the ability to recall facts from prior interactions.
 
-**Episodic memory** records specific past events with temporal context. In practice, this is often implemented through few-shot examples injected into the system prompt: the agent "remembers" how it handled a prior case by seeing a curated example of that case (MongoDB, agent memory concepts).
+**Episodic memory** records specific past events with temporal context. In practice, this is often implemented through few-shot examples injected into the system prompt: the agent "remembers" how it handled a prior case by seeing a curated example of that case.
 
-**Semantic memory** is a structured knowledge repository of facts and relationships, implemented as knowledge graphs or structured databases. It enables the agent to reason about relationships between concepts without relying on context window state (Medium, memory types in agentic AI).
+**Semantic memory** is a structured knowledge repository of facts and relationships, implemented as knowledge graphs or structured databases. It enables the agent to reason about relationships between concepts without relying on context window state.
 
-**Procedural memory** encodes how to perform tasks. For language models, this is largely embedded in model weights. Execution patterns and agent frameworks add a procedural layer on top of the model's internalized knowledge (LangChain, memory concepts).
+**Procedural memory** encodes how to perform tasks. For language models, this is largely embedded in model weights. Execution patterns and agent frameworks add a procedural layer on top of the model's internalized knowledge.
 
 ### 5.2 Token Budget Management
 
-Token budget management is required for any agent that runs long sessions or processes large documents (exam guide, "Scalability – Token Budget Management"). Three techniques reduce context growth:
+Token budget management is required for any agent that runs long sessions or processes large documents. Three techniques reduce context growth:
 
 1. **Summarization**: When a tool returns a verbose output, summarize it before inserting the summary into context. A search result that returns 2,000 words of text can usually be reduced to the three or four relevant facts without information loss.
 2. **Subagent boundaries**: Delegate work to a specialist rather than accumulating the context for unrelated tasks in the orchestrator's window. Each subagent starts with a fresh context containing only what is necessary.
-3. **Scratchpad files**: Write intermediate facts and state to external files rather than accumulating them in the context window. The orchestrator reads from the scratchpad selectively, pulling only the facts relevant to the current planning step (exam guide, "Context & Token Management – Scratchpad Files").
+3. **Scratchpad files**: Write intermediate facts and state to external files rather than accumulating them in the context window. The orchestrator reads from the scratchpad selectively, pulling only the facts relevant to the current planning step.
 
-Know the general patterns for token limits across Claude model tiers: Haiku for low-latency, cost-sensitive applications; Sonnet for balanced performance; Opus for complex reasoning tasks requiring maximum capability. Do not memorize exact token counts as they change across model versions (exam guide, "Token Limits and Model Selection").
+Know the general patterns for token limits across Claude model tiers: Haiku for low-latency, cost-sensitive applications; Sonnet for balanced performance; Opus for complex reasoning tasks requiring maximum capability. Do not memorize exact token counts as they change across model versions.
 
 ### 5.3 Scratchpad Pattern
 
@@ -359,17 +364,17 @@ Implement the scratchpad as a structured file (JSON or YAML) rather than a prose
 
 ### 6.1 Escalation Triggers
 
-Escalation to a human reviewer is required in three categories of situation (exam guide, "Escalation & Human-in-the-Loop"):
+Escalation to a human reviewer is required in three categories of situation:
 
 1. **Policy gaps**: The agent lacks explicit rules or guidelines covering the decision at hand. Proceeding without policy coverage means the agent is improvising; improvised decisions in production carry unacceptable risk.
 2. **Confidence threshold breach**: The agent's confidence in its decision falls below the configured threshold, even if the decision is technically feasible. Confidence-based escalation acknowledges that a technically possible action is not always the right action.
 3. **Customer or contract impact**: The decision affects customer satisfaction, contractual obligations, or financial transactions. These categories require human accountability by definition.
 
-Escalation transparency is a separate requirement: when escalating, the agent must make it clear why the decision was escalated, what information was available, and what the agent would have decided autonomously. Without this explanation, the human reviewer cannot efficiently evaluate the case (exam guide, "Escalation Transparency").
+Escalation transparency is a separate requirement: when escalating, the agent must make it clear why the decision was escalated, what information was available, and what the agent would have decided autonomously. Without this explanation, the human reviewer cannot efficiently evaluate the case.
 
 ### 6.2 Confidence-Based Routing
 
-Confidence-based routing uses a threshold (commonly expressed as a percentage, e.g., 85%) to determine whether to proceed autonomously or route to human review (beetroot.co, human-in-the-loop agentic AI). High-confidence decisions proceed; low-confidence decisions are held for review.
+Confidence-based routing uses a threshold (commonly expressed as a percentage, e.g., 85%) to determine whether to proceed autonomously or route to human review. High-confidence decisions proceed; low-confidence decisions are held for review.
 
 The threshold is not a single value; it varies by action type. A low-confidence decision to return a search result is acceptable. A low-confidence decision to delete a file, send an email, or process a financial transaction is not. Set thresholds by combining a confidence score with an action risk tier.
 
@@ -390,7 +395,7 @@ graph TD
 
 *Figure 5: Confidence-based routing decision flow with action risk tier and human review queue.*
 
-Maintain a comprehensive audit trail for all escalated decisions. Audit logs are required for regulatory compliance in financial and security-critical domains and provide the data needed to tune thresholds over time (Galileo, human-in-the-loop agent oversight).
+Maintain a comprehensive audit trail for all escalated decisions. Audit logs are required for regulatory compliance in financial and security-critical domains and provide the data needed to tune thresholds over time.
 
 ### 6.3 Guardrails and Anti-Patterns
 
@@ -400,7 +405,7 @@ Maintain a comprehensive audit trail for all escalated decisions. Audit logs are
 
 **Privilege minimization** restricts each agent and tool to the minimum set of permissions required for its function. An agent that only reads documents must not have write permissions. An agent that operates in a test environment must not have credentials for the production environment.
 
-**Behavioral monitoring** detects anomalous instruction patterns, unusually high tool call volumes, or access to resources outside the agent's normal scope. Integrate real-time telemetry with monitoring infrastructure to enable rapid response (Obsidian Security, prompt injection).
+**Behavioral monitoring** detects anomalous instruction patterns, unusually high tool call volumes, or access to resources outside the agent's normal scope. Integrate real-time telemetry with monitoring infrastructure to enable rapid response.
 
 ---
 
@@ -408,7 +413,7 @@ Maintain a comprehensive audit trail for all escalated decisions. Audit logs are
 
 ### 7.1 Few-Shot Examples
 
-Few-shot examples show the model what correct output looks like for a given task. They are particularly effective for ambiguous scenarios where the desired output format or decision boundary is difficult to specify in prose (exam guide, "Few-Shot Examples for Accuracy").
+Few-shot examples show the model what correct output looks like for a given task. They are particularly effective for ambiguous scenarios where the desired output format or decision boundary is difficult to specify in prose.
 
 Construct few-shot examples that cover:
 
@@ -416,11 +421,11 @@ Construct few-shot examples that cover:
 - At least one edge case: an input near the decision boundary that the model might otherwise classify incorrectly.
 - The format boundary: an example that demonstrates the exact output structure required, including field names, types, and nesting.
 
-For multi-pass review pipelines, craft few-shot examples specifically for the review step, not just the extraction step. A model that extracts accurately but reviews inconsistently produces false positives at the review stage (exam guide, "Multi-Pass Review Architecture").
+For multi-pass review pipelines, craft few-shot examples specifically for the review step, not just the extraction step. A model that extracts accurately but reviews inconsistently produces false positives at the review stage.
 
 ### 7.2 Chain-of-Thought
 
-Chain-of-thought prompting instructs the model to explain its reasoning before arriving at a decision (exam guide, "Chain-of-Thought in Prompts"). This technique improves accuracy on complex decisions and produces an audit trail that human reviewers can evaluate.
+Chain-of-thought prompting instructs the model to explain its reasoning before arriving at a decision. This technique improves accuracy on complex decisions and produces an audit trail that human reviewers can evaluate.
 
 The instruction is simple: add a prompt directive such as "Before deciding, reason through the relevant factors step by step. Then state your decision." The reasoning appears in the response before the final answer.
 
@@ -428,13 +433,13 @@ In escalation workflows, the chain-of-thought output is the primary artifact tha
 
 ### 7.3 Multi-Pass Review
 
-Multi-pass review architectures run the same content through multiple review steps, each with a distinct focus, to reduce false positives (exam guide, "Multi-Pass Review Architecture"). A single-pass review that attempts to check all criteria simultaneously is more likely to miss nuanced issues or over-flag benign content.
+Multi-pass review architectures run the same content through multiple review steps, each with a distinct focus, to reduce false positives. A single-pass review that attempts to check all criteria simultaneously is more likely to miss nuanced issues or over-flag benign content.
 
 A standard multi-pass architecture:
 
-1. **Pass 1 – Extraction**: Extract structured data from the input. Use `tool_use` with a JSON schema to enforce output structure.
-2. **Pass 2 – Classification**: Classify the extracted data against review criteria. Use explicit, enumerated criteria rather than qualitative descriptions (e.g., "security risk: LOW, MEDIUM, or HIGH" rather than "assess the security risk").
-3. **Pass 3 – Decision**: Apply the classification to the approval rule (e.g., "approve if security risk is LOW or MEDIUM"). Escalate if classification confidence is below threshold.
+1. **Pass 1 - Extraction**: Extract structured data from the input. Use `tool_use` with a JSON schema to enforce output structure.
+2. **Pass 2 - Classification**: Classify the extracted data against review criteria. Use explicit, enumerated criteria rather than qualitative descriptions (e.g., "security risk: LOW, MEDIUM, or HIGH" rather than "assess the security risk").
+3. **Pass 3 - Decision**: Apply the classification to the approval rule (e.g., "approve if security risk is LOW or MEDIUM"). Escalate if classification confidence is below threshold.
 
 Each pass uses a separate model invocation with a focused system prompt. This separation prevents the model from anchoring on extraction decisions when making classification decisions, and vice versa.
 
@@ -442,7 +447,7 @@ Each pass uses a separate model invocation with a focused system prompt. This se
 
 ## 8. Anti-Patterns
 
-The following patterns produce unreliable, fragile, or unsafe agent systems. Each is a direct failure mode identified in the exam guide or derived from the security and orchestration references.
+The following patterns produce unreliable, fragile, or unsafe agent systems.
 
 **Tools that do too much.** A tool that combines search, retrieval, and formatting into a single operation is harder to describe, harder to test, and impossible to use in compositions where only one of those behaviors is needed. Split multi-behavior tools into single-responsibility tools.
 
@@ -458,9 +463,9 @@ The following patterns produce unreliable, fragile, or unsafe agent systems. Eac
 
 **Trusting external content as instructions.** An agent that retrieves a document and treats its content with the same authority as its system prompt is vulnerable to indirect prompt injection. Treat all external content, including retrieved documents, web pages, and API responses, as data, not instructions (OWASP, LLM Prompt Injection Prevention Cheat Sheet).
 
-**Over-fitting schemas to the known data.** A schema that requires every field and accepts no null values will fail when real-world data is incomplete. Design schemas with nullable fields and optional arrays to handle partial results without triggering validation errors (exam guide, "Flexible Schema Design").
+**Over-fitting schemas to the known data.** A schema that requires every field and accepts no null values will fail when real-world data is incomplete. Design schemas with nullable fields and optional arrays to handle partial results without triggering validation errors.
 
-**Sequential processing of independent batches.** Calling the API once per item for a batch of 100 items is slower and more expensive than using the Message Batches API. Use batch processing for workloads where items are independent and latency is not time-critical (exam guide, "Batch Processing Strategy").
+**Sequential processing of independent batches.** Calling the API once per item for a batch of 100 items is slower and more expensive than using the Message Batches API. Use batch processing for workloads where items are independent and latency is not time-critical.
 
 ---
 
@@ -492,6 +497,8 @@ The following patterns produce unreliable, fragile, or unsafe agent systems. Eac
 
 ## References
 
+### Official
+
 - MCP Specification 2025-06-18, Server/Tools: https://modelcontextprotocol.io/specification/2025-06-18/server/tools
 - MCP Specification, Server/Resources: https://modelcontextprotocol.io/specification/2025-06-18/server/resources
 - MCP Specification, Transports (draft): https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/draft/basic/transports.mdx
@@ -502,12 +509,15 @@ The following patterns produce unreliable, fragile, or unsafe agent systems. Eac
 - MCP TypeScript SDK: https://github.com/modelcontextprotocol/typescript-sdk
 - Anthropic SDK (Python), Tool Use Format: https://github.com/anthropics/anthropic-sdk-python
 - Anthropic Courses, Tool Use Chatbot: https://github.com/anthropics/courses/blob/master/tool_use/06_chatbot_with_multiple_tools.ipynb
+- OWASP, LLM Prompt Injection Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
+
+### Background Reading
+
 - MongoDB, Agent Memory Types: https://www.mongodb.com/resources/basics/artificial-intelligence/agent-memory
-- Medium, Memory Types in Agentic AI: https://medium.com/@gokcerbelgusen/memory-types-in-agentic-ai-a-breakdown-523c980921ec
 - LangChain, Memory Concepts: https://docs.langchain.com/oss/python/concepts/memory
 - Human-in-the-Loop, Agentic AI Trust: https://beetroot.co/ai-ml/human-in-the-loop-meets-agentic-ai-building-trust-and-control-in-automated-workflows/
 - Human-in-the-Loop, Approval Workflows: https://zapier.com/blog/human-in-the-loop/
 - Galileo, Agent Oversight and Confidence Routing: https://galileo.ai/blog/human-in-the-loop-agent-oversight
-- OWASP, LLM Prompt Injection Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
 - Palo Alto Networks, Prompt Injection Attacks: https://www.paloaltonetworks.com/cyberpedia/what-is-a-prompt-injection-attack
 - Obsidian Security, Prompt Injection Defenses: https://www.obsidiansecurity.com/blog/prompt-injection
+- Medium, Memory Types in Agentic AI: https://medium.com/@gokcerbelgusen/memory-types-in-agentic-ai-a-breakdown-523c980921ec
