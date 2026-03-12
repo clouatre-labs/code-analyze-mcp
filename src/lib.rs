@@ -133,6 +133,7 @@ impl CodeAnalyzer {
         description = "Analyze directory structure and code metrics. Returns tree with LOC, function count, class count, and test file markers. Respects .gitignore. Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Output auto-summarizes at 50K chars; use summary=true proactively on large codebases. Use cursor/page_size to paginate files when next_cursor appears in the response.",
         output_schema = schema_for_type::<analyze::AnalysisOutput>(),
         annotations(
+            title = "Analyze Directory",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
@@ -307,6 +308,7 @@ impl CodeAnalyzer {
         description = "Extract semantic structure from a single source file. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supports pagination for large files via cursor/page_size. Use after analyze_directory for targeted deep dives.",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
+            title = "Analyze File",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
@@ -450,6 +452,7 @@ impl CodeAnalyzer {
         description = "Build call graph for a named function or method across all files in a directory. Returns direct callers and callees; extend follow_depth to trace deeper chains. Symbol lookup is case-sensitive exact-match. Use to understand function impact and trace dependencies. Use cursor/page_size to paginate call chains when next_cursor appears in the response.",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
+            title = "Analyze Symbol",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
