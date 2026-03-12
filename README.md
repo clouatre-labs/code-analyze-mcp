@@ -235,6 +235,7 @@ analyze_directory path: /project summary: false
 ## Documentation
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Design goals, module map, data flow, language handler system, caching strategy
+- **[MCP, Agents, and Orchestration](docs/anthropic-mcp-agents-orchestration.md)** - Best practices for agentic loops, orchestration patterns, MCP tool design, memory management, and safety controls
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development workflow, commit conventions, PR checklist
 - **[SECURITY.md](SECURITY.md)** - Security policy and vulnerability reporting
 
