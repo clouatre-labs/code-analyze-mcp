@@ -62,12 +62,11 @@ fn error_meta(
     is_retryable: bool,
     suggested_action: &'static str,
 ) -> Option<serde_json::Value> {
-    serde_json::to_value(crate::types::ErrorMeta {
-        error_category: category,
-        is_retryable,
-        suggested_action,
-    })
-    .ok()
+    Some(serde_json::json!({
+        "errorCategory": category,
+        "isRetryable": is_retryable,
+        "suggestedAction": suggested_action,
+    }))
 }
 
 /// Helper function for paginating focus chains (callers or callees).
