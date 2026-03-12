@@ -148,7 +148,7 @@ We follow [SemVer](https://semver.org/): MAJOR (breaking), MINOR (features), PAT
 
 ### MCP resources
 
-Resource endpoints (`list_resources`, `read_resource`) are designed but not yet implemented. See the [MCP Resources design in ARCHITECTURE.md](docs/ARCHITECTURE.md#mcp-resources-planned) for the URI scheme, content catalogue, and implementation path before starting work on this feature.
+Resource endpoints (`list_resources`, `read_resource`) are designed but not yet implemented. See the [MCP Resources design in ARCHITECTURE.md](docs/ARCHITECTURE.md#mcp-resources-planned) for the URI scheme, content catalog, and implementation path before starting work on this feature.
 
 ## AI Agent Contributions
 

@@ -128,5 +128,5 @@ Resource data (language registry, example queries) should be defined as static c
 
 - This is a planned design, not a committed API contract. URI scheme and content may evolve before Phase 2 implementation.
 - MCP resource subscription (`resources/subscribe`) is out of scope; all resources are static.
-- Client adoption of MCP resources is still emerging. Validate real-world agent behavior before prioritising above other enhancements.
+- Client adoption of MCP resources is still emerging. Validate real-world agent behavior before prioritizing above other enhancements.
 - Phase 2 implementation is tracked in a separate issue.
