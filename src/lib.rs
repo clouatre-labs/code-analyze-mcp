@@ -155,20 +155,21 @@ impl CodeAnalyzer {
         let max_depth = params.max_depth;
         let ct_clone = ct.clone();
 
+        // Collect entries once for analysis
+        let entries = walk_directory(path, max_depth).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Failed to walk directory: {}", e),
+                None,
+            )
+        })?;
+
         // Get total file count for progress reporting
-        let total_files = match walk_directory(path, max_depth) {
-            Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
-            Err(_) => 0,
-        };
+        let total_files = entries.iter().filter(|e| !e.is_dir).count();
 
         // Spawn blocking analysis with progress tracking
         let handle = tokio::task::spawn_blocking(move || {
-            analyze::analyze_directory_with_progress(
-                &path_owned,
-                max_depth,
-                counter_clone,
-                ct_clone,
-            )
+            analyze::analyze_directory_with_progress(&path_owned, entries, counter_clone, ct_clone)
         });
 
         // Poll and emit progress every 100ms
