@@ -36,7 +36,7 @@ jobs:
           toolchain: stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@c676846f29d98ff6b0106d3608c7ffd4048af17b
+        uses: Swatinem/rust-cache@d7ac6f694df60fb8ce48bab7b59ad5da1ac8d46e
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
