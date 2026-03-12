@@ -863,10 +863,13 @@ fn test_analyze_directory_with_progress_increments_counter() {
     fs::write(root.join("src/lib.rs"), "pub fn lib_fn() {}").unwrap();
     fs::write(root.join("README.md"), "# Test").unwrap();
 
+    // Collect entries first
+    let entries = walk_directory(root, None).unwrap();
+
     // Analyze with progress counter
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    let output = analyze_directory_with_progress(root, None, counter.clone(), ct).unwrap();
+    let output = analyze_directory_with_progress(root, entries, counter.clone(), ct).unwrap();
 
     // Verify counter was incremented for each file
     let final_count = counter.load(Ordering::Relaxed);
@@ -888,10 +891,13 @@ fn test_analyze_directory_with_progress_empty_directory() {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
 
+    // Collect entries first
+    let entries = walk_directory(root, None).unwrap();
+
     // Analyze empty directory with progress counter
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    let output = analyze_directory_with_progress(root, None, counter.clone(), ct).unwrap();
+    let output = analyze_directory_with_progress(root, entries, counter.clone(), ct).unwrap();
 
     // Verify counter is 0 for empty directory
     let final_count = counter.load(Ordering::Relaxed);
@@ -1192,9 +1198,12 @@ fn test_cancellation_during_directory_walk() {
     let ct = CancellationToken::new();
     ct.cancel();
 
+    // Collect entries first
+    let entries = walk_directory(root, None).unwrap();
+
     // Act: Call analyze_directory_with_progress with cancelled token
     let counter = Arc::new(AtomicUsize::new(0));
-    let result = analyze_directory_with_progress(root, None, counter, ct);
+    let result = analyze_directory_with_progress(root, entries, counter, ct);
 
     // Assert: Should return Cancelled error
     assert!(matches!(result, Err(AnalyzeError::Cancelled)));
@@ -1210,9 +1219,12 @@ fn test_cancellation_noop_after_completion() {
     // Create a non-cancelled token
     let ct = CancellationToken::new();
 
+    // Collect entries first
+    let entries = walk_directory(root, None).unwrap();
+
     // Act: Call analyze_directory_with_progress with active token
     let counter = Arc::new(AtomicUsize::new(0));
-    let result = analyze_directory_with_progress(root, None, counter, ct);
+    let result = analyze_directory_with_progress(root, entries, counter, ct);
 
     // Assert: Should succeed (existing behavior unchanged)
     assert!(result.is_ok());

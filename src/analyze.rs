@@ -71,7 +71,7 @@ pub struct FileAnalysisOutput {
 #[instrument(skip_all, fields(path = %root.display()))]
 pub fn analyze_directory_with_progress(
     root: &Path,
-    max_depth: Option<u32>,
+    entries: Vec<WalkEntry>,
     progress: Arc<AtomicUsize>,
     ct: CancellationToken,
 ) -> Result<AnalysisOutput, AnalyzeError> {
@@ -79,9 +79,6 @@ pub fn analyze_directory_with_progress(
     if ct.is_cancelled() {
         return Err(AnalyzeError::Cancelled);
     }
-
-    // Walk the directory
-    let entries = walk_directory(root, max_depth)?;
 
     // Detect language from file extension
     let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
@@ -158,7 +155,7 @@ pub fn analyze_directory_with_progress(
     );
 
     // Format output
-    let formatted = format_structure(&entries, &analysis_results, max_depth, Some(root));
+    let formatted = format_structure(&entries, &analysis_results, None, Some(root));
 
     Ok(AnalysisOutput {
         formatted,
@@ -174,9 +171,10 @@ pub fn analyze_directory(
     root: &Path,
     max_depth: Option<u32>,
 ) -> Result<AnalysisOutput, AnalyzeError> {
+    let entries = walk_directory(root, max_depth)?;
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    analyze_directory_with_progress(root, max_depth, counter, ct)
+    analyze_directory_with_progress(root, entries, counter, ct)
 }
 
 /// Determine analysis mode based on parameters and path.
