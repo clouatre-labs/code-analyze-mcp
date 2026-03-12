@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "code-analyze": {
+      "type": "stdio",
+      "command": "code-analyze-mcp",
+      "args": []
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+      }
+    },
+    "brave_search": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@brave/brave-search-mcp-server", "--transport", "stdio"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      }
+    },
+    "aptu": {
+      "type": "stdio",
+      "command": "aptu-mcp",
+      "args": ["--read-only"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
+        "GROQ_API_KEY": "${GROQ_API_KEY}"
+      }
+    }
+  }
+}

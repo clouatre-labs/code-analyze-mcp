@@ -31,3 +31,6 @@ Thumbs.db
 
 # Project-Specific
 .handoff/
+
+# Override global .gitignore to track MCP config
+!.mcp.json
