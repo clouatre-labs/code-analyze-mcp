@@ -39,7 +39,7 @@ use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
-use types::{AnalysisMode, AnalyzeParams};
+use types::{AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeSymbolParams};
 
 const SIZE_LIMIT: usize = 50_000;
 
@@ -76,63 +76,6 @@ fn paginate_focus_chains(
     };
 
     Ok((paginated.items, next))
-}
-
-/// Helper function to create the output schema for the analyze tool
-fn create_analyze_output_schema() -> std::sync::Arc<serde_json::Map<String, Value>> {
-    use serde_json::json;
-    let schema = json!({
-        "type": "object",
-        "properties": {
-            "mode": {
-                "type": "string",
-                "enum": ["overview", "file_details", "symbol_focus"],
-                "description": "The analysis mode used"
-            },
-            "formatted": {
-                "type": "string",
-                "description": "Formatted text output of the analysis"
-            },
-            "files": {
-                "type": "array",
-                "description": "List of files analyzed (overview mode only)",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "path": { "type": "string" },
-                        "language": { "type": "string" },
-                        "loc": { "type": "integer" },
-                        "functions": { "type": "integer" },
-                        "classes": { "type": "integer" }
-                    }
-                }
-            },
-            "semantic": {
-                "type": "object",
-                "description": "Semantic analysis data (file_details mode only)",
-                "properties": {
-                    "functions": { "type": "array" },
-                    "classes": { "type": "array" },
-                    "imports": { "type": "array" }
-                }
-            },
-            "line_count": {
-                "type": "integer",
-                "description": "Total line count (file_details mode only)"
-            },
-            "next_cursor": {
-                "type": ["string", "null"],
-                "description": "Pagination cursor for next page of results"
-            }
-        },
-        "required": ["formatted"]
-    });
-
-    if let Value::Object(map) = schema {
-        std::sync::Arc::new(map)
-    } else {
-        std::sync::Arc::new(serde_json::Map::new())
-    }
 }
 
 #[derive(Clone)]
@@ -186,9 +129,8 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, context))]
     #[tool(
-        title = "Code Structure Analyzer",
-        description = "Analyze code structure in 3 modes: 1) Overview - directory tree with LOC/function/class counts (use max_depth to limit). 2) FileDetails - functions, classes, imports for one file. 3) SymbolFocus - call graph for a named symbol across a directory (requires focus, case-sensitive). Typical flow: directory overview -> file details -> symbol focus. For large overview output (>50K chars), use summary=true to get totals and top-level structure without per-file detail; output auto-summarizes at the 50K threshold. Use cursor/page_size to paginate files (overview) or functions (file_details) when next_cursor appears in the response. Functions called >3x show N.",
-        output_schema = create_analyze_output_schema(),
+        name = "analyze_directory",
+        description = "Analyze directory structure and code metrics. Returns tree with LOC, function count, class count, and test file markers. Respects .gitignore. Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Output auto-summarizes at 50K chars; use summary=true proactively on large codebases. Use cursor/page_size to paginate files when next_cursor appears in the response.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -196,304 +138,125 @@ impl CodeAnalyzer {
             open_world_hint = false
         )
     )]
-    async fn analyze(
+    async fn analyze_directory(
         &self,
-        params: Parameters<AnalyzeParams>,
+        params: Parameters<AnalyzeDirectoryParams>,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
 
-        // Determine mode if not provided
-        let mode = params
-            .mode
-            .unwrap_or_else(|| analyze::determine_mode(&params.path, params.focus.as_deref()));
+        let path = Path::new(&params.path);
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+        let path_owned = path.to_path_buf();
+        let max_depth = params.max_depth;
+        let ct_clone = ct.clone();
 
-        // Dispatch based on mode and construct ModeResult
-        let mode_result = match mode {
-            AnalysisMode::Overview => {
-                let path = Path::new(&params.path);
-                let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                let counter_clone = counter.clone();
-                let path_owned = path.to_path_buf();
-                let max_depth = params.max_depth;
-                let ct_clone = ct.clone();
+        // Get total file count for progress reporting
+        let total_files = match walk_directory(path, max_depth) {
+            Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
+            Err(_) => 0,
+        };
 
-                // Get total file count for progress reporting
-                let total_files = match walk_directory(path, max_depth) {
-                    Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
-                    Err(_) => 0,
-                };
+        // Spawn blocking analysis with progress tracking
+        let handle = tokio::task::spawn_blocking(move || {
+            analyze::analyze_directory_with_progress(
+                &path_owned,
+                max_depth,
+                counter_clone,
+                ct_clone,
+            )
+        });
 
-                // Spawn blocking analysis with progress tracking
-                let handle = tokio::task::spawn_blocking(move || {
-                    analyze::analyze_directory_with_progress(
-                        &path_owned,
-                        max_depth,
-                        counter_clone,
-                        ct_clone,
-                    )
-                });
-
-                // Poll and emit progress every 100ms
-                let token = ProgressToken(NumberOrString::String(
-                    format!(
-                        "analyze-overview-{}",
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_nanos())
-                            .unwrap_or(0)
-                    )
-                    .into(),
-                ));
-                let mut last_progress = 0usize;
-                let mut cancelled = false;
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    if ct.is_cancelled() {
-                        cancelled = true;
-                        break;
-                    }
-                    let current = counter.load(std::sync::atomic::Ordering::Relaxed);
-                    if current != last_progress && total_files > 0 {
-                        self.emit_progress(
-                            &token,
-                            current as f64,
-                            total_files as f64,
-                            format!("Analyzing {}/{} files", current, total_files),
-                        )
-                        .await;
-                        last_progress = current;
-                    }
-                    if handle.is_finished() {
-                        break;
-                    }
-                }
-
-                // Emit final 100% progress only if not cancelled
-                if !cancelled && total_files > 0 {
-                    self.emit_progress(
-                        &token,
-                        total_files as f64,
-                        total_files as f64,
-                        format!("Completed analyzing {} files", total_files),
-                    )
-                    .await;
-                }
-
-                match handle.await {
-                    Ok(Ok(output)) => types::ModeResult::Overview(output),
-                    Ok(Err(analyze::AnalyzeError::Cancelled)) => {
-                        let output = analyze::AnalysisOutput {
-                            formatted: "Analysis cancelled".to_string(),
-                            files: vec![],
-                            entries: vec![],
-                            next_cursor: None,
-                        };
-                        types::ModeResult::Overview(output)
-                    }
-                    Ok(Err(e)) => {
-                        let output = analyze::AnalysisOutput {
-                            formatted: format!("Error analyzing directory: {}", e),
-                            files: vec![],
-                            entries: vec![],
-                            next_cursor: None,
-                        };
-                        types::ModeResult::Overview(output)
-                    }
-                    Err(e) => {
-                        let output = analyze::AnalysisOutput {
-                            formatted: format!("Task join error: {}", e),
-                            files: vec![],
-                            entries: vec![],
-                            next_cursor: None,
-                        };
-                        types::ModeResult::Overview(output)
-                    }
-                }
+        // Poll and emit progress every 100ms
+        let token = ProgressToken(NumberOrString::String(
+            format!(
+                "analyze-overview-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            )
+            .into(),
+        ));
+        let mut last_progress = 0usize;
+        let mut cancelled = false;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if ct.is_cancelled() {
+                cancelled = true;
+                break;
             }
-            AnalysisMode::FileDetails => {
-                // Build cache key from file metadata
-                let cache_key = std::fs::metadata(&params.path).ok().and_then(|meta| {
-                    meta.modified().ok().map(|mtime| cache::CacheKey {
-                        path: std::path::PathBuf::from(&params.path),
-                        modified: mtime,
-                        mode: AnalysisMode::FileDetails,
-                    })
-                });
-
-                // Check cache first
-                let output_result = if let Some(ref key) = cache_key {
-                    if let Some(cached) = self.cache.get(key) {
-                        Ok(cached)
-                    } else {
-                        // Cache miss, analyze and store
-                        match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
-                            Ok(output) => {
-                                let arc_output = std::sync::Arc::new(output);
-                                self.cache.put(key.clone(), arc_output.clone());
-                                Ok(arc_output)
-                            }
-                            Err(e) => Err(format!("Error analyzing file: {}", e)),
-                        }
-                    }
-                } else {
-                    // No cache key available, analyze directly
-                    match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
-                        Ok(output) => Ok(std::sync::Arc::new(output)),
-                        Err(e) => Err(format!("Error analyzing file: {}", e)),
-                    }
-                };
-
-                match output_result {
-                    Ok(output) => types::ModeResult::FileDetails((*output).clone()),
-                    Err(e) => {
-                        let output = analyze::FileAnalysisOutput {
-                            formatted: e,
-                            semantic: types::SemanticAnalysis {
-                                functions: vec![],
-                                classes: vec![],
-                                imports: vec![],
-                                references: vec![],
-                                call_frequency: std::collections::HashMap::new(),
-                                calls: vec![],
-                                assignments: vec![],
-                                field_accesses: vec![],
-                            },
-                            line_count: 0,
-                            next_cursor: None,
-                        };
-                        types::ModeResult::FileDetails(output)
-                    }
-                }
+            let current = counter.load(std::sync::atomic::Ordering::Relaxed);
+            if current != last_progress && total_files > 0 {
+                self.emit_progress(
+                    &token,
+                    current as f64,
+                    total_files as f64,
+                    format!("Analyzing {}/{} files", current, total_files),
+                )
+                .await;
+                last_progress = current;
             }
-            AnalysisMode::SymbolFocus => {
-                let focus = params.focus.as_deref().unwrap_or("");
-                let follow_depth = params.follow_depth.unwrap_or(1);
-                let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                let counter_clone = counter.clone();
-                let path = Path::new(&params.path);
-                let path_owned = path.to_path_buf();
-                let max_depth = params.max_depth;
-                let focus_owned = focus.to_string();
-                let ast_recursion_limit = params.ast_recursion_limit;
-                let ct_clone = ct.clone();
+            if handle.is_finished() {
+                break;
+            }
+        }
 
-                // Compute use_summary before spawning: explicit params only
-                // (auto-detect requires full output first, handled after task)
-                let use_summary_for_task =
-                    params.force != Some(true) && params.summary == Some(true);
+        // Emit final 100% progress only if not cancelled
+        if !cancelled && total_files > 0 {
+            self.emit_progress(
+                &token,
+                total_files as f64,
+                total_files as f64,
+                format!("Completed analyzing {} files", total_files),
+            )
+            .await;
+        }
 
-                // Get total file count for progress reporting
-                let total_files = match walk_directory(path, max_depth) {
-                    Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
-                    Err(_) => 0,
-                };
-
-                // Spawn blocking analysis with progress tracking
-                let handle = tokio::task::spawn_blocking(move || {
-                    analyze::analyze_focused_with_progress(
-                        &path_owned,
-                        &focus_owned,
-                        follow_depth,
-                        max_depth,
-                        ast_recursion_limit,
-                        counter_clone,
-                        ct_clone,
-                        use_summary_for_task,
-                    )
-                });
-
-                // Poll and emit progress every 100ms
-                let token = ProgressToken(NumberOrString::String(
-                    format!(
-                        "analyze-symbol-{}",
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_nanos())
-                            .unwrap_or(0)
-                    )
-                    .into(),
+        let mut output = match handle.await {
+            Ok(Ok(output)) => output,
+            Ok(Err(analyze::AnalyzeError::Cancelled)) => {
+                return Ok(CallToolResult::success(vec![Content::text(
+                    "Analysis cancelled".to_string(),
+                )]));
+            }
+            Ok(Err(e)) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("Error analyzing directory: {}", e),
+                    None,
                 ));
-                let mut last_progress = 0usize;
-                let mut cancelled = false;
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    if ct.is_cancelled() {
-                        cancelled = true;
-                        break;
-                    }
-                    let current = counter.load(std::sync::atomic::Ordering::Relaxed);
-                    if current != last_progress && total_files > 0 {
-                        self.emit_progress(
-                            &token,
-                            current as f64,
-                            total_files as f64,
-                            format!(
-                                "Analyzing {}/{} files for symbol '{}'",
-                                current, total_files, focus
-                            ),
-                        )
-                        .await;
-                        last_progress = current;
-                    }
-                    if handle.is_finished() {
-                        break;
-                    }
-                }
-
-                // Emit final 100% progress only if not cancelled
-                if !cancelled && total_files > 0 {
-                    self.emit_progress(
-                        &token,
-                        total_files as f64,
-                        total_files as f64,
-                        format!(
-                            "Completed analyzing {} files for symbol '{}'",
-                            total_files, focus
-                        ),
-                    )
-                    .await;
-                }
-
-                match handle.await {
-                    Ok(Ok(output)) => types::ModeResult::SymbolFocus(output),
-                    Ok(Err(analyze::AnalyzeError::Cancelled)) => {
-                        let output = analyze::FocusedAnalysisOutput {
-                            formatted: "Analysis cancelled".to_string(),
-                            next_cursor: None,
-                            prod_chains: vec![],
-                            test_chains: vec![],
-                            outgoing_chains: vec![],
-                            def_count: 0,
-                        };
-                        types::ModeResult::SymbolFocus(output)
-                    }
-                    Ok(Err(e)) => {
-                        let output = analyze::FocusedAnalysisOutput {
-                            formatted: format!("Error analyzing symbol focus: {}", e),
-                            next_cursor: None,
-                            prod_chains: vec![],
-                            test_chains: vec![],
-                            outgoing_chains: vec![],
-                            def_count: 0,
-                        };
-                        types::ModeResult::SymbolFocus(output)
-                    }
-                    Err(e) => {
-                        let output = analyze::FocusedAnalysisOutput {
-                            formatted: format!("Task join error: {}", e),
-                            next_cursor: None,
-                            prod_chains: vec![],
-                            test_chains: vec![],
-                            outgoing_chains: vec![],
-                            def_count: 0,
-                        };
-                        types::ModeResult::SymbolFocus(output)
-                    }
-                }
+            }
+            Err(e) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("Task join error: {}", e),
+                    None,
+                ));
             }
         };
+
+        // Apply summary/output size limiting logic
+        let use_summary = if params.force == Some(true) {
+            false
+        } else if params.summary == Some(true) {
+            true
+        } else if params.summary == Some(false) {
+            false
+        } else {
+            output.formatted.len() > SIZE_LIMIT
+        };
+
+        if use_summary {
+            output.formatted = format_summary(
+                &output.entries,
+                &output.files,
+                params.max_depth,
+                Some(Path::new(&params.path)),
+            );
+        }
 
         // Decode pagination cursor if provided
         let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
@@ -506,275 +269,462 @@ impl CodeAnalyzer {
             0
         };
 
-        // Convert ModeResult to text-only content with pagination and capture structured JSON
-        let (formatted_text, next_cursor, structured_value) = match mode_result {
-            types::ModeResult::Overview(mut output) => {
-                // Apply summary/output size limiting logic
-                // Determine if we should use summary
-                let use_summary = if params.force == Some(true) {
-                    false
-                } else if params.summary == Some(true) {
-                    true
-                } else if params.summary == Some(false) {
-                    false
-                } else {
-                    output.formatted.len() > SIZE_LIMIT
-                };
+        // Apply pagination to files
+        let paginated = paginate_slice(&output.files, offset, page_size, PaginationMode::Default)
+            .map_err(|e| {
+            ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+        })?;
 
-                if use_summary {
-                    output.formatted = format_summary(
-                        &output.entries,
-                        &output.files,
-                        params.max_depth,
-                        Some(Path::new(&params.path)),
-                    );
-                }
+        if paginated.next_cursor.is_some() || offset > 0 {
+            output.formatted = format_structure_paginated(
+                &paginated.items,
+                paginated.total,
+                params.max_depth,
+                Some(Path::new(&params.path)),
+            );
+        }
 
-                // Apply pagination to files
-                let paginated =
-                    paginate_slice(&output.files, offset, page_size, PaginationMode::Default)
-                        .map_err(|e| {
-                            ErrorData::new(
-                                rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                e.to_string(),
-                                None,
-                            )
-                        })?;
-
-                if paginated.next_cursor.is_some() || offset > 0 {
-                    output.formatted = format_structure_paginated(
-                        &paginated.items,
-                        paginated.total,
-                        params.max_depth,
-                        Some(Path::new(&params.path)),
-                    );
-                }
-
-                // Update next_cursor in output after pagination
-                output.next_cursor = paginated.next_cursor.clone();
-
-                // Serialize after all mutations
-                let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
-                (output.formatted, paginated.next_cursor, structured)
-            }
-            types::ModeResult::FileDetails(mut output) => {
-                // Apply summary/output size limiting logic (same 3-way decision as Overview)
-                let use_summary = if params.force == Some(true) {
-                    false
-                } else if params.summary == Some(true) {
-                    true
-                } else if params.summary == Some(false) {
-                    false
-                } else {
-                    output.formatted.len() > SIZE_LIMIT
-                };
-
-                if use_summary {
-                    output.formatted = format_file_details_summary(
-                        &output.semantic,
-                        &params.path,
-                        output.line_count,
-                    );
-                } else if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
-                    let estimated_tokens = output.formatted.len() / 4;
-                    let message = format!(
-                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
-                         - force=true to return full output\n\
-                         - Narrow your scope (smaller directory, specific file)\n\
-                         - Use symbol_focus mode for targeted analysis\n\
-                         - Reduce max_depth parameter",
-                        output.formatted.len(),
-                        estimated_tokens
-                    );
-                    return Err(ErrorData::new(
-                        rmcp::model::ErrorCode::INVALID_REQUEST,
-                        message,
-                        None,
-                    ));
-                }
-
-                // Paginate functions (typically the largest collection)
-                let paginated = paginate_slice(
-                    &output.semantic.functions,
-                    offset,
-                    page_size,
-                    PaginationMode::Default,
-                )
-                .map_err(|e| {
-                    ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
-                })?;
-
-                // Regenerate formatted output from the paginated slice when pagination is active
-                if paginated.next_cursor.is_some() || offset > 0 {
-                    output.formatted = format_file_details_paginated(
-                        &paginated.items,
-                        paginated.total,
-                        &output.semantic,
-                        &params.path,
-                        output.line_count,
-                        offset,
-                    );
-                }
-
-                // Update next_cursor in output after pagination
-                output.next_cursor = paginated.next_cursor.clone();
-
-                // Serialize after all mutations
-                let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
-                (output.formatted, paginated.next_cursor, structured)
-            }
-            types::ModeResult::SymbolFocus(mut output) => {
-                // Auto-detect: if no explicit summary param and output exceeds limit,
-                // re-run analysis with use_summary=true (double-compute, acceptable)
-                if params.summary.is_none()
-                    && params.force != Some(true)
-                    && output.formatted.len() > SIZE_LIMIT
-                {
-                    let path_owned2 = Path::new(&params.path).to_path_buf();
-                    let focus_owned2 = params.focus.clone().unwrap_or_default();
-                    let follow_depth2 = params.follow_depth.unwrap_or(1);
-                    let max_depth2 = params.max_depth;
-                    let ast_recursion_limit2 = params.ast_recursion_limit;
-                    let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                    let ct2 = ct.clone();
-                    let summary_result = tokio::task::spawn_blocking(move || {
-                        analyze::analyze_focused_with_progress(
-                            &path_owned2,
-                            &focus_owned2,
-                            follow_depth2,
-                            max_depth2,
-                            ast_recursion_limit2,
-                            counter2,
-                            ct2,
-                            true, // use_summary=true
-                        )
-                    })
-                    .await;
-                    match summary_result {
-                        Ok(Ok(summary_output)) => {
-                            output.formatted = summary_output.formatted;
-                        }
-                        _ => {
-                            // Fallback: return error (summary generation failed)
-                            let estimated_tokens = output.formatted.len() / 4;
-                            let message = format!(
-                                "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
-                                output.formatted.len(),
-                                estimated_tokens
-                            );
-                            return Err(ErrorData::new(
-                                rmcp::model::ErrorCode::INVALID_REQUEST,
-                                message,
-                                None,
-                            ));
-                        }
-                    }
-                } else if output.formatted.len() > SIZE_LIMIT
-                    && params.force != Some(true)
-                    && params.summary == Some(false)
-                {
-                    // Explicit summary=false with large output: return error
-                    let estimated_tokens = output.formatted.len() / 4;
-                    let message = format!(
-                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
-                         - force=true to return full output\n\
-                         - summary=true to get compact summary\n\
-                         - Narrow your scope (smaller directory, specific file)",
-                        output.formatted.len(),
-                        estimated_tokens
-                    );
-                    return Err(ErrorData::new(
-                        rmcp::model::ErrorCode::INVALID_REQUEST,
-                        message,
-                        None,
-                    ));
-                }
-
-                // SymbolFocus pagination: decode cursor mode to determine callers vs callees
-                let cursor_mode = if let Some(ref cursor_str) = params.cursor {
-                    decode_cursor(cursor_str)
-                        .map(|c| c.mode)
-                        .unwrap_or(PaginationMode::Callers)
-                } else {
-                    PaginationMode::Callers
-                };
-
-                let paginated_next_cursor = match cursor_mode {
-                    PaginationMode::Callers => {
-                        let (paginated_items, paginated_next) = paginate_focus_chains(
-                            &output.prod_chains,
-                            PaginationMode::Callers,
-                            offset,
-                            page_size,
-                        )?;
-
-                        if paginated_next.is_some() || offset > 0 {
-                            let focus_symbol = params.focus.as_deref().unwrap_or("");
-                            let base_path = Path::new(&params.path);
-                            output.formatted = format_focused_paginated(
-                                &paginated_items,
-                                output.prod_chains.len(),
-                                PaginationMode::Callers,
-                                focus_symbol,
-                                &output.prod_chains,
-                                &output.test_chains,
-                                &output.outgoing_chains,
-                                output.def_count,
-                                offset,
-                                Some(base_path),
-                            );
-                            paginated_next
-                        } else {
-                            None
-                        }
-                    }
-                    PaginationMode::Callees => {
-                        let (paginated_items, paginated_next) = paginate_focus_chains(
-                            &output.outgoing_chains,
-                            PaginationMode::Callees,
-                            offset,
-                            page_size,
-                        )?;
-
-                        if paginated_next.is_some() || offset > 0 {
-                            let focus_symbol = params.focus.as_deref().unwrap_or("");
-                            let base_path = Path::new(&params.path);
-                            output.formatted = format_focused_paginated(
-                                &paginated_items,
-                                output.outgoing_chains.len(),
-                                PaginationMode::Callees,
-                                focus_symbol,
-                                &output.prod_chains,
-                                &output.test_chains,
-                                &output.outgoing_chains,
-                                output.def_count,
-                                offset,
-                                Some(base_path),
-                            );
-                            paginated_next
-                        } else {
-                            None
-                        }
-                    }
-                    PaginationMode::Default => {
-                        unreachable!("SymbolFocus should only use Callers or Callees modes")
-                    }
-                };
-
-                let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
-                (output.formatted, paginated_next_cursor, structured)
-            }
-        };
+        // Update next_cursor in output after pagination
+        output.next_cursor = paginated.next_cursor.clone();
 
         // Build final text output with pagination cursor if present
-        let mut final_text = formatted_text;
-        if let Some(cursor) = next_cursor {
+        let mut final_text = output.formatted.clone();
+        if let Some(cursor) = paginated.next_cursor {
             final_text.push('\n');
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
         let mut result = CallToolResult::success(vec![Content::text(final_text)]);
-        result.structured_content = Some(structured_value);
+        let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+        result.structured_content = Some(structured);
+        Ok(result)
+    }
+
+    #[instrument(skip(self, context))]
+    #[tool(
+        name = "analyze_file",
+        description = "Extract semantic structure from a single source file. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supports pagination for large files via cursor/page_size. Use after analyze_directory for targeted deep dives.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn analyze_file(
+        &self,
+        params: Parameters<AnalyzeFileParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let _ct = context.ct.clone();
+
+        // Build cache key from file metadata
+        let cache_key = std::fs::metadata(&params.path).ok().and_then(|meta| {
+            meta.modified().ok().map(|mtime| cache::CacheKey {
+                path: std::path::PathBuf::from(&params.path),
+                modified: mtime,
+                mode: AnalysisMode::FileDetails,
+            })
+        });
+
+        // Check cache first
+        let output_result = if let Some(ref key) = cache_key {
+            if let Some(cached) = self.cache.get(key) {
+                Ok(cached)
+            } else {
+                // Cache miss, analyze and store
+                match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
+                    Ok(output) => {
+                        let arc_output = std::sync::Arc::new(output);
+                        self.cache.put(key.clone(), arc_output.clone());
+                        Ok(arc_output)
+                    }
+                    Err(e) => Err(format!("Error analyzing file: {}", e)),
+                }
+            }
+        } else {
+            // No cache key available, analyze directly
+            match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
+                Ok(output) => Ok(std::sync::Arc::new(output)),
+                Err(e) => Err(format!("Error analyzing file: {}", e)),
+            }
+        };
+
+        let mut output = match output_result {
+            Ok(arc_output) => (*arc_output).clone(),
+            Err(e) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e,
+                    None,
+                ));
+            }
+        };
+
+        // Apply summary/output size limiting logic
+        let use_summary = if params.force == Some(true) {
+            false
+        } else if params.summary == Some(true) {
+            true
+        } else if params.summary == Some(false) {
+            false
+        } else {
+            output.formatted.len() > SIZE_LIMIT
+        };
+
+        if use_summary {
+            output.formatted =
+                format_file_details_summary(&output.semantic, &params.path, output.line_count);
+        } else if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
+            let estimated_tokens = output.formatted.len() / 4;
+            let message = format!(
+                "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
+                 - force=true to return full output\n\
+                 - Narrow your scope (smaller directory, specific file)\n\
+                 - Use analyze_symbol mode for targeted analysis\n\
+                 - Reduce max_depth parameter",
+                output.formatted.len(),
+                estimated_tokens
+            );
+            return Err(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_REQUEST,
+                message,
+                None,
+            ));
+        }
+
+        // Decode pagination cursor if provided
+        let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+        let offset = if let Some(ref cursor_str) = params.cursor {
+            let cursor_data = decode_cursor(cursor_str).map_err(|e| {
+                ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
+            })?;
+            cursor_data.offset
+        } else {
+            0
+        };
+
+        // Paginate functions
+        let paginated = paginate_slice(
+            &output.semantic.functions,
+            offset,
+            page_size,
+            PaginationMode::Default,
+        )
+        .map_err(|e| ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
+
+        // Regenerate formatted output from the paginated slice when pagination is active
+        if paginated.next_cursor.is_some() || offset > 0 {
+            output.formatted = format_file_details_paginated(
+                &paginated.items,
+                paginated.total,
+                &output.semantic,
+                &params.path,
+                output.line_count,
+                offset,
+            );
+        }
+
+        // Update next_cursor in output after pagination
+        output.next_cursor = paginated.next_cursor.clone();
+
+        // Build final text output with pagination cursor if present
+        let mut final_text = output.formatted.clone();
+        if let Some(cursor) = paginated.next_cursor {
+            final_text.push('\n');
+            final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
+        }
+
+        let mut result = CallToolResult::success(vec![Content::text(final_text)]);
+        let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+        result.structured_content = Some(structured);
+        Ok(result)
+    }
+
+    #[instrument(skip(self, context))]
+    #[tool(
+        name = "analyze_symbol",
+        description = "Build call graph for a named function or method across all files in a directory. Returns direct callers and callees; extend follow_depth to trace deeper chains. Symbol lookup is case-sensitive exact-match. Use to understand function impact and trace dependencies. Use cursor/page_size to paginate call chains when next_cursor appears in the response.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn analyze_symbol(
+        &self,
+        params: Parameters<AnalyzeSymbolParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let ct = context.ct.clone();
+
+        let follow_depth = params.follow_depth.unwrap_or(1);
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+        let path = Path::new(&params.path);
+        let path_owned = path.to_path_buf();
+        let max_depth = params.max_depth;
+        let symbol_owned = params.symbol.clone();
+        let ast_recursion_limit = params.ast_recursion_limit;
+        let ct_clone = ct.clone();
+
+        // Compute use_summary before spawning: explicit params only
+        let use_summary_for_task = params.force != Some(true) && params.summary == Some(true);
+
+        // Get total file count for progress reporting
+        let total_files = match walk_directory(path, max_depth) {
+            Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
+            Err(_) => 0,
+        };
+
+        // Spawn blocking analysis with progress tracking
+        let handle = tokio::task::spawn_blocking(move || {
+            analyze::analyze_focused_with_progress(
+                &path_owned,
+                &symbol_owned,
+                follow_depth,
+                max_depth,
+                ast_recursion_limit,
+                counter_clone,
+                ct_clone,
+                use_summary_for_task,
+            )
+        });
+
+        // Poll and emit progress every 100ms
+        let token = ProgressToken(NumberOrString::String(
+            format!(
+                "analyze-symbol-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            )
+            .into(),
+        ));
+        let mut last_progress = 0usize;
+        let mut cancelled = false;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if ct.is_cancelled() {
+                cancelled = true;
+                break;
+            }
+            let current = counter.load(std::sync::atomic::Ordering::Relaxed);
+            if current != last_progress && total_files > 0 {
+                self.emit_progress(
+                    &token,
+                    current as f64,
+                    total_files as f64,
+                    format!(
+                        "Analyzing {}/{} files for symbol '{}'",
+                        current, total_files, params.symbol
+                    ),
+                )
+                .await;
+                last_progress = current;
+            }
+            if handle.is_finished() {
+                break;
+            }
+        }
+
+        // Emit final 100% progress only if not cancelled
+        if !cancelled && total_files > 0 {
+            self.emit_progress(
+                &token,
+                total_files as f64,
+                total_files as f64,
+                format!(
+                    "Completed analyzing {} files for symbol '{}'",
+                    total_files, params.symbol
+                ),
+            )
+            .await;
+        }
+
+        let mut output = match handle.await {
+            Ok(Ok(output)) => output,
+            Ok(Err(analyze::AnalyzeError::Cancelled)) => {
+                return Ok(CallToolResult::success(vec![Content::text(
+                    "Analysis cancelled".to_string(),
+                )]));
+            }
+            Ok(Err(e)) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("Error analyzing symbol focus: {}", e),
+                    None,
+                ));
+            }
+            Err(e) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("Task join error: {}", e),
+                    None,
+                ));
+            }
+        };
+
+        // Auto-detect: if no explicit summary param and output exceeds limit,
+        // re-run analysis with use_summary=true
+        if params.summary.is_none()
+            && params.force != Some(true)
+            && output.formatted.len() > SIZE_LIMIT
+        {
+            let path_owned2 = Path::new(&params.path).to_path_buf();
+            let symbol_owned2 = params.symbol.clone();
+            let follow_depth2 = params.follow_depth.unwrap_or(1);
+            let max_depth2 = params.max_depth;
+            let ast_recursion_limit2 = params.ast_recursion_limit;
+            let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let ct2 = ct.clone();
+            let summary_result = tokio::task::spawn_blocking(move || {
+                analyze::analyze_focused_with_progress(
+                    &path_owned2,
+                    &symbol_owned2,
+                    follow_depth2,
+                    max_depth2,
+                    ast_recursion_limit2,
+                    counter2,
+                    ct2,
+                    true, // use_summary=true
+                )
+            })
+            .await;
+            match summary_result {
+                Ok(Ok(summary_output)) => {
+                    output.formatted = summary_output.formatted;
+                }
+                _ => {
+                    // Fallback: return error (summary generation failed)
+                    let estimated_tokens = output.formatted.len() / 4;
+                    let message = format!(
+                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
+                        output.formatted.len(),
+                        estimated_tokens
+                    );
+                    return Err(ErrorData::new(
+                        rmcp::model::ErrorCode::INVALID_REQUEST,
+                        message,
+                        None,
+                    ));
+                }
+            }
+        } else if output.formatted.len() > SIZE_LIMIT
+            && params.force != Some(true)
+            && params.summary == Some(false)
+        {
+            // Explicit summary=false with large output: return error
+            let estimated_tokens = output.formatted.len() / 4;
+            let message = format!(
+                "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
+                 - force=true to return full output\n\
+                 - summary=true to get compact summary\n\
+                 - Narrow your scope (smaller directory, specific file)",
+                output.formatted.len(),
+                estimated_tokens
+            );
+            return Err(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_REQUEST,
+                message,
+                None,
+            ));
+        }
+
+        // Decode pagination cursor if provided
+        let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+        let offset = if let Some(ref cursor_str) = params.cursor {
+            let cursor_data = decode_cursor(cursor_str).map_err(|e| {
+                ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
+            })?;
+            cursor_data.offset
+        } else {
+            0
+        };
+
+        // SymbolFocus pagination: decode cursor mode to determine callers vs callees
+        let cursor_mode = if let Some(ref cursor_str) = params.cursor {
+            decode_cursor(cursor_str)
+                .map(|c| c.mode)
+                .unwrap_or(PaginationMode::Callers)
+        } else {
+            PaginationMode::Callers
+        };
+
+        let paginated_next_cursor = match cursor_mode {
+            PaginationMode::Callers => {
+                let (paginated_items, paginated_next) = paginate_focus_chains(
+                    &output.prod_chains,
+                    PaginationMode::Callers,
+                    offset,
+                    page_size,
+                )?;
+
+                if paginated_next.is_some() || offset > 0 {
+                    let base_path = Path::new(&params.path);
+                    output.formatted = format_focused_paginated(
+                        &paginated_items,
+                        output.prod_chains.len(),
+                        PaginationMode::Callers,
+                        &params.symbol,
+                        &output.prod_chains,
+                        &output.test_chains,
+                        &output.outgoing_chains,
+                        output.def_count,
+                        offset,
+                        Some(base_path),
+                    );
+                    paginated_next
+                } else {
+                    None
+                }
+            }
+            PaginationMode::Callees => {
+                let (paginated_items, paginated_next) = paginate_focus_chains(
+                    &output.outgoing_chains,
+                    PaginationMode::Callees,
+                    offset,
+                    page_size,
+                )?;
+
+                if paginated_next.is_some() || offset > 0 {
+                    let base_path = Path::new(&params.path);
+                    output.formatted = format_focused_paginated(
+                        &paginated_items,
+                        output.outgoing_chains.len(),
+                        PaginationMode::Callees,
+                        &params.symbol,
+                        &output.prod_chains,
+                        &output.test_chains,
+                        &output.outgoing_chains,
+                        output.def_count,
+                        offset,
+                        Some(base_path),
+                    );
+                    paginated_next
+                } else {
+                    None
+                }
+            }
+            PaginationMode::Default => {
+                unreachable!("SymbolFocus should only use Callers or Callees modes")
+            }
+        };
+
+        // Build final text output with pagination cursor if present
+        let mut final_text = output.formatted.clone();
+        if let Some(cursor) = paginated_next_cursor {
+            final_text.push('\n');
+            final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
+        }
+
+        let mut result = CallToolResult::success(vec![Content::text(final_text)]);
+        let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+        result.structured_content = Some(structured);
         Ok(result)
     }
 }
@@ -793,7 +743,7 @@ impl ServerHandler for CodeAnalyzer {
             .with_description("MCP server for code structure analysis using tree-sitter");
         InitializeResult::new(capabilities)
             .with_server_info(server_info)
-            .with_instructions("Use overview mode to map a codebase (pass a directory). Use file_details mode to extract functions, classes, and imports from a specific file (pass a file path). Use symbol_focus mode to trace call graphs for a named function or class (pass a directory and set focus to the symbol name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes next_cursor, pass it back as cursor to retrieve the next page.")
+            .with_instructions("Use analyze_directory to map a codebase (pass a directory). Use analyze_file to extract functions, classes, and imports from a specific file (pass a file path). Use analyze_symbol to trace call graphs for a named function or class (pass a directory and set symbol to the function name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes next_cursor, pass it back as cursor to retrieve the next page.")
     }
 
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
@@ -862,7 +812,7 @@ impl ServerHandler for CodeAnalyzer {
         request: CompleteRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<CompleteResult, ErrorData> {
-        // Dispatch on argument name: "path" or "focus"
+        // Dispatch on argument name: "path" or "symbol"
         let argument_name = &request.argument.name;
         let argument_value = &request.argument.value;
 
@@ -872,8 +822,8 @@ impl ServerHandler for CodeAnalyzer {
                 let root = Path::new(".");
                 completion::path_completions(root, argument_value)
             }
-            "focus" => {
-                // Focus completions: need the path argument from context
+            "symbol" => {
+                // Symbol completions: need the path argument from context
                 let path_arg = request
                     .context
                     .as_ref()

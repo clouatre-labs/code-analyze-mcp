@@ -1,43 +1,46 @@
-use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write;
 
-/// Internal enum wrapping the three analysis output types.
-/// Not serialized; used for type-safe dispatch in lib.rs.
-#[derive(Debug)]
-pub enum ModeResult {
-    Overview(AnalysisOutput),
-    FileDetails(FileAnalysisOutput),
-    SymbolFocus(FocusedAnalysisOutput),
-}
+#[allow(unused_imports)]
+use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct AnalyzeParams {
-    #[schemars(description = "File or directory path to analyze")]
+pub struct AnalyzeDirectoryParams {
+    #[schemars(description = "Directory path to analyze")]
     pub path: String,
 
     #[schemars(
-        description = "Analysis mode. Auto-detected: directory path without focus -> overview; file path -> file_details; focus parameter present -> symbol_focus. Override by setting explicitly."
-    )]
-    #[serde(default)]
-    pub mode: Option<AnalysisMode>,
-
-    #[schemars(
-        description = "Maximum directory traversal depth for overview mode. Unset means unlimited. Use 2-3 for large monorepos to limit output size."
+        description = "Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos to limit output size."
     )]
     pub max_depth: Option<u32>,
 
     #[schemars(
-        description = "Symbol name for symbol_focus mode (required for symbol_focus). Case-sensitive function or method name. Triggers symbol_focus auto-detection when mode is not set explicitly."
+        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses."
     )]
-    pub focus: Option<String>,
+    pub force: Option<bool>,
 
     #[schemars(
-        description = "Call graph traversal depth for symbol_focus mode. Default 1 (callers and callees one level out). Increase for deeper dependency traces; each level multiplies output size."
+        description = "true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large codebases to reduce token consumption."
     )]
-    pub follow_depth: Option<u32>,
+    pub summary: Option<bool>,
+
+    #[schemars(
+        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call."
+    )]
+    pub cursor: Option<String>,
+
+    #[schemars(
+        description = "Items per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips."
+    )]
+    pub page_size: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AnalyzeFileParams {
+    #[schemars(description = "File path to analyze")]
+    pub path: String,
 
     #[schemars(
         description = "Maximum AST node recursion depth for tree-sitter queries. Default is sufficient for all standard source files; increase only for pathologically deep nesting in generated code."
@@ -45,22 +48,68 @@ pub struct AnalyzeParams {
     pub ast_recursion_limit: Option<usize>,
 
     #[schemars(
-        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true (overview) or narrowing scope over force=true; force=true can produce very large responses."
+        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses."
     )]
     pub force: Option<bool>,
 
     #[schemars(
-        description = "Overview mode primarily; file_details has same 3-way logic (true/false/auto) but size-error still triggers if output exceeds 50K even after summary is applied. true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large codebases to avoid the size threshold and reduce token consumption."
+        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars."
     )]
     pub summary: Option<bool>,
 
     #[schemars(
-        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page of files (overview) or functions (file_details). Omit on the first call."
+        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call."
     )]
     pub cursor: Option<String>,
 
     #[schemars(
-        description = "Items per page for pagination (default: 100). Items are files in overview mode and functions in file_details mode. Reduce below 100 to limit response size; increase above 100 to reduce round trips."
+        description = "Items per page for pagination (default: 100). Items are functions. Reduce below 100 to limit response size; increase above 100 to reduce round trips."
+    )]
+    pub page_size: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AnalyzeSymbolParams {
+    #[schemars(description = "Directory path to search for the symbol")]
+    pub path: String,
+
+    #[schemars(
+        description = "Symbol name to build call graph for (function or method). Case-sensitive exact match."
+    )]
+    pub symbol: String,
+
+    #[schemars(
+        description = "Call graph traversal depth (default 1). Level 1 = direct callers and callees; increase for deeper dependency traces."
+    )]
+    pub follow_depth: Option<u32>,
+
+    #[schemars(
+        description = "Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos."
+    )]
+    pub max_depth: Option<u32>,
+
+    #[schemars(
+        description = "Maximum AST node recursion depth for tree-sitter queries. Default is sufficient for all standard source files."
+    )]
+    pub ast_recursion_limit: Option<usize>,
+
+    #[schemars(
+        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses."
+    )]
+    pub force: Option<bool>,
+
+    #[schemars(
+        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars."
+    )]
+    pub summary: Option<bool>,
+
+    #[schemars(
+        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call."
+    )]
+    pub cursor: Option<String>,
+
+    #[schemars(
+        description = "Items per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips."
     )]
     pub page_size: Option<usize>,
 }
