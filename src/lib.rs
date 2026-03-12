@@ -564,7 +564,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_file",
-        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript (unsupported file extensions return empty results, not an error). Common mistake: passing a directory path returns an error; use analyze_directory for directories. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
+        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX (unsupported file extensions return empty results, not an error). Common mistake: passing a directory path returns an error; use analyze_directory for directories. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
