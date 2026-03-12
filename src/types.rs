@@ -22,7 +22,7 @@ pub struct AnalyzeDirectoryParams {
     pub force: Option<bool>,
 
     #[schemars(
-        description = "true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large codebases to reduce token consumption."
+        description = "true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars."
     )]
     pub summary: Option<bool>,
 
@@ -53,7 +53,7 @@ pub struct AnalyzeFileParams {
     pub force: Option<bool>,
 
     #[schemars(
-        description = "true = compact summary (no per-function details); false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large files to reduce token consumption."
+        description = "true = compact summary (no per-function details); false = full output; unset = auto-summarize when output exceeds 50K chars."
     )]
     pub summary: Option<bool>,
 
@@ -99,7 +99,7 @@ pub struct AnalyzeSymbolParams {
     pub force: Option<bool>,
 
     #[schemars(
-        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large codebases to reduce token consumption."
+        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars."
     )]
     pub summary: Option<bool>,
 
