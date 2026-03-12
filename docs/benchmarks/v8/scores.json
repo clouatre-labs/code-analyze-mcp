@@ -1,0 +1,38 @@
+{
+  "experiment": "v8-benchmark",
+  "conditions": {
+    "A-control": "Claude Code native tools only (Glob, Grep, Read, Bash)",
+    "B-treatment": "Claude Code native tools + code-analyze-mcp (analyze_directory, analyze_file, analyze_symbol preferred)"
+  },
+  "model": "claude-haiku-4-5",
+  "temperature": 0.5,
+  "target_repo": "tobymao/sqlglot",
+  "pinned_commit": null,
+  "blinding": {
+    "method": "Random shuffle with seed=512, condition labels stripped before scoring; mapping revealed post-scoring",
+    "mapping": {
+      "R01": "A2",
+      "R02": "A5",
+      "R03": "B5",
+      "R04": "B1",
+      "R05": "B2",
+      "R06": "A4",
+      "R07": "B4",
+      "R08": "A3",
+      "R09": "B3",
+      "R10": "A1"
+    }
+  },
+  "per_run_scores": {
+    "A1": null,
+    "A2": null,
+    "A3": null,
+    "A4": null,
+    "A5": null,
+    "B1": null,
+    "B2": null,
+    "B3": null,
+    "B4": null,
+    "B5": null
+  }
+}
