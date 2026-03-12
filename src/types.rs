@@ -12,7 +12,7 @@ pub struct AnalyzeDirectoryParams {
     pub path: String,
 
     #[schemars(
-        description = "Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos to limit output size."
+        description = "Maximum directory traversal depth for overview mode only. 0 or unset = unlimited depth. Use 1-3 for large monorepos to manage output size. Ignored in other modes."
     )]
     pub max_depth: Option<u32>,
 
@@ -43,7 +43,7 @@ pub struct AnalyzeFileParams {
     pub path: String,
 
     #[schemars(
-        description = "Maximum AST node depth for tree-sitter queries. Unset means no depth cap. Increase only if query results are missing constructs in deeply nested or generated code."
+        description = "Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code."
     )]
     pub ast_recursion_limit: Option<usize>,
 
@@ -74,12 +74,12 @@ pub struct AnalyzeSymbolParams {
     pub path: String,
 
     #[schemars(
-        description = "Symbol name to build call graph for (function or method). Case-sensitive exact-match; searched across all files in the specified directory."
+        description = "Symbol name to build call graph for (function or method). Exact case-sensitive match required; searched across all files in the specified directory. Example: 'parse_config' finds all callers and callees of that function."
     )]
     pub symbol: String,
 
     #[schemars(
-        description = "Call graph traversal depth (default 1). Level 1 = direct callers and callees; increase for deeper chains. Output grows with graph branching factor at each level."
+        description = "Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2."
     )]
     pub follow_depth: Option<u32>,
 
@@ -89,7 +89,7 @@ pub struct AnalyzeSymbolParams {
     pub max_depth: Option<u32>,
 
     #[schemars(
-        description = "Maximum AST node depth for tree-sitter queries. Unset means no depth cap. Increase only if query results are missing constructs in deeply nested or generated code."
+        description = "Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code."
     )]
     pub ast_recursion_limit: Option<usize>,
 
