@@ -2,7 +2,6 @@
 
 # code-analyze-mcp
 
-[![CI](https://github.com/clouatre-labs/code-analyze-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/clouatre-labs/code-analyze-mcp/actions/workflows/ci.yml)
 [![MCP Security Scan](https://img.shields.io/github/actions/workflow/status/clouatre-labs/code-analyze-mcp/mcp-scan.yml?label=mcp-scan&logo=cisco)](https://github.com/clouatre-labs/code-analyze-mcp/actions/workflows/mcp-scan.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org)
