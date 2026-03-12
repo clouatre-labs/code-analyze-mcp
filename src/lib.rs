@@ -129,6 +129,8 @@ impl CodeAnalyzer {
 
     /// Private helper: Extract analysis logic for overview mode (analyze_directory).
     /// Returns the complete analysis output after spawning and monitoring progress.
+    /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
+    #[instrument(skip(self, params, ct))]
     async fn handle_overview_mode(
         &self,
         params: &AnalyzeDirectoryParams,
@@ -226,6 +228,7 @@ impl CodeAnalyzer {
 
     /// Private helper: Extract analysis logic for file details mode (analyze_file).
     /// Returns the cached or newly analyzed file output.
+    #[instrument(skip(self, params))]
     async fn handle_file_details_mode(
         &self,
         params: &AnalyzeFileParams,
@@ -265,6 +268,8 @@ impl CodeAnalyzer {
 
     /// Private helper: Extract analysis logic for focused mode (analyze_symbol).
     /// Returns the complete focused analysis output after spawning and monitoring progress.
+    /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
+    #[instrument(skip(self, params, ct))]
     async fn handle_focused_mode(
         &self,
         params: &AnalyzeSymbolParams,
