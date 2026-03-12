@@ -272,7 +272,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-          if cargo search code-analyze-mcp --limit 1 2>/dev/null | grep -q "^code-analyze-mcp = \"${VERSION}\""; then
+          if curl -sf "https://crates.io/api/v1/crates/code-analyze-mcp/${VERSION}" > /dev/null; then
             echo "code-analyze-mcp@${VERSION} already published, skipping"
           else
             cargo publish
