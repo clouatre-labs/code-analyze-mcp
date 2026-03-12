@@ -1,3 +1,8 @@
+//! Test file detection using path heuristics.
+//!
+//! Identifies test files based on directory and filename patterns.
+//! Supports Rust, Python, Go, Java, TypeScript, and JavaScript.
+
 use std::path::Path;
 
 /// Detect if a file path represents a test file based on path-based heuristics.

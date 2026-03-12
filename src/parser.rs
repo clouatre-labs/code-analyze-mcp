@@ -1,3 +1,12 @@
+//! Tree-sitter-based parser for extracting semantic structure from source code.
+//!
+//! This module provides language-agnostic parsing using tree-sitter queries to extract
+//! functions, classes, imports, references, and other semantic elements from source files.
+//! Two main extractors handle different use cases:
+//!
+//! - [`ElementExtractor`]: Quick extraction of function and class counts.
+//! - [`SemanticExtractor`]: Detailed semantic analysis with calls, imports, and references.
+
 use crate::languages::get_language_info;
 use crate::types::{
     AssignmentInfo, CallInfo, ClassInfo, FieldAccessInfo, FunctionInfo, ImportInfo, ReferenceInfo,
@@ -171,6 +180,12 @@ pub struct ElementExtractor;
 
 impl ElementExtractor {
     /// Extract function and class counts from source code.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParserError::UnsupportedLanguage` if the language is not recognized.
+    /// Returns `ParserError::ParseError` if the source code cannot be parsed.
+    /// Returns `ParserError::QueryError` if the tree-sitter query fails.
     #[instrument(skip_all, fields(language))]
     pub fn extract_with_depth(source: &str, language: &str) -> Result<(usize, usize), ParserError> {
         let lang_info = get_language_info(language)
@@ -352,6 +367,12 @@ pub struct SemanticExtractor;
 
 impl SemanticExtractor {
     /// Extract semantic information from source code.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParserError::UnsupportedLanguage` if the language is not recognized.
+    /// Returns `ParserError::ParseError` if the source code cannot be parsed.
+    /// Returns `ParserError::QueryError` if the tree-sitter query fails.
     #[instrument(skip_all, fields(language))]
     pub fn extract(
         source: &str,

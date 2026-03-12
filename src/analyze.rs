@@ -1,3 +1,8 @@
+//! Main analysis engine for extracting code structure from files and directories.
+//!
+//! Implements the three analysis modes: Overview (directory structure), FileDetails (semantic extraction),
+//! and SymbolFocus (call graph analysis). Handles parallel processing and cancellation.
+
 use crate::formatter::{
     format_file_details, format_focused, format_focused_summary, format_structure,
 };

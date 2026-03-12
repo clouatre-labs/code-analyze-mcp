@@ -1,3 +1,8 @@
+//! Directory traversal with .gitignore support.
+//!
+//! Provides recursive directory walking with automatic filtering based on `.gitignore` and `.ignore` files.
+//! Uses the `ignore` crate for cross-platform, efficient file system traversal.
+
 use ignore::WalkBuilder;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -7,6 +12,7 @@ use tracing::instrument;
 #[derive(Debug, Clone)]
 pub struct WalkEntry {
     pub path: PathBuf,
+    /// Depth in the directory tree (0 = root).
     pub depth: usize,
     pub is_dir: bool,
     pub is_symlink: bool,

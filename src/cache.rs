@@ -1,3 +1,8 @@
+//! LRU cache for analysis results indexed by path, modification time, and mode.
+//!
+//! Provides thread-safe, capacity-bounded caching of file analysis outputs using LRU eviction.
+//! Recovers gracefully from poisoned mutex conditions.
+
 use crate::analyze::FileAnalysisOutput;
 use crate::types::AnalysisMode;
 use lru::LruCache;

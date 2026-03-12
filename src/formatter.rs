@@ -1,3 +1,8 @@
+//! Output formatting for analysis results across different modes.
+//!
+//! Formats semantic analysis, call graphs, and directory structures into human-readable text.
+//! Handles multiline wrapping, pagination, and summary generation.
+
 use crate::graph::CallChain;
 use crate::graph::CallGraph;
 use crate::pagination::PaginationMode;

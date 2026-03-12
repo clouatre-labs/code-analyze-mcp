@@ -1,3 +1,8 @@
+//! Path completion support for file and directory paths.
+//!
+//! Provides completion suggestions for partial paths within a directory tree,
+//! respecting .gitignore and .ignore files.
+
 use crate::cache::AnalysisCache;
 use ignore::WalkBuilder;
 use std::path::Path;
