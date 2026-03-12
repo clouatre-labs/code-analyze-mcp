@@ -1,17 +1,20 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., 0.1.0)'
-        required: true
-        type: string
       dry_run:
-        description: 'Dry run (skip tag creation, publish, release creation, homebrew)'
+        description: 'Dry run (skip publish, release creation, homebrew)'
         required: true
         type: boolean
         default: true
+      version:
+        description: 'Version to simulate (e.g., 0.1.1)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -22,87 +25,91 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  DRY_RUN: ${{ inputs.dry_run }}
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
 
 jobs:
-  create-tag:
-    name: Create Release Tag
+  verify-tag-signature:
+    name: Verify Tag Signature
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify tag is signed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Verifying signature for tag: $TAG"
+          
+          # Get tag ref to find the tag object SHA
+          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.sha')
+          TAG_TYPE=$(gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" --jq '.object.type')
+          
+          if [ "$TAG_TYPE" != "tag" ]; then
+            echo "ERROR: $TAG is a lightweight tag (type: $TAG_TYPE), not an annotated/signed tag"
+            exit 1
+          fi
+          
+          # Verify the tag signature via GitHub API
+          VERIFIED=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.verification.verified')
+          REASON=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.verification.reason')
+          
+          echo "Tag verification: verified=$VERIFIED, reason=$REASON"
+          
+          if [ "$VERIFIED" != "true" ]; then
+            echo "ERROR: Tag $TAG signature is not valid (reason: $REASON)"
+            exit 1
+          fi
+          
+          echo "Tag $TAG is signed and verified by GitHub"
+
+  create-release:
+    name: Create Release
+    needs: [verify-tag-signature]
+    if: always() && (needs.verify-tag-signature.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      version: ${{ inputs.version }}
-      tag: v${{ inputs.version }}
+      version: ${{ env.VERSION }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      - name: Extract version from tag or input
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Validate version matches Cargo.toml
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        shell: bash
         run: |
           CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          if [ "${{ inputs.version }}" != "$CARGO_VERSION" ]; then
-            echo "ERROR: Input version ${{ inputs.version }} does not match Cargo.toml version $CARGO_VERSION"
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "Tag version $VERSION does not match Cargo.toml version $CARGO_VERSION"
             exit 1
           fi
 
-      - name: Create annotated tag
-        if: ${{ !inputs.dry_run }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="v${{ inputs.version }}"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-
-          if git ls-remote --exit-code origin "refs/tags/$TAG" > /dev/null 2>&1; then
-            echo "Tag $TAG already exists, skipping creation"
-          else
-            git tag -a "$TAG" -m "Release $TAG"
-            git push origin "$TAG"
-            echo "Created annotated tag $TAG"
-          fi
-
-      - name: Dry run - skip tag creation
-        if: ${{ inputs.dry_run }}
-        run: echo "DRY RUN - Would create annotated tag v${{ inputs.version }}"
-
-  create-release:
-    name: Create Release
-    needs: create-tag
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      version: ${{ needs.create-tag.outputs.version }}
-    steps:
-      - name: Checkout repository (real run)
-        if: ${{ !inputs.dry_run }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          ref: refs/tags/v${{ needs.create-tag.outputs.version }}
-          fetch-tags: true
-
-      - name: Checkout repository (dry run)
-        if: ${{ inputs.dry_run }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
       - name: Create GitHub release
-        if: ${{ !inputs.dry_run }}
-        id: create_release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="v${{ needs.create-tag.outputs.version }}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists, skipping creation"
-          else
-            gh release create "$TAG" --title "$TAG" --notes "" --draft=false
-          fi
+        if: ${{ env.DRY_RUN != 'true' }}
+        uses: taiki-e/create-gh-release-action@c5baa0b5dc700cf06439d87935e130220a6882d9 # v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
 
       - name: Dry run - skip release creation
-        if: ${{ inputs.dry_run }}
-        run: echo "DRY RUN - Would create release for v${{ needs.create-tag.outputs.version }}"
+        if: ${{ env.DRY_RUN == 'true' }}
+        run: echo "DRY RUN - Would create release for v$VERSION"
 
   build-and-attest:
     name: Build ${{ matrix.target }}
@@ -130,13 +137,13 @@ jobs:
       os: ${{ matrix.os }}
       cross: ${{ matrix.cross }}
       version: ${{ needs.create-release.outputs.version }}
-      dry_run: ${{ inputs.dry_run }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
     secrets: inherit
 
   update-homebrew:
     name: Update Homebrew Formula
     needs: [create-release, build-and-attest]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout homebrew-tap repository
@@ -147,16 +154,14 @@ jobs:
           path: homebrew-tap
 
       - name: Download SHA256 checksums
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
-          VERSION_NUMBER="${{ needs.create-release.outputs.version }}"
           RELEASE_URL="https://api.github.com/repos/clouatre-labs/code-analyze-mcp/releases/tags/${RELEASE_TAG}"
-
-          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" \
-            | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
-
+          
+          # Get release assets
+          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
+          
+          # Download each asset and compute SHA256
           echo "$ASSETS" | jq -r '.url' | while read -r url; do
             filename=$(basename "$url")
             curl -sL "$url" -o "/tmp/$filename"
@@ -212,11 +217,12 @@ jobs:
           cd homebrew-tap
           RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
           BRANCH_NAME="update-code-analyze-mcp-${RELEASE_TAG}"
-
+          
           git config user.email "hugues@linux.com"
           git config user.name "Hugues Clouatre"
           git fetch origin
-          if git ls-remote --exit-code origin "$BRANCH_NAME" > /dev/null 2>&1; then
+          if git ls-remote --exit-code origin "$BRANCH_NAME" 2>/dev/null; then
+            echo "Stale branch $BRANCH_NAME exists, deleting..."
             git push origin --delete "$BRANCH_NAME"
           fi
           git checkout -b "$BRANCH_NAME"
@@ -231,30 +237,23 @@ jobs:
           cd homebrew-tap
           RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
           BRANCH_NAME="update-code-analyze-mcp-${RELEASE_TAG}"
-
+          
           gh pr create \
             --title "Update code-analyze-mcp formula for ${RELEASE_TAG}" \
             --body "Automated formula update with SHA256 checksums for release ${RELEASE_TAG}" \
             --head "$BRANCH_NAME" \
             --base main
-
+          
+          # Auto-merge after Audit check passes (ruleset requires status checks)
           gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
 
   publish:
     name: Publish to crates.io
     needs: create-release
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository (real run)
-        if: ${{ !inputs.dry_run }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          ref: refs/tags/v${{ needs.create-release.outputs.version }}
-          fetch-tags: true
-
-      - name: Checkout repository (dry run)
-        if: ${{ inputs.dry_run }}
+      - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install Rust stable
@@ -268,7 +267,7 @@ jobs:
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
           if curl -sf -A "code-analyze-mcp-release/1.0" "https://crates.io/api/v1/crates/code-analyze-mcp/${VERSION}" > /dev/null; then
-            echo "code-analyze-mcp@${VERSION} already published, skipping"
-          else
-            cargo publish
+            echo "code-analyze-mcp ${VERSION} already published to crates.io, skipping"
+            exit 0
           fi
+          cargo publish
