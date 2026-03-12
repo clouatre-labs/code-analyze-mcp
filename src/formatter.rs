@@ -1,4 +1,3 @@
-use crate::dataflow::DataflowGraph;
 use crate::graph::CallChain;
 use crate::graph::CallGraph;
 use crate::pagination::PaginationMode;
@@ -374,7 +373,6 @@ fn format_chains_as_tree(chains: &[(&str, &str)], arrow: &str, focus_symbol: &st
 #[instrument(skip_all)]
 pub fn format_focused(
     graph: &CallGraph,
-    dataflow: &DataflowGraph,
     symbol: &str,
     follow_depth: u32,
     base_path: Option<&Path>,
@@ -565,40 +563,6 @@ pub fn format_focused(
         }
     }
 
-    // DATAFLOW section
-    output.push_str("DATAFLOW:\n");
-    let assignments = dataflow.find_assignments(symbol);
-    if assignments.is_empty() {
-        output.push_str("  ASSIGNMENTS: (none)\n");
-    } else {
-        output.push_str("  ASSIGNMENTS:\n");
-        for (file, line, scope) in &assignments {
-            output.push_str(&format!(
-                "    {} = ... (scope: {}) {}:{}\n",
-                symbol,
-                scope,
-                strip_base_path(file, base_path),
-                line
-            ));
-        }
-    }
-
-    let field_accesses = dataflow.find_field_accesses(symbol);
-    if field_accesses.is_empty() {
-        output.push_str("  FIELD_ACCESSES: (none)\n");
-    } else {
-        output.push_str("  FIELD_ACCESSES:\n");
-        for (file, line, scope) in &field_accesses {
-            output.push_str(&format!(
-                "    {}.* (scope: {}) {}:{}\n",
-                symbol,
-                scope,
-                strip_base_path(file, base_path),
-                line
-            ));
-        }
-    }
-
     Ok(output)
 }
 
@@ -607,7 +571,6 @@ pub fn format_focused(
 #[instrument(skip_all)]
 pub fn format_focused_summary(
     graph: &CallGraph,
-    dataflow: &DataflowGraph,
     symbol: &str,
     follow_depth: u32,
     base_path: Option<&Path>,
@@ -735,16 +698,6 @@ pub fn format_focused_summary(
             output.push_str(&format!("  {}\n", name));
         }
     }
-
-    // DATAFLOW section
-    output.push_str("DATAFLOW: ");
-    let assignments = dataflow.find_assignments(symbol);
-    let field_accesses = dataflow.find_field_accesses(symbol);
-    output.push_str(&format!(
-        "{} assignments, {} field accesses\n",
-        assignments.len(),
-        field_accesses.len()
-    ));
 
     // SUGGESTION section
     output.push_str("SUGGESTION:\n");

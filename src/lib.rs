@@ -1,7 +1,6 @@
 pub mod analyze;
 pub mod cache;
 pub mod completion;
-pub mod dataflow;
 pub mod formatter;
 pub mod graph;
 pub mod lang;

@@ -1,5 +1,4 @@
 use code_analyze_mcp::analyze::analyze_focused;
-use code_analyze_mcp::dataflow::DataflowGraph;
 use code_analyze_mcp::formatter::format_focused_summary;
 use code_analyze_mcp::graph::CallGraph;
 use code_analyze_mcp::types::SemanticAnalysis;
@@ -79,11 +78,9 @@ fn test_symbol_focus_summary_format() {
         ],
     );
 
-    let dataflow = DataflowGraph::new();
-
     // Act: Format as summary
-    let summary = format_focused_summary(&graph, &dataflow, "my_func", 1, Some(root))
-        .expect("Should format summary");
+    let summary =
+        format_focused_summary(&graph, "my_func", 1, Some(root)).expect("Should format summary");
 
     // Assert: Check key sections exist
     assert!(
@@ -99,10 +96,6 @@ fn test_symbol_focus_summary_format() {
     assert!(
         summary.contains("CALLEES (top 10):"),
         "Should have CALLEES section"
-    );
-    assert!(
-        summary.contains("DATAFLOW:"),
-        "Should have DATAFLOW section"
     );
     assert!(
         summary.contains("SUGGESTION:"),
