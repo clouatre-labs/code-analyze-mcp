@@ -1,0 +1,52 @@
+name: MCP Security Scan
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - ".github/workflows/mcp-scan.yml"
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-scan:
+    name: MCP Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MCP_SCANNER_LLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MCP_SCANNER_LLM_MODEL: anthropic/claude-haiku-4-5-20251001
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9
+        with:
+          toolchain: stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install mcp-scanner
+        run: pip install cisco-ai-mcp-scanner==4.3.0
+
+      - name: Run YARA + behavioral scan
+        run: |
+          mcp-scanner --analyzers yara,behavioral --source-path src/ --format summary stdio --stdio-command cargo --stdio-arg run
+
+      - name: Run LLM scan
+        if: env.MCP_SCANNER_LLM_API_KEY != ''
+        run: |
+          mcp-scanner --analyzers llm --llm-timeout 30 --format summary stdio --stdio-command cargo --stdio-arg run
