@@ -13,22 +13,65 @@ use tracing::instrument;
 
 const MULTILINE_THRESHOLD: usize = 10;
 
-/// Strip a base path from a path string, returning a relative path or the original on failure.
-fn strip_base_path(path_str: &str, base_path: Option<&Path>) -> String {
-    match base_path {
-        Some(base) => {
-            if let Ok(rel_path) = Path::new(path_str).strip_prefix(base) {
-                rel_path.display().to_string()
-            } else {
-                path_str.to_string()
-            }
+/// Format a list of function signatures wrapped at 100 characters with bullet annotation.
+fn format_function_list_wrapped<'a>(
+    functions: impl Iterator<Item = &'a crate::types::FunctionInfo>,
+    call_frequency: &std::collections::HashMap<String, usize>,
+) -> String {
+    let mut output = String::new();
+    let mut line = String::from("  ");
+    for (i, func) in functions.enumerate() {
+        let mut call_marker = func.compact_signature();
+
+        if let Some(&count) = call_frequency.get(&func.name)
+            && count > 3
+        {
+            call_marker.push_str(&format!("\u{2022}{}", count));
         }
-        None => path_str.to_string(),
+
+        if i == 0 {
+            line.push_str(&call_marker);
+        } else if line.len() + call_marker.len() + 2 > 100 {
+            output.push_str(&line);
+            output.push('\n');
+            let mut new_line = String::with_capacity(2 + call_marker.len());
+            new_line.push_str("  ");
+            new_line.push_str(&call_marker);
+            line = new_line;
+        } else {
+            line.push_str(", ");
+            line.push_str(&call_marker);
+        }
+    }
+    if !line.trim().is_empty() {
+        output.push_str(&line);
+        output.push('\n');
+    }
+    output
+}
+
+/// Build a bracket string for file info (line count, function count, class count).
+/// Returns None if all counts are zero, otherwise returns "[42L, 7F, 2C]" format.
+fn format_file_info_parts(line_count: usize, fn_count: usize, cls_count: usize) -> Option<String> {
+    let mut parts = Vec::new();
+    if line_count > 0 {
+        parts.push(format!("{}L", line_count));
+    }
+    if fn_count > 0 {
+        parts.push(format!("{}F", fn_count));
+    }
+    if cls_count > 0 {
+        parts.push(format!("{}C", cls_count));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(format!("[{}]", parts.join(", ")))
     }
 }
 
-/// Strip a base path from a PathBuf, returning a relative path or the original on failure.
-fn strip_base_path_buf(path: &Path, base_path: Option<&Path>) -> String {
+/// Strip a base path from a Path, returning a relative path or the original on failure.
+fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
     match base_path {
         Some(base) => {
             if let Ok(rel_path) = path.strip_prefix(base) {
@@ -163,22 +206,14 @@ pub fn format_structure(
                     continue;
                 }
 
-                let mut info_parts = Vec::new();
-
-                if analysis.line_count > 0 {
-                    info_parts.push(format!("{}L", analysis.line_count));
-                }
-                if analysis.function_count > 0 {
-                    info_parts.push(format!("{}F", analysis.function_count));
-                }
-                if analysis.class_count > 0 {
-                    info_parts.push(format!("{}C", analysis.class_count));
-                }
-
-                if info_parts.is_empty() {
-                    output.push_str(&format!("{}{}\n", indent, name));
+                if let Some(info_str) = format_file_info_parts(
+                    analysis.line_count,
+                    analysis.function_count,
+                    analysis.class_count,
+                ) {
+                    output.push_str(&format!("{}{} {}\n", indent, name, info_str));
                 } else {
-                    output.push_str(&format!("{}{} [{}]\n", indent, name, info_parts.join(", ")));
+                    output.push_str(&format!("{}{}\n", indent, name));
                 }
             }
             // Skip files not in analysis_map (binary/unreadable files)
@@ -216,22 +251,14 @@ pub fn format_structure(
                     continue;
                 }
 
-                let mut info_parts = Vec::new();
-
-                if analysis.line_count > 0 {
-                    info_parts.push(format!("{}L", analysis.line_count));
-                }
-                if analysis.function_count > 0 {
-                    info_parts.push(format!("{}F", analysis.function_count));
-                }
-                if analysis.class_count > 0 {
-                    info_parts.push(format!("{}C", analysis.class_count));
-                }
-
-                if info_parts.is_empty() {
-                    output.push_str(&format!("{}{}\n", indent, name));
+                if let Some(info_str) = format_file_info_parts(
+                    analysis.line_count,
+                    analysis.function_count,
+                    analysis.class_count,
+                ) {
+                    output.push_str(&format!("{}{} {}\n", indent, name, info_str));
                 } else {
-                    output.push_str(&format!("{}{} [{}]\n", indent, name, info_parts.join(", ")));
+                    output.push_str(&format!("{}{}\n", indent, name));
                 }
             }
         }
@@ -252,7 +279,7 @@ pub fn format_file_details(
     let mut output = String::new();
 
     // FILE: header with counts, prepend [TEST] if applicable
-    let display_path = strip_base_path(path, base_path);
+    let display_path = strip_base_path(Path::new(path), base_path);
     if is_test {
         output.push_str(&format!(
             "FILE [TEST] {}({}L, {}F, {}C, {}I)\n",
@@ -279,34 +306,10 @@ pub fn format_file_details(
     // F: section with functions, parameters, return types and call frequency
     if !analysis.functions.is_empty() {
         output.push_str("F:\n");
-        let mut line = String::from("  ");
-        for (i, func) in analysis.functions.iter().enumerate() {
-            let mut call_marker = func.compact_signature();
-
-            if let Some(&count) = analysis.call_frequency.get(&func.name)
-                && count > 3
-            {
-                write!(call_marker, "\u{2022}{}", count).ok();
-            }
-
-            if i == 0 {
-                line.push_str(&call_marker);
-            } else if line.len() + call_marker.len() + 2 > 100 {
-                output.push_str(&line);
-                output.push('\n');
-                let mut new_line = String::with_capacity(2 + call_marker.len());
-                new_line.push_str("  ");
-                new_line.push_str(&call_marker);
-                line = new_line;
-            } else {
-                line.push_str(", ");
-                line.push_str(&call_marker);
-            }
-        }
-        if !line.trim().is_empty() {
-            output.push_str(&line);
-            output.push('\n');
-        }
+        output.push_str(&format_function_list_wrapped(
+            analysis.functions.iter(),
+            &analysis.call_frequency,
+        ));
     }
 
     // I: section with imports grouped by module
@@ -421,7 +424,7 @@ pub fn format_focused(
         for (path, line) in definitions {
             output.push_str(&format!(
                 "  {}:{}\n",
-                strip_base_path_buf(path, base_path),
+                strip_base_path(path, base_path),
                 line
             ));
         }
@@ -469,7 +472,7 @@ pub fn format_focused(
         // Strip base path for display
         let display_files: Vec<_> = test_files
             .iter()
-            .map(|f| strip_base_path_buf(Path::new(f), base_path))
+            .map(|f| strip_base_path(Path::new(f), base_path))
             .collect();
 
         let file_list = display_files.join(", ");
@@ -547,7 +550,7 @@ pub fn format_focused(
             let mut sorted_files = prod_files;
             sorted_files.sort();
             for file in sorted_files {
-                output.push_str(&format!("  {}\n", strip_base_path_buf(&file, base_path)));
+                output.push_str(&format!("  {}\n", strip_base_path(&file, base_path)));
             }
         }
 
@@ -557,7 +560,7 @@ pub fn format_focused(
             let mut sorted_files = test_files;
             sorted_files.sort();
             for file in sorted_files {
-                output.push_str(&format!("    {}\n", strip_base_path_buf(&file, base_path)));
+                output.push_str(&format!("    {}\n", strip_base_path(&file, base_path)));
             }
         }
     }
@@ -574,7 +577,7 @@ pub fn format_focused(
                 "    {} = ... (scope: {}) {}:{}\n",
                 symbol,
                 scope,
-                strip_base_path_buf(file, base_path),
+                strip_base_path(file, base_path),
                 line
             ));
         }
@@ -590,7 +593,7 @@ pub fn format_focused(
                 "    {}.* (scope: {}) {}:{}\n",
                 symbol,
                 scope,
-                strip_base_path_buf(file, base_path),
+                strip_base_path(file, base_path),
                 line
             ));
         }
@@ -654,7 +657,7 @@ pub fn format_focused_summary(
         for (path, line) in definitions {
             output.push_str(&format!(
                 "  {}:{}\n",
-                strip_base_path_buf(path, base_path),
+                strip_base_path(path, base_path),
                 line
             ));
         }
@@ -672,7 +675,7 @@ pub fn format_focused_summary(
             std::collections::HashMap::new();
         for chain in &prod_chains {
             if let Some((name, path, _)) = chain.chain.first() {
-                let file_path = strip_base_path_buf(path, base_path);
+                let file_path = strip_base_path(path, base_path);
                 caller_freq
                     .entry(name.clone())
                     .and_modify(|(count, _)| *count += 1)
@@ -878,22 +881,14 @@ pub fn format_summary(
         } else {
             // For files, show individual stats
             if let Some(analysis) = analysis_map.get(&entry.path.display().to_string()) {
-                let mut info_parts = Vec::new();
-
-                if analysis.line_count > 0 {
-                    info_parts.push(format!("{}L", analysis.line_count));
-                }
-                if analysis.function_count > 0 {
-                    info_parts.push(format!("{}F", analysis.function_count));
-                }
-                if analysis.class_count > 0 {
-                    info_parts.push(format!("{}C", analysis.class_count));
-                }
-
-                if info_parts.is_empty() {
-                    output.push_str(&format!("  {}\n", name));
+                if let Some(info_str) = format_file_info_parts(
+                    analysis.line_count,
+                    analysis.function_count,
+                    analysis.class_count,
+                ) {
+                    output.push_str(&format!("  {} {}\n", name, info_str));
                 } else {
-                    output.push_str(&format!("  {} [{}]\n", name, info_parts.join(", ")));
+                    output.push_str(&format!("  {}\n", name));
                 }
             }
         }
@@ -1078,34 +1073,10 @@ pub fn format_file_details_paginated(
     // F: section with paginated function slice
     if !functions_page.is_empty() {
         output.push_str("F:\n");
-        let mut line = String::from("  ");
-        for (i, func) in functions_page.iter().enumerate() {
-            let mut call_marker = func.compact_signature();
-
-            if let Some(&count) = semantic.call_frequency.get(&func.name)
-                && count > 3
-            {
-                write!(call_marker, "\u{2022}{}", count).ok();
-            }
-
-            if i == 0 {
-                line.push_str(&call_marker);
-            } else if line.len() + call_marker.len() + 2 > 100 {
-                output.push_str(&line);
-                output.push('\n');
-                let mut new_line = String::with_capacity(2 + call_marker.len());
-                new_line.push_str("  ");
-                new_line.push_str(&call_marker);
-                line = new_line;
-            } else {
-                line.push_str(", ");
-                line.push_str(&call_marker);
-            }
-        }
-        if !line.trim().is_empty() {
-            output.push_str(&line);
-            output.push('\n');
-        }
+        output.push_str(&format_function_list_wrapped(
+            functions_page.iter(),
+            &semantic.call_frequency,
+        ));
     }
 
     output
@@ -1205,7 +1176,7 @@ pub fn format_focused_paginated(
 
                 let display_files: Vec<_> = test_files
                     .iter()
-                    .map(|f| strip_base_path_buf(std::path::Path::new(f), base_path))
+                    .map(|f| strip_base_path(std::path::Path::new(f), base_path))
                     .collect();
 
                 output.push_str(&format!(
@@ -1284,7 +1255,7 @@ fn format_file_entry(file: &FileInfo, base_path: Option<&Path>) -> String {
     if file.class_count > 0 {
         parts.push(format!("{}C", file.class_count));
     }
-    let display_path = strip_base_path(&file.path, base_path);
+    let display_path = strip_base_path(Path::new(&file.path), base_path);
     if parts.is_empty() {
         format!("{}\n", display_path)
     } else {
@@ -1298,24 +1269,24 @@ mod tests {
 
     #[test]
     fn test_strip_base_path_relative() {
-        let path_str = "/home/user/project/src/main.rs";
+        let path = Path::new("/home/user/project/src/main.rs");
         let base = Path::new("/home/user/project");
-        let result = strip_base_path(path_str, Some(base));
+        let result = strip_base_path(path, Some(base));
         assert_eq!(result, "src/main.rs");
     }
 
     #[test]
     fn test_strip_base_path_fallback_absolute() {
-        let path_str = "/other/project/src/main.rs";
+        let path = Path::new("/other/project/src/main.rs");
         let base = Path::new("/home/user/project");
-        let result = strip_base_path(path_str, Some(base));
+        let result = strip_base_path(path, Some(base));
         assert_eq!(result, "/other/project/src/main.rs");
     }
 
     #[test]
     fn test_strip_base_path_none() {
-        let path_str = "/home/user/project/src/main.rs";
-        let result = strip_base_path(path_str, None);
+        let path = Path::new("/home/user/project/src/main.rs");
+        let result = strip_base_path(path, None);
         assert_eq!(result, "/home/user/project/src/main.rs");
     }
 
@@ -1405,6 +1376,54 @@ mod tests {
 
         // Should contain import count
         assert!(result.contains("Imports: 0"));
+    }
+    #[test]
+    fn test_format_file_info_parts_all_zero() {
+        assert_eq!(format_file_info_parts(0, 0, 0), None);
+    }
+
+    #[test]
+    fn test_format_file_info_parts_partial() {
+        assert_eq!(
+            format_file_info_parts(42, 0, 3),
+            Some("[42L, 3C]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_format_file_info_parts_all_nonzero() {
+        assert_eq!(
+            format_file_info_parts(100, 5, 2),
+            Some("[100L, 5F, 2C]".to_string())
+        );
+    }
+
+    #[test]
+    fn test_format_function_list_wrapped_empty() {
+        let freq = std::collections::HashMap::new();
+        let result = format_function_list_wrapped(std::iter::empty(), &freq);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_format_function_list_wrapped_bullet_annotation() {
+        use crate::types::FunctionInfo;
+        use std::collections::HashMap;
+
+        let mut freq = HashMap::new();
+        freq.insert("frequent".to_string(), 5); // count > 3 should get bullet
+
+        let funcs = vec![FunctionInfo {
+            name: "frequent".to_string(),
+            line: 1,
+            end_line: 10,
+            parameters: vec![],
+            return_type: Some("void".to_string()),
+        }];
+
+        let result = format_function_list_wrapped(funcs.iter(), &freq);
+        // Should contain bullet (U+2022) followed by count
+        assert!(result.contains("\u{2022}5"));
     }
 }
 
