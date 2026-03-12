@@ -106,6 +106,8 @@ def extract_token_usage(messages: List[Dict]) -> Tuple[int, int]:
     input_tokens = 0
     output_tokens = 0
     for msg in messages:
+        if msg.get("role") != "assistant":
+            continue
         usage = msg.get("usage") or {}
         input_tokens += usage.get("input_tokens", 0) or msg.get("input_tokens", 0)
         output_tokens += usage.get("output_tokens", 0) or msg.get("output_tokens", 0)

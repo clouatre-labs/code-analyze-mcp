@@ -49,7 +49,7 @@ def mannwhitneyu(group1: List[float], group2: List[float]) -> Tuple[float, float
             ranks.extend([avg] * (j - i))
             i = j
         r1 = sum(ranks[k] for k in range(len(combined)) if combined[k][1] == 0)
-        U = n1 * n2 + n1 * (n1 + 1) / 2 - r1
+        U = r1 - n1 * (n1 + 1) / 2
         mu = n1 * n2 / 2
         sigma = math.sqrt(n1 * n2 * (n1 + n2 + 1) / 12)
         z = (U - mu) / sigma if sigma > 0 else 0.0
@@ -150,8 +150,12 @@ def print_cost_table(per_run: Dict):
 
     print(f"| Condition | Reliability | Median cost_usd | Median quality | Eff. cost/QP |")
     print(f"|-----------|-------------|-----------------|----------------|--------------|")
-    print(f"| A | {rel_a:.2f} | {statistics.median(a_costs):.4f if a_costs else 'n/a'} | {statistics.median(a_quality):.1f if a_quality else 'n/a'} | {eff_cost(a_costs, a_quality, rel_a)} |")
-    print(f"| B | {rel_b:.2f} | {statistics.median(b_costs):.4f if b_costs else 'n/a'} | {statistics.median(b_quality):.1f if b_quality else 'n/a'} | {eff_cost(b_costs, b_quality, rel_b)} |")
+    a_cost_str = f"{statistics.median(a_costs):.4f}" if a_costs else "n/a"
+    b_cost_str = f"{statistics.median(b_costs):.4f}" if b_costs else "n/a"
+    a_qual_str = f"{statistics.median(a_quality):.1f}" if a_quality else "n/a"
+    b_qual_str = f"{statistics.median(b_quality):.1f}" if b_quality else "n/a"
+    print(f"| A | {rel_a:.2f} | {a_cost_str} | {a_qual_str} | {eff_cost(a_costs, a_quality, rel_a)} |")
+    print(f"| B | {rel_b:.2f} | {b_cost_str} | {b_qual_str} | {eff_cost(b_costs, b_quality, rel_b)} |")
 
 
 def main():
