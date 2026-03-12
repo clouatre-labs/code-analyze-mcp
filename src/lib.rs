@@ -478,7 +478,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_directory",
-        description = "Analyze directory structure and code metrics. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore. Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Output auto-summarizes at 50K chars; use summary=true to force compact output. Paginate large results with cursor and page_size.",
+        description = "Analyze directory structure and code metrics for multi-file overview. Use this tool for directories; use analyze_file for a single file. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore (results may differ from raw filesystem listing because .gitignore rules are applied). Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Empty directories return an empty tree with zero counts. Output auto-summarizes at 50K chars; use summary=true to force compact output. Paginate large results with cursor and page_size. Example queries: Analyze the src/ directory to understand module structure; What files are in the tests/ directory and how large are they?",
         output_schema = schema_for_type::<analyze::AnalysisOutput>(),
         annotations(
             title = "Analyze Directory",
@@ -564,7 +564,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_file",
-        description = "Extract semantic structure from a single source file. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supports pagination for large files via cursor/page_size. Use summary=true for compact output.",
+        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
@@ -681,7 +681,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Build call graph for a named function or method across all files in a directory. Returns direct callers and callees. Symbol lookup is case-sensitive exact-match. Use follow_depth to trace deeper chains. Use cursor/page_size to paginate call chains when results exceed page_size.",
+        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. Symbol lookup is case-sensitive exact-match; myFunc and myfunc are different symbols. A symbol unknown to the graph (not defined and not referenced) returns an error; a symbol that is defined but has no callers or callees returns empty chains without error. follow_depth warning: depth 2+ causes exponential output growth as the call graph branches; use depth 1 by default and increase only for targeted investigation; depth 0 returns direct caller/callee edges without following neighbors further. Use cursor/page_size to paginate call chains when results exceed page_size. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",
