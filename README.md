@@ -52,23 +52,31 @@ The binary is at `target/release/code-analyze-mcp`.
 
 ### Configure MCP Client
 
-Add to `.mcp.json` at your project root (shared with your team via version control):
+After installation via brew or cargo, register with the Claude Code CLI:
+
+```bash
+claude mcp add --transport stdio code-analyze -- code-analyze-mcp
+```
+
+If you built from source, use the binary path directly:
+
+```bash
+claude mcp add --transport stdio code-analyze -- /path/to/repo/target/release/code-analyze-mcp
+```
+
+stdio is intentional: this server runs locally and processes files directly on disk. The low-latency, zero-network-overhead transport matches the use case. Streamable HTTP adds a network hop with no benefit for a local tool.
+
+Or add manually to `.mcp.json` at your project root (shared with your team via version control):
 
 ```json
 {
   "mcpServers": {
     "code-analyze": {
-      "command": "/path/to/code-analyze-mcp",
+      "command": "code-analyze-mcp",
       "args": []
     }
   }
 }
-```
-
-Or add via the Claude Code CLI:
-
-```bash
-claude mcp add code-analyze /path/to/code-analyze-mcp
 ```
 
 ## Tools
