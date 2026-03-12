@@ -89,7 +89,7 @@ Walks a directory tree, counts lines of code, functions, and classes per file. R
 
 **Example output:**
 
-```
+```text
 src/                                [328 LOC | F:28 C:5]
   main.rs                           [18 LOC | F:1 C:0]
   lib.rs                            [156 LOC | F:12 C:3]
@@ -118,7 +118,7 @@ Extracts functions, classes, imports, and type references from a single file.
 
 **Example output:**
 
-```
+```text
 FILE: src/lib.rs [156 LOC | F:12 C:3]
 
 CLASSES:
@@ -165,7 +165,7 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
 
 **Example output:**
 
-```
+```text
 FOCUS: analyze
 DEPTH: 2
 FILES: 12 analyzed
@@ -199,7 +199,7 @@ For large codebases, two mechanisms prevent context overflow:
 
 `analyze_file` and `analyze_symbol` append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page.
 
-```
+```text
 # Response ends with:
 NEXT_CURSOR: eyJvZmZzZXQiOjUwfQ==
 
