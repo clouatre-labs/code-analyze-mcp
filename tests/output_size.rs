@@ -40,3 +40,20 @@ fn test_symbol_focus_output_size() {
         char_count
     );
 }
+
+#[test]
+fn test_summary_mode_produces_smaller_output() {
+    use code_analyze_mcp::formatter::format_summary;
+
+    let output = analyze::analyze_directory(Path::new("src"), None).unwrap();
+    let full_len = output.formatted.len();
+    let summarized = format_summary(&output.entries, &output.files, None, None);
+    let summary_len = summarized.len();
+
+    assert!(
+        summary_len < full_len,
+        "summary output ({}) should be smaller than full output ({})",
+        summary_len,
+        full_len
+    );
+}
