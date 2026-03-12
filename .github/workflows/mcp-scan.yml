@@ -24,6 +24,7 @@ jobs:
     env:
       MCP_SCANNER_LLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       MCP_SCANNER_LLM_MODEL: anthropic/claude-haiku-4-5-20251001
+      MCP_SCANNER_LLM_TIMEOUT: "30"
 
     steps:
       - name: Checkout
@@ -52,4 +53,4 @@ jobs:
       - name: Run LLM scan
         if: env.MCP_SCANNER_LLM_API_KEY != ''
         run: |
-          mcp-scanner --analyzers llm --llm-timeout 30 --format summary stdio --stdio-command ./target/debug/code-analyze-mcp
+          mcp-scanner --analyzers llm --format summary stdio --stdio-command ./target/debug/code-analyze-mcp
