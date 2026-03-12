@@ -93,24 +93,66 @@ Ensure your commits are GPG-signed and all CI checks pass before opening a pull 
 
 By contributing, you agree your contributions are licensed under [Apache-2.0](LICENSE).
 
-## Testing Release Workflows Locally
+## Releasing
 
-Use [`act`](https://github.com/nektos/act) to run GitHub Actions locally before pushing:
+Releases are automated via GitHub Actions. Maintainers with push access to `main`:
 
-```bash
-brew install act
+### GPG Setup
+
+Configure a GPG key for signing commits and tags:
+
+1. **Generate a key** (if needed): `gpg --full-generate-key`
+2. **Configure Git**:
+   ```bash
+   gpg --list-secret-keys --keyid-format=long  # Find your KEY_ID
+   git config --global user.signingkey <KEY_ID>
+   git config --global commit.gpgsign true
+   git config --global tag.gpgsign true
+   ```
+3. **Add to GitHub**: `gpg --armor --export <KEY_ID> | pbcopy` (Linux: `xclip -selection clipboard`) and paste at [GitHub Settings](https://github.com/settings/keys)
+
+### Release Steps
+
+1. Update version in `Cargo.toml`
+2. Commit: `git commit -S --signoff -m "chore: bump version to X.Y.Z"`
+3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
+4. Push: `git push origin main --tags`
+5. Edit the release to add highlights (see below)
+
+The workflow verifies the tag signature, builds binaries (macOS ARM64, Linux ARM64/x86_64 musl), generates GitHub artifact attestations, creates a GitHub release with auto-generated notes, publishes to crates.io, and opens a PR against the Homebrew tap.
+
+### Release Notes
+
+GitHub auto-generates a changelog from conventional commits. After the workflow completes, edit the release on GitHub to prepend a curated highlights section:
+
+```markdown
+## [Theme or Summary]
+
+Brief description of what this release delivers.
+
+### Highlights
+
+- **Feature Name** - One-line description
+- **Another Feature** - One-line description
+
+---
+
+[Auto-generated changelog follows]
 ```
 
-Dry-run the release workflow:
+### Dry Run
+
+Test the release workflow without publishing or creating a release:
 
 ```bash
-act workflow_dispatch -W .github/workflows/release.yml \
-  --input version=0.1.0 --input dry_run=true \
-  --secret RELEASE_TOKEN=your_token \
-  --secret GITHUB_TOKEN=your_token
+gh workflow run release.yml -f dry_run=true -f version=X.Y.Z
 ```
 
-Note: `act` cannot run macOS runners -- `aarch64-apple-darwin` builds always require real GitHub runners. Linux jobs run fully locally.
+Note: `act` can also run Linux jobs locally, but `aarch64-apple-darwin` builds always require real GitHub runners.
+
+### Versioning
+
+We follow [SemVer](https://semver.org/): MAJOR (breaking), MINOR (features), PATCH (fixes).
 
 ## AI Agent Contributions
 
