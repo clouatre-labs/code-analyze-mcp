@@ -1,5 +1,9 @@
 # Architecture
 
+## See Also
+
+- [anthropic-mcp-agents-orchestration.md](anthropic-mcp-agents-orchestration.md) - MCP tool design principles and annotation semantics that informed this server's interface design
+
 ## Design Goals
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
