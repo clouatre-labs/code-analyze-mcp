@@ -356,8 +356,8 @@ impl CodeAnalyzer {
             }
         };
 
-        let mut output = match output_result {
-            Ok(arc_output) => (*arc_output).clone(),
+        let arc_output = match output_result {
+            Ok(arc_output) => arc_output,
             Err(e) => {
                 return Err(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -367,6 +367,12 @@ impl CodeAnalyzer {
             }
         };
 
+        // Clone only the two fields that may be mutated per-request (formatted and
+        // next_cursor). The heavy SemanticAnalysis data is shared via Arc and never
+        // modified, so we borrow it directly from the cached pointer.
+        let mut formatted = arc_output.formatted.clone();
+        let line_count = arc_output.line_count;
+
         // Apply summary/output size limiting logic
         let use_summary = if params.force == Some(true) {
             false
@@ -375,21 +381,20 @@ impl CodeAnalyzer {
         } else if params.summary == Some(false) {
             false
         } else {
-            output.formatted.len() > SIZE_LIMIT
+            formatted.len() > SIZE_LIMIT
         };
 
         if use_summary {
-            output.formatted =
-                format_file_details_summary(&output.semantic, &params.path, output.line_count);
-        } else if output.formatted.len() > SIZE_LIMIT && params.force != Some(true) {
-            let estimated_tokens = output.formatted.len() / 4;
+            formatted = format_file_details_summary(&arc_output.semantic, &params.path, line_count);
+        } else if formatted.len() > SIZE_LIMIT && params.force != Some(true) {
+            let estimated_tokens = formatted.len() / 4;
             let message = format!(
                 "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
                  - force=true to return full output\n\
                  - Narrow your scope (smaller directory, specific file)\n\
                  - Use analyze_symbol mode for targeted analysis\n\
                  - Reduce max_depth parameter",
-                output.formatted.len(),
+                formatted.len(),
                 estimated_tokens
             );
             return Err(ErrorData::new(
@@ -412,7 +417,7 @@ impl CodeAnalyzer {
 
         // Paginate functions
         let paginated = paginate_slice(
-            &output.semantic.functions,
+            &arc_output.semantic.functions,
             offset,
             page_size,
             PaginationMode::Default,
@@ -421,28 +426,36 @@ impl CodeAnalyzer {
 
         // Regenerate formatted output from the paginated slice when pagination is active
         if paginated.next_cursor.is_some() || offset > 0 {
-            output.formatted = format_file_details_paginated(
+            formatted = format_file_details_paginated(
                 &paginated.items,
                 paginated.total,
-                &output.semantic,
+                &arc_output.semantic,
                 &params.path,
-                output.line_count,
+                line_count,
                 offset,
             );
         }
 
-        // Update next_cursor in output after pagination
-        output.next_cursor = paginated.next_cursor.clone();
+        // Capture next_cursor from pagination result
+        let next_cursor = paginated.next_cursor.clone();
 
         // Build final text output with pagination cursor if present
-        let mut final_text = output.formatted.clone();
-        if let Some(cursor) = paginated.next_cursor {
+        let mut final_text = formatted.clone();
+        if let Some(ref cursor) = next_cursor {
             final_text.push('\n');
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
+        // Build the response output, sharing SemanticAnalysis from the Arc to avoid cloning it.
+        let response_output = analyze::FileAnalysisOutput {
+            formatted,
+            semantic: arc_output.semantic.clone(),
+            line_count,
+            next_cursor,
+        };
+
         let mut result = CallToolResult::success(vec![Content::text(final_text)]);
-        let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+        let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
     }
