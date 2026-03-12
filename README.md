@@ -68,58 +68,24 @@ Or add via the Claude Code CLI:
 claude mcp add code-analyze /path/to/code-analyze-mcp
 ```
 
-## Tool Interface
+## Tools
 
-Three tools are exposed. All optional parameters are omitted from the call when not needed.
+All optional parameters may be omitted. Shared optional parameters across tools:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `summary` | boolean | auto | Compact output; auto-triggers above 50K chars |
+| `cursor` | string | -- | Pagination cursor from a previous response's `next_cursor` |
+| `page_size` | integer | 100 | Items per page |
+| `force` | boolean | false | Bypass output size warning |
 
 ### `analyze_directory`
 
-Walks a directory tree and returns metrics per file.
+Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules.
 
 **Required:** `path` *(string)* -- directory to analyze
 
-**Optional:**
-- `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
-- `summary` *(boolean, default auto)* -- compact output; auto-triggers above 50K chars
-- `cursor` *(string)* -- pagination cursor from a previous response's `next_cursor`
-- `page_size` *(integer, default 100)* -- files per page
-- `force` *(boolean, default false)* -- bypass output size warning
-
-### `analyze_file`
-
-Extracts functions, classes, imports, and type references from a single file.
-
-**Required:** `path` *(string)* -- file to analyze
-
-**Optional:**
-- `summary` *(boolean, default auto)* -- compact output; auto-triggers above 50K chars
-- `cursor` *(string)* -- pagination cursor from a previous response's `next_cursor`
-- `page_size` *(integer, default 100)* -- items per page
-- `force` *(boolean, default false)* -- bypass output size warning
-- `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
-
-### `analyze_symbol`
-
-Builds a call graph for a named symbol across all files in a directory.
-
-**Required:**
-- `path` *(string)* -- directory to search
-- `symbol` *(string)* -- symbol name, case-sensitive exact-match
-
-**Optional:**
-- `follow_depth` *(integer, default 1)* -- call graph traversal depth
-- `max_depth` *(integer, default unlimited)* -- directory recursion limit
-- `summary` *(boolean, default auto)* -- compact output; auto-triggers above 50K chars
-- `cursor` *(string)* -- pagination cursor from a previous response's `next_cursor`
-- `page_size` *(integer, default 100)* -- callers and callees are paginated separately
-- `force` *(boolean, default false)* -- bypass output size warning
-- `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
-
-## Analysis Modes
-
-### `analyze_directory` -- Directory Overview
-
-Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules via the `ignore` crate.
+**Additional optional:** `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
 
 **Example output:**
 
@@ -136,22 +102,19 @@ src/                                [328 LOC | F:28 C:5]
 Total: 4 files, 328 LOC, 28 functions, 5 classes
 ```
 
-**Usage:**
-
 ```bash
-# Overview with default recursion
 analyze_directory path: /path/to/project
-
-# Limit depth to 2 levels
 analyze_directory path: /path/to/project max_depth: 2
-
-# Get summary totals only
 analyze_directory path: /path/to/project summary: true
 ```
 
-### `analyze_file` -- File Details
+### `analyze_file`
 
 Extracts functions, classes, imports, and type references from a single file.
+
+**Required:** `path` *(string)* -- file to analyze
+
+**Additional optional:** `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
 **Example output:**
 
@@ -181,22 +144,24 @@ REFERENCES:
   fields: [path, mode, language]
 ```
 
-**Usage:**
-
 ```bash
-# File details
 analyze_file path: /path/to/file.rs
-
-# Get paginated results
 analyze_file path: /path/to/file.rs page_size: 50
-
-# Fetch next page
 analyze_file path: /path/to/file.rs cursor: eyJvZmZzZXQiOjUwfQ==
 ```
 
-### `analyze_symbol` -- Symbol Call Graph
+### `analyze_symbol`
 
-Builds a call graph for a named symbol across all files in a directory. Uses sentinel values `<module>` (top-level calls) and `<reference>` (type references).
+Builds a call graph for a named symbol across all files in a directory. Uses sentinel values `<module>` (top-level calls) and `<reference>` (type references). Functions called >3 times show `(•N)` notation.
+
+**Required:**
+- `path` *(string)* -- directory to search
+- `symbol` *(string)* -- symbol name, case-sensitive exact-match
+
+**Additional optional:**
+- `follow_depth` *(integer, default 1)* -- call graph traversal depth
+- `max_depth` *(integer, default unlimited)* -- directory recursion limit
+- `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
 **Example output:**
 
@@ -220,18 +185,9 @@ CALLEES (outgoing):
   determine_mode -> is_directory [src/utils.rs:23]
 ```
 
-Functions called >3 times show `(•N)` notation.
-
-**Usage:**
-
 ```bash
-# Call graph with default depth (1)
 analyze_symbol path: /path/to/project symbol: my_function
-
-# Deeper traversal
 analyze_symbol path: /path/to/project symbol: my_function follow_depth: 3
-
-# With directory limit
 analyze_symbol path: /path/to/project symbol: my_function max_depth: 3 follow_depth: 2
 ```
 
