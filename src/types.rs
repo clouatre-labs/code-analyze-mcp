@@ -43,7 +43,7 @@ pub struct AnalyzeFileParams {
     pub path: String,
 
     #[schemars(
-        description = "Internal tree-sitter recursion depth (default: 4096). Increase only for pathologically deep AST nesting in generated code. Leave unset unless analysis fails due to recursion limits."
+        description = "Maximum AST node depth for tree-sitter queries. Unset means no depth cap. Increase only if query results are missing constructs in deeply nested or generated code."
     )]
     pub ast_recursion_limit: Option<usize>,
 
@@ -79,7 +79,7 @@ pub struct AnalyzeSymbolParams {
     pub symbol: String,
 
     #[schemars(
-        description = "Call graph traversal depth (default 1). Level 1 = direct callers and callees; increase for deeper chains. Each level multiplies output size."
+        description = "Call graph traversal depth (default 1). Level 1 = direct callers and callees; increase for deeper chains. Output grows with graph branching factor at each level."
     )]
     pub follow_depth: Option<u32>,
 
@@ -89,7 +89,7 @@ pub struct AnalyzeSymbolParams {
     pub max_depth: Option<u32>,
 
     #[schemars(
-        description = "Internal tree-sitter recursion depth (default: 4096). Increase only for pathologically deep AST nesting in generated code. Leave unset unless analysis fails due to recursion limits."
+        description = "Maximum AST node depth for tree-sitter queries. Unset means no depth cap. Increase only if query results are missing constructs in deeply nested or generated code."
     )]
     pub ast_recursion_limit: Option<usize>,
 
