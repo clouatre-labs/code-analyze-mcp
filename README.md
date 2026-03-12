@@ -72,18 +72,20 @@ claude mcp add code-analyze /path/to/code-analyze-mcp
 
 The `analyze` tool accepts these parameters:
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `path` | string | Yes | — | File or directory to analyze |
-| `max_depth` | integer | No | unlimited | Directory recursion limit |
-| `focus` | string | No | — | Symbol name for call graph analysis (case-sensitive) |
-| `follow_depth` | integer | No | 1 | Call graph traversal depth |
-| `ast_recursion_limit` | integer | No | 256 | Tree-sitter recursion limit for stack safety |
-| `force` | boolean | No | false | Bypass output size warning |
-| `mode` | string | No | auto | Analysis mode: 'overview', 'file_details', 'symbol_focus' |
-| `summary` | boolean | No | auto | Compact output; unset=auto-detect when output exceeds 50K chars |
-| `cursor` | string | No | — | Opaque pagination cursor token (from previous response's next_cursor) |
-| `page_size` | integer | No | 100 | Number of items per page |
+**Required**
+
+- `path` *(string)* -- file or directory to analyze
+
+**Optional**
+
+- `focus` *(string)* -- symbol name for call graph mode (case-sensitive)
+- `follow_depth` *(integer, default 1)* -- call graph traversal depth
+- `max_depth` *(integer, default unlimited)* -- directory recursion limit
+- `summary` *(boolean, default auto)* -- compact output; auto-triggers above 50K chars
+- `cursor` *(string)* -- pagination cursor from a previous response's `next_cursor`
+- `page_size` *(integer, default 100)* -- items per page
+- `force` *(boolean, default false)* -- bypass output size warning
+- `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
 ### Mode Auto-Detection
 
