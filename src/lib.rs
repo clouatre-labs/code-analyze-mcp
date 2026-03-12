@@ -127,27 +127,15 @@ impl CodeAnalyzer {
         }
     }
 
-    #[instrument(skip(self, context))]
-    #[tool(
-        name = "analyze_directory",
-        description = "Analyze directory structure and code metrics. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore. Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Output auto-summarizes at 50K chars; use summary=true to force compact output. Paginate large results with cursor and page_size.",
-        output_schema = schema_for_type::<analyze::AnalysisOutput>(),
-        annotations(
-            title = "Analyze Directory",
-            read_only_hint = true,
-            destructive_hint = false,
-            idempotent_hint = true,
-            open_world_hint = false
-        )
-    )]
-    async fn analyze_directory(
+    /// Private helper: Extract analysis logic for overview mode (analyze_directory).
+    /// Returns the complete analysis output after spawning and monitoring progress.
+    /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
+    #[instrument(skip(self, params, ct))]
+    async fn handle_overview_mode(
         &self,
-        params: Parameters<AnalyzeDirectoryParams>,
-        context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let params = params.0;
-        let ct = context.ct.clone();
-
+        params: &AnalyzeDirectoryParams,
+        ct: tokio_util::sync::CancellationToken,
+    ) -> Result<analyze::AnalysisOutput, ErrorData> {
         let path = Path::new(&params.path);
         let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let counter_clone = counter.clone();
@@ -218,17 +206,173 @@ impl CodeAnalyzer {
             .await;
         }
 
+        match handle.await {
+            Ok(Ok(output)) => Ok(output),
+            Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                "Analysis cancelled".to_string(),
+                None,
+            )),
+            Ok(Err(e)) => Err(ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Error analyzing directory: {}", e),
+                None,
+            )),
+            Err(e) => Err(ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Task join error: {}", e),
+                None,
+            )),
+        }
+    }
+
+    /// Private helper: Extract analysis logic for file details mode (analyze_file).
+    /// Returns the cached or newly analyzed file output.
+    #[instrument(skip(self, params))]
+    async fn handle_file_details_mode(
+        &self,
+        params: &AnalyzeFileParams,
+    ) -> Result<std::sync::Arc<analyze::FileAnalysisOutput>, ErrorData> {
+        // Build cache key from file metadata
+        let cache_key = std::fs::metadata(&params.path).ok().and_then(|meta| {
+            meta.modified().ok().map(|mtime| cache::CacheKey {
+                path: std::path::PathBuf::from(&params.path),
+                modified: mtime,
+                mode: AnalysisMode::FileDetails,
+            })
+        });
+
+        // Check cache first
+        if let Some(ref key) = cache_key
+            && let Some(cached) = self.cache.get(key)
+        {
+            return Ok(cached);
+        }
+
+        // Cache miss or no cache key, analyze and optionally store
+        match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
+            Ok(output) => {
+                let arc_output = std::sync::Arc::new(output);
+                if let Some(ref key) = cache_key {
+                    self.cache.put(key.clone(), arc_output.clone());
+                }
+                Ok(arc_output)
+            }
+            Err(e) => Err(ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Error analyzing file: {}", e),
+                None,
+            )),
+        }
+    }
+
+    /// Private helper: Extract analysis logic for focused mode (analyze_symbol).
+    /// Returns the complete focused analysis output after spawning and monitoring progress.
+    /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
+    #[instrument(skip(self, params, ct))]
+    async fn handle_focused_mode(
+        &self,
+        params: &AnalyzeSymbolParams,
+        ct: tokio_util::sync::CancellationToken,
+    ) -> Result<analyze::FocusedAnalysisOutput, ErrorData> {
+        let follow_depth = params.follow_depth.unwrap_or(1);
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+        let path = Path::new(&params.path);
+        let path_owned = path.to_path_buf();
+        let max_depth = params.max_depth;
+        let symbol_owned = params.symbol.clone();
+        let ast_recursion_limit = params.ast_recursion_limit;
+        let ct_clone = ct.clone();
+
+        // Compute use_summary before spawning: explicit params only
+        let use_summary_for_task = params.force != Some(true) && params.summary == Some(true);
+
+        // Get total file count for progress reporting
+        let total_files = match walk_directory(path, max_depth) {
+            Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
+            Err(_) => 0,
+        };
+
+        // Spawn blocking analysis with progress tracking
+        let handle = tokio::task::spawn_blocking(move || {
+            analyze::analyze_focused_with_progress(
+                &path_owned,
+                &symbol_owned,
+                follow_depth,
+                max_depth,
+                ast_recursion_limit,
+                counter_clone,
+                ct_clone,
+                use_summary_for_task,
+            )
+        });
+
+        // Poll and emit progress every 100ms
+        let token = ProgressToken(NumberOrString::String(
+            format!(
+                "analyze-symbol-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            )
+            .into(),
+        ));
+        let mut last_progress = 0usize;
+        let mut cancelled = false;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if ct.is_cancelled() {
+                cancelled = true;
+                break;
+            }
+            let current = counter.load(std::sync::atomic::Ordering::Relaxed);
+            if current != last_progress && total_files > 0 {
+                self.emit_progress(
+                    &token,
+                    current as f64,
+                    total_files as f64,
+                    format!(
+                        "Analyzing {}/{} files for symbol '{}'",
+                        current, total_files, params.symbol
+                    ),
+                )
+                .await;
+                last_progress = current;
+            }
+            if handle.is_finished() {
+                break;
+            }
+        }
+
+        // Emit final 100% progress only if not cancelled
+        if !cancelled && total_files > 0 {
+            self.emit_progress(
+                &token,
+                total_files as f64,
+                total_files as f64,
+                format!(
+                    "Completed analyzing {} files for symbol '{}'",
+                    total_files, params.symbol
+                ),
+            )
+            .await;
+        }
+
         let mut output = match handle.await {
             Ok(Ok(output)) => output,
             Ok(Err(analyze::AnalyzeError::Cancelled)) => {
-                return Ok(CallToolResult::success(vec![Content::text(
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
                     "Analysis cancelled".to_string(),
-                )]));
+                    None,
+                ));
             }
             Ok(Err(e)) => {
                 return Err(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    format!("Error analyzing directory: {}", e),
+                    format!("Error analyzing symbol: {}", e),
                     None,
                 ));
             }
@@ -240,6 +384,99 @@ impl CodeAnalyzer {
                 ));
             }
         };
+
+        // Auto-detect: if no explicit summary param and output exceeds limit,
+        // re-run analysis with use_summary=true
+        if params.summary.is_none()
+            && params.force != Some(true)
+            && output.formatted.len() > SIZE_LIMIT
+        {
+            let path_owned2 = Path::new(&params.path).to_path_buf();
+            let symbol_owned2 = params.symbol.clone();
+            let follow_depth2 = params.follow_depth.unwrap_or(1);
+            let max_depth2 = params.max_depth;
+            let ast_recursion_limit2 = params.ast_recursion_limit;
+            let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let ct2 = ct.clone();
+            let summary_result = tokio::task::spawn_blocking(move || {
+                analyze::analyze_focused_with_progress(
+                    &path_owned2,
+                    &symbol_owned2,
+                    follow_depth2,
+                    max_depth2,
+                    ast_recursion_limit2,
+                    counter2,
+                    ct2,
+                    true, // use_summary=true
+                )
+            })
+            .await;
+            match summary_result {
+                Ok(Ok(summary_output)) => {
+                    output.formatted = summary_output.formatted;
+                }
+                _ => {
+                    // Fallback: return error (summary generation failed)
+                    let estimated_tokens = output.formatted.len() / 4;
+                    let message = format!(
+                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
+                        output.formatted.len(),
+                        estimated_tokens
+                    );
+                    return Err(ErrorData::new(
+                        rmcp::model::ErrorCode::INVALID_REQUEST,
+                        message,
+                        None,
+                    ));
+                }
+            }
+        } else if output.formatted.len() > SIZE_LIMIT
+            && params.force != Some(true)
+            && params.summary == Some(false)
+        {
+            // Explicit summary=false with large output: return error
+            let estimated_tokens = output.formatted.len() / 4;
+            let message = format!(
+                "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
+                 - force=true to return full output\n\
+                 - summary=true to get compact summary\n\
+                 - Narrow your scope (smaller directory, specific file)",
+                output.formatted.len(),
+                estimated_tokens
+            );
+            return Err(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_REQUEST,
+                message,
+                None,
+            ));
+        }
+
+        Ok(output)
+    }
+
+    #[instrument(skip(self, context))]
+    #[tool(
+        name = "analyze_directory",
+        description = "Analyze directory structure and code metrics. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore. Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Output auto-summarizes at 50K chars; use summary=true to force compact output. Paginate large results with cursor and page_size.",
+        output_schema = schema_for_type::<analyze::AnalysisOutput>(),
+        annotations(
+            title = "Analyze Directory",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn analyze_directory(
+        &self,
+        params: Parameters<AnalyzeDirectoryParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let ct = context.ct.clone();
+
+        // Call handler for analysis and progress tracking
+        let mut output = self.handle_overview_mode(&params, ct).await?;
 
         // Apply summary/output size limiting logic
         let use_summary = if params.force == Some(true) {
@@ -324,48 +561,8 @@ impl CodeAnalyzer {
         let params = params.0;
         let _ct = context.ct.clone();
 
-        // Build cache key from file metadata
-        let cache_key = std::fs::metadata(&params.path).ok().and_then(|meta| {
-            meta.modified().ok().map(|mtime| cache::CacheKey {
-                path: std::path::PathBuf::from(&params.path),
-                modified: mtime,
-                mode: AnalysisMode::FileDetails,
-            })
-        });
-
-        // Check cache first
-        let output_result = if let Some(ref key) = cache_key {
-            if let Some(cached) = self.cache.get(key) {
-                Ok(cached)
-            } else {
-                // Cache miss, analyze and store
-                match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
-                    Ok(output) => {
-                        let arc_output = std::sync::Arc::new(output);
-                        self.cache.put(key.clone(), arc_output.clone());
-                        Ok(arc_output)
-                    }
-                    Err(e) => Err(format!("Error analyzing file: {}", e)),
-                }
-            }
-        } else {
-            // No cache key available, analyze directly
-            match analyze::analyze_file(&params.path, params.ast_recursion_limit) {
-                Ok(output) => Ok(std::sync::Arc::new(output)),
-                Err(e) => Err(format!("Error analyzing file: {}", e)),
-            }
-        };
-
-        let arc_output = match output_result {
-            Ok(arc_output) => arc_output,
-            Err(e) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    e,
-                    None,
-                ));
-            }
-        };
+        // Call handler for analysis and caching
+        let arc_output = self.handle_file_details_mode(&params).await?;
 
         // Clone only the two fields that may be mutated per-request (formatted and
         // next_cursor). The heavy SemanticAnalysis data is shared via Arc and never
@@ -481,179 +678,8 @@ impl CodeAnalyzer {
         let params = params.0;
         let ct = context.ct.clone();
 
-        let follow_depth = params.follow_depth.unwrap_or(1);
-        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let counter_clone = counter.clone();
-        let path = Path::new(&params.path);
-        let path_owned = path.to_path_buf();
-        let max_depth = params.max_depth;
-        let symbol_owned = params.symbol.clone();
-        let ast_recursion_limit = params.ast_recursion_limit;
-        let ct_clone = ct.clone();
-
-        // Compute use_summary before spawning: explicit params only
-        let use_summary_for_task = params.force != Some(true) && params.summary == Some(true);
-
-        // Get total file count for progress reporting
-        let total_files = match walk_directory(path, max_depth) {
-            Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
-            Err(_) => 0,
-        };
-
-        // Spawn blocking analysis with progress tracking
-        let handle = tokio::task::spawn_blocking(move || {
-            analyze::analyze_focused_with_progress(
-                &path_owned,
-                &symbol_owned,
-                follow_depth,
-                max_depth,
-                ast_recursion_limit,
-                counter_clone,
-                ct_clone,
-                use_summary_for_task,
-            )
-        });
-
-        // Poll and emit progress every 100ms
-        let token = ProgressToken(NumberOrString::String(
-            format!(
-                "analyze-symbol-{}",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0)
-            )
-            .into(),
-        ));
-        let mut last_progress = 0usize;
-        let mut cancelled = false;
-        loop {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            if ct.is_cancelled() {
-                cancelled = true;
-                break;
-            }
-            let current = counter.load(std::sync::atomic::Ordering::Relaxed);
-            if current != last_progress && total_files > 0 {
-                self.emit_progress(
-                    &token,
-                    current as f64,
-                    total_files as f64,
-                    format!(
-                        "Analyzing {}/{} files for symbol '{}'",
-                        current, total_files, params.symbol
-                    ),
-                )
-                .await;
-                last_progress = current;
-            }
-            if handle.is_finished() {
-                break;
-            }
-        }
-
-        // Emit final 100% progress only if not cancelled
-        if !cancelled && total_files > 0 {
-            self.emit_progress(
-                &token,
-                total_files as f64,
-                total_files as f64,
-                format!(
-                    "Completed analyzing {} files for symbol '{}'",
-                    total_files, params.symbol
-                ),
-            )
-            .await;
-        }
-
-        let mut output = match handle.await {
-            Ok(Ok(output)) => output,
-            Ok(Err(analyze::AnalyzeError::Cancelled)) => {
-                return Ok(CallToolResult::success(vec![Content::text(
-                    "Analysis cancelled".to_string(),
-                )]));
-            }
-            Ok(Err(e)) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    format!("Error analyzing symbol focus: {}", e),
-                    None,
-                ));
-            }
-            Err(e) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    format!("Task join error: {}", e),
-                    None,
-                ));
-            }
-        };
-
-        // Auto-detect: if no explicit summary param and output exceeds limit,
-        // re-run analysis with use_summary=true
-        if params.summary.is_none()
-            && params.force != Some(true)
-            && output.formatted.len() > SIZE_LIMIT
-        {
-            let path_owned2 = Path::new(&params.path).to_path_buf();
-            let symbol_owned2 = params.symbol.clone();
-            let follow_depth2 = params.follow_depth.unwrap_or(1);
-            let max_depth2 = params.max_depth;
-            let ast_recursion_limit2 = params.ast_recursion_limit;
-            let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-            let ct2 = ct.clone();
-            let summary_result = tokio::task::spawn_blocking(move || {
-                analyze::analyze_focused_with_progress(
-                    &path_owned2,
-                    &symbol_owned2,
-                    follow_depth2,
-                    max_depth2,
-                    ast_recursion_limit2,
-                    counter2,
-                    ct2,
-                    true, // use_summary=true
-                )
-            })
-            .await;
-            match summary_result {
-                Ok(Ok(summary_output)) => {
-                    output.formatted = summary_output.formatted;
-                }
-                _ => {
-                    // Fallback: return error (summary generation failed)
-                    let estimated_tokens = output.formatted.len() / 4;
-                    let message = format!(
-                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
-                        output.formatted.len(),
-                        estimated_tokens
-                    );
-                    return Err(ErrorData::new(
-                        rmcp::model::ErrorCode::INVALID_REQUEST,
-                        message,
-                        None,
-                    ));
-                }
-            }
-        } else if output.formatted.len() > SIZE_LIMIT
-            && params.force != Some(true)
-            && params.summary == Some(false)
-        {
-            // Explicit summary=false with large output: return error
-            let estimated_tokens = output.formatted.len() / 4;
-            let message = format!(
-                "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
-                 - force=true to return full output\n\
-                 - summary=true to get compact summary\n\
-                 - Narrow your scope (smaller directory, specific file)",
-                output.formatted.len(),
-                estimated_tokens
-            );
-            return Err(ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_REQUEST,
-                message,
-                None,
-            ));
-        }
+        // Call handler for analysis and progress tracking
+        let mut output = self.handle_focused_mode(&params, ct).await?;
 
         // Decode pagination cursor if provided
         let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
