@@ -52,10 +52,16 @@ The binary is at `target/release/code-analyze-mcp`.
 
 ### Configure MCP Client
 
-After installation, register with the Claude Code CLI:
+After installation via brew or cargo, register with the Claude Code CLI:
 
 ```bash
 claude mcp add --transport stdio code-analyze -- code-analyze-mcp
+```
+
+If you built from source, use the binary path directly:
+
+```bash
+claude mcp add --transport stdio code-analyze -- /path/to/repo/target/release/code-analyze-mcp
 ```
 
 stdio is intentional: this server runs locally and processes files directly on disk. The low-latency, zero-network-overhead transport matches the use case. Streamable HTTP adds a network hop with no benefit for a local tool.
