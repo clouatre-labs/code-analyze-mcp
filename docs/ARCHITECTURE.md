@@ -4,7 +4,7 @@
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
 - **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system
-- **Single MCP tool with auto-detected modes**: One `analyze` tool that automatically detects analysis mode (overview, file details, symbol focus) based on input parameters
+- **Three focused MCP tools**: `analyze_directory`, `analyze_file`, and `analyze_symbol` -- each with a clear, explicit interface rather than a single tool with auto-detected modes
 - **Compatible with any MCP orchestrator**: Claude Code, Kiro, Fast-Agent, MCP-Agent, and others
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
 
@@ -13,7 +13,7 @@
 | Module | File | Responsibility |
 |--------|------|-----------------|
 | `main` | `src/main.rs` | MCP server entry point; initializes tracing and stdio transport |
-| `lib` | `src/lib.rs` | CodeAnalyzer struct; MCP tool handler; mode dispatch |
+| `lib` | `src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_symbol` |
 | `analyze` | `src/analyze.rs` | High-level analysis orchestration; directory and file analysis |
 | `parser` | `src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
 | `formatter` | `src/formatter.rs` | Output formatting for all three modes |
@@ -29,31 +29,29 @@
 
 ```mermaid
 graph TD
-    A["MCP Request"] --> B["Parameter Parsing"]
-    B --> C{"Mode Detection"}
-    C -->|focus param| D["Symbol Focus Mode"]
-    C -->|file path| E["File Details Mode"]
-    C -->|directory path| F["Overview Mode"]
-    D --> G["walk_directory"]
-    G --> H["Build CallGraph BFS"]
-    H --> I["format_focused"]
-    E --> J["Read File"]
-    J --> K["SemanticExtractor"]
-    K --> L["format_file_details"]
-    F --> M["walk_directory"]
+    A["MCP Request"] --> B1["analyze_directory"]
+    A --> B2["analyze_file"]
+    A --> B3["analyze_symbol"]
+    B1 --> M["walk_directory"]
     M --> N["Parallel Parse rayon"]
     N --> O["ElementExtractor"]
     O --> P["format_structure"]
-    I --> Q["MCP Response"]
+    B2 --> J["Read File"]
+    J --> K["SemanticExtractor"]
+    K --> L["format_file_details"]
+    B3 --> G["walk_directory"]
+    G --> H["Build CallGraph BFS"]
+    H --> I["format_focused"]
+    P --> Q["MCP Response"]
     L --> Q
-    P --> Q
+    I --> Q
 ```
 
 ## Analysis Modes
 
-### Structure Mode (Directory Overview)
+### analyze_directory (Directory Overview)
 
-Triggered when path is a directory and no focus parameter is provided.
+Invoked when the caller wants a structural overview of a directory.
 
 **Pipeline:**
 1. Walk directory tree with `walk_directory()` (respects .gitignore)
@@ -68,9 +66,9 @@ Triggered when path is a directory and no focus parameter is provided.
 - `walk_directory()` - uses ignore crate for .gitignore-aware traversal
 - `ElementExtractor::extract_with_depth()` - counts functions and classes
 
-### Semantic Mode (File Details)
+### analyze_file (File Details)
 
-Triggered when path is a file and no focus parameter is provided.
+Invoked when the caller wants semantic details for a single source file.
 
 **Pipeline:**
 1. Read file source
@@ -89,9 +87,9 @@ Triggered when path is a file and no focus parameter is provided.
 - `SemanticExtractor::extract()` - parses file and extracts semantic elements
 - `format_file_details()` - formats output with sections
 
-### Focused Mode (Symbol Call Graph)
+### analyze_symbol (Symbol Call Graph)
 
-Triggered when focus parameter is provided.
+Invoked when the caller wants a call graph for a named symbol.
 
 **Pipeline:**
 1. Walk entire directory to build symbol index
