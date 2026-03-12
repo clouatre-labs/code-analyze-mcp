@@ -288,7 +288,8 @@ impl CodeAnalyzer {
         let ct_clone = ct.clone();
 
         // Compute use_summary before spawning: explicit params only
-        let use_summary_for_task = params.force != Some(true) && params.summary == Some(true);
+        let use_summary_for_task = params.output_control.force != Some(true)
+            && params.output_control.summary == Some(true);
 
         // Get total file count for progress reporting
         let total_files = match walk_directory(path, max_depth) {
@@ -392,8 +393,8 @@ impl CodeAnalyzer {
 
         // Auto-detect: if no explicit summary param and output exceeds limit,
         // re-run analysis with use_summary=true
-        if params.summary.is_none()
-            && params.force != Some(true)
+        if params.output_control.summary.is_none()
+            && params.output_control.force != Some(true)
             && output.formatted.len() > SIZE_LIMIT
         {
             let path_owned2 = Path::new(&params.path).to_path_buf();
@@ -436,8 +437,8 @@ impl CodeAnalyzer {
                 }
             }
         } else if output.formatted.len() > SIZE_LIMIT
-            && params.force != Some(true)
-            && params.summary == Some(false)
+            && params.output_control.force != Some(true)
+            && params.output_control.summary == Some(false)
         {
             // Explicit summary=false with large output: return error
             let estimated_tokens = output.formatted.len() / 4;
@@ -484,11 +485,11 @@ impl CodeAnalyzer {
         let mut output = self.handle_overview_mode(&params, ct).await?;
 
         // Apply summary/output size limiting logic
-        let use_summary = if params.force == Some(true) {
+        let use_summary = if params.output_control.force == Some(true) {
             false
-        } else if params.summary == Some(true) {
+        } else if params.output_control.summary == Some(true) {
             true
-        } else if params.summary == Some(false) {
+        } else if params.output_control.summary == Some(false) {
             false
         } else {
             output.formatted.len() > SIZE_LIMIT
@@ -504,8 +505,8 @@ impl CodeAnalyzer {
         }
 
         // Decode pagination cursor if provided
-        let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
-        let offset = if let Some(ref cursor_str) = params.cursor {
+        let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+        let offset = if let Some(ref cursor_str) = params.pagination.cursor {
             let cursor_data = decode_cursor(cursor_str).map_err(|e| {
                 ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
             })?;
@@ -576,11 +577,11 @@ impl CodeAnalyzer {
         let line_count = arc_output.line_count;
 
         // Apply summary/output size limiting logic
-        let use_summary = if params.force == Some(true) {
+        let use_summary = if params.output_control.force == Some(true) {
             false
-        } else if params.summary == Some(true) {
+        } else if params.output_control.summary == Some(true) {
             true
-        } else if params.summary == Some(false) {
+        } else if params.output_control.summary == Some(false) {
             false
         } else {
             formatted.len() > SIZE_LIMIT
@@ -588,7 +589,7 @@ impl CodeAnalyzer {
 
         if use_summary {
             formatted = format_file_details_summary(&arc_output.semantic, &params.path, line_count);
-        } else if formatted.len() > SIZE_LIMIT && params.force != Some(true) {
+        } else if formatted.len() > SIZE_LIMIT && params.output_control.force != Some(true) {
             let estimated_tokens = formatted.len() / 4;
             let message = format!(
                 "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
@@ -606,9 +607,9 @@ impl CodeAnalyzer {
             ));
         }
 
-        // Decode pagination cursor if provided
-        let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
-        let offset = if let Some(ref cursor_str) = params.cursor {
+        // Decode pagination cursor if provided (analyze_file)
+        let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+        let offset = if let Some(ref cursor_str) = params.pagination.cursor {
             let cursor_data = decode_cursor(cursor_str).map_err(|e| {
                 ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
             })?;
@@ -686,9 +687,9 @@ impl CodeAnalyzer {
         // Call handler for analysis and progress tracking
         let mut output = self.handle_focused_mode(&params, ct).await?;
 
-        // Decode pagination cursor if provided
-        let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
-        let offset = if let Some(ref cursor_str) = params.cursor {
+        // Decode pagination cursor if provided (analyze_symbol)
+        let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+        let offset = if let Some(ref cursor_str) = params.pagination.cursor {
             let cursor_data = decode_cursor(cursor_str).map_err(|e| {
                 ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
             })?;
@@ -698,7 +699,7 @@ impl CodeAnalyzer {
         };
 
         // SymbolFocus pagination: decode cursor mode to determine callers vs callees
-        let cursor_mode = if let Some(ref cursor_str) = params.cursor {
+        let cursor_mode = if let Some(ref cursor_str) = params.pagination.cursor {
             decode_cursor(cursor_str)
                 .map(|c| c.mode)
                 .unwrap_or(PaginationMode::Callers)

@@ -6,112 +6,76 @@ use std::fmt::Write;
 #[allow(unused_imports)]
 use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
 
+/// Pagination parameters shared across all tools.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct PaginationParams {
+    /// Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call.
+    pub cursor: Option<String>,
+    /// Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips.
+    pub page_size: Option<usize>,
+}
+
+/// Output control parameters shared across all tools.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct OutputControlParams {
+    /// Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses.
+    pub force: Option<bool>,
+    /// true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars.
+    pub summary: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeDirectoryParams {
-    #[schemars(description = "Directory path to analyze")]
+    /// Directory path to analyze
     pub path: String,
 
-    #[schemars(
-        description = "Maximum directory traversal depth for overview mode only. 0 or unset = unlimited depth. Use 1-3 for large monorepos to manage output size. Ignored in other modes."
-    )]
+    /// Maximum directory traversal depth for overview mode only. 0 or unset = unlimited depth. Use 1-3 for large monorepos to manage output size. Ignored in other modes.
     pub max_depth: Option<u32>,
 
-    #[schemars(
-        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses."
-    )]
-    pub force: Option<bool>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 
-    #[schemars(
-        description = "true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars."
-    )]
-    pub summary: Option<bool>,
-
-    #[schemars(
-        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call."
-    )]
-    pub cursor: Option<String>,
-
-    #[schemars(
-        description = "Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips."
-    )]
-    pub page_size: Option<usize>,
+    #[serde(flatten)]
+    pub output_control: OutputControlParams,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeFileParams {
-    #[schemars(description = "File path to analyze")]
+    /// File path to analyze
     pub path: String,
 
-    #[schemars(
-        description = "Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code."
-    )]
+    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
     pub ast_recursion_limit: Option<usize>,
 
-    #[schemars(
-        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses."
-    )]
-    pub force: Option<bool>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 
-    #[schemars(
-        description = "true = compact summary (no per-function details); false = full output; unset = auto-summarize when output exceeds 50K chars."
-    )]
-    pub summary: Option<bool>,
-
-    #[schemars(
-        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call."
-    )]
-    pub cursor: Option<String>,
-
-    #[schemars(
-        description = "Items per page for pagination (default: 100). Items are functions. Reduce below 100 to limit response size; increase above 100 to reduce round trips."
-    )]
-    pub page_size: Option<usize>,
+    #[serde(flatten)]
+    pub output_control: OutputControlParams,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeSymbolParams {
-    #[schemars(description = "Directory path to search for the symbol")]
+    /// Directory path to search for the symbol
     pub path: String,
 
-    #[schemars(
-        description = "Symbol name to build call graph for (function or method). Exact case-sensitive match required; searched across all files in the specified directory. Example: 'parse_config' finds all callers and callees of that function."
-    )]
+    /// Symbol name to build call graph for (function or method). Exact case-sensitive match required; searched across all files in the specified directory. Example: 'parse_config' finds all callers and callees of that function.
     pub symbol: String,
 
-    #[schemars(
-        description = "Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2."
-    )]
+    /// Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2.
     pub follow_depth: Option<u32>,
 
-    #[schemars(
-        description = "Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos."
-    )]
+    /// Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos.
     pub max_depth: Option<u32>,
 
-    #[schemars(
-        description = "Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code."
-    )]
+    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
     pub ast_recursion_limit: Option<usize>,
 
-    #[schemars(
-        description = "Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses."
-    )]
-    pub force: Option<bool>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 
-    #[schemars(
-        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars."
-    )]
-    pub summary: Option<bool>,
-
-    #[schemars(
-        description = "Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call."
-    )]
-    pub cursor: Option<String>,
-
-    #[schemars(
-        description = "Items per page for pagination (default: 100). Callers and callees are paginated separately. Reduce below 100 to limit response size; increase above 100 to reduce round trips."
-    )]
-    pub page_size: Option<usize>,
+    #[serde(flatten)]
+    pub output_control: OutputControlParams,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -133,7 +97,7 @@ pub struct FileInfo {
     pub line_count: usize,
     pub function_count: usize,
     pub class_count: usize,
-    #[schemars(description = "Whether this file is a test file")]
+    /// Whether this file is a test file
     pub is_test: bool,
 }
 
@@ -202,31 +166,31 @@ pub struct CallInfo {
     pub line: usize,
     pub column: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(description = "Number of arguments passed at the call site")]
+    /// Number of arguments passed at the call site
     pub arg_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AssignmentInfo {
-    #[schemars(description = "Variable name being assigned")]
+    /// Variable name being assigned
     pub variable: String,
-    #[schemars(description = "Value expression being assigned")]
+    /// Value expression being assigned
     pub value: String,
-    #[schemars(description = "Line number where assignment occurs")]
+    /// Line number where assignment occurs
     pub line: usize,
-    #[schemars(description = "Enclosing function scope or 'global'")]
+    /// Enclosing function scope or 'global'
     pub scope: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FieldAccessInfo {
-    #[schemars(description = "Object expression being accessed")]
+    /// Object expression being accessed
     pub object: String,
-    #[schemars(description = "Field name being accessed")]
+    /// Field name being accessed
     pub field: String,
-    #[schemars(description = "Line number where field access occurs")]
+    /// Line number where field access occurs
     pub line: usize,
-    #[schemars(description = "Enclosing function scope or 'global'")]
+    /// Enclosing function scope or 'global'
     pub scope: String,
 }
 
@@ -288,39 +252,33 @@ pub struct ElementQueryResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ImportInfo {
-    #[schemars(
-        description = "Full module path excluding the imported symbol (e.g., 'std::collections' for 'use std::collections::HashMap')"
-    )]
+    /// Full module path excluding the imported symbol (e.g., 'std::collections' for 'use std::collections::HashMap')
     pub module: String,
-    #[schemars(
-        description = "Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap')"
-    )]
+    /// Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap')
     pub items: Vec<String>,
-    #[schemars(description = "Line number where import appears")]
+    /// Line number where import appears
     pub line: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SemanticAnalysis {
-    #[schemars(description = "Functions with parameters and return types")]
+    /// Functions with parameters and return types
     pub functions: Vec<FunctionInfo>,
-    #[schemars(description = "Classes/structs")]
+    /// Classes/structs
     pub classes: Vec<ClassInfo>,
-    #[schemars(
-        description = "Flat list of imports; each entry carries its full module path and imported symbols"
-    )]
+    /// Flat list of imports; each entry carries its full module path and imported symbols
     pub imports: Vec<ImportInfo>,
-    #[schemars(description = "Type references with location information")]
+    /// Type references with location information
     pub references: Vec<ReferenceInfo>,
-    #[schemars(description = "Call frequency map (function name -> count)")]
+    /// Call frequency map (function name -> count)
     pub call_frequency: HashMap<String, usize>,
-    #[schemars(description = "Caller-callee pairs extracted from call expressions")]
+    /// Caller-callee pairs extracted from call expressions
     pub calls: Vec<CallInfo>,
+    /// Variable assignments and reassignments
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[schemars(description = "Variable assignments and reassignments")]
     pub assignments: Vec<AssignmentInfo>,
+    /// Field access patterns
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[schemars(description = "Field access patterns")]
     pub field_accesses: Vec<FieldAccessInfo>,
 }
 
@@ -375,5 +333,85 @@ mod tests {
 
         let sig = func.compact_signature();
         assert_eq!(sig, "main() :1-5");
+    }
+
+    #[test]
+    fn schema_flatten_inline() {
+        use schemars::schema_for;
+
+        // Test AnalyzeDirectoryParams: cursor, page_size, force, summary must be top-level
+        let dir_schema = schema_for!(AnalyzeDirectoryParams);
+        let dir_props = dir_schema
+            .as_object()
+            .and_then(|o| o.get("properties"))
+            .and_then(|v| v.as_object())
+            .expect("AnalyzeDirectoryParams must have properties");
+
+        assert!(
+            dir_props.contains_key("cursor"),
+            "cursor must be top-level in AnalyzeDirectoryParams schema"
+        );
+        assert!(
+            dir_props.contains_key("page_size"),
+            "page_size must be top-level in AnalyzeDirectoryParams schema"
+        );
+        assert!(
+            dir_props.contains_key("force"),
+            "force must be top-level in AnalyzeDirectoryParams schema"
+        );
+        assert!(
+            dir_props.contains_key("summary"),
+            "summary must be top-level in AnalyzeDirectoryParams schema"
+        );
+
+        // Test AnalyzeFileParams
+        let file_schema = schema_for!(AnalyzeFileParams);
+        let file_props = file_schema
+            .as_object()
+            .and_then(|o| o.get("properties"))
+            .and_then(|v| v.as_object())
+            .expect("AnalyzeFileParams must have properties");
+
+        assert!(
+            file_props.contains_key("cursor"),
+            "cursor must be top-level in AnalyzeFileParams schema"
+        );
+        assert!(
+            file_props.contains_key("page_size"),
+            "page_size must be top-level in AnalyzeFileParams schema"
+        );
+        assert!(
+            file_props.contains_key("force"),
+            "force must be top-level in AnalyzeFileParams schema"
+        );
+        assert!(
+            file_props.contains_key("summary"),
+            "summary must be top-level in AnalyzeFileParams schema"
+        );
+
+        // Test AnalyzeSymbolParams
+        let symbol_schema = schema_for!(AnalyzeSymbolParams);
+        let symbol_props = symbol_schema
+            .as_object()
+            .and_then(|o| o.get("properties"))
+            .and_then(|v| v.as_object())
+            .expect("AnalyzeSymbolParams must have properties");
+
+        assert!(
+            symbol_props.contains_key("cursor"),
+            "cursor must be top-level in AnalyzeSymbolParams schema"
+        );
+        assert!(
+            symbol_props.contains_key("page_size"),
+            "page_size must be top-level in AnalyzeSymbolParams schema"
+        );
+        assert!(
+            symbol_props.contains_key("force"),
+            "force must be top-level in AnalyzeSymbolParams schema"
+        );
+        assert!(
+            symbol_props.contains_key("summary"),
+            "summary must be top-level in AnalyzeSymbolParams schema"
+        );
     }
 }
