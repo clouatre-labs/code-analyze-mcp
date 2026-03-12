@@ -32,7 +32,7 @@ pub struct AnalyzeDirectoryParams {
     pub cursor: Option<String>,
 
     #[schemars(
-        description = "Items per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips."
+        description = "Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips."
     )]
     pub page_size: Option<usize>,
 }
@@ -43,7 +43,7 @@ pub struct AnalyzeFileParams {
     pub path: String,
 
     #[schemars(
-        description = "Maximum AST node recursion depth for tree-sitter queries. Default is sufficient for all standard source files; increase only for pathologically deep nesting in generated code."
+        description = "Internal tree-sitter recursion depth (default: 4096). Increase only for pathologically deep AST nesting in generated code. Leave unset unless analysis fails due to recursion limits."
     )]
     pub ast_recursion_limit: Option<usize>,
 
@@ -53,7 +53,7 @@ pub struct AnalyzeFileParams {
     pub force: Option<bool>,
 
     #[schemars(
-        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars."
+        description = "true = compact summary (no per-function details); false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large files to reduce token consumption."
     )]
     pub summary: Option<bool>,
 
@@ -74,12 +74,12 @@ pub struct AnalyzeSymbolParams {
     pub path: String,
 
     #[schemars(
-        description = "Symbol name to build call graph for (function or method). Case-sensitive exact match."
+        description = "Symbol name to build call graph for (function or method). Case-sensitive exact-match; searched across all files in the specified directory."
     )]
     pub symbol: String,
 
     #[schemars(
-        description = "Call graph traversal depth (default 1). Level 1 = direct callers and callees; increase for deeper dependency traces."
+        description = "Call graph traversal depth (default 1). Level 1 = direct callers and callees; increase for deeper chains. Each level multiplies output size."
     )]
     pub follow_depth: Option<u32>,
 
@@ -89,7 +89,7 @@ pub struct AnalyzeSymbolParams {
     pub max_depth: Option<u32>,
 
     #[schemars(
-        description = "Maximum AST node recursion depth for tree-sitter queries. Default is sufficient for all standard source files."
+        description = "Internal tree-sitter recursion depth (default: 4096). Increase only for pathologically deep AST nesting in generated code. Leave unset unless analysis fails due to recursion limits."
     )]
     pub ast_recursion_limit: Option<usize>,
 
@@ -99,7 +99,7 @@ pub struct AnalyzeSymbolParams {
     pub force: Option<bool>,
 
     #[schemars(
-        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars."
+        description = "true = compact summary; false = full output; unset = auto-summarize when output exceeds 50K chars. Use true proactively on large codebases to reduce token consumption."
     )]
     pub summary: Option<bool>,
 
@@ -109,7 +109,7 @@ pub struct AnalyzeSymbolParams {
     pub cursor: Option<String>,
 
     #[schemars(
-        description = "Items per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips."
+        description = "Items per page for pagination (default: 100). Callers and callees are paginated separately. Reduce below 100 to limit response size; increase above 100 to reduce round trips."
     )]
     pub page_size: Option<usize>,
 }
