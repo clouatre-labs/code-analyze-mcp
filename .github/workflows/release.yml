@@ -224,6 +224,10 @@ jobs:
 
           git config user.email "hugues@linux.com"
           git config user.name "Hugues Clouatre"
+          git fetch origin
+          if git ls-remote --exit-code origin "$BRANCH_NAME" > /dev/null 2>&1; then
+            git push origin --delete "$BRANCH_NAME"
+          fi
           git checkout -b "$BRANCH_NAME"
           git add Formula/code-analyze-mcp.rb
           git commit --signoff -m "Update code-analyze-mcp formula for ${RELEASE_TAG}"
@@ -272,7 +276,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-          if curl -sf "https://crates.io/api/v1/crates/code-analyze-mcp/${VERSION}" > /dev/null; then
+          if curl -sf -A "code-analyze-mcp-release/1.0" "https://crates.io/api/v1/crates/code-analyze-mcp/${VERSION}" > /dev/null; then
             echo "code-analyze-mcp@${VERSION} already published, skipping"
           else
             cargo publish
