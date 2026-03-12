@@ -1,4 +1,3 @@
-use crate::dataflow::DataflowGraph;
 use crate::formatter::{
     format_file_details, format_focused, format_focused_summary, format_structure,
 };
@@ -358,7 +357,6 @@ pub fn analyze_focused_with_progress(
     }
 
     // Build call graph
-    let dataflow = DataflowGraph::build_from_results(&analysis_results);
     let graph = CallGraph::build_from_results(analysis_results)?;
 
     // Compute chain data for pagination (always, regardless of summary mode)
@@ -376,9 +374,9 @@ pub fn analyze_focused_with_progress(
 
     // Format output
     let formatted = if use_summary {
-        format_focused_summary(&graph, &dataflow, focus, follow_depth, Some(root))?
+        format_focused_summary(&graph, focus, follow_depth, Some(root))?
     } else {
-        format_focused(&graph, &dataflow, focus, follow_depth, Some(root))?
+        format_focused(&graph, focus, follow_depth, Some(root))?
     };
 
     Ok(FocusedAnalysisOutput {
