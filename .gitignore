@@ -1,3 +1,34 @@
-/target/
-/.handoff/
-/target/criterion/
+# Rust / Cargo
+debug/
+target/
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
+
+# AI Coding Agents
+.amazonq/
+.claude/
+.codex/
+.copilot/
+.cursor/
+.goose/
+.goosehints
+.kiro/
+.windsurf/
+AGENTS.md
+CLAUDE.md
+opencode.json
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating Systems
+.DS_Store
+Thumbs.db
+
+# Project-Specific
+.handoff/
