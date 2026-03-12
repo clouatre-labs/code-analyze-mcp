@@ -11,6 +11,9 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 </div>
 
+> [!NOTE]
+> Native agent tools (regex search, path matching, file reading) handle targeted lookups well. `code-analyze-mcp` handles the mechanical, non-AI work: mapping directory structure, extracting symbols, and tracing call graphs. Offloading this to a dedicated tool reduces token usage and speeds up coding with better accuracy.
+
 ## Overview
 
 code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It exposes three tools: `analyze_directory` (file tree with metrics), `analyze_file` (functions, classes, imports from a single file), and `analyze_symbol` (call graph for a named symbol). It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
