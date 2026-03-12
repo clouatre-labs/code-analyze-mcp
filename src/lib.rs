@@ -57,6 +57,19 @@ use types::{AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeSymb
 
 const SIZE_LIMIT: usize = 50_000;
 
+fn error_meta(
+    category: &'static str,
+    is_retryable: bool,
+    suggested_action: &'static str,
+) -> Option<serde_json::Value> {
+    serde_json::to_value(crate::types::ErrorMeta {
+        error_category: category,
+        is_retryable,
+        suggested_action,
+    })
+    .ok()
+}
+
 /// Helper function for paginating focus chains (callers or callees).
 /// Returns (items, re-encoded_cursor_option).
 fn paginate_focus_chains(
@@ -65,8 +78,13 @@ fn paginate_focus_chains(
     offset: usize,
     page_size: usize,
 ) -> Result<(Vec<graph::CallChain>, Option<String>), ErrorData> {
-    let paginated = paginate_slice(chains, offset, page_size, mode)
-        .map_err(|e| ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
+    let paginated = paginate_slice(chains, offset, page_size, mode).map_err(|e| {
+        ErrorData::new(
+            rmcp::model::ErrorCode::INTERNAL_ERROR,
+            e.to_string(),
+            error_meta("transient", true, "retry the request"),
+        )
+    })?;
 
     if paginated.next_cursor.is_none() && offset == 0 {
         return Ok((paginated.items, None));
@@ -74,7 +92,11 @@ fn paginate_focus_chains(
 
     let next = if let Some(raw_cursor) = paginated.next_cursor {
         let decoded = decode_cursor(&raw_cursor).map_err(|e| {
-            ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+            ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                e.to_string(),
+                error_meta("validation", false, "invalid cursor format"),
+            )
         })?;
         Some(
             encode_cursor(&CursorData {
@@ -82,7 +104,11 @@ fn paginate_focus_chains(
                 offset: decoded.offset,
             })
             .map_err(|e| {
-                ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+                ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    e.to_string(),
+                    error_meta("validation", false, "invalid cursor format"),
+                )
             })?,
         )
     } else {
@@ -162,7 +188,7 @@ impl CodeAnalyzer {
             ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("Failed to walk directory: {}", e),
-                None,
+                error_meta("resource", false, "check path permissions and availability"),
             )
         })?;
 
@@ -228,17 +254,17 @@ impl CodeAnalyzer {
             Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 "Analysis cancelled".to_string(),
-                None,
+                error_meta("transient", true, "analysis was cancelled"),
             )),
             Ok(Err(e)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("Error analyzing directory: {}", e),
-                None,
+                error_meta("resource", false, "check path and file permissions"),
             )),
             Err(e) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("Task join error: {}", e),
-                None,
+                error_meta("transient", true, "retry the request"),
             )),
         }
     }
@@ -278,7 +304,7 @@ impl CodeAnalyzer {
             Err(e) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("Error analyzing file: {}", e),
-                None,
+                error_meta("resource", false, "check file path and permissions"),
             )),
         }
     }
@@ -387,21 +413,21 @@ impl CodeAnalyzer {
                 return Err(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
                     "Analysis cancelled".to_string(),
-                    None,
+                    error_meta("transient", true, "analysis was cancelled"),
                 ));
             }
             Ok(Err(e)) => {
                 return Err(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
                     format!("Error analyzing symbol: {}", e),
-                    None,
+                    error_meta("resource", false, "check symbol name and file"),
                 ));
             }
             Err(e) => {
                 return Err(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
                     format!("Task join error: {}", e),
-                    None,
+                    error_meta("transient", true, "retry the request"),
                 ));
             }
         };
@@ -445,9 +471,9 @@ impl CodeAnalyzer {
                         estimated_tokens
                     );
                     return Err(ErrorData::new(
-                        rmcp::model::ErrorCode::INVALID_REQUEST,
+                        rmcp::model::ErrorCode::INVALID_PARAMS,
                         message,
-                        None,
+                        error_meta("validation", false, "use summary=true or force=true"),
                     ));
                 }
             }
@@ -466,9 +492,13 @@ impl CodeAnalyzer {
                 estimated_tokens
             );
             return Err(ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_REQUEST,
+                rmcp::model::ErrorCode::INVALID_PARAMS,
                 message,
-                None,
+                error_meta(
+                    "validation",
+                    false,
+                    "use force=true, summary=true, or narrow scope",
+                ),
             ));
         }
 
@@ -523,7 +553,11 @@ impl CodeAnalyzer {
         let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = if let Some(ref cursor_str) = params.pagination.cursor {
             let cursor_data = decode_cursor(cursor_str).map_err(|e| {
-                ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
+                ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    e.to_string(),
+                    error_meta("validation", false, "invalid cursor format"),
+                )
             })?;
             cursor_data.offset
         } else {
@@ -533,7 +567,11 @@ impl CodeAnalyzer {
         // Apply pagination to files
         let paginated = paginate_slice(&output.files, offset, page_size, PaginationMode::Default)
             .map_err(|e| {
-            ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None)
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                e.to_string(),
+                error_meta("transient", true, "retry the request"),
+            )
         })?;
 
         if paginated.next_cursor.is_some() || offset > 0 {
@@ -616,9 +654,9 @@ impl CodeAnalyzer {
                 estimated_tokens
             );
             return Err(ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_REQUEST,
+                rmcp::model::ErrorCode::INVALID_PARAMS,
                 message,
-                None,
+                error_meta("validation", false, "use force=true or narrow scope"),
             ));
         }
 
@@ -626,7 +664,11 @@ impl CodeAnalyzer {
         let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = if let Some(ref cursor_str) = params.pagination.cursor {
             let cursor_data = decode_cursor(cursor_str).map_err(|e| {
-                ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
+                ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    e.to_string(),
+                    error_meta("validation", false, "invalid cursor format"),
+                )
             })?;
             cursor_data.offset
         } else {
@@ -640,7 +682,13 @@ impl CodeAnalyzer {
             page_size,
             PaginationMode::Default,
         )
-        .map_err(|e| ErrorData::new(rmcp::model::ErrorCode::INTERNAL_ERROR, e.to_string(), None))?;
+        .map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                e.to_string(),
+                error_meta("transient", true, "retry the request"),
+            )
+        })?;
 
         // Regenerate formatted output from the paginated slice when pagination is active
         if paginated.next_cursor.is_some() || offset > 0 {
@@ -706,7 +754,11 @@ impl CodeAnalyzer {
         let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = if let Some(ref cursor_str) = params.pagination.cursor {
             let cursor_data = decode_cursor(cursor_str).map_err(|e| {
-                ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, e.to_string(), None)
+                ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    e.to_string(),
+                    error_meta("validation", false, "invalid cursor format"),
+                )
             })?;
             cursor_data.offset
         } else {
