@@ -144,6 +144,12 @@ Note: `act` can also run Linux jobs locally, but `aarch64-apple-darwin` builds a
 
 We follow [SemVer](https://semver.org/): MAJOR (breaking), MINOR (features), PATCH (fixes).
 
+## Planned enhancements
+
+### MCP resources
+
+Resource endpoints (`list_resources`, `read_resource`) are designed but not yet implemented. See the [MCP Resources design in ARCHITECTURE.md](docs/ARCHITECTURE.md#mcp-resources-planned) for the URI scheme, content catalogue, and implementation path before starting work on this feature.
+
 ## AI Agent Contributions
 
 This section covers workflows for using **GitHub Copilot coding agent** to implement issues.

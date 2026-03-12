@@ -83,3 +83,46 @@ Adding a language requires: a tree-sitter grammar crate, a language module with 
 ## Call Graph Design
 
 BFS from the target symbol outward, tracking callers and callees at each depth level. Visited symbols are memoized to avoid cycles. Call frequency is counted across the walk; symbols exceeding the threshold are annotated in output. Sentinel values (`<module>`, `<reference>`) represent call sites that have no enclosing function or are type-level references rather than call expressions.
+
+## MCP Resources (Planned)
+
+### Current state
+
+`CodeAnalyzer` implements `ServerHandler` but does not override `list_resources()` or `read_resource()`. The default implementations return empty results and `method_not_found` respectively. No resource endpoints exist.
+
+### Value proposition
+
+With resources, agents can discover tool capabilities without making exploratory tool calls:
+
+- Which languages and file extensions are supported?
+- What are example queries for each analysis mode?
+- What are the performance characteristics for different codebase sizes?
+
+Without resources, agents must read documentation out-of-band or infer capabilities through trial and error.
+
+### Resource URI scheme
+
+| URI | Content | Format |
+|-----|---------|--------|
+| `catalog/languages` | Supported languages and file extensions | JSON |
+| `catalog/modes` | Tool names, descriptions, when to use each | JSON |
+| `patterns/overview/examples` | Example queries for `analyze_directory` | JSON |
+| `patterns/file-details/examples` | Example queries for `analyze_file` | JSON |
+| `patterns/symbol-focus/examples` | Example queries for `analyze_symbol` | JSON |
+| `performance/characteristics` | Token and latency estimates by codebase size | JSON |
+
+### Implementation path
+
+Override two methods on `CodeAnalyzer`'s `ServerHandler` impl in `src/lib.rs`:
+
+- `list_resources()` -- enumerate the URIs above with name and MIME type
+- `read_resource()` -- route by URI and return static JSON content
+
+Resource data (language registry, example queries) should be defined as static constants close to the relevant logic (language registry in `src/lang.rs`, mode examples adjacent to tool definitions).
+
+### Notes
+
+- This is a planned design, not a committed API contract. URI scheme and content may evolve before Phase 2 implementation.
+- MCP resource subscription (`resources/subscribe`) is out of scope; all resources are static.
+- Client adoption of MCP resources is still emerging. Validate real-world agent behavior before prioritising above other enhancements.
+- Phase 2 implementation is tracked in a separate issue.
