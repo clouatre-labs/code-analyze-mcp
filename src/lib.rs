@@ -130,7 +130,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_directory",
-        description = "Analyze directory structure and code metrics. Returns tree with LOC, function count, class count, and test file markers. Respects .gitignore. Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Output auto-summarizes at 50K chars; use summary=true proactively on large codebases. Use cursor/page_size to paginate files when next_cursor appears in the response.",
+        description = "Analyze directory structure and code metrics. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore. Use max_depth to limit traversal depth (recommended 2-3 for large monorepos). Output auto-summarizes at 50K chars; use summary=true to force compact output. Paginate large results with cursor and page_size.",
         output_schema = schema_for_type::<analyze::AnalysisOutput>(),
         annotations(
             title = "Analyze Directory",
@@ -305,7 +305,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_file",
-        description = "Extract semantic structure from a single source file. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supports pagination for large files via cursor/page_size. Use after analyze_directory for targeted deep dives.",
+        description = "Extract semantic structure from a single source file. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supports pagination for large files via cursor/page_size. Use summary=true for compact output.",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
@@ -449,7 +449,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Build call graph for a named function or method across all files in a directory. Returns direct callers and callees; extend follow_depth to trace deeper chains. Symbol lookup is case-sensitive exact-match. Use to understand function impact and trace dependencies. Use cursor/page_size to paginate call chains when next_cursor appears in the response.",
+        description = "Build call graph for a named function or method across all files in a directory. Returns direct callers and callees. Symbol lookup is case-sensitive exact-match. Use follow_depth to trace deeper chains. Use cursor/page_size to paginate call chains when results exceed page_size.",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",
