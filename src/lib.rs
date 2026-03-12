@@ -741,7 +741,7 @@ impl ServerHandler for CodeAnalyzer {
             .enable_tool_list_changed()
             .enable_completions()
             .build();
-        let server_info = Implementation::new("code-analyze-mcp", "0.1.0")
+        let server_info = Implementation::new("code-analyze-mcp", env!("CARGO_PKG_VERSION"))
             .with_title("Code Analyze MCP")
             .with_description("MCP server for code structure analysis using tree-sitter");
         InitializeResult::new(capabilities)
