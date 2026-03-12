@@ -51,25 +51,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ inputs.version }}"
-          COMMIT_SHA=$(git rev-parse HEAD)
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
 
-          if gh api repos/${{ github.repository }}/git/refs/tags/"$TAG" --silent 2>/dev/null; then
+          if git ls-remote --exit-code origin "refs/tags/$TAG" > /dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping creation"
           else
-            TAG_SHA=$(gh api repos/${{ github.repository }}/git/tags \
-              -X POST \
-              -f tag="$TAG" \
-              -f message="Release $TAG" \
-              -f object="$COMMIT_SHA" \
-              -f type="commit" \
-              --jq '.sha')
-
-            gh api repos/${{ github.repository }}/git/refs \
-              -X POST \
-              -f ref="refs/tags/$TAG" \
-              -f sha="$TAG_SHA"
-
-            echo "Created annotated tag $TAG -> $TAG_SHA"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            echo "Created annotated tag $TAG"
           fi
 
       - name: Dry run - skip tag creation
