@@ -13,7 +13,7 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It provides three analysis modes: directory overview (file tree with metrics), file-level semantic analysis (functions, classes, imports), and symbol-focused call graphs. It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
+code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It exposes three tools: `analyze_directory` (file tree with metrics), `analyze_file` (functions, classes, imports from a single file), and `analyze_symbol` (call graph for a named symbol). It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
 
 ## Installation
 
@@ -70,46 +70,56 @@ claude mcp add code-analyze /path/to/code-analyze-mcp
 
 ## Tool Interface
 
-The `analyze` tool accepts these parameters:
+Three tools are exposed. All optional parameters are omitted from the call when not needed.
 
-**Required**
+### `analyze_directory`
 
-- `path` *(string)* -- file or directory to analyze
+Walks a directory tree and returns metrics per file.
 
-**Optional**
+**Required:** `path` *(string)* -- directory to analyze
 
-- `focus` *(string)* -- symbol name for call graph mode (case-sensitive)
-- `follow_depth` *(integer, default 1)* -- call graph traversal depth
-- `max_depth` *(integer, default unlimited)* -- directory recursion limit
+**Optional:**
+- `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
+- `summary` *(boolean, default auto)* -- compact output; auto-triggers above 50K chars
+- `cursor` *(string)* -- pagination cursor from a previous response's `next_cursor`
+- `page_size` *(integer, default 100)* -- files per page
+- `force` *(boolean, default false)* -- bypass output size warning
+
+### `analyze_file`
+
+Extracts functions, classes, imports, and type references from a single file.
+
+**Required:** `path` *(string)* -- file to analyze
+
+**Optional:**
 - `summary` *(boolean, default auto)* -- compact output; auto-triggers above 50K chars
 - `cursor` *(string)* -- pagination cursor from a previous response's `next_cursor`
 - `page_size` *(integer, default 100)* -- items per page
 - `force` *(boolean, default false)* -- bypass output size warning
 - `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
-### Mode Auto-Detection
+### `analyze_symbol`
 
-```mermaid
-graph TD
-    A["analyze tool called"] --> B{"Parameters provided?"}
-    B -->|focus param| C["Symbol Focus Mode"]
-    B -->|path is file| D["File Details Mode"]
-    B -->|path is directory| E["Directory Overview Mode"]
-    C --> F["Build call graph for symbol"]
-    D --> G["Extract semantic elements from file"]
-    E --> H["Walk directory tree and count elements"]
-    F --> I["Return MCP response"]
-    G --> I
-    H --> I
-```
+Builds a call graph for a named symbol across all files in a directory.
+
+**Required:**
+- `path` *(string)* -- directory to search
+- `symbol` *(string)* -- symbol name, case-sensitive exact-match
+
+**Optional:**
+- `follow_depth` *(integer, default 1)* -- call graph traversal depth
+- `max_depth` *(integer, default unlimited)* -- directory recursion limit
+- `summary` *(boolean, default auto)* -- compact output; auto-triggers above 50K chars
+- `cursor` *(string)* -- pagination cursor from a previous response's `next_cursor`
+- `page_size` *(integer, default 100)* -- callers and callees are paginated separately
+- `force` *(boolean, default false)* -- bypass output size warning
+- `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
 ## Analysis Modes
 
-### Directory Overview
+### `analyze_directory` -- Directory Overview
 
 Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules via the `ignore` crate.
-
-**Triggered when:** Path is a directory and no `focus` parameter is provided.
 
 **Example output:**
 
@@ -130,20 +140,18 @@ Total: 4 files, 328 LOC, 28 functions, 5 classes
 
 ```bash
 # Overview with default recursion
-analyze path: /path/to/project
+analyze_directory path: /path/to/project
 
 # Limit depth to 2 levels
-analyze path: /path/to/project max_depth: 2
+analyze_directory path: /path/to/project max_depth: 2
 
 # Get summary totals only
-analyze path: /path/to/project summary: true
+analyze_directory path: /path/to/project summary: true
 ```
 
-### File Details
+### `analyze_file` -- File Details
 
 Extracts functions, classes, imports, and type references from a single file.
-
-**Triggered when:** Path is a file and no `focus` parameter is provided.
 
 **Example output:**
 
@@ -177,20 +185,18 @@ REFERENCES:
 
 ```bash
 # File details
-analyze path: /path/to/file.rs
+analyze_file path: /path/to/file.rs
 
-# Get paginated results (100 items per page)
-analyze path: /path/to/file.rs page_size: 50
+# Get paginated results
+analyze_file path: /path/to/file.rs page_size: 50
 
 # Fetch next page
-analyze path: /path/to/file.rs cursor: eyJvZmZzZXQiOjUwfQ==
+analyze_file path: /path/to/file.rs cursor: eyJvZmZzZXQiOjUwfQ==
 ```
 
-### Symbol Call Graph
+### `analyze_symbol` -- Symbol Call Graph
 
-Builds a call graph for a named symbol and traverses it with configurable depth. Uses sentinel values `<module>` (top-level calls) and `<reference>` (type references).
-
-**Triggered when:** `focus` parameter is provided.
+Builds a call graph for a named symbol across all files in a directory. Uses sentinel values `<module>` (top-level calls) and `<reference>` (type references).
 
 **Example output:**
 
@@ -220,13 +226,13 @@ Functions called >3 times show `(•N)` notation.
 
 ```bash
 # Call graph with default depth (1)
-analyze path: /path/to/project focus: my_function
+analyze_symbol path: /path/to/project symbol: my_function
 
 # Deeper traversal
-analyze path: /path/to/project focus: my_function follow_depth: 3
+analyze_symbol path: /path/to/project symbol: my_function follow_depth: 3
 
 # With directory limit
-analyze path: /path/to/project focus: my_function max_depth: 3 follow_depth: 2
+analyze_symbol path: /path/to/project symbol: my_function max_depth: 3 follow_depth: 2
 ```
 
 ## Output Management
@@ -235,26 +241,26 @@ For large codebases, two mechanisms prevent context overflow:
 
 **Pagination**
 
-File details and symbol focus modes append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page.
+`analyze_file` and `analyze_symbol` append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page.
 
 ```
 # Response ends with:
 NEXT_CURSOR: eyJvZmZzZXQiOjUwfQ==
 
 # Fetch next page:
-analyze path: /my/project cursor: eyJvZmZzZXQiOjUwfQ== page_size: 100
+analyze_symbol path: /my/project symbol: my_function cursor: eyJvZmZzZXQiOjUwfQ==
 ```
 
 **Summary Mode**
 
-When output exceeds 50K chars, the server auto-compacts results using aggregate statistics. Override with `summary: true` (force) or `summary: false` (disable).
+When output exceeds 50K chars, the server auto-compacts results using aggregate statistics. Override with `summary: true` (force compact) or `summary: false` (disable).
 
 ```bash
 # Force summary for large project
-analyze path: /huge/codebase summary: true
+analyze_directory path: /huge/codebase summary: true
 
 # Disable summary (get full details, may be large)
-analyze path: /project summary: false
+analyze_directory path: /project summary: false
 ```
 
 ## Supported Languages
