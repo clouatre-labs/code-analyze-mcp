@@ -21,7 +21,7 @@ import math
 import statistics
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 
 def mannwhitneyu(group1: List[float], group2: List[float]) -> Tuple[float, float, float]:
