@@ -270,4 +270,10 @@ jobs:
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: cargo publish
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          if cargo search code-analyze-mcp --limit 1 2>/dev/null | grep -q "^code-analyze-mcp = \"${VERSION}\""; then
+            echo "code-analyze-mcp@${VERSION} already published, skipping"
+          else
+            cargo publish
+          fi
