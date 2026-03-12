@@ -418,3 +418,51 @@ mod tests {
         );
     }
 }
+
+/// Structured error metadata for MCP error responses.
+/// Serializes to camelCase JSON for inclusion in `ErrorData.data`.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorMeta {
+    pub error_category: &'static str,
+    pub is_retryable: bool,
+    pub suggested_action: &'static str,
+}
+
+#[cfg(test)]
+mod error_meta_tests {
+    use super::*;
+
+    #[test]
+    fn test_error_meta_serialization_camel_case() {
+        let meta = ErrorMeta {
+            error_category: "validation",
+            is_retryable: false,
+            suggested_action: "fix input",
+        };
+        let v = serde_json::to_value(&meta).unwrap();
+        assert_eq!(v["errorCategory"], "validation");
+        assert_eq!(v["isRetryable"], false);
+        assert_eq!(v["suggestedAction"], "fix input");
+    }
+
+    #[test]
+    fn test_error_meta_validation_not_retryable() {
+        let meta = ErrorMeta {
+            error_category: "validation",
+            is_retryable: false,
+            suggested_action: "use summary=true",
+        };
+        assert!(!meta.is_retryable);
+    }
+
+    #[test]
+    fn test_error_meta_transient_retryable() {
+        let meta = ErrorMeta {
+            error_category: "transient",
+            is_retryable: true,
+            suggested_action: "retry the request",
+        };
+        assert!(meta.is_retryable);
+    }
+}
