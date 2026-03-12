@@ -105,12 +105,12 @@ impl CodeAnalyzer {
     #[instrument(skip(self))]
     async fn emit_progress(
         &self,
+        peer: Option<Peer<RoleServer>>,
         token: &ProgressToken,
         progress: f64,
         total: f64,
         message: String,
     ) {
-        let peer = self.peer.lock().await.clone();
         if let Some(peer) = peer {
             let notification = ServerNotification::ProgressNotification(Notification::new(
                 ProgressNotificationParam {
@@ -170,6 +170,7 @@ impl CodeAnalyzer {
             )
             .into(),
         ));
+        let peer = self.peer.lock().await.clone();
         let mut last_progress = 0usize;
         let mut cancelled = false;
         loop {
@@ -181,6 +182,7 @@ impl CodeAnalyzer {
             let current = counter.load(std::sync::atomic::Ordering::Relaxed);
             if current != last_progress && total_files > 0 {
                 self.emit_progress(
+                    peer.clone(),
                     &token,
                     current as f64,
                     total_files as f64,
@@ -197,6 +199,7 @@ impl CodeAnalyzer {
         // Emit final 100% progress only if not cancelled
         if !cancelled && total_files > 0 {
             self.emit_progress(
+                peer.clone(),
                 &token,
                 total_files as f64,
                 total_files as f64,
@@ -318,6 +321,7 @@ impl CodeAnalyzer {
             )
             .into(),
         ));
+        let peer = self.peer.lock().await.clone();
         let mut last_progress = 0usize;
         let mut cancelled = false;
         loop {
@@ -329,6 +333,7 @@ impl CodeAnalyzer {
             let current = counter.load(std::sync::atomic::Ordering::Relaxed);
             if current != last_progress && total_files > 0 {
                 self.emit_progress(
+                    peer.clone(),
                     &token,
                     current as f64,
                     total_files as f64,
@@ -348,6 +353,7 @@ impl CodeAnalyzer {
         // Emit final 100% progress only if not cancelled
         if !cancelled && total_files > 0 {
             self.emit_progress(
+                peer.clone(),
                 &token,
                 total_files as f64,
                 total_files as f64,
@@ -925,5 +931,23 @@ impl ServerHandler for CodeAnalyzer {
         let mut filter_lock = self.log_level_filter.lock().unwrap();
         *filter_lock = level_filter;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_emit_progress_none_peer_is_noop() {
+        let peer = Arc::new(TokioMutex::new(None));
+        let log_level_filter = Arc::new(Mutex::new(LevelFilter::INFO));
+        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let analyzer = CodeAnalyzer::new(peer, log_level_filter, rx);
+        let token = ProgressToken(NumberOrString::String("test".into()));
+        // Should complete without panic
+        analyzer
+            .emit_progress(None, &token, 0.0, 10.0, "test".to_string())
+            .await;
     }
 }
