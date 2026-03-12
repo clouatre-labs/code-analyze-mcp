@@ -15,9 +15,7 @@ fn overview_benchmark(c: &mut Criterion) {
             let progress = Arc::new(AtomicUsize::new(0));
             let ct = CancellationToken::new();
 
-            code_analyze_mcp::analyze::analyze_directory_with_progress(
-                path, entries, progress, ct,
-            )
+            code_analyze_mcp::analyze::analyze_directory_with_progress(path, entries, progress, ct)
         });
     });
 
