@@ -564,7 +564,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_file",
-        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX (unsupported file extensions return empty results, not an error). Common mistake: passing a directory path returns an error; use analyze_directory for directories. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
+        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
@@ -681,7 +681,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. Symbol lookup is case-sensitive exact-match; myFunc and myfunc are different symbols; if results are empty, verify capitalization. Symbol not found returns empty results (not an error). follow_depth warning: depth 2+ causes exponential output growth as the call graph branches; use depth 1 by default and increase only for targeted investigation; depth 0 returns definitions only. Use cursor/page_size to paginate call chains when results exceed page_size. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep",
+        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. Symbol lookup is case-sensitive exact-match; myFunc and myfunc are different symbols; if results are empty, verify capitalization. Symbol not found returns an error; verify the symbol name and capitalization. follow_depth warning: depth 2+ causes exponential output growth as the call graph branches; use depth 1 by default and increase only for targeted investigation; depth 0 returns direct caller/callee edges without following neighbors further. Use cursor/page_size to paginate call chains when results exceed page_size. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",
