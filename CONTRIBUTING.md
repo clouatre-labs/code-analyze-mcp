@@ -99,17 +99,7 @@ Releases are automated via GitHub Actions. Maintainers with push access to `main
 
 ### GPG Setup
 
-Configure a GPG key for signing commits and tags:
-
-1. **Generate a key** (if needed): `gpg --full-generate-key`
-2. **Configure Git**:
-   ```bash
-   gpg --list-secret-keys --keyid-format=long  # Find your KEY_ID
-   git config --global user.signingkey <KEY_ID>
-   git config --global commit.gpgsign true
-   git config --global tag.gpgsign true
-   ```
-3. **Add to GitHub**: `gpg --armor --export <KEY_ID> | pbcopy` (Linux: `xclip -selection clipboard`) and paste at [GitHub Settings](https://github.com/settings/keys)
+Commits and tags must be GPG-signed. Follow the [GitHub docs on signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) to generate a key, configure Git, and add the public key to your account.
 
 ### Release Steps
 
