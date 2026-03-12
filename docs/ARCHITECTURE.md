@@ -339,9 +339,9 @@ All planned waves are complete. One open issue remains: [#169](https://github.co
 
 - Project skeleton (main.rs, lib.rs, types.rs, lang.rs)
 - CI pipeline (format, lint, commitlint, check-base)
-- Structure mode (directory overview with file tree)
-- Semantic mode (file-level analysis with functions, classes, imports)
-- Symbol focus mode (call graphs with BFS traversal)
+- `analyze_directory` (directory overview with file tree)
+- `analyze_file` (file-level analysis with functions, classes, imports)
+- `analyze_symbol` (call graphs with BFS traversal)
 - All 5 language modules (Rust, Python, TypeScript, Go, Java)
 - LRU caching with mtime invalidation
 - Output size limiting, force flag, summary mode, pagination
