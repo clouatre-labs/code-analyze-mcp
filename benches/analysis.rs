@@ -11,12 +11,12 @@ fn overview_benchmark(c: &mut Criterion) {
     group.bench_function("analyze_directory_src", |b| {
         b.iter(|| {
             let path = std::hint::black_box(Path::new("src"));
-            let max_depth = std::hint::black_box(None);
+            let entries = code_analyze_mcp::traversal::walk_directory(path, None).unwrap();
             let progress = Arc::new(AtomicUsize::new(0));
             let ct = CancellationToken::new();
 
             code_analyze_mcp::analyze::analyze_directory_with_progress(
-                path, max_depth, progress, ct,
+                path, entries, progress, ct,
             )
         });
     });
