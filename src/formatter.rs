@@ -1002,8 +1002,8 @@ pub fn format_structure_paginated(
 }
 
 /// Format a paginated subset of functions for FileDetails mode.
-/// When `verbose=true`, shows classes and imports on the first page (offset == 0) with F:/C:/I: section headers.
-/// When `verbose=false` (default), omits section headers and renders one function per line with line ranges.
+/// When `verbose=false` (default/compact): shows `C:` (if non-empty) and `F:` with wrapped rendering; omits `I:`.
+/// When `verbose=true`: shows `C:`, `I:`, and `F:` with wrapped rendering on the first page (offset == 0).
 /// Header shows position context: `FILE: path (NL, start-end/totalF, CC, II)`.
 #[instrument(skip_all)]
 pub fn format_file_details_paginated(
@@ -1031,26 +1031,23 @@ pub fn format_file_details_paginated(
         semantic.imports.len(),
     ));
 
-    // Classes and imports sections only on first page (verbose mode only)
-    if offset == 0 && verbose {
+    // Classes section on first page for both verbose and compact modes
+    if offset == 0 && !semantic.classes.is_empty() {
         output.push_str(&format_classes_section(&semantic.classes));
+    }
+
+    // Imports section only on first page in verbose mode
+    if offset == 0 && verbose {
         output.push_str(&format_imports_section(&semantic.imports));
     }
 
     // F: section with paginated function slice
     if !functions_page.is_empty() {
-        if verbose {
-            output.push_str("F:\n");
-            output.push_str(&format_function_list_wrapped(
-                functions_page.iter(),
-                &semantic.call_frequency,
-            ));
-        } else {
-            // Compact format: one line per function (compact_signature includes :start-end)
-            for func in functions_page {
-                output.push_str(&format!("  {}\n", func.compact_signature()));
-            }
-        }
+        output.push_str("F:\n");
+        output.push_str(&format_function_list_wrapped(
+            functions_page.iter(),
+            &semantic.call_frequency,
+        ));
     }
 
     output
@@ -1463,25 +1460,130 @@ mod tests {
         assert!(verbose_out.contains("I:\n"), "verbose must have I: section");
         assert!(verbose_out.contains("F:\n"), "verbose must have F: section");
 
-        // Compact omits C:, I:, F: headers
+        // Compact includes C: and F: but omits I: (imports)
         assert!(
-            !compact_out.contains("C:\n"),
-            "compact must not have C: section"
+            compact_out.contains("C:\n"),
+            "compact must have C: section (restored)"
         );
         assert!(
             !compact_out.contains("I:\n"),
-            "compact must not have I: section"
+            "compact must not have I: section (imports omitted)"
         );
         assert!(
-            !compact_out.contains("F:\n"),
-            "compact must not have F: section"
+            compact_out.contains("F:\n"),
+            "compact must have F: section with wrapped formatting"
         );
 
-        // Compact still shows functions with line numbers
+        // Compact functions are wrapped: fn_0 and fn_1 must appear on the same line
         assert!(compact_out.contains("fn_0"), "compact must list functions");
+        let has_two_on_same_line = compact_out
+            .lines()
+            .any(|l| l.contains("fn_0") && l.contains("fn_1"));
         assert!(
-            compact_out.contains(":1-4"),
-            "compact must include line range from compact_signature"
+            has_two_on_same_line,
+            "compact must render multiple functions per line (wrapped), not one-per-line"
+        );
+    }
+
+    /// Regression test: compact mode must be <= verbose for function-heavy files (no imports to mask regression).
+    #[test]
+    fn test_compact_mode_consistent_token_reduction() {
+        use crate::types::{FunctionInfo, SemanticAnalysis};
+        use std::collections::HashMap;
+
+        let funcs: Vec<FunctionInfo> = (0..50)
+            .map(|i| FunctionInfo {
+                name: format!("function_name_{}", i),
+                line: i * 10 + 1,
+                end_line: i * 10 + 8,
+                parameters: vec![
+                    "arg1: u32".to_string(),
+                    "arg2: String".to_string(),
+                    "arg3: Option<bool>".to_string(),
+                ],
+                return_type: Some("Result<Vec<String>, Error>".to_string()),
+            })
+            .collect();
+
+        let semantic = SemanticAnalysis {
+            functions: funcs,
+            classes: vec![],
+            imports: vec![],
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
+
+        let verbose_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/large_file.rs",
+            1000,
+            0,
+            true,
+        );
+        let compact_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/large_file.rs",
+            1000,
+            0,
+            false,
+        );
+
+        assert!(
+            compact_out.len() <= verbose_out.len(),
+            "compact ({} chars) must be <= verbose ({} chars)",
+            compact_out.len(),
+            verbose_out.len(),
+        );
+    }
+
+    /// Edge case test: Compact mode with empty classes should not emit C: header.
+    #[test]
+    fn test_compact_mode_empty_classes_no_header() {
+        use crate::types::{FunctionInfo, SemanticAnalysis};
+        use std::collections::HashMap;
+
+        let funcs: Vec<FunctionInfo> = (0..5)
+            .map(|i| FunctionInfo {
+                name: format!("fn_{}", i),
+                line: i * 5 + 1,
+                end_line: i * 5 + 4,
+                parameters: vec![],
+                return_type: None,
+            })
+            .collect();
+
+        let semantic = SemanticAnalysis {
+            functions: funcs,
+            classes: vec![], // Empty classes
+            imports: vec![],
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
+
+        let compact_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/simple.rs",
+            100,
+            0,
+            false,
+        );
+
+        // Should not have stray C: header when classes are empty
+        assert!(
+            !compact_out.contains("C:\n"),
+            "compact mode must not emit C: header when classes are empty"
         );
     }
 }
