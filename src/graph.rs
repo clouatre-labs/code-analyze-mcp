@@ -3,19 +3,66 @@
 //! Builds caller and callee relationships from semantic analysis results.
 //! Implements type-aware function matching to disambiguate overloads and name collisions.
 
-use crate::types::SemanticAnalysis;
+use crate::types::{SemanticAnalysis, SymbolMatchMode};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 /// Type info for a function: (path, line, parameters, return_type)
 type FunctionTypeInfo = (PathBuf, usize, Vec<String>, Option<String>);
 
 #[derive(Debug, Error)]
 pub enum GraphError {
-    #[error("Symbol not found: {0}")]
+    #[error("Symbol not found: '{0}'. Try match_mode=insensitive for a case-insensitive search.")]
     SymbolNotFound(String),
+    #[error(
+        "Multiple candidates matched '{query}': {candidates}. Refine the symbol name or use a stricter match_mode.",
+        candidates = .candidates.join(", ")
+    )]
+    MultipleCandidates {
+        query: String,
+        candidates: Vec<String>,
+    },
+}
+
+/// Resolve a symbol name against the set of known symbols using the requested match mode.
+///
+/// Returns:
+/// - `Ok(name)` when exactly one symbol matches.
+/// - `Err(GraphError::SymbolNotFound)` when no symbol matches.
+/// - `Err(GraphError::MultipleCandidates)` when more than one symbol matches.
+pub fn resolve_symbol<'a>(
+    known_symbols: impl Iterator<Item = &'a String>,
+    query: &str,
+    mode: &SymbolMatchMode,
+) -> Result<String, GraphError> {
+    let query_lower = query.to_lowercase();
+    let matches: Vec<String> = known_symbols
+        .filter(|s| match mode {
+            SymbolMatchMode::Exact => s.as_str() == query,
+            SymbolMatchMode::Insensitive => s.to_lowercase() == query_lower,
+            SymbolMatchMode::Prefix => s.to_lowercase().starts_with(&query_lower),
+            SymbolMatchMode::Contains => s.to_lowercase().contains(&query_lower),
+        })
+        .cloned()
+        .collect();
+
+    debug!(
+        query,
+        mode = ?mode,
+        candidate_count = matches.len(),
+        "resolve_symbol"
+    );
+
+    match matches.len() {
+        1 => Ok(matches.into_iter().next().expect("len==1")),
+        0 => Err(GraphError::SymbolNotFound(query.to_string())),
+        _ => Err(GraphError::MultipleCandidates {
+            query: query.to_string(),
+            candidates: matches,
+        }),
+    }
 }
 
 /// Strip scope prefixes from a callee name.
@@ -773,5 +820,71 @@ mod tests {
                 .iter()
                 .any(|(_, line, caller)| *line == 12 && caller == "main")
         );
+    }
+
+    // ---- resolve_symbol tests ----
+
+    fn known(names: &[&str]) -> Vec<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn test_resolve_symbol_exact_match() {
+        let syms = known(&["parse_config", "ParseConfig", "PARSE_CONFIG"]);
+        let result = resolve_symbol(syms.iter(), "parse_config", &SymbolMatchMode::Exact);
+        assert_eq!(result.unwrap(), "parse_config");
+    }
+
+    #[test]
+    fn test_resolve_symbol_exact_no_match() {
+        let syms = known(&["ParseConfig"]);
+        let err = resolve_symbol(syms.iter(), "parse_config", &SymbolMatchMode::Exact).unwrap_err();
+        assert!(matches!(err, GraphError::SymbolNotFound(_)));
+    }
+
+    #[test]
+    fn test_resolve_symbol_insensitive_match() {
+        let syms = known(&["ParseConfig", "other"]);
+        let result = resolve_symbol(syms.iter(), "parseconfig", &SymbolMatchMode::Insensitive);
+        assert_eq!(result.unwrap(), "ParseConfig");
+    }
+
+    #[test]
+    fn test_resolve_symbol_insensitive_no_match() {
+        let syms = known(&["unrelated"]);
+        let err =
+            resolve_symbol(syms.iter(), "parseconfig", &SymbolMatchMode::Insensitive).unwrap_err();
+        assert!(matches!(err, GraphError::SymbolNotFound(_)));
+    }
+
+    #[test]
+    fn test_resolve_symbol_prefix_single() {
+        let syms = known(&["parse_config", "parse_args", "build"]);
+        let result = resolve_symbol(syms.iter(), "build", &SymbolMatchMode::Prefix);
+        assert_eq!(result.unwrap(), "build");
+    }
+
+    #[test]
+    fn test_resolve_symbol_prefix_multiple_candidates() {
+        let syms = known(&["parse_config", "parse_args", "build"]);
+        let err = resolve_symbol(syms.iter(), "parse", &SymbolMatchMode::Prefix).unwrap_err();
+        assert!(matches!(err, GraphError::MultipleCandidates { .. }));
+        if let GraphError::MultipleCandidates { candidates, .. } = err {
+            assert_eq!(candidates.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_resolve_symbol_contains_single() {
+        let syms = known(&["parse_config", "build_artifact"]);
+        let result = resolve_symbol(syms.iter(), "config", &SymbolMatchMode::Contains);
+        assert_eq!(result.unwrap(), "parse_config");
+    }
+
+    #[test]
+    fn test_resolve_symbol_contains_no_match() {
+        let syms = known(&["parse_config", "build_artifact"]);
+        let err = resolve_symbol(syms.iter(), "deploy", &SymbolMatchMode::Contains).unwrap_err();
+        assert!(matches!(err, GraphError::SymbolNotFound(_)));
     }
 }

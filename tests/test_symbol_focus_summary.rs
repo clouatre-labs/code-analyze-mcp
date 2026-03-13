@@ -210,9 +210,11 @@ pub fn another_caller() {
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
+    use code_analyze_mcp::types::SymbolMatchMode;
     let output = analyze_focused_with_progress(
         root,
         "target_fn",
+        SymbolMatchMode::Exact,
         1,
         None,
         None,
@@ -274,9 +276,11 @@ pub fn another_caller() {
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
+    use code_analyze_mcp::types::SymbolMatchMode;
     let output = analyze_focused_with_progress(
         root,
         "target_fn",
+        SymbolMatchMode::Exact,
         1,
         None,
         None,

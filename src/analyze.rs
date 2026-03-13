@@ -6,12 +6,12 @@
 use crate::formatter::{
     format_file_details, format_focused, format_focused_summary, format_structure,
 };
-use crate::graph::{CallChain, CallGraph};
+use crate::graph::{CallChain, CallGraph, resolve_symbol};
 use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
-use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis};
+use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis, SymbolMatchMode};
 use rayon::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -277,6 +277,7 @@ pub struct FocusedAnalysisOutput {
 pub fn analyze_focused_with_progress(
     root: &Path,
     focus: &str,
+    match_mode: SymbolMatchMode,
     follow_depth: u32,
     max_depth: Option<u32>,
     ast_recursion_limit: Option<usize>,
@@ -364,10 +365,28 @@ pub fn analyze_focused_with_progress(
     // Build call graph
     let graph = CallGraph::build_from_results(analysis_results)?;
 
+    // Resolve symbol name using the requested match mode.
+    // For Exact mode this is a no-op when the symbol exists; for fuzzy modes it
+    // finds the canonical name or returns an informative error.
+    let all_known: Vec<String> = graph
+        .definitions
+        .keys()
+        .chain(graph.callers.keys())
+        .chain(graph.callees.keys())
+        .cloned()
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    let resolved_focus = resolve_symbol(all_known.iter(), focus, &match_mode)?;
+
     // Compute chain data for pagination (always, regardless of summary mode)
-    let def_count = graph.definitions.get(focus).map_or(0, |d| d.len());
-    let incoming_chains = graph.find_incoming_chains(focus, follow_depth)?;
-    let outgoing_chains = graph.find_outgoing_chains(focus, follow_depth)?;
+    let def_count = graph
+        .definitions
+        .get(&resolved_focus)
+        .map_or(0, |d| d.len());
+    let incoming_chains = graph.find_incoming_chains(&resolved_focus, follow_depth)?;
+    let outgoing_chains = graph.find_outgoing_chains(&resolved_focus, follow_depth)?;
 
     let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
         incoming_chains.into_iter().partition(|chain| {
@@ -379,9 +398,9 @@ pub fn analyze_focused_with_progress(
 
     // Format output
     let formatted = if use_summary {
-        format_focused_summary(&graph, focus, follow_depth, Some(root))?
+        format_focused_summary(&graph, &resolved_focus, follow_depth, Some(root))?
     } else {
-        format_focused(&graph, focus, follow_depth, Some(root))?
+        format_focused(&graph, &resolved_focus, follow_depth, Some(root))?
     };
 
     Ok(FocusedAnalysisOutput {
@@ -411,6 +430,7 @@ pub fn analyze_focused(
     analyze_focused_with_progress(
         root,
         focus,
+        SymbolMatchMode::Exact,
         follow_depth,
         max_depth,
         ast_recursion_limit,
