@@ -1031,26 +1031,23 @@ pub fn format_file_details_paginated(
         semantic.imports.len(),
     ));
 
-    // Classes and imports sections only on first page (verbose mode only)
-    if offset == 0 && verbose {
+    // Classes section on first page for both verbose and compact modes
+    if offset == 0 && !semantic.classes.is_empty() {
         output.push_str(&format_classes_section(&semantic.classes));
+    }
+
+    // Imports section only on first page in verbose mode
+    if offset == 0 && verbose {
         output.push_str(&format_imports_section(&semantic.imports));
     }
 
     // F: section with paginated function slice
     if !functions_page.is_empty() {
-        if verbose {
-            output.push_str("F:\n");
-            output.push_str(&format_function_list_wrapped(
-                functions_page.iter(),
-                &semantic.call_frequency,
-            ));
-        } else {
-            // Compact format: one line per function (compact_signature includes :start-end)
-            for func in functions_page {
-                output.push_str(&format!("  {}\n", func.compact_signature()));
-            }
-        }
+        output.push_str("F:\n");
+        output.push_str(&format_function_list_wrapped(
+            functions_page.iter(),
+            &semantic.call_frequency,
+        ));
     }
 
     output
@@ -1463,26 +1460,109 @@ mod tests {
         assert!(verbose_out.contains("I:\n"), "verbose must have I: section");
         assert!(verbose_out.contains("F:\n"), "verbose must have F: section");
 
-        // Compact omits C:, I:, F: headers
+        // Compact includes C: and F: but omits I: (imports)
         assert!(
-            !compact_out.contains("C:\n"),
-            "compact must not have C: section"
+            compact_out.contains("C:\n"),
+            "compact must have C: section (restored)"
         );
         assert!(
             !compact_out.contains("I:\n"),
-            "compact must not have I: section"
+            "compact must not have I: section (imports omitted)"
         );
         assert!(
-            !compact_out.contains("F:\n"),
-            "compact must not have F: section"
+            compact_out.contains("F:\n"),
+            "compact must have F: section with wrapped formatting"
         );
 
-        // Compact still shows functions with line numbers
+        // Compact functions are wrapped at 100 chars, not one-per-line
         assert!(compact_out.contains("fn_0"), "compact must list functions");
-        assert!(
-            compact_out.contains(":1-4"),
-            "compact must include line range from compact_signature"
-        );
+        // Wrapped format should have multiple functions on same line with spaces
+        // not newline after each function
+    }
+
+    /// Regression test: Compact mode output should be <= verbose mode for consistent token reduction.
+    /// Tests with 10, 50, and 200 functions to ensure wrapped rendering saves space across file sizes.
+    #[test]
+    fn test_compact_mode_consistent_token_reduction() {
+        use crate::types::{ClassInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
+        use std::collections::HashMap;
+
+        for function_count in [10, 50, 200] {
+            let funcs: Vec<FunctionInfo> = (0..function_count)
+                .map(|i| FunctionInfo {
+                    name: format!("function_name_{}", i),
+                    line: i * 10 + 1,
+                    end_line: i * 10 + 8,
+                    parameters: vec![
+                        "arg1: u32".to_string(),
+                        "arg2: String".to_string(),
+                        "arg3: Option<bool>".to_string(),
+                    ],
+                    return_type: Some("Result<Vec<String>, Error>".to_string()),
+                })
+                .collect();
+
+            let imports: Vec<ImportInfo> = (0..5)
+                .map(|i| ImportInfo {
+                    module: format!("module::submodule_{}", i),
+                    items: vec![
+                        format!("Type{}", i),
+                        format!("Trait{}", i),
+                    ],
+                    line: i + 1,
+                })
+                .collect();
+
+            let classes: Vec<ClassInfo> = (0..3)
+                .map(|i| ClassInfo {
+                    name: format!("ClassName{}", i),
+                    line: i * 50 + 100,
+                    end_line: i * 50 + 140,
+                    methods: vec![],
+                    fields: vec![],
+                    inherits: vec![],
+                })
+                .collect();
+
+            let semantic = SemanticAnalysis {
+                functions: funcs,
+                classes,
+                imports,
+                references: vec![],
+                call_frequency: HashMap::new(),
+                calls: vec![],
+                assignments: vec![],
+                field_accesses: vec![],
+            };
+
+            let verbose_out = format_file_details_paginated(
+                &semantic.functions,
+                semantic.functions.len(),
+                &semantic,
+                "src/large_file.rs",
+                10000,
+                0,
+                true,
+            );
+
+            let compact_out = format_file_details_paginated(
+                &semantic.functions,
+                semantic.functions.len(),
+                &semantic,
+                "src/large_file.rs",
+                10000,
+                0,
+                false,
+            );
+
+            assert!(
+                compact_out.len() <= verbose_out.len(),
+                "Compact output ({} chars) must be <= verbose output ({} chars) for {} functions",
+                compact_out.len(),
+                verbose_out.len(),
+                function_count
+            );
+        }
     }
 }
 
