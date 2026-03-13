@@ -607,8 +607,8 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut result =
-            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(no_cache_meta()));
+        let mut result = CallToolResult::success(vec![Content::text(final_text)])
+            .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
@@ -737,8 +737,8 @@ impl CodeAnalyzer {
             next_cursor,
         };
 
-        let mut result =
-            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(no_cache_meta()));
+        let mut result = CallToolResult::success(vec![Content::text(final_text)])
+            .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
@@ -863,8 +863,8 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut result =
-            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(no_cache_meta()));
+        let mut result = CallToolResult::success(vec![Content::text(final_text)])
+            .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
