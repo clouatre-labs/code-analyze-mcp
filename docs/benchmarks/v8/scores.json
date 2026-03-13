@@ -37,7 +37,7 @@
       "0": "Major components missing; fundamental misunderstanding of project structure"
     },
     "cross_module_tracing": {
-      "3": "Complete trace from SQL string through Tokenizer → Parser → Expression tree → Generator output; intermediate types (Token, TokenType, Expression subclass) identified at each stage; dialect override points noted",
+      "3": "Complete trace from SQL string through Tokenizer -> Parser -> Expression tree -> Generator output; intermediate types (Token, TokenType, Expression subclass) identified at each stage; dialect override points noted",
       "2": "Key stages present; minor gaps (e.g., optimizer pass not mentioned, or type at one stage missing)",
       "1": "Partial trace; missing multiple stages or intermediate types; pipeline not end-to-end",
       "0": "No meaningful trace or entirely incorrect"
@@ -60,140 +60,140 @@
       "structural_accuracy": 2,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 2,
+      "tool_efficiency": 1,
       "efficiency": {
-        "tool_calls_total": 9,
+        "tool_calls_total": 19,
         "mcp_calls": 0,
-        "native_calls": 9,
+        "native_calls": 17,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.1676,
+        "total_tokens": 947264
       }
     },
     "A2": {
       "structural_accuracy": 3,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 3,
+      "tool_efficiency": 0,
       "efficiency": {
-        "tool_calls_total": 2,
+        "tool_calls_total": 40,
         "mcp_calls": 0,
-        "native_calls": 2,
+        "native_calls": 37,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.5172,
+        "total_tokens": 2397459
       }
     },
     "A3": {
       "structural_accuracy": 2,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 3,
+      "tool_efficiency": 1,
       "efficiency": {
-        "tool_calls_total": 4,
+        "tool_calls_total": 20,
         "mcp_calls": 0,
-        "native_calls": 4,
+        "native_calls": 18,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.1817,
+        "total_tokens": 1183427
       }
     },
     "A4": {
       "structural_accuracy": 2,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 2,
+      "tool_efficiency": 1,
       "efficiency": {
-        "tool_calls_total": 9,
+        "tool_calls_total": 20,
         "mcp_calls": 0,
-        "native_calls": 9,
+        "native_calls": 18,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.1943,
+        "total_tokens": 1409010
       }
     },
     "A5": {
       "structural_accuracy": 3,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 2,
+      "tool_efficiency": 0,
       "efficiency": {
-        "tool_calls_total": 10,
+        "tool_calls_total": 22,
         "mcp_calls": 0,
-        "native_calls": 10,
+        "native_calls": 20,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.2987,
+        "total_tokens": 1837019
       }
     },
     "B1": {
       "structural_accuracy": 2,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 2,
+      "tool_efficiency": 0,
       "efficiency": {
-        "tool_calls_total": 7,
-        "mcp_calls": 3,
-        "native_calls": 4,
+        "tool_calls_total": 39,
+        "mcp_calls": 5,
+        "native_calls": 33,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.2992,
+        "total_tokens": 2299861
       }
     },
     "B2": {
       "structural_accuracy": 2,
       "cross_module_tracing": 2,
       "approach_quality": 3,
-      "tool_efficiency": 3,
+      "tool_efficiency": 1,
       "efficiency": {
-        "tool_calls_total": 5,
-        "mcp_calls": 3,
-        "native_calls": 2,
+        "tool_calls_total": 20,
+        "mcp_calls": 6,
+        "native_calls": 12,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.2085,
+        "total_tokens": 1386745
       }
     },
     "B3": {
       "structural_accuracy": 2,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 2,
+      "tool_efficiency": 1,
       "efficiency": {
-        "tool_calls_total": 6,
-        "mcp_calls": 3,
-        "native_calls": 3,
+        "tool_calls_total": 20,
+        "mcp_calls": 9,
+        "native_calls": 9,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.2669,
+        "total_tokens": 1501157
       }
     },
     "B4": {
       "structural_accuracy": 2,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 3,
+      "tool_efficiency": 0,
       "efficiency": {
-        "tool_calls_total": 5,
-        "mcp_calls": 3,
-        "native_calls": 2,
+        "tool_calls_total": 22,
+        "mcp_calls": 10,
+        "native_calls": 10,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.2827,
+        "total_tokens": 1631688
       }
     },
     "B5": {
       "structural_accuracy": 3,
       "cross_module_tracing": 3,
       "approach_quality": 3,
-      "tool_efficiency": 2,
+      "tool_efficiency": 0,
       "efficiency": {
-        "tool_calls_total": 7,
-        "mcp_calls": 3,
-        "native_calls": 4,
+        "tool_calls_total": 24,
+        "mcp_calls": 6,
+        "native_calls": 16,
         "valid_output": true,
-        "cost_usd": null,
-        "total_tokens": null
+        "cost_usd": 0.2995,
+        "total_tokens": 1842744
       }
     }
   },
@@ -205,6 +205,7 @@
       "effective_cost_per_qp = cost_usd / (quality_score * reliability)"
     ],
     "tool_call_analysis": "Median tool_calls_total per condition; mcp_calls vs native_calls ratio in B",
-    "composite_metric": "effective_cost_per_qp = cost_usd / (quality_score * reliability) where reliability = fraction of valid runs per condition"
+    "composite_metric": "effective_cost_per_qp = cost_usd / (quality_score * reliability) where reliability = fraction of valid runs per condition",
+    "cost_model": "Bedrock on-demand haiku-4-5: input=$0.80/M, cache_write=$1.00/M, cache_read=$0.08/M, output=$4.00/M"
   }
 }
