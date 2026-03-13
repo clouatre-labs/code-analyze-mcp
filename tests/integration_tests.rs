@@ -3300,3 +3300,33 @@ fn test_format_focused_paginated_unit() {
         "should have FOCUS header"
     );
 }
+
+#[test]
+fn test_call_tool_result_cache_hint_metadata() {
+    use rmcp::model::{CallToolResult, Content, Meta};
+    use serde_json::json;
+
+    // Construct Meta with cache_hint
+    let mut meta = serde_json::Map::new();
+    meta.insert(
+        "cache_hint".to_string(),
+        serde_json::Value::String("no-cache".to_string()),
+    );
+
+    // Create CallToolResult with metadata
+    let result =
+        CallToolResult::success(vec![Content::text("test output")]).with_meta(Some(Meta(meta)));
+
+    // Serialize to JSON
+    let json = serde_json::to_value(&result).expect("should serialize");
+
+    // Assert _meta.cache_hint == "no-cache"
+    assert_eq!(
+        json.get("_meta")
+            .and_then(|m| m.get("cache_hint"))
+            .and_then(|v| v.as_str()),
+        Some("no-cache"),
+        "Expected _meta.cache_hint to be 'no-cache' in serialized JSON: {}",
+        json
+    );
+}
