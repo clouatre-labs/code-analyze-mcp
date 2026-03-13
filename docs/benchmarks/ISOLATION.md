@@ -123,6 +123,18 @@ fact. `validate.py` detects it by scanning `content_json` for tool call records.
 
 6. Resume the benchmark at the next run in `run-order.txt`.
 
+## Required Benchmark Environment Variables
+
+All benchmark runs must set the following environment variables to ensure symmetric conditions:
+
+```bash
+export DISABLE_PROMPT_CACHING=1
+```
+
+**Rationale:** Bedrock and Claude Code both enable prompt caching by default. In single-session benchmark runs, the cache is written once and never read — a net +25% token cost overhead with no corresponding benefit. Disabling caching ensures cost measurements reflect tool efficiency, not cache overhead.
+
+All conditions must have `DISABLE_PROMPT_CACHING=1` set to avoid confounding the analysis with platform-specific caching behavior.
+
 ## Future Work
 
 The upstream fix is tracked at [block/goose#7808]. The proposed change adds `blocked_tools` to
