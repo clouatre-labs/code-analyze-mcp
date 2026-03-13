@@ -2,16 +2,8 @@ name: MCP Security Scan
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - ".github/workflows/mcp-scan.yml"
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -38,7 +30,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@d7ac6f694df60fb8ce48bab7b59ad5da1ac8d46e
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: "true"
 
       - name: Install mcp-scanner
         run: pip install cisco-ai-mcp-scanner==4.3.0
