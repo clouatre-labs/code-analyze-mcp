@@ -1564,6 +1564,50 @@ mod tests {
             );
         }
     }
+
+    /// Edge case test: Compact mode with empty classes should not emit C: header.
+    #[test]
+    fn test_compact_mode_empty_classes_no_header() {
+        use crate::types::{FunctionInfo, SemanticAnalysis};
+        use std::collections::HashMap;
+
+        let funcs: Vec<FunctionInfo> = (0..5)
+            .map(|i| FunctionInfo {
+                name: format!("fn_{}", i),
+                line: i * 5 + 1,
+                end_line: i * 5 + 4,
+                parameters: vec![],
+                return_type: None,
+            })
+            .collect();
+
+        let semantic = SemanticAnalysis {
+            functions: funcs,
+            classes: vec![], // Empty classes
+            imports: vec![],
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
+
+        let compact_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/simple.rs",
+            100,
+            0,
+            false,
+        );
+
+        // Should not have stray C: header when classes are empty
+        assert!(
+            !compact_out.contains("C:\n"),
+            "compact mode must not emit C: header when classes are empty"
+        );
+    }
 }
 
 fn format_classes_section(classes: &[ClassInfo]) -> String {
