@@ -1,1 +1,179 @@
-{}
+{
+  "run_id": "B2",
+  "condition": "B-treatment",
+  "module_map": [
+    {
+      "module": "expressions/",
+      "responsibility": "AST node definitions. Core expression types (Func, BinaryOp, Alias, etc.) with arg_types for type safety. Submodules: core.py (base Expression class), string.py (Levenshtein, Soundex, etc.), query.py (SELECT, INSERT, etc.), dml.py (UPDATE, DELETE), temporal.py (TIMESTAMP, DATE), array.py (ARRAY operations).",
+      "key_types": [
+        "Expression",
+        "Func",
+        "Binary",
+        "Levenshtein",
+        "Soundex",
+        "Select",
+        "Insert"
+      ]
+    },
+    {
+      "module": "parser.py",
+      "responsibility": "SQL string to AST. Consumes tokens, builds expression tree via recursive descent. ~425 functions for parsing distinct SQL constructs. Produces typed Expression instances. Dialect-specific behavior via dialect parsers in parsers/.",
+      "key_types": [
+        "Parser",
+        "ParseError",
+        "TokenType"
+      ]
+    },
+    {
+      "module": "generator.py",
+      "responsibility": "AST to SQL string. Traverses expression tree, generates dialect-specific SQL. ~454 generator methods mapping expression types to SQL generation. Handles quoting, formatting, and type-specific rendering.",
+      "key_types": [
+        "Generator",
+        "Expression output variants by dialect"
+      ]
+    },
+    {
+      "module": "tokens.py + tokenizer_core.py",
+      "responsibility": "Tokenization layer. Converts SQL string to token stream. Token types: IDENTIFIER, KEYWORD, NUMBER, STRING, OPERATOR, etc. tokenizer_core.py contains core lexing logic; tokens.py wraps it with dialect-specific rules.",
+      "key_types": [
+        "Token",
+        "TokenType",
+        "Tokenizer"
+      ]
+    },
+    {
+      "module": "dialects/",
+      "responsibility": "Dialect-specific parsing and generation. Each dialect file (bigquery.py, postgres.py, snowflake.py, etc.) subclasses Parser and Generator, overriding parsing rules and output formatting. Handles dialect-specific functions (e.g., EDITDISTANCE -> LEVENSHTEIN mapping).",
+      "key_types": [
+        "Dialect",
+        "Parser subclass per dialect",
+        "Generator subclass per dialect"
+      ]
+    },
+    {
+      "module": "optimizer/",
+      "responsibility": "AST transformation and optimization. Modules: annotate_types.py (type inference), qualify_columns.py (scope resolution), simplify.py (constant folding), push_predicates.py (WHERE optimization). Operates on expression trees post-parse.",
+      "key_types": [
+        "annotate_types",
+        "qualify_columns",
+        "simplify",
+        "scope"
+      ]
+    },
+    {
+      "module": "executor/",
+      "responsibility": "Query execution engine for standalone execution (no database). python.py interprets expressions into Python operations. context.py manages execution state. Limited to expressions, not full SQL semantics.",
+      "key_types": [
+        "PythonExecutor",
+        "ExecutionContext"
+      ]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. Tokenization",
+      "module": "tokens.py, tokenizer_core.py",
+      "key_function": "Tokenizer.tokenize(sql: str) -> List[Token]",
+      "types_produced": [
+        "Token (with TokenType, value, line, col)"
+      ]
+    },
+    {
+      "stage": "2. Parsing",
+      "module": "parser.py (+ dialects/[dialect].py for dialect-specific rules)",
+      "key_function": "Parser.parse(tokens: List[Token]) -> List[Expression]",
+      "types_produced": [
+        "Expression subclasses (Select, Insert, Func, Binary, Literal, etc.)"
+      ]
+    },
+    {
+      "stage": "3. Semantic Analysis (Optional)",
+      "module": "optimizer/",
+      "key_function": "optimizer.optimize(ast: Expression, schema: Schema) -> Expression",
+      "types_produced": [
+        "Annotated Expression tree (types inferred, columns qualified)"
+      ]
+    },
+    {
+      "stage": "4. Generation (Transpilation)",
+      "module": "generator.py (+ dialects/[dialect].py for dialect output rules)",
+      "key_function": "Generator.generate(ast: Expression) -> str",
+      "types_produced": [
+        "SQL string in target dialect"
+      ]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "expressions/core.py",
+      "inbound_deps": 18,
+      "outbound_deps": 3,
+      "reason": "Base class Expression. Imported by parser.py, generator.py, optimizer/* modules, and all expression submodules. Central hub; all AST work depends on it."
+    },
+    {
+      "module": "parser.py",
+      "inbound_deps": 14,
+      "outbound_deps": 8,
+      "reason": "Imports from expressions, tokens, errors, helper, time, trie. All dialect parsers inherit from it. Called by __init__.py public API. High coupling to tokenizer and expression modules."
+    },
+    {
+      "module": "dialects/dialect.py",
+      "inbound_deps": 16,
+      "outbound_deps": 7,
+      "reason": "Base Dialect class. All dialect implementations subclass it. Imported by parser.py, generator.py, tokens.py for dialect resolution. Central registry of all supported dialects."
+    },
+    {
+      "module": "generator.py",
+      "inbound_deps": 12,
+      "outbound_deps": 5,
+      "reason": "Depends on expressions core, helper, schema. Called by public transpile API. All dialect generators inherit from it. Generates SQL from AST."
+    },
+    {
+      "module": "optimizer/scope.py",
+      "inbound_deps": 9,
+      "outbound_deps": 6,
+      "reason": "Scope resolution for optimizer. Imported by qualify_columns.py, resolver.py, schema analysis. Complex interdependencies within optimizer module."
+    }
+  ],
+  "change_proposal": {
+    "files_to_modify": [
+      "sqlglot/expressions/string.py - Add LEVENSHTEIN(str1, str2, [max_distance], [ins_cost], [del_cost]) function class if not already present",
+      "sqlglot/parsers/*.py - Dialect-specific parsers that lack LEVENSHTEIN/EDITDISTANCE/LEVENSHTEINDISTANCE mapping (e.g., mysql.py, mariadb.py, sqlite.py)",
+      "sqlglot/dialects/*.py - Corresponding generator overrides for dialect-specific LEVENSHTEIN output (e.g., generate EDITDISTANCE for Snowflake)",
+      "tests/dialects/test_*.py - Add test cases for LEVENSHTEIN transpilation across dialects"
+    ],
+    "new_types": [
+      "Likely none - Levenshtein already exists in expressions/string.py with arg_types for (this, expression, ins_cost, del_cost, max_distance). May need to add max_distance support to dialects that lack it (e.g., Snowflake's EDITDISTANCE third arg)."
+    ],
+    "pattern_to_follow": "Follow Soundex/Levenshtein precedent: (1) Expression class in expressions/string.py defines arg_types with all variant parameters. (2) Each dialect parser adds FUNCTION_NAME -> Expression.from_arg_list entry in FUNCTIONS dict. (3) Each dialect generator adds case in sql_gen_method to output dialect-specific name and arguments. (4) Tests validate round-trip transpilation.",
+    "integration_point": "LEVENSHTEIN is already a hub function in sqlglot. New dialects or parameter variants hook into (1) parsers/[dialect].py FUNCTIONS mapping, (2) dialects/[dialect].py Generator.sql_* method override, (3) test fixtures for round-trip validation. No core pipeline changes needed.",
+    "risks": [
+      "Parameter variance across dialects: PostgreSQL uses LEVENSHTEIN(str1, str2), Snowflake EDITDISTANCE(str1, str2, [max_dist]), ClickHouse EDITDISTANCE(str1, str2). Cost parameters (ins_cost, del_cost) are dialect-specific. Ensure arg_types in Expression match all variants or add fallback.",
+      "NULL handling: Different dialects handle NULL arguments differently (some return NULL, some return distance). Optimizer/executor may need dialect-aware NULL semantics.",
+      "Performance: Levenshtein is O(n*m) in input length. Large string columns may not benefit from code-analyze tracing. No existing executor optimization visible; verify executor/python.py supports it.",
+      "Missing dialect coverage: SQLite, MariaDB, MySQL may lack native LEVENSHTEIN; transpilation to unsupported dialect may fail silently or produce incorrect output. Add error handling or downgrade to SOUNDEX if unavailable."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "analyze_directory",
+      "params": "path=/tmp/sqlglot, summary=true, max_depth=2 - mapped repo structure, identified 64 files across dialects, optimizer, executor"
+    },
+    {
+      "tool": "analyze_file",
+      "params": "path=/tmp/sqlglot/sqlglot/tokens.py, summary=true - extracted Tokenizer class, token flow, imports from tokenizer_core"
+    },
+    {
+      "tool": "analyze_symbol",
+      "params": "path=/tmp/sqlglot/sqlglot, symbol=Expression, follow_depth=1 - traced Expression base class definition in expressions/core.py"
+    },
+    {
+      "tool": "Bash grep",
+      "params": "grep -r 'LEVENSHTEIN|EDITDISTANCE|SOUNDEX' --include='*.py' - identified 27 references across 10 dialect files, tests, and generators. Found Levenshtein class in expressions/string.py with arg_types."
+    },
+    {
+      "tool": "Bash ls + file inspection",
+      "params": "Listed sqlglot/ structure: found expressions/ submodule, optimizer/, executor/, dialects/, parser.py, generator.py, tokens.py. Identified key files: expressions/string.py (Levenshtein definition), parsers/* (dialect-specific parsing)."
+    }
+  ]
+}
