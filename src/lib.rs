@@ -573,13 +573,14 @@ impl CodeAnalyzer {
             )
         })?;
 
-        if paginated.next_cursor.is_some() || offset > 0 {
+        let verbose = params.output_control.verbose.unwrap_or(false);
+        if paginated.next_cursor.is_some() || offset > 0 || !verbose {
             output.formatted = format_structure_paginated(
                 &paginated.items,
                 paginated.total,
                 params.max_depth,
                 Some(Path::new(&params.path)),
-                params.output_control.verbose.unwrap_or(false),
+                verbose,
             );
         }
 
@@ -691,7 +692,8 @@ impl CodeAnalyzer {
         })?;
 
         // Regenerate formatted output from the paginated slice when pagination is active
-        if paginated.next_cursor.is_some() || offset > 0 {
+        let verbose = params.output_control.verbose.unwrap_or(false);
+        if paginated.next_cursor.is_some() || offset > 0 || !verbose {
             formatted = format_file_details_paginated(
                 &paginated.items,
                 paginated.total,
@@ -699,7 +701,7 @@ impl CodeAnalyzer {
                 &params.path,
                 line_count,
                 offset,
-                params.output_control.verbose.unwrap_or(false),
+                verbose,
             );
         }
 
@@ -784,7 +786,8 @@ impl CodeAnalyzer {
                     page_size,
                 )?;
 
-                if paginated_next.is_some() || offset > 0 {
+                let verbose = params.output_control.verbose.unwrap_or(false);
+                if paginated_next.is_some() || offset > 0 || !verbose {
                     let base_path = Path::new(&params.path);
                     output.formatted = format_focused_paginated(
                         &paginated_items,
@@ -797,7 +800,7 @@ impl CodeAnalyzer {
                         output.def_count,
                         offset,
                         Some(base_path),
-                        params.output_control.verbose.unwrap_or(false),
+                        verbose,
                     );
                     paginated_next
                 } else {
@@ -812,7 +815,8 @@ impl CodeAnalyzer {
                     page_size,
                 )?;
 
-                if paginated_next.is_some() || offset > 0 {
+                let verbose = params.output_control.verbose.unwrap_or(false);
+                if paginated_next.is_some() || offset > 0 || !verbose {
                     let base_path = Path::new(&params.path);
                     output.formatted = format_focused_paginated(
                         &paginated_items,
@@ -825,7 +829,7 @@ impl CodeAnalyzer {
                         output.def_count,
                         offset,
                         Some(base_path),
-                        params.output_control.verbose.unwrap_or(false),
+                        verbose,
                     );
                     paginated_next
                 } else {

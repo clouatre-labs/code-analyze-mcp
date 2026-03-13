@@ -1002,7 +1002,8 @@ pub fn format_structure_paginated(
 }
 
 /// Format a paginated subset of functions for FileDetails mode.
-/// Shows classes and imports only on the first page (offset == 0).
+/// When `verbose=true`, shows classes and imports on the first page (offset == 0) with F:/C:/I: section headers.
+/// When `verbose=false` (default), omits section headers and renders one function per line with line ranges.
 /// Header shows position context: `FILE: path (NL, start-end/totalF, CC, II)`.
 #[instrument(skip_all)]
 pub fn format_file_details_paginated(
@@ -1086,9 +1087,8 @@ pub fn format_focused_paginated(
     def_count: usize,
     offset: usize,
     base_path: Option<&Path>,
-    verbose: bool,
+    _verbose: bool,
 ) -> String {
-    let _ = verbose;
     let start = offset + 1; // 1-indexed
     let end = offset + paginated_chains.len();
 
