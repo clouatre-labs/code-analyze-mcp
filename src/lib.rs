@@ -41,7 +41,7 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
     CallToolResult, CancelledNotificationParam, CompleteRequestParams, CompleteResult,
     CompletionInfo, Content, ErrorData, Implementation, InitializeResult, LoggingLevel,
-    LoggingMessageNotificationParam, Notification, NumberOrString, ProgressNotificationParam,
+    LoggingMessageNotificationParam, Meta, Notification, NumberOrString, ProgressNotificationParam,
     ProgressToken, ServerCapabilities, ServerNotification, SetLevelRequestParams,
 };
 use rmcp::service::{NotificationContext, RequestContext};
@@ -598,7 +598,13 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut result = CallToolResult::success(vec![Content::text(final_text)]);
+        let mut meta = serde_json::Map::new();
+        meta.insert(
+            "cache_hint".to_string(),
+            serde_json::Value::String("no-cache".to_string()),
+        );
+        let mut result =
+            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(Meta(meta)));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
@@ -727,7 +733,13 @@ impl CodeAnalyzer {
             next_cursor,
         };
 
-        let mut result = CallToolResult::success(vec![Content::text(final_text)]);
+        let mut meta = serde_json::Map::new();
+        meta.insert(
+            "cache_hint".to_string(),
+            serde_json::Value::String("no-cache".to_string()),
+        );
+        let mut result =
+            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(Meta(meta)));
         let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
@@ -852,7 +864,13 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut result = CallToolResult::success(vec![Content::text(final_text)]);
+        let mut meta = serde_json::Map::new();
+        meta.insert(
+            "cache_hint".to_string(),
+            serde_json::Value::String("no-cache".to_string()),
+        );
+        let mut result =
+            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(Meta(meta)));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
