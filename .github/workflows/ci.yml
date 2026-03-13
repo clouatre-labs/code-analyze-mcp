@@ -24,6 +24,25 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Detect file changes
+        uses: dorny/paths-filter@9d7afb8d214ad99e78fbd4247752c4caed2b6e4c # v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'tests/**'
+
   commitlint:
     name: Lint Commits
     runs-on: ubuntu-latest
@@ -62,6 +81,8 @@ jobs:
   format:
     name: Check Format
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -77,6 +98,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -96,6 +119,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -114,8 +139,9 @@ jobs:
   bench:
     name: Benchmark
     runs-on: ubuntu-latest
+    needs: changes
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
     timeout-minutes: 15
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -127,16 +153,14 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Compile benchmarks (PR)
-        if: github.event_name == 'pull_request'
-        run: cargo bench --no-run
-      - name: Run benchmarks (main)
-        if: github.ref == 'refs/heads/main'
+      - name: Run benchmarks
         run: cargo bench
 
   deny:
     name: Audit Dependencies
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -152,7 +176,7 @@ jobs:
     name: CI Result
     runs-on: ubuntu-latest
     if: always()
-    needs: [commitlint, check-base, format, lint, test, bench, deny]
+    needs: [changes, commitlint, check-base, format, lint, test, bench, deny]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
