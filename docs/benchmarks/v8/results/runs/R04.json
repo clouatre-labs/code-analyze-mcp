@@ -1,1 +1,177 @@
-{}
+{
+  "run_id": "B1",
+  "condition": "B-treatment",
+  "module_map": [
+    {
+      "module": "sqlglot/tokens.py",
+      "responsibility": "Lexical tokenization. Converts SQL string into Token stream using dialect-aware tokenizer rules.",
+      "key_types": [
+        "Token",
+        "TokenType",
+        "Tokenizer"
+      ]
+    },
+    {
+      "module": "sqlglot/parser.py",
+      "responsibility": "Syntax parsing. Builds AST from token stream using recursive descent parser. ~425 parse methods for different SQL constructs.",
+      "key_types": [
+        "Parser",
+        "Expr"
+      ]
+    },
+    {
+      "module": "sqlglot/expressions/",
+      "responsibility": "AST node types. Core.py defines Expr base class with arg_types. Submodules (string.py, functions.py, etc) define 500+ Expression subclasses (Soundex, Concat, etc).",
+      "key_types": [
+        "Expression",
+        "Func",
+        "Soundex",
+        "SoundexP123"
+      ]
+    },
+    {
+      "module": "sqlglot/generator.py",
+      "responsibility": "Code generation. Converts AST to target dialect SQL via 450+ methods (soundex_sql, concat_sql, etc). Dialect subclasses override for dialect-specific variants.",
+      "key_types": [
+        "Generator"
+      ]
+    },
+    {
+      "module": "sqlglot/dialects/",
+      "responsibility": "SQL dialect support. 25+ dialects (postgres.py, bigquery.py, etc). Each defines custom Parser and Generator subclasses to handle dialect-specific syntax and functions.",
+      "key_types": [
+        "Dialect",
+        "Postgres",
+        "BigQuery",
+        "MySQL"
+      ]
+    },
+    {
+      "module": "sqlglot/optimizer/",
+      "responsibility": "Query optimization. 15+ passes (qualify, pushdown_predicates, simplify, etc). Transforms AST to optimized form via rule application. Heavy use of expressions module.",
+      "key_types": [
+        "Optimizer rules"
+      ]
+    },
+    {
+      "module": "sqlglot/executor/",
+      "responsibility": "SQL execution engine. PythonExecutor evaluates optimized AST against data. Integrates schema, table types, and planner for execution context.",
+      "key_types": [
+        "PythonExecutor",
+        "Table",
+        "ExecutionContext"
+      ]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. Tokenization",
+      "module": "tokens.py",
+      "key_function": "Tokenizer.tokenize(sql: str) -> List[Token]",
+      "types_produced": [
+        "Token(type: TokenType, text: str)"
+      ]
+    },
+    {
+      "stage": "2. Parsing",
+      "module": "parser.py",
+      "key_function": "Parser.parse(tokens: List[Token], sql: str) -> List[Optional[Expr]]",
+      "types_produced": [
+        "Expr subclasses (Select, Soundex, Func, etc)"
+      ]
+    },
+    {
+      "stage": "3. AST Representation",
+      "module": "expressions/core.py",
+      "key_function": "Expr (base class with arg_types dict mapping child names to optional flags)",
+      "types_produced": [
+        "Expression tree with parent/child links, arg_key tracking"
+      ]
+    },
+    {
+      "stage": "4. Optimization (optional)",
+      "module": "optimizer/optimizer.py",
+      "key_function": "optimize(expr: Expr, schema: Schema, rules: Sequence) -> Expr",
+      "types_produced": [
+        "Optimized Expr tree (same types, transformed structure)"
+      ]
+    },
+    {
+      "stage": "5. Code Generation",
+      "module": "generator.py",
+      "key_function": "Generator.generate(expr: Expr, dialect: str) -> str",
+      "types_produced": [
+        "SQL string in target dialect"
+      ]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "expressions/core.py",
+      "inbound_deps": 28,
+      "outbound_deps": 5,
+      "reason": "Central hub: all AST nodes inherit from Expr. Parser, generator, optimizer all depend on it. Defines foundational arg_types contract and tree traversal."
+    },
+    {
+      "module": "dialects/dialect.py",
+      "inbound_deps": 22,
+      "outbound_deps": 12,
+      "reason": "Dialect registry and abstraction. Parser and Generator import for dialect-specific subclassing. Optimizer uses dialect context for type inference and transformations."
+    },
+    {
+      "module": "parser.py",
+      "inbound_deps": 15,
+      "outbound_deps": 18,
+      "reason": "Tokenizer integration point. Heavy use of TokenType enum. References all expression types. Dialect Parser subclasses override parse methods for syntax variants."
+    }
+  ],
+  "change_proposal": {
+    "files_to_modify": [
+      "sqlglot/expressions/string.py",
+      "sqlglot/parser.py (or dialect-specific parser if needed)",
+      "sqlglot/generator.py",
+      "sqlglot/dialects/dialect.py (if registering cross-dialect)"
+    ],
+    "new_types": [
+      "class Levenshtein(Expression, Func): arg_types = {'this': True, 'expression': True, 'max_distance': False} -- AST node for LEVENSHTEIN(str1, str2) calls"
+    ],
+    "pattern_to_follow": "Soundex and EditDistance follow minimal pattern: (1) Define class in expressions/string.py inheriting Expression and Func. (2) Parser recognizes LEVENSHTEIN token via TokenType enum (add if missing). (3) Generator provides levenshtein_sql(self, expression) -> str method returning target dialect syntax. (4) Dialect-specific generators override for variants (e.g., MySQL returns LEVENSHTEIN(...), Postgres may use custom UDF).",
+    "integration_point": "Parser.FUNCTIONS dict (parser.py ~line 300-400) maps 'LEVENSHTEIN' string to parser lambda. Most dialects inherit default. Dialect-specific overrides in PostgresParser, MySQLParser, etc. if needed.",
+    "risks": [
+      "TokenType enum expansion: ensure LEVENSHTEIN token doesn't conflict with reserved words in target dialects",
+      "Dialect variance: not all SQL dialects support LEVENSHTEIN natively; Postgres/MySQL do, BigQuery uses EDIT_DISTANCE; need per-dialect mapping in Generator",
+      "Function signature: some dialects use 2 args (str1, str2), others add threshold/max_distance; Levenshtein class design must support optional args",
+      "Performance: string distance on large datasets may be slow; no built-in optimization passes target string functions specifically"
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "analyze_directory",
+      "params": "path=/tmp/sqlglot, summary=true, max_depth=2 -- high-level repo structure overview"
+    },
+    {
+      "tool": "analyze_file",
+      "params": "path=/tmp/sqlglot/sqlglot/tokens.py, summary=true -- token system (Token, TokenType, Tokenizer classes)"
+    },
+    {
+      "tool": "analyze_symbol",
+      "params": "path=/tmp/sqlglot/sqlglot, symbol=parse, follow_depth=1 -- trace parse function definitions across modules (__init__, parser, dialects)"
+    },
+    {
+      "tool": "Grep",
+      "params": "pattern=class Soundex|SOUNDEX|EDITDISTANCE, path=/tmp/sqlglot -- find existing string function patterns"
+    },
+    {
+      "tool": "Bash",
+      "params": "grep -A 2 'class Soundex' sqlglot/expressions/string.py -- verify minimal class structure for string functions"
+    },
+    {
+      "tool": "Bash",
+      "params": "head -50 sqlglot/expressions/string.py -- see string.py import and class definition patterns"
+    },
+    {
+      "tool": "Bash",
+      "params": "find /tmp/sqlglot/sqlglot -type d -- enumerate subdirectories (dialects, optimizer, executor, expressions)"
+    }
+  ]
+}

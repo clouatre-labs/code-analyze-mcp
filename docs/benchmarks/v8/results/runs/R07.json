@@ -1,1 +1,207 @@
-{}
+{
+  "run_id": "B4",
+  "condition": "B-treatment",
+  "module_map": [
+    {
+      "module": "tokenizer_core.py / tokens.py",
+      "responsibility": "SQL tokenization into Token objects. Core lexical analysis.",
+      "key_types": [
+        "Token",
+        "TokenType enum (200+ types)",
+        "Tokenizer class"
+      ]
+    },
+    {
+      "module": "parser.py",
+      "responsibility": "Recursive-descent parser converting tokens to AST expressions. Defines Parser class with 425+ methods.",
+      "key_types": [
+        "Parser class",
+        "Expr (base AST node)",
+        "ParserError"
+      ]
+    },
+    {
+      "module": "expressions/ (string.py, arithmetic.py, etc.)",
+      "responsibility": "AST node types representing SQL constructs. ~1000+ Expression subclasses (e.g., Select, Levenshtein, Soundex).",
+      "key_types": [
+        "Expr (base)",
+        "Func (function base)",
+        "Levenshtein, Soundex, etc."
+      ]
+    },
+    {
+      "module": "generator.py",
+      "responsibility": "AST-to-SQL generation. Dialect-aware code generation with 454 methods for expression rendering.",
+      "key_types": [
+        "Generator class",
+        "dialect-specific generator subclasses"
+      ]
+    },
+    {
+      "module": "dialects/",
+      "responsibility": "Dialect-specific parsers and generators. 34 SQL dialects (BigQuery, Snowflake, Postgres, DuckDB, etc.).",
+      "key_types": [
+        "Dialect base class (2509L, 140 methods)",
+        "dialect.py Parser subclasses",
+        "dialect.py Generator subclasses"
+      ]
+    },
+    {
+      "module": "optimizer/",
+      "responsibility": "AST optimization and transformation (21 modules). Scope analysis, type annotation, simplification, join optimization.",
+      "key_types": [
+        "Scope (1008L)",
+        "Simplify (1711L, 103F)",
+        "QualifyColumns, AnnotateTypes, etc."
+      ]
+    },
+    {
+      "module": "executor/",
+      "responsibility": "Python execution engine for SQL AST. In-memory table execution, environment management.",
+      "key_types": [
+        "Executor (python.py, 432L)",
+        "Table (table.py, 157L)",
+        "Env (env.py, 246L)"
+      ]
+    },
+    {
+      "module": "__init__.py / helpers",
+      "responsibility": "Public API: parse, parse_one, transpile, tokenize. Schema, lineage, diff utilities.",
+      "key_types": [
+        "Expr (exported)",
+        "Schema, Lineage, Diff"
+      ]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. Tokenization",
+      "module": "tokens.py / tokenizer_core.py",
+      "key_function": "Tokenizer.tokenize(sql: str) -> List[Token]",
+      "types_produced": [
+        "Token(type: TokenType, text: str, line: int, col: int)"
+      ],
+      "details": "Converts raw SQL string to tokens. TokenType enum has 200+ types (SELECT, IDENTIFIER, NUMBER, etc.). Tokenizer is dialect-aware (e.g., SnowflakeTokenizer, BigQueryTokenizer)."
+    },
+    {
+      "stage": "2. Parsing",
+      "module": "parser.py",
+      "key_function": "Parser.parse(tokens: List[Token]) -> List[Expr]; Parser.parse_expression() (recursive descent)",
+      "types_produced": [
+        "Expr subclasses (Select, Func, Levenshtein, etc.)"
+      ],
+      "details": "Recursive-descent parser with 425 methods. Converts token stream to AST. Dialect-specific parsers override FUNCTIONS dict (e.g., SnowflakeParser maps 'EDITDISTANCE' -> exp.Levenshtein). Parser is stateful; maintains lookahead and expression stack."
+    },
+    {
+      "stage": "3. AST Nodes (Expressions)",
+      "module": "expressions/ (base Expr class + subclasses)",
+      "key_function": "Expr.from_arg_list(args) -> Expr; Func base class wraps SQL functions",
+      "types_produced": [
+        "Expr subtypes: Levenshtein, Soundex, Select, Join, Literal, Identifier, etc."
+      ],
+      "details": "Expr is a generic AST node with arg_types dict for validation. ~1000+ subclasses cover all SQL constructs. Levenshtein has args: {this, expression, ins_cost, del_cost, sub_cost, max_dist}. Soundex has args: {this}."
+    },
+    {
+      "stage": "4. Optimization (optional)",
+      "module": "optimizer/ (21 modules)",
+      "key_function": "optimize(expressions: List[Expr]) -> List[Expr]; orchestrated by optimizer.py",
+      "types_produced": [
+        "Expr (transformed)"
+      ],
+      "details": "Scope builds variable scope. Simplify rewrites expressions. QualifyColumns resolves ambiguities. AnnotateTypes infers data types. All return modified Expr AST."
+    },
+    {
+      "stage": "5. Dialect Code Generation",
+      "module": "generator.py + dialects/*.py",
+      "key_function": "Generator.generate(expression: Expr) -> str; dialect-specific transforms via TRANSFORMS dict",
+      "types_produced": [
+        "SQL string (dialect-specific)"
+      ],
+      "details": "Generator.TRANSFORMS maps Expr type -> lambda (self, expr) -> str. Dialects override (e.g., Snowflake maps exp.Levenshtein -> rename_func('EDITDISTANCE')). Emits SQL tailored to target dialect."
+    },
+    {
+      "stage": "6. Output SQL",
+      "module": "__init__.py (transpile API)",
+      "key_function": "transpile(sql: str, read: dialect, write: dialect) -> List[str]",
+      "types_produced": [
+        "SQL string (output)"
+      ],
+      "details": "Orchestrates parse -> [optional optimize] -> generate -> output. Entry point is sqlglot.transpile()."
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "expressions/ (Expr base + subclasses)",
+      "inbound_deps": 12,
+      "outbound_deps": 3,
+      "reason": "Core AST node hierarchy. Imported by parser (creates Expr), generator (traverses Expr), optimizer (transforms Expr), dialects (maps Expr -> SQL), executor (executes Expr). Central to all pipelines."
+    },
+    {
+      "module": "dialects/dialect.py",
+      "inbound_deps": 11,
+      "outbound_deps": 4,
+      "reason": "Base Dialect class. Defines FUNCTIONS, TRANSFORMS, reserved keywords. Every dialect imports from here. Generator depends on it for dialect dispatch. Parser inherits from it."
+    },
+    {
+      "module": "parser.py",
+      "inbound_deps": 9,
+      "outbound_deps": 5,
+      "reason": "Core parsing logic. Imported by __init__.py (public parse API), dialects (Parser subclasses), tests. Depends on tokens, expressions, errors."
+    },
+    {
+      "module": "generator.py",
+      "inbound_deps": 8,
+      "outbound_deps": 4,
+      "reason": "Core generation logic. Imported by __init__.py (public transpile API), dialects (Generator subclasses), executor. Depends on expressions, dialect base, transforms."
+    },
+    {
+      "module": "optimizer/ (scope.py, simplify.py)",
+      "inbound_deps": 7,
+      "outbound_deps": 4,
+      "reason": "AST transformation hub. Imported by __init__.py (optimize API), tests, external tools. Internal cross-dependencies (scope -> simplify, etc.). Depends on expressions, errors."
+    }
+  ],
+  "change_proposal": {
+    "files_to_modify": [
+      "/tmp/sqlglot/sqlglot/expressions/string.py (add Levenshtein class if not present; extend with LEVENSHTEIN dialect support)",
+      "/tmp/sqlglot/sqlglot/parsers/[dialect].py (add FUNCTIONS dict entry mapping 'LEVENSHTEIN' -> exp.Levenshtein)",
+      "/tmp/sqlglot/sqlglot/dialects/[dialect].py (add TRANSFORMS dict entry mapping exp.Levenshtein -> dialect-specific function name)",
+      "/tmp/sqlglot/sqlglot/parser.py (ensure base Parser.FUNCTIONS includes default LEVENSHTEIN mapping)"
+    ],
+    "new_types": [
+      "exp.Levenshtein already exists: arg_types = {this, expression, ins_cost, del_cost, sub_cost, max_dist}. Reuse existing type; no new class needed.",
+      "Optional: Create exp.LevenshteinDistance as alias if dialect variation requires it, but Levenshtein covers most use cases."
+    ],
+    "pattern_to_follow": "See EDITDISTANCE (Snowflake), LEVENSHTEIN_DISTANCE (Postgres, Presto), EDIT_DISTANCE (BigQuery, Exasol), EDITDIST3 (DuckDB, SQLite), LEVENSHTEINDISTANCE (ClickHouse). All map to exp.Levenshtein. Pattern: (1) Define parser function or use from_arg_list; (2) Register in FUNCTIONS dict; (3) Register generator output in TRANSFORMS dict using rename_func() or custom lambda.",
+    "integration_point": "1. Parser integration: Add 'LEVENSHTEIN' to Parser.FUNCTIONS (or dialect-specific FUNCTIONS override in parsers/[dialect].py). 2. Generator integration: Add exp.Levenshtein -> 'LEVENSHTEIN' mapping in dialects/[dialect].py TRANSFORMS. 3. Support max_dist arg (optional third arg) like Snowflake EDITDISTANCE does. 4. Type annotation: Add exp.Levenshtein to typing/__init__.py and typing/[dialect].py if needed.",
+    "risks": [
+      "Existing Levenshtein class already supports max_dist, ins_cost, del_cost, sub_cost. Risk: Some dialects don't support all args (BigQuery ignores ins_cost, del_cost, sub_cost; see unsupported_args decorator). Must use unsupported_args() wrapper in generator to suppress unsupported args and emit SQL correctly.",
+      "Naming collision: Different dialects use different names (EDITDISTANCE, LEVENSHTEIN, EDIT_DISTANCE, LEVENSHTEIN_DISTANCE). Risk: Parser must disambiguate on read (dialect.FUNCTIONS); generator must rename on write (TRANSFORMS). Mitigation: Use parser/generator overrides per dialect.",
+      "Arg mismatch: Postgres LEVENSHTEIN_LESS_EQUAL has extra cost args (ins_cost, del_cost, sub_cost). BigQuery EDIT_DISTANCE uses kwarg max_distance. Risk: Builder function must map args correctly (see parsers/postgres.py _build_levenshtein_less_equal). Mitigation: Custom builder function per dialect if needed.",
+      "Soundex & other functions: Similar pattern applies to Soundex, which already exists (exp.Soundex in expressions). Ensure consistency across string function registration.",
+      "No new test files: Must add/extend existing tests (tests/test_expressions.py, tests/test_parser.py, tests/test_transpile.py) to cover LEVENSHTEIN parsing and generation per dialect. Risk: New dialects without tests may not catch regressions."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "analyze_directory",
+      "params": "path=/tmp/sqlglot, max_depth=2, summary=true; path=/tmp/sqlglot/sqlglot, max_depth=1; path=/tmp/sqlglot/sqlglot/dialects, max_depth=1; path=/tmp/sqlglot/sqlglot/optimizer, max_depth=1; path=/tmp/sqlglot/sqlglot/executor, max_depth=1"
+    },
+    {
+      "tool": "analyze_symbol",
+      "params": "path=/tmp/sqlglot, symbol=parse, follow_depth=1; traces function call chains to understand entry points"
+    },
+    {
+      "tool": "analyze_file",
+      "params": "path=/tmp/sqlglot/sqlglot/__init__.py; analyzed public API (tokenize, parse, parse_one, transpile)"
+    },
+    {
+      "tool": "bash grep",
+      "params": "grep -r LEVENSHTEIN, EDITDISTANCE, SOUNDEX, EDITDISTANCE; found existing implementations in parsers and dialects to understand pattern"
+    },
+    {
+      "tool": "read",
+      "params": "path=/tmp/sqlglot/sqlglot/dialects/snowflake.py offset=1 limit=100; examined Snowflake dialect structure to understand TRANSFORMS dict and generator integration"
+    }
+  ]
+}

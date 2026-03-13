@@ -1,1 +1,184 @@
-{}
+{
+  "run_id": "R03",
+  "condition": "B-treatment",
+  "module_map": [
+    {
+      "module": "expressions/",
+      "responsibility": "AST node definitions for all SQL constructs. Hierarchical classes: Expression → Func → specific functions (e.g., Levenshtein, Soundex). Organized by domain: string.py, math.py, aggregate.py, temporal.py, query.py, dml.py.",
+      "key_types": ["Expression", "Func", "Levenshtein", "Soundex", "Binary"]
+    },
+    {
+      "module": "tokens.py",
+      "responsibility": "Token definitions and Tokenizer class. Wraps _TokenizerCore (external Rust engine via sqlglotrs). Manages dialect-specific token mappings and quoting rules.",
+      "key_types": ["Token", "TokenType", "Tokenizer", "_TokenizerBase"]
+    },
+    {
+      "module": "parser.py",
+      "responsibility": "SQL parser: consumes Token stream from Tokenizer, produces Expression AST tree. Handles dialect-specific parsing via function_parsers dict. 425+ functions, 9508 lines.",
+      "key_types": ["Parser", "Token stream to Expression tree"]
+    },
+    {
+      "module": "generator.py",
+      "responsibility": "SQL code generator: converts Expression tree back to SQL string. Dialect-specific generation via generate_* methods. 454+ functions, 5744 lines.",
+      "key_types": ["Generator", "Expression tree to SQL string"]
+    },
+    {
+      "module": "dialects/",
+      "responsibility": "Dialect-specific implementations. Each dialect (e.g., bigquery.py, postgres.py) extends Dialect, Parser, and Generator. Registers function name mappings (e.g., EDITDISTANCE to Levenshtein). Central hub: dialect.py (91,948 bytes).",
+      "key_types": ["Dialect", "DialectType", "dialect.py (registry)"]
+    },
+    {
+      "module": "optimizer/",
+      "responsibility": "AST optimization passes: scope analysis, type annotation, predicate pushdown, join elimination, etc. Operates on Expression trees. 15+ optimizer modules.",
+      "key_types": ["Scope", "TypeInfo"]
+    },
+    {
+      "module": "executor/",
+      "responsibility": "Python-based SQL execution engine. Interprets Expression trees and executes operations. Minimal use in core pipeline; optional feature.",
+      "key_types": ["Executor"]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. Tokenization",
+      "module": "tokens.py",
+      "key_function": "Tokenizer.tokenize(sql: str) returns List[Token]",
+      "description": "SQL string split into tokens using dialect-specific rules. Calls sqlglotrs (Rust backend) via _TokenizerCore.",
+      "types_produced": ["Token (contains type: TokenType, text: str, line: int, col: int)"]
+    },
+    {
+      "stage": "2. Parsing",
+      "module": "parser.py",
+      "key_function": "Parser.parse(tokens: List[Token]) returns List[Expression]",
+      "description": "Token stream consumed via recursive descent parsing. Dialect-specific function_parsers dict maps SQL func names (e.g., LEVENSHTEIN) to parser builders. Returns Expression tree.",
+      "types_produced": ["Expression (root)", "Select", "Levenshtein (for LEVENSHTEIN(str1, str2))", "Literal", "Identifier"]
+    },
+    {
+      "stage": "3. AST Construction",
+      "module": "expressions/core.py + domain modules",
+      "key_function": "Expression subclasses with arg_types dict",
+      "description": "Parser creates typed Expression nodes. Example: Levenshtein(this=Identifier(col1), expression=Identifier(col2)) with optional max_dist arg.",
+      "types_produced": ["Expression tree (fully typed AST)"]
+    },
+    {
+      "stage": "4. Optimization (optional)",
+      "module": "optimizer/",
+      "key_function": "optimize(ast: Expression, schema: Schema) returns Expression",
+      "description": "AST transformation passes. Type annotation, scope binding, predicate pushdown. Mutates Expression tree in place.",
+      "types_produced": ["Expression tree (optimized)"]
+    },
+    {
+      "stage": "5. Dialect-Specific Generation",
+      "module": "generator.py + dialects/",
+      "key_function": "Generator.generate(expr: Expression) returns str",
+      "description": "Expression tree traversed, generate_*() methods called per node type. Dialect subclasses override to emit dialect-specific SQL. Example: Levenshtein produces LEVENSHTEIN(...), EDITDISTANCE(...), or LEVENSHTEIN_DISTANCE(...).",
+      "types_produced": ["SQL string (dialect-native syntax)"]
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "dialects/dialect.py",
+      "inbound_deps": 35,
+      "outbound_deps": 8,
+      "reason": "Central registry. Every dialect imports Dialect base class. All parsers/generators inherit from its Parser/Generator. dialect.py imports from: expressions, parser, generator, tokens, errors, helper, jsonpath. Acts as dependency aggregator and factory (get_or_raise)."
+    },
+    {
+      "module": "expressions/",
+      "inbound_deps": 32,
+      "outbound_deps": 2,
+      "reason": "Core AST vocabulary. Imported by parser.py, generator.py, all dialects, all optimizers, executor. All language constructs (SELECT, Levenshtein, etc.) defined here. Minimal outbound: only core.py imports typing, helper."
+    },
+    {
+      "module": "parser.py",
+      "inbound_deps": 12,
+      "outbound_deps": 6,
+      "reason": "Pipeline entry point. Imported by: dialects/dialect.py, parsers/* (specializations), __init__.py (public API), tests. Outbound: tokens, expressions, errors, helper, trie, time."
+    }
+  ],
+  "change_proposal": {
+    "objective": "Add LEVENSHTEIN(str1, str2) as a canonical scalar function",
+    "files_to_modify": [
+      "/tmp/sqlglot/sqlglot/expressions/string.py",
+      "/tmp/sqlglot/sqlglot/parsers/base.py",
+      "/tmp/sqlglot/sqlglot/dialects/dialect.py",
+      "/tmp/sqlglot/sqlglot/dialects/postgres.py",
+      "/tmp/sqlglot/sqlglot/dialects/clickhouse.py",
+      "/tmp/sqlglot/sqlglot/dialects/snowflake.py",
+      "/tmp/sqlglot/sqlglot/tests/test_build.py"
+    ],
+    "new_types": [
+      "Levenshtein (already exists, line 74 in string.py) with optional ins_cost, del_cost, sub_cost, max_dist"
+    ],
+    "pattern_to_follow": "Levenshtein is the canonical type. Pattern: (1) Expression class in expressions/string.py with arg_types dict. (2) Parser function in parsers/base.py (function_parsers dict) maps SQL name to Expression builder. (3) Dialect specializations override parser (parsers/*) or generator (dialects/*) for dialect-specific syntax.",
+    "implementation_steps": [
+      {
+        "step": "1. Define canonical LEVENSHTEIN in parsers/base.py",
+        "details": "Add to Parser.FUNCTIONS dict: LEVENSHTEIN: exp.Levenshtein.from_arg_list (already in parsers/clickhouse.py, parsers/presto.py). Makes LEVENSHTEIN(str1, str2) parse to Levenshtein node."
+      },
+      {
+        "step": "2. Update generator.py",
+        "details": "Ensure levenshtein_sql() method exists and is called for Levenshtein nodes. Default: LEVENSHTEIN(' + args + ')'."
+      },
+      {
+        "step": "3. Add dialect overrides for non-standard naming",
+        "details": "dialects/snowflake.py: rename_func(EDITDISTANCE). dialects/presto.py: rename_func(LEVENSHTEIN_DISTANCE). dialects/clickhouse.py: already handles EDITDISTANCE."
+      },
+      {
+        "step": "4. Update tests",
+        "details": "tests/test_build.py: add test parsing SELECT LEVENSHTEIN(a, b) across dialects. Verify transpilation: postgres to clickhouse changes output correctly."
+      }
+    ],
+    "integration_point": "Levenshtein already in expression type system (expressions/string.py). Gaps: (1) Base parser may lack LEVENSHTEIN in function_parsers. (2) Generator may lack levenshtein_sql() or use fallback func_sql().",
+    "risks": [
+      "Risk 1: Name collision. LEVENSHTEIN is non-standard. Postgres: LEVENSHTEIN, ClickHouse: EDITDISTANCE, Presto: LEVENSHTEIN_DISTANCE. Solution: Levenshtein class supports via _sql_names or dialect TRANSFORMS.",
+      "Risk 2: Missing optional args (ins_cost, del_cost, sub_cost, max_dist). Solution: arg_types marks them False (optional); generator skips if None.",
+      "Risk 3: Generator fallback. If levenshtein_sql() missing, falls back to func_sql() outputting generic LEVENSHTEIN(...). Verify transpilation tests pass.",
+      "Risk 4: Parser registration conflicts. Different dialects may have conflicting parsers. Solution: dialects/dialect.py merges rules; last wins. Ensure base parsers/base.py LEVENSHTEIN doesn't conflict."
+    ],
+    "migration_checklist": [
+      "Verify exp.Levenshtein exists with arg_types (found at line 74-82 in expressions/string.py)",
+      "Check parsers/base.py for LEVENSHTEIN in Parser.FUNCTIONS",
+      "Check generator.py for levenshtein_sql() method",
+      "Test: sqlglot.parse_one(SELECT LEVENSHTEIN(a, b)) returns Levenshtein node",
+      "Test: transpile across dialects (postgres to clickhouse) matches dialect syntax",
+      "Review tests/test_transpile.py for LEVENSHTEIN coverage"
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "analyze_directory",
+      "params": "path=/tmp/sqlglot, summary=true, max_depth=2",
+      "findings": "Top-level modules: sqlglot (core), dialects/, optimizer/, executor/. 64 files, 50888 LOC."
+    },
+    {
+      "tool": "analyze_file (tokens.py)",
+      "params": "path=/tmp/sqlglot/sqlglot/tokens.py, summary=true",
+      "findings": "Tokenizer wraps _TokenizerCore (Rust). Methods: tokenize(sql: str). 2 classes, 8 functions, 587 LOC."
+    },
+    {
+      "tool": "analyze_symbol (parse)",
+      "params": "path=/tmp/sqlglot/sqlglot, symbol=parse, follow_depth=1",
+      "findings": "parse() in 6 files. Main: parser.py:1887 Parser.parse(). Public API: __init__.py:88."
+    },
+    {
+      "tool": "Grep (Levenshtein references)",
+      "params": "pattern=Levenshtein",
+      "findings": "Class at expressions/string.py:74. Used by: parsers/clickhouse.py, parsers/snowflake.py, parsers/postgres.py, parsers/drill.py, parsers/presto.py."
+    },
+    {
+      "tool": "Grep (cross-module imports)",
+      "params": "pattern=^from sqlglot import",
+      "findings": "110 files import from sqlglot. Top: expressions, Dialect, Parser, Generator, tokens. Confirms hub pattern."
+    },
+    {
+      "tool": "Read (expressions/__init__.py)",
+      "params": "Wildcard imports from submodules. ALL_FUNCTIONS registry via subclasses(). FUNCTION_BY_NAME built dynamically.",
+      "findings": "Central function registry system."
+    },
+    {
+      "tool": "Read (expressions/string.py)",
+      "params": "Levenshtein class at line 74-82.",
+      "findings": "arg_types: this (required), expression, ins_cost, del_cost, sub_cost, max_dist (optional)."
+    }
+  ]
+}

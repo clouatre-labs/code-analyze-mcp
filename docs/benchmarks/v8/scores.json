@@ -1,5 +1,6 @@
 {
   "experiment": "v8-benchmark",
+  "pinned_commit": "d5e6d965288c0929e0a4ef9a9db292fb28bbf3d1",
   "conditions": {
     "A-control": "Claude Code native tools only (Glob, Grep, Read, Bash)",
     "B-treatment": "Claude Code native tools + code-analyze-mcp (analyze_directory, analyze_file, analyze_symbol preferred)"
@@ -7,7 +8,12 @@
   "model": "claude-haiku-4-5",
   "temperature": 0.5,
   "target_repo": "tobymao/sqlglot",
-  "pinned_commit": null,
+  "hypothesis": {
+    "H1_quality": "Condition B produces higher total rubric scores than Condition A",
+    "H2_efficiency": "Condition B achieves equal or better quality with fewer total tokens",
+    "H3_cost_effectiveness": "Condition B achieves lower effective_cost_per_qp = cost_usd / (quality_score * reliability)",
+    "H0_null": "No significant difference in quality score distributions (Mann-Whitney U, alpha=0.05)"
+  },
   "blinding": {
     "method": "Random shuffle with seed=512, condition labels stripped before scoring; mapping revealed post-scoring",
     "mapping": {
@@ -23,16 +29,182 @@
       "R10": "A1"
     }
   },
+  "rubric": {
+    "structural_accuracy": {
+      "3": "Correctly identifies all major modules (expressions.py, tokens.py, parser.py, generator.py, dialects/, optimizer/, planner.py, executor/); responsibilities clearly defined; key types (Expression, Token, TokenType, Generator) accurately described",
+      "2": "Identifies most modules; minor omissions or slight generalization; core pipeline modules present",
+      "1": "Partial coverage; missing optimizer or executor; vague on Expression hierarchy depth",
+      "0": "Major components missing; fundamental misunderstanding of project structure"
+    },
+    "cross_module_tracing": {
+      "3": "Complete trace from SQL string through Tokenizer → Parser → Expression tree → Generator output; intermediate types (Token, TokenType, Expression subclass) identified at each stage; dialect override points noted",
+      "2": "Key stages present; minor gaps (e.g., optimizer pass not mentioned, or type at one stage missing)",
+      "1": "Partial trace; missing multiple stages or intermediate types; pipeline not end-to-end",
+      "0": "No meaningful trace or entirely incorrect"
+    },
+    "approach_quality": {
+      "3": "Change proposal identifies: correct files (expressions.py for new class, generator.py for levenshtein_sql method, dialect file for overrides); new Levenshtein Expression subclass; follows existing scalar function pattern (e.g., Soundex); integration via dialect's FUNCTIONS map; realistic risks (dialect support gap, type inference, test coverage)",
+      "2": "Reasonable proposal; most files and types identified; risks partially addressed",
+      "1": "Incomplete; missing files, wrong integration point, or no risk analysis",
+      "0": "Superficial or incorrect proposal"
+    },
+    "tool_efficiency": {
+      "3": "5 or fewer tool calls; focused exploration; clear synthesis path",
+      "2": "6-10 tool calls; somewhat exploratory but reaches conclusions",
+      "1": "11-20 tool calls; extensive exploration; delayed synthesis",
+      "0": "More than 20 tool calls; inefficient; redundant or circular exploration"
+    }
+  },
   "per_run_scores": {
-    "A1": null,
-    "A2": null,
-    "A3": null,
-    "A4": null,
-    "A5": null,
-    "B1": null,
-    "B2": null,
-    "B3": null,
-    "B4": null,
-    "B5": null
+    "A1": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "efficiency": {
+        "tool_calls_total": 9,
+        "mcp_calls": 0,
+        "native_calls": 9,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "A2": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "efficiency": {
+        "tool_calls_total": 2,
+        "mcp_calls": 0,
+        "native_calls": 2,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "A3": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "efficiency": {
+        "tool_calls_total": 4,
+        "mcp_calls": 0,
+        "native_calls": 4,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "A4": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "efficiency": {
+        "tool_calls_total": 9,
+        "mcp_calls": 0,
+        "native_calls": 9,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "A5": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "efficiency": {
+        "tool_calls_total": 10,
+        "mcp_calls": 0,
+        "native_calls": 10,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "B1": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "efficiency": {
+        "tool_calls_total": 7,
+        "mcp_calls": 3,
+        "native_calls": 4,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "B2": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 2,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "efficiency": {
+        "tool_calls_total": 5,
+        "mcp_calls": 3,
+        "native_calls": 2,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "B3": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "efficiency": {
+        "tool_calls_total": 6,
+        "mcp_calls": 3,
+        "native_calls": 3,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "B4": {
+      "structural_accuracy": 2,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 3,
+      "efficiency": {
+        "tool_calls_total": 5,
+        "mcp_calls": 3,
+        "native_calls": 2,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    },
+    "B5": {
+      "structural_accuracy": 3,
+      "cross_module_tracing": 3,
+      "approach_quality": 3,
+      "tool_efficiency": 2,
+      "efficiency": {
+        "tool_calls_total": 7,
+        "mcp_calls": 3,
+        "native_calls": 4,
+        "valid_output": true,
+        "cost_usd": null,
+        "total_tokens": null
+      }
+    }
+  },
+  "analysis_notes": {
+    "primary_outcome": "Quality score distribution (Mann-Whitney U on total scores)",
+    "secondary_outcomes": [
+      "total_tokens per condition",
+      "cost_usd per condition",
+      "effective_cost_per_qp = cost_usd / (quality_score * reliability)"
+    ],
+    "tool_call_analysis": "Median tool_calls_total per condition; mcp_calls vs native_calls ratio in B",
+    "composite_metric": "effective_cost_per_qp = cost_usd / (quality_score * reliability) where reliability = fraction of valid runs per condition"
   }
 }

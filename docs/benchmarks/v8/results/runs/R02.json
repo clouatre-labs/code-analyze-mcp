@@ -1,1 +1,164 @@
-{}
+{
+  "run_id": "A5",
+  "condition": "A-control",
+  "module_map": [
+    {
+      "module": "sqlglot.tokens",
+      "responsibility": "Tokenization layer - converts SQL strings into Token objects with token type classification. Manages keyword/operator recognition, string/identifier parsing, comment handling across dialects.",
+      "key_types": ["Token", "TokenType", "_TokenizerBase"]
+    },
+    {
+      "module": "sqlglot.parser",
+      "responsibility": "Parsing layer - converts token stream into abstract syntax tree (AST). Core orchestrator receiving tokens and producing Expression trees. Handles dialect-specific parsing via parser_class per dialect.",
+      "key_types": ["Parser", "Expression (as exp.*)"]
+    },
+    {
+      "module": "sqlglot.expressions.core",
+      "responsibility": "Expression hierarchy foundation - defines base Expression class and type system. All AST nodes derive from Expression. Contains builders for expressions, metadata, and traversal methods.",
+      "key_types": ["Expression", "Expr", "Func", "Binary"]
+    },
+    {
+      "module": "sqlglot.expressions.string",
+      "responsibility": "String function expressions - defines scalar function types for string operations (Length, Substring, Soundex, Levenshtein, RegexpExtract, etc.). No execution; only AST node definitions.",
+      "key_types": ["Soundex", "Levenshtein", "Substring", "Length"]
+    },
+    {
+      "module": "sqlglot.generator",
+      "responsibility": "Generation layer - converts AST back to SQL strings. TRANSFORMS dict maps Expression types to generator methods. Handles dialect-specific output formatting and quoting.",
+      "key_types": ["Generator", "TRANSFORMS dict"]
+    },
+    {
+      "module": "sqlglot.dialects.dialect",
+      "responsibility": "Dialect abstraction layer - factory for dialect instances, orchestrates parser_class and generator_class per dialect. Maps token types, keywords, functions per dialect.",
+      "key_types": ["Dialect", "Dialects"]
+    },
+    {
+      "module": "sqlglot.optimizer",
+      "responsibility": "Post-parse optimization layer - transforms AST for efficiency (pushdown predicates, eliminate subqueries, type annotation, qualification). Works on parsed Expression trees.",
+      "key_types": ["Expression trees with metadata"]
+    },
+    {
+      "module": "sqlglot.executor",
+      "responsibility": "Runtime execution engine - evaluates AST against data. Implements function evaluation, type coercion, aggregation. Separate from parsing/generation pipeline.",
+      "key_types": ["Expression nodes as instructions"]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. Tokenization",
+      "module": "sqlglot/tokens.py, sqlglot/tokenizer_core.py",
+      "key_function": "Tokenizer.tokenize(sql) via Dialect.tokenize(sql)",
+      "types_produced": ["List[Token]"],
+      "description": "SQL string → Token stream. Tokenizer (from _TokenizerBase subclass) breaks SQL into tokens with TokenType classification (KEYWORD, NUMBER, STRING, IDENTIFIER, OPERATOR, etc.)."
+    },
+    {
+      "stage": "2. Parsing",
+      "module": "sqlglot/parser.py",
+      "key_function": "Parser.parse(tokens) via Dialect.parse(sql)",
+      "types_produced": ["List[Expression]"],
+      "description": "Token stream → AST. Parser (from Parser subclass per dialect) consumes tokens and builds nested Expression trees. Calls _parse_* methods to recognize grammar rules, constructs Expr subclasses."
+    },
+    {
+      "stage": "3. Function Recognition",
+      "module": "sqlglot/parser.py (FUNCTIONS dict), sqlglot/expressions/",
+      "key_function": "Parser._parse_function() and FUNCTIONS mapping",
+      "types_produced": ["Expression subclass (e.g., exp.Levenshtein)"],
+      "description": "During parsing, function names matched via parser.FUNCTIONS[name] → builder function. Builder creates appropriate Expression subclass. For LEVENSHTEIN, creates exp.Levenshtein(this=arg1, expression=arg2, ...)."
+    },
+    {
+      "stage": "4. AST Traversal/Optimization (Optional)",
+      "module": "sqlglot/optimizer/",
+      "key_function": "optimize(tree) chains optimizers: annotate_types, pushdown_predicates, etc.",
+      "types_produced": ["Expression (modified in-place)"],
+      "description": "AST → optimized AST. Optimizers walk Expression tree and transform nodes. Type annotation adds metadata. Optional step; not required for generation."
+    },
+    {
+      "stage": "5. Code Generation",
+      "module": "sqlglot/generator.py",
+      "key_function": "Generator.generate(expression) → str",
+      "types_produced": ["str (SQL string)"],
+      "description": "AST → SQL string. Generator traverses Expression tree, looks up TRANSFORMS[type(expr)] → method, calls it to generate SQL fragment. Recursively processes child expressions. Dialect-specific TRANSFORMS dict determines output format."
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "sqlglot.expressions.core",
+      "inbound_deps": 28,
+      "outbound_deps": 12,
+      "reason": "Central hub. All modules import from expressions.core to use Expression base class, type system, and AST builders. Parser, Generator, Optimizer, Executor all depend on it. No other module is imported by as many modules."
+    },
+    {
+      "module": "sqlglot.parser",
+      "inbound_deps": 18,
+      "outbound_deps": 8,
+      "reason": "Parsing hub. Dialects import parser.Parser to extend for dialect-specific parsing. Tokenizer depends on parser for Token/TokenType. Schema, Lineage, Optimizer modules use Parser for AST construction helpers."
+    },
+    {
+      "module": "sqlglot.generator",
+      "inbound_deps": 15,
+      "outbound_deps": 6,
+      "reason": "Generation hub. All dialect generators subclass Generator. Transforms dict is central mapping. Dialects register custom TRANSFORMS to override parent behavior. Used by diff, transpile, and all output-generation paths."
+    }
+  ],
+  "change_proposal": {
+    "files_to_modify": [
+      "/tmp/sqlglot/sqlglot/expressions/string.py",
+      "/tmp/sqlglot/sqlglot/parser.py (dialects use this base)",
+      "/tmp/sqlglot/sqlglot/generator.py (dialects override TRANSFORMS)",
+      "/tmp/sqlglot/sqlglot/dialects/dialect.py (base dialect class)"
+    ],
+    "new_types": [
+      "LEVENSHTEIN already exists as exp.Levenshtein in expressions/string.py (lines 74-82). No new type needed; function is already defined with arg_types: this, expression, ins_cost, del_cost, sub_cost, max_dist."
+    ],
+    "pattern_to_follow": "Levenshtein is already implemented. Pattern: (1) Expression class in expressions/string.py defines arg_types (required and optional args). (2) Parser registers function name in FUNCTIONS dict or function_builders dict (dialect-specific). (3) Builder function creates exp.Levenshtein(...args). (4) Generator.TRANSFORMS[exp.Levenshtein] maps to method that outputs SQL. (5) Dialect subclasses override TRANSFORMS if dialect syntax differs.",
+    "integration_point": "1. Check Parser.FUNCTIONS dict for LEVENSHTEIN keyword → builder mapping. 2. If missing, add to parser class: FUNCTIONS['LEVENSHTEIN'] = build_levenshtein. 3. In Generator.TRANSFORMS, add exp.Levenshtein → lambda self, e: self.func('LEVENSHTEIN', e.this, e.args.get('expression'), ...). 4. For each dialect supporting LEVENSHTEIN, ensure dialect parser and generator override as needed.",
+    "risks": [
+      "Levenshtein is already defined in expressions.string but may not be wired into all dialects' FUNCTIONS dict. Risk: missing parser registrations means LEVENSHTEIN(...) parsed as Anonymous function, losing structure. Risk: missing generator method means fallback to generic func() output.",
+      "Dialect-specific syntax (e.g., Postgres vs MySQL Levenshtein) requires per-dialect overrides to handle arg order/names differences. Some dialects use levenshtein(), others use editdistance().",
+      "Adding new optional args (ins_cost, del_cost, sub_cost, max_dist) requires updating builder in parser and transpilation tests across all dialects that use Levenshtein. Some dialects may not support all args; need fallback/skipping.",
+      "No fundamental architectural risks; existing pattern is sound. Main practical risk is incomplete dialect support leading to loss of semantic meaning during transpilation between databases."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "Glob",
+      "params": "pattern=sqlglot/**/*.py; discovered expressions/, dialects/, optimizer/, executor/ structure"
+    },
+    {
+      "tool": "Bash",
+      "params": "ls -la /tmp/sqlglot/sqlglot/; verified top-level modules and directory structure"
+    },
+    {
+      "tool": "Bash",
+      "params": "rg 'from sqlglot|import sqlglot' /tmp/sqlglot/sqlglot --type py; identified cross-module import patterns"
+    },
+    {
+      "tool": "Read",
+      "params": "file_path=/tmp/sqlglot/sqlglot/parser.py lines 1-150; read parser module imports and function builder patterns (build_logarithm, build_like, build_hex, build_lower/upper)"
+    },
+    {
+      "tool": "Read",
+      "params": "file_path=/tmp/sqlglot/sqlglot/tokens.py lines 1-100; read tokenizer base class, Token/TokenType definitions and imports"
+    },
+    {
+      "tool": "Read",
+      "params": "file_path=/tmp/sqlglot/sqlglot/generator.py lines 1-150; read Generator class structure, TRANSFORMS dict pattern, unsupported_args decorator"
+    },
+    {
+      "tool": "Grep",
+      "params": "pattern='class.*Soundex|SOUNDEX' in expressions/; located Soundex and SoundexP123 function definitions"
+    },
+    {
+      "tool": "Read",
+      "params": "file_path=/tmp/sqlglot/sqlglot/expressions/string.py; full file; confirmed Levenshtein (74-82), Soundex (144-149), scalar function definition pattern"
+    },
+    {
+      "tool": "Read",
+      "params": "file_path=/tmp/sqlglot/sqlglot/__init__.py; read public API, tokenize/parse/transpile entry points, Dialect factory"
+    },
+    {
+      "tool": "Bash",
+      "params": "ls -la /tmp/sqlglot/sqlglot/optimizer/; verified optimizer module structure and component files"
+    }
+  ]
+}

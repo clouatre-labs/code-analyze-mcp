@@ -8,3 +8,4 @@
 8. Condition A, rep 3
 9. Condition B, rep 3
 10. Condition A, rep 1
+pinned_commit: d5e6d965288c0929e0a4ef9a9db292fb28bbf3d1

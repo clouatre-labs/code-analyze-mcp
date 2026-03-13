@@ -1,1 +1,157 @@
-{}
+{
+  "run_id": "A2",
+  "condition": "A-control",
+  "module_map": [
+    {
+      "module": "tokens.py",
+      "responsibility": "Token definitions and TokenType enum for lexical analysis output",
+      "key_types": ["Token", "TokenType"]
+    },
+    {
+      "module": "tokenizer_core.py",
+      "responsibility": "Lexical scanner: converts SQL string to Token list via character-by-character scanning",
+      "key_types": ["TokenizerCore", "List[Token]"]
+    },
+    {
+      "module": "parser.py",
+      "responsibility": "Syntax parser: consumes Token list and builds AST via recursive descent parsing; maintains function registry via FUNCTIONS dict mapping SQL names to Expression constructors",
+      "key_types": ["Parser", "List[Expression]", "FUNCTIONS dict"]
+    },
+    {
+      "module": "expressions/",
+      "responsibility": "Core AST node hierarchy; all SQL constructs as Expression subclasses (string.py, temporal.py, query.py, etc.); FUNCTION_BY_NAME registry auto-generated from Func subclasses",
+      "key_types": ["Expression (base)", "Func (function nodes)", "specific: Levenshtein, Soundex, Concat"]
+    },
+    {
+      "module": "generator.py",
+      "responsibility": "AST→SQL: converts Expression tree back to SQL string; dialect-aware via dispatch methods for each Expression type",
+      "key_types": ["Generator", "GeneratorMethod (dispatcher)", "str (output)"]
+    },
+    {
+      "module": "dialects/",
+      "responsibility": "Dialect-specific parsers/generators: extends Parser and Generator for SQL dialect variants (BigQuery, Snowflake, Spark, etc.); overrides FUNCTIONS, token handling, and generation methods",
+      "key_types": ["Dialect", "DialectType"]
+    },
+    {
+      "module": "optimizer/",
+      "responsibility": "Query optimization passes (simplify, qualify columns, pushdown predicates, etc.); transforms AST to equivalent optimized form",
+      "key_types": ["Expression (in/out)", "TypeAnnotator", "Scope"]
+    },
+    {
+      "module": "executor/",
+      "responsibility": "Query execution engine: evaluates optimized AST against data; Python-based runtime for DML/SELECT",
+      "key_types": ["Expression (in)", "Context", "RowReader", "data output"]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. Tokenization",
+      "module": "tokenizer_core.py + tokens.py",
+      "key_function": "Tokenizer.tokenize(sql: str) -> List[Token]",
+      "types_produced": ["Token (with TokenType, value, line, col, comments, etc.)"],
+      "flow": "SQL string scanned character-by-character; pattern matching identifies keywords, literals, operators; emits Token stream"
+    },
+    {
+      "stage": "2. Function/Type Lookup",
+      "module": "expressions/ + parser.py",
+      "key_function": "FUNCTION_BY_NAME = {name: func for func in ALL_FUNCTIONS for name in func.sql_names()}",
+      "types_produced": ["dict[str, type[Func]]"],
+      "flow": "Parser.FUNCTIONS merges FUNCTION_BY_NAME (Expression constructors) with custom builders (build_hex, build_logarithm, etc.); maps SQL function names to callable factories"
+    },
+    {
+      "stage": "3. Parsing",
+      "module": "parser.py",
+      "key_function": "Parser.parse(tokens: List[Token], sql: str) -> List[Optional[Expression]]",
+      "types_produced": ["Expression (base AST node)"],
+      "flow": "Recursive descent parser consumes token stream; builds AST via exp.* constructors; FUNCTIONS dict called to construct Func nodes for recognized functions"
+    },
+    {
+      "stage": "4. Optimization (optional)",
+      "module": "optimizer/",
+      "key_function": "optimizer.optimize(ast: Expression, read: Dialect, write: Dialect, ...) -> Expression",
+      "types_produced": ["Expression (optimized AST)"],
+      "flow": "Optimizer passes (annotate_types, qualify_columns, simplify, pushdown_predicates, etc.) transform AST in-place or return new tree; maintains semantic equivalence"
+    },
+    {
+      "stage": "5. Dialect Generation",
+      "module": "generator.py + dialects/",
+      "key_function": "Generator.generate(expression: Expression) -> str",
+      "types_produced": ["str (SQL output)"],
+      "flow": "Generator traverses AST; dispatches on expression.__class__.__name__ to find generator method (e.g., generator_levenshtein); concatenates SQL fragments; respects dialect-specific SQL syntax"
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "expressions (expressions/__init__.py + submodules)",
+      "inbound_deps": 21,
+      "outbound_deps": 2,
+      "reason": "Central AST node hierarchy. Parser, Generator, Optimizer, Dialects, Executor all depend on exp.* classes. Every SQL construct is an Expression. FUNCTION_BY_NAME registry (built via subclasses inspection) connects Expression to Parser. Expressions inherit from core classes (Expression, Func, Binary, etc.)."
+    },
+    {
+      "module": "generator.py",
+      "inbound_deps": 21,
+      "outbound_deps": 11,
+      "reason": "Converts Expression trees to SQL strings. Imported by Parser (for error generation), Dialects (subclass for dialect-specific output), __init__ (transpile API), Transforms, Optimizer (debugging), Executor (query execution). Contains Generator base class and unsupported_args decorator used across dialects."
+    },
+    {
+      "module": "parser.py",
+      "inbound_deps": 12,
+      "outbound_deps": 12,
+      "reason": "Entry point for SQL text→AST. Imported by Dialects (subclass for dialect-specific parsing), __init__ (parse API), Schema (reference only). FUNCTIONS dict bridges Expression constructors and Token stream. Uses tokens.TokenType, trie.TrieResult for keyword lookup, helper utilities."
+    }
+  ],
+  "change_proposal": {
+    "target_function": "LEVENSHTEIN(str1, str2, [ins_cost], [del_cost], [sub_cost], [max_dist])",
+    "status": "ALREADY IMPLEMENTED",
+    "implementation_summary": {
+      "already_exists": true,
+      "location": "/tmp/sqlglot/sqlglot/expressions/string.py, lines 74-82"
+    },
+    "existing_implementation": {
+      "expression_class": "Levenshtein(Expression, Func)",
+      "arg_types": {
+        "this": "required (str1)",
+        "expression": "optional (str2)",
+        "ins_cost": "optional (insertion cost)",
+        "del_cost": "optional (deletion cost)",
+        "sub_cost": "optional (substitution cost)",
+        "max_dist": "optional (maximum distance)"
+      },
+      "sql_names": "auto-derived from class name: ['LEVENSHTEIN']"
+    },
+    "pattern_for_new_functions": {
+      "step_1_expression_definition": "Add class in expressions/string.py (or appropriate submodule). Inherit from Expression and Func. Define arg_types dict mapping parameter names to (required, optional) bool. Set _sql_names list if aliases needed.",
+      "example": "class MyStringFunc(Expression, Func):\n    arg_types = {\"this\": True, \"expression\": False}\n    _sql_names = [\"MYFUNC\", \"MY_FUNCTION\"]",
+      "step_2_parser_registration": "Expression class auto-registered via FUNCTION_BY_NAME (no parser change needed unless custom builder required). If builder needed (e.g., multi-arg handling), add to Parser.FUNCTIONS dict in parser.py around line 289-382.",
+      "step_3_generator_dispatch": "Generator.generate() dispatches on expression.__class__.__name__. Add method generator_myfunction(self, expression) returning SQL string. Located in generator.py. Dialects subclass and override if needed.",
+      "step_4_dialect_overrides": "For dialect-specific SQL syntax, subclass Generator in dialects/dialect_name.py; override generator_myfunction() method."
+    },
+    "files_to_check_for_levenshtein": [
+      "/tmp/sqlglot/sqlglot/expressions/string.py (definition)",
+      "/tmp/sqlglot/sqlglot/generator.py (search for levenshtein_sql or dispatch logic)",
+      "/tmp/sqlglot/sqlglot/dialects/ (any dialect overrides)"
+    ],
+    "risks_for_new_functions": [
+      "Missing generator method → generate() will fail for function nodes (falls back to default Expression rendering)",
+      "Dialect mismatch → target SQL may not support function; override in dialects/ required",
+      "Type checking → Optimizer.annotate_types may not infer correct return type; add to optimizer/annotate_types.py if needed",
+      "Tokenizer → Dialect.tokenizer may need keyword registration if not auto-detected (e.g., new reserved words)"
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "Bash + grep/rg",
+      "params": "10 calls: locate files (ls -la), search imports (rg '^from|^import'), find FUNCTIONS dict line numbers (grep -n), search for specific functions (rg 'class.*Levenshtein')"
+    },
+    {
+      "tool": "Read",
+      "params": "5 calls: parser.py FUNCTIONS dict (lines 289-382), expressions/string.py Levenshtein class (lines 74-82), __init__.py pipeline entry points (lines 73-177), generator.py imports (lines 1-50)"
+    }
+  ],
+  "summary": {
+    "pipeline_architecture": "Strictly layered: Tokenizer (tokens.py → List[Token]) → Parser (parser.py uses FUNCTION_BY_NAME from expressions/) → Expression AST → Optimizer (optional, in-place transforms) → Generator (generator.py, dialect-aware dispatch) → SQL string. Dialects subclass Parser/Generator; executor/optimizer/schema provide utilities.",
+    "hub_pattern": "Three hubs (expressions, generator, parser) form a triangle: expressions are nodes, generator renders to SQL, parser consumes tokens. All other modules (dialects, optimizer, executor, schema) converge here. expressions is most connected (central node).",
+    "function_addition_pattern": "Define Expression subclass with arg_types → auto-registered in FUNCTION_BY_NAME via introspection → parser picks up via FUNCTIONS dict → generator must have corresponding method. Levenshtein already follows this pattern perfectly.",
+    "analysis_confidence": "High. Used only native tools (Bash, Read, Grep). Verified key files and code patterns. No private tools or environment assumptions."
+  }
+}
