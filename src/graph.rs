@@ -12,13 +12,27 @@ use tracing::{debug, instrument};
 /// Type info for a function: (path, line, parameters, return_type)
 type FunctionTypeInfo = (PathBuf, usize, Vec<String>, Option<String>);
 
+const MAX_CANDIDATES_IN_ERROR: usize = 20;
+
+fn format_candidates(candidates: &[String]) -> String {
+    if candidates.len() <= MAX_CANDIDATES_IN_ERROR {
+        candidates.join(", ")
+    } else {
+        format!(
+            "{}, (and {} more)",
+            candidates[..MAX_CANDIDATES_IN_ERROR].join(", "),
+            candidates.len() - MAX_CANDIDATES_IN_ERROR
+        )
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum GraphError {
     #[error("Symbol not found: '{symbol}'. {hint}")]
     SymbolNotFound { symbol: String, hint: String },
     #[error(
-        "Multiple candidates matched '{query}': {candidates}. Refine the symbol name or use a stricter match_mode.",
-        candidates = .candidates.join(", ")
+        "Multiple candidates matched '{query}': {candidates_display}. Refine the symbol name or use a stricter match_mode.",
+        candidates_display = format_candidates(.candidates)
     )]
     MultipleCandidates {
         query: String,
@@ -37,16 +51,23 @@ pub fn resolve_symbol<'a>(
     query: &str,
     mode: &SymbolMatchMode,
 ) -> Result<String, GraphError> {
-    let query_lower = query.to_lowercase();
-    let mut matches: Vec<String> = known_symbols
-        .filter(|s| match mode {
-            SymbolMatchMode::Exact => s.as_str() == query,
-            SymbolMatchMode::Insensitive => s.to_lowercase() == query_lower,
-            SymbolMatchMode::Prefix => s.to_lowercase().starts_with(&query_lower),
-            SymbolMatchMode::Contains => s.to_lowercase().contains(&query_lower),
-        })
-        .cloned()
-        .collect();
+    let mut matches: Vec<String> = if matches!(mode, SymbolMatchMode::Exact) {
+        known_symbols
+            .filter(|s| s.as_str() == query)
+            .cloned()
+            .collect()
+    } else {
+        let query_lower = query.to_lowercase();
+        known_symbols
+            .filter(|s| match mode {
+                SymbolMatchMode::Exact => unreachable!(),
+                SymbolMatchMode::Insensitive => s.to_lowercase() == query_lower,
+                SymbolMatchMode::Prefix => s.to_lowercase().starts_with(&query_lower),
+                SymbolMatchMode::Contains => s.to_lowercase().contains(&query_lower),
+            })
+            .cloned()
+            .collect()
+    };
     matches.sort();
 
     debug!(
@@ -430,7 +451,7 @@ impl CallGraph {
         if !self.definitions.contains_key(symbol) && !graph_map.contains_key(symbol) {
             return Err(GraphError::SymbolNotFound {
                 symbol: symbol.to_string(),
-                hint: "Try match_mode=insensitive for a case-insensitive search.".to_string(),
+                hint: "Symbol resolved but not found in graph. The symbol may have no calls or definitions in the indexed files.".to_string(),
             });
         }
 
@@ -883,7 +904,7 @@ mod tests {
     fn test_resolve_symbol_prefix_multiple_candidates() {
         let syms = known(&["parse_config", "parse_args", "build"]);
         let err = resolve_symbol(syms.iter(), "parse", &SymbolMatchMode::Prefix).unwrap_err();
-        assert!(matches!(err, GraphError::MultipleCandidates { .. }));
+        assert!(matches!(&err, GraphError::MultipleCandidates { .. }));
         if let GraphError::MultipleCandidates { candidates, .. } = err {
             assert_eq!(candidates.len(), 2);
         }

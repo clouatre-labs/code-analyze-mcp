@@ -366,19 +366,33 @@ pub fn analyze_focused_with_progress(
     let graph = CallGraph::build_from_results(analysis_results)?;
 
     // Resolve symbol name using the requested match mode.
-    // For Exact mode this is a no-op when the symbol exists; for fuzzy modes it
-    // finds the canonical name or returns an informative error.
-    let all_known: Vec<String> = graph
-        .definitions
-        .keys()
-        .chain(graph.callers.keys())
-        .chain(graph.callees.keys())
-        .cloned()
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect();
-
-    let resolved_focus = resolve_symbol(all_known.iter(), focus, &match_mode)?;
+    // Exact mode: check the graph directly without building a sorted set (O(1) lookups).
+    // Fuzzy modes: collect a sorted, deduplicated set of all known symbols for deterministic results.
+    let resolved_focus = if match_mode == SymbolMatchMode::Exact {
+        let exists = graph.definitions.contains_key(focus)
+            || graph.callers.contains_key(focus)
+            || graph.callees.contains_key(focus);
+        if exists {
+            focus.to_string()
+        } else {
+            return Err(crate::graph::GraphError::SymbolNotFound {
+                symbol: focus.to_string(),
+                hint: "Try match_mode=insensitive for a case-insensitive search.".to_string(),
+            }
+            .into());
+        }
+    } else {
+        let all_known: Vec<String> = graph
+            .definitions
+            .keys()
+            .chain(graph.callers.keys())
+            .chain(graph.callees.keys())
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        resolve_symbol(all_known.iter(), focus, &match_mode)?
+    };
 
     // Compute chain data for pagination (always, regardless of summary mode)
     let def_count = graph

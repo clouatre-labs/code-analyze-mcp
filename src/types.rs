@@ -57,7 +57,7 @@ pub struct AnalyzeFileParams {
 }
 
 /// Symbol name matching strategy for analyze_symbol.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SymbolMatchMode {
     /// Case-sensitive exact match (default). Preserves all existing behaviour.
