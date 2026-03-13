@@ -30,15 +30,15 @@ The loop continues until `stop_reason` is no longer `tool_use`. In practice, thi
 
 ```mermaid
 graph TD
-    A[Perception\nReceive Input / Tool Result] --> B[Planning\nDetermine Next Action]
+    A[Perception<br/>Receive Input / Tool Result] --> B[Planning<br/>Determine Next Action]
     B --> C{Action Type}
     C --> D[Call Tool]
     C --> E[Spawn Subagent]
     C --> F[Escalate to Human]
     C --> G[Return Final Response]
-    D --> H[Tool Execution\nReceive Result]
+    D --> H[Tool Execution<br/>Receive Result]
     E --> H
-    H --> I[Reflection\nEvaluate Result]
+    H --> I[Reflection<br/>Evaluate Result]
     I --> J{Task Complete?}
     J -- No --> A
     J -- Yes --> G
@@ -47,6 +47,42 @@ graph TD
 ```
 
 *Figure 1: The agentic loop: perception, planning, tool execution, and reflection cycle with escalation path.*
+
+The orchestrating code drives the loop by detecting `stop_reason`. When the model returns `tool_use`, dispatch each tool call and inject all results as a `tool_result` block before the next invocation:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+messages = [{"role": "user", "content": user_input}]
+
+while True:
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=4096,
+        tools=tools,
+        messages=messages,
+    )
+    messages.append({"role": "assistant", "content": response.content})
+
+    if response.stop_reason != "tool_use":
+        break  # terminal: end_turn, max_tokens, or stop_sequence
+
+    tool_results = []
+    for block in response.content:
+        if block.type == "tool_use":
+            result = dispatch_tool(block.name, block.input)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": result,
+            })
+    messages.append({"role": "user", "content": tool_results})
+
+final_text = next(b.text for b in response.content if b.type == "text")
+```
+
+*Code Snippet 1: Agentic loop in Python using the Anthropic SDK. Tool results are injected as a `tool_result` block before the next model call.*
 
 ### 1.2 When to Use Agents
 
@@ -78,7 +114,7 @@ The orchestrator is responsible for:
 ```mermaid
 graph TD
     U[User Request] --> O[Orchestrator Agent]
-    O --> P[Planning\nDecompose Task]
+    O --> P[Planning<br/>Decompose Task]
     P --> S1[Specialist: Search]
     P --> S2[Specialist: Analysis]
     P --> S3[Specialist: Formatting]
@@ -102,23 +138,27 @@ Choose between parallel and sequential delegation based on data dependencies bet
 
 ```mermaid
 graph TD
-    subgraph Sequential
-        T1[Task A] --> T2[Task B]
-        T2 --> T3[Task C]
-        T3 --> R1[Result]
-    end
+    START([Task Arrives]) --> DEP{Dependency<br/>Analysis}
 
-    subgraph Parallel
-        T4[Task A]
-        T5[Task B]
-        T6[Task C]
-        T4 --> R2[Aggregate]
-        T5 --> R2
-        T6 --> R2
-    end
+    DEP -->|"Independent subtasks<br/>no shared state"| PAR[Parallel Dispatch]
+    DEP -->|"Output A feeds Input B<br/>or shared mutable state"| SEQ[Sequential Pipeline]
+
+    PAR --> W1[Worker 1]
+    PAR --> W2[Worker 2]
+    PAR --> W3[Worker 3]
+    W1 --> AGG[Aggregate<br/>Handle partial failures]
+    W2 --> AGG
+    W3 --> AGG
+
+    SEQ --> S1[Step 1<br/>Validate input]
+    S1 --> S2[Step 2<br/>Enrich with context]
+    S2 --> S3[Step 3<br/>Produce output]
+
+    AGG --> DONE([Result])
+    S3 --> DONE
 ```
 
-*Figure 3: Sequential vs parallel execution patterns.*
+*Figure 3: Scheduling strategy derived from data dependency: independent subtasks dispatch in parallel; dependent subtasks form a sequential pipeline.*
 
 ### 2.3 Context Passing and Handoffs
 
@@ -131,6 +171,25 @@ Effective handoffs follow these rules:
 - Include the task description, relevant prior results, and any constraints or escalation criteria explicitly in the subagent's system prompt or first user message.
 - Do not pass raw tool outputs verbatim when a summary is sufficient. Summarization reduces token consumption without losing the information the subagent requires.
 
+A minimal structured handoff contains the task description, any prior results the subagent needs, explicit constraints, and escalation criteria:
+
+```json
+{
+  "task": "Summarize Q3 financial report",
+  "constraints": ["max 300 words", "focus on revenue and margins"],
+  "prior_results": {
+    "document_id": "doc_abc123",
+    "extracted_tables": ["revenue", "expenses"]
+  },
+  "escalation_criteria": {
+    "confidence_threshold": 0.85,
+    "escalate_on": ["missing_data", "conflicting_figures"]
+  }
+}
+```
+
+*Code Snippet 2: Structured subagent handoff. The subagent receives only what it needs; raw history and unrelated state are excluded.*
+
 ---
 
 ## 3. Model Context Protocol (MCP)
@@ -140,31 +199,6 @@ Effective handoffs follow these rules:
 MCP defines a client/server protocol through which a host application (the MCP client, typically Claude or a Claude-powered agent) discovers and calls tools, reads resources, and uses prompts exposed by an MCP server (MCP specification 2025-06-18, server/tools).
 
 The server exposes a catalog of tools. The client queries that catalog at session start and receives tool definitions including name, description, and input schema. When the model decides to use a tool, the client sends a tool call to the server, receives the result, and injects it into the conversation as a `tool_result` block.
-
-```mermaid
-graph TD
-    subgraph Host
-        A[Claude / Agent]
-        B[MCP Client]
-    end
-
-    subgraph MCP Server
-        C[Tool Registry]
-        D[Tool Executor]
-        E[Resource Store]
-    end
-
-    A --> B
-    B --> C[Discover Tools]
-    C --> B
-    B --> D[Execute Tool Call]
-    D --> B
-    B --> E[Read Resources]
-    E --> B
-    B --> A
-```
-
-*Figure 4: MCP client/server architecture showing tool discovery, execution, and resource access.*
 
 The server also exposes resources (arbitrary data identified by URI) and prompts (predefined instruction templates). Resources are read by the client and injected into context. Prompts are user-controlled templates that standardize instruction patterns across teams (MCP specification, server/resources; modelcontextprotocol.info, concepts/prompts).
 
@@ -235,7 +269,7 @@ Tool definitions in the Anthropic API require three fields: `name`, `description
 }
 ```
 
-*Code Snippet 1: Anthropic API tool definition with input_schema, required fields, and optional enum parameter.*
+*Code Snippet 3: Anthropic API tool definition with input_schema, required fields, and optional enum parameter.*
 
 The MCP specification extends this with an optional `outputSchema` field that documents the structure of the tool's return value. Defining an `outputSchema` enables downstream validation and allows orchestrators to verify that tool output matches expectations before injecting it into context (MCP specification 2025-06-18, server/tools).
 
@@ -265,7 +299,7 @@ The MCP specification extends this with an optional `outputSchema` field that do
 }
 ```
 
-*Code Snippet 2: MCP tool definition using inputSchema with format constraints.*
+*Code Snippet 4: MCP tool definition using inputSchema with format constraints.*
 
 ### 4.2 Specificity and Naming
 
@@ -298,7 +332,7 @@ The orchestrator uses the error category and retryable flag to drive retry logic
 }
 ```
 
-*Code Snippet 3: Structured error response with category, retryable flag, and user-facing message.*
+*Code Snippet 5: Structured error response with category, retryable flag, and user-facing message.*
 
 ### 4.4 Composition
 
@@ -393,7 +427,7 @@ graph TD
     I --> J[Alternative Path or Terminate]
 ```
 
-*Figure 5: Confidence-based routing decision flow with action risk tier and human review queue.*
+*Figure 4: Confidence-based routing decision flow with action risk tier and human review queue.*
 
 Maintain a comprehensive audit trail for all escalated decisions. Audit logs are required for regulatory compliance in financial and security-critical domains and provide the data needed to tune thresholds over time.
 
