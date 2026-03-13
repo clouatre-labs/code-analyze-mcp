@@ -131,7 +131,7 @@ All benchmark runs must set the following environment variables to ensure symmet
 export DISABLE_PROMPT_CACHING=1
 ```
 
-**Rationale:** Bedrock and Claude Code both enable prompt caching by default. In single-session benchmark runs, the cache is written once and never read — a net +25% token cost overhead with no corresponding benefit. Disabling caching ensures cost measurements reflect tool efficiency, not cache overhead.
+**Rationale:** Bedrock and Claude Code both enable prompt caching by default. In benchmark runs, caches are not reused across independent runs — cache_write overhead accumulates with limited cross-run cache_read benefit. Disabling caching ensures cost measurements reflect tool efficiency, not cache overhead.
 
 All conditions must have `DISABLE_PROMPT_CACHING=1` set to avoid confounding the analysis with platform-specific caching behavior.
 
