@@ -69,6 +69,15 @@ fn error_meta(
     }))
 }
 
+fn no_cache_meta() -> Meta {
+    let mut m = serde_json::Map::new();
+    m.insert(
+        "cache_hint".to_string(),
+        serde_json::Value::String("no-cache".to_string()),
+    );
+    Meta(m)
+}
+
 /// Helper function for paginating focus chains (callers or callees).
 /// Returns (items, re-encoded_cursor_option).
 fn paginate_focus_chains(
@@ -598,13 +607,8 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut meta = serde_json::Map::new();
-        meta.insert(
-            "cache_hint".to_string(),
-            serde_json::Value::String("no-cache".to_string()),
-        );
         let mut result =
-            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(Meta(meta)));
+            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
@@ -733,13 +737,8 @@ impl CodeAnalyzer {
             next_cursor,
         };
 
-        let mut meta = serde_json::Map::new();
-        meta.insert(
-            "cache_hint".to_string(),
-            serde_json::Value::String("no-cache".to_string()),
-        );
         let mut result =
-            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(Meta(meta)));
+            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
@@ -864,13 +863,8 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut meta = serde_json::Map::new();
-        meta.insert(
-            "cache_hint".to_string(),
-            serde_json::Value::String("no-cache".to_string()),
-        );
         let mut result =
-            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(Meta(meta)));
+            CallToolResult::success(vec![Content::text(final_text)]).with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
