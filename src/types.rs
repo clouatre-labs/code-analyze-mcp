@@ -56,13 +56,31 @@ pub struct AnalyzeFileParams {
     pub output_control: OutputControlParams,
 }
 
+/// Symbol name matching strategy for analyze_symbol.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SymbolMatchMode {
+    /// Case-sensitive exact match (default). Preserves all existing behaviour.
+    #[default]
+    Exact,
+    /// Case-insensitive exact match. Useful when casing is unknown.
+    Insensitive,
+    /// Case-insensitive prefix match. Returns all symbols whose name starts with the query.
+    Prefix,
+    /// Case-insensitive substring match. Returns all symbols whose name contains the query.
+    Contains,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeSymbolParams {
     /// Directory path to search for the symbol
     pub path: String,
 
-    /// Symbol name to build call graph for (function or method). Exact case-sensitive match required; searched across all files in the specified directory. Example: 'parse_config' finds all callers and callees of that function.
+    /// Symbol name to build call graph for (function or method). Example: 'parse_config' finds all callers and callees of that function.
     pub symbol: String,
+
+    /// Symbol matching mode (default: exact). exact: case-sensitive exact match. insensitive: case-insensitive exact match. prefix: case-insensitive prefix match. contains: case-insensitive substring match. When exact match fails, retry with insensitive. When prefix or contains returns multiple candidates, the response lists them so you can refine.
+    pub match_mode: Option<SymbolMatchMode>,
 
     /// Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2.
     pub follow_depth: Option<u32>,

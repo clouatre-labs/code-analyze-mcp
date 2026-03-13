@@ -324,6 +324,7 @@ impl CodeAnalyzer {
         let path_owned = path.to_path_buf();
         let max_depth = params.max_depth;
         let symbol_owned = params.symbol.clone();
+        let match_mode = params.match_mode.clone().unwrap_or_default();
         let ast_recursion_limit = params.ast_recursion_limit;
         let ct_clone = ct.clone();
 
@@ -342,6 +343,7 @@ impl CodeAnalyzer {
             analyze::analyze_focused_with_progress(
                 &path_owned,
                 &symbol_owned,
+                match_mode,
                 follow_depth,
                 max_depth,
                 ast_recursion_limit,
@@ -439,6 +441,7 @@ impl CodeAnalyzer {
         {
             let path_owned2 = Path::new(&params.path).to_path_buf();
             let symbol_owned2 = params.symbol.clone();
+            let match_mode2 = params.match_mode.clone().unwrap_or_default();
             let follow_depth2 = params.follow_depth.unwrap_or(1);
             let max_depth2 = params.max_depth;
             let ast_recursion_limit2 = params.ast_recursion_limit;
@@ -448,6 +451,7 @@ impl CodeAnalyzer {
                 analyze::analyze_focused_with_progress(
                     &path_owned2,
                     &symbol_owned2,
+                    match_mode2,
                     follow_depth2,
                     max_depth2,
                     ast_recursion_limit2,
@@ -732,7 +736,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. Symbol lookup is case-sensitive exact-match; myFunc and myfunc are different symbols. A symbol unknown to the graph (not defined and not referenced) returns an error; a symbol that is defined but has no callers or callees returns empty chains without error. follow_depth warning: each increment can multiply output size exponentially; use follow_depth=1 for production use; follow_depth=2+ only for targeted deep dives. Use cursor/page_size to paginate call chains when results exceed page_size. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep",
+        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. Default symbol lookup is case-sensitive exact-match (match_mode=exact); myFunc and myfunc are different symbols. If exact match fails, retry with match_mode=insensitive for a case-insensitive search. To list candidates matching a prefix, use match_mode=prefix. To find symbols containing a substring, use match_mode=contains. When prefix or contains matches multiple symbols, an error is returned listing all candidates so you can refine to a single match. A symbol unknown to the graph (not defined and not referenced) returns an error; a symbol that is defined but has no callers or callees returns empty chains without error. follow_depth warning: each increment can multiply output size exponentially; use follow_depth=1 for production use; follow_depth=2+ only for targeted deep dives. Use cursor/page_size to paginate call chains when results exceed page_size. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",

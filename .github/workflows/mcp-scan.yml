@@ -2,8 +2,13 @@ name: MCP Security Scan
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
