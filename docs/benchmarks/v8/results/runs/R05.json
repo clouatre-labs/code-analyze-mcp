@@ -1,41 +1,72 @@
 {
-  "run_id": "R05",
+  "run_id": "B2",
   "condition": "B-treatment",
   "module_map": [
     {
       "module": "expressions/",
       "responsibility": "AST node definitions. Core expression types (Func, BinaryOp, Alias, etc.) with arg_types for type safety. Submodules: core.py (base Expression class), string.py (Levenshtein, Soundex, etc.), query.py (SELECT, INSERT, etc.), dml.py (UPDATE, DELETE), temporal.py (TIMESTAMP, DATE), array.py (ARRAY operations).",
-      "key_types": ["Expression", "Func", "Binary", "Levenshtein", "Soundex", "Select", "Insert"]
+      "key_types": [
+        "Expression",
+        "Func",
+        "Binary",
+        "Levenshtein",
+        "Soundex",
+        "Select",
+        "Insert"
+      ]
     },
     {
       "module": "parser.py",
       "responsibility": "SQL string to AST. Consumes tokens, builds expression tree via recursive descent. ~425 functions for parsing distinct SQL constructs. Produces typed Expression instances. Dialect-specific behavior via dialect parsers in parsers/.",
-      "key_types": ["Parser", "ParseError", "TokenType"]
+      "key_types": [
+        "Parser",
+        "ParseError",
+        "TokenType"
+      ]
     },
     {
       "module": "generator.py",
       "responsibility": "AST to SQL string. Traverses expression tree, generates dialect-specific SQL. ~454 generator methods mapping expression types to SQL generation. Handles quoting, formatting, and type-specific rendering.",
-      "key_types": ["Generator", "Expression output variants by dialect"]
+      "key_types": [
+        "Generator",
+        "Expression output variants by dialect"
+      ]
     },
     {
       "module": "tokens.py + tokenizer_core.py",
       "responsibility": "Tokenization layer. Converts SQL string to token stream. Token types: IDENTIFIER, KEYWORD, NUMBER, STRING, OPERATOR, etc. tokenizer_core.py contains core lexing logic; tokens.py wraps it with dialect-specific rules.",
-      "key_types": ["Token", "TokenType", "Tokenizer"]
+      "key_types": [
+        "Token",
+        "TokenType",
+        "Tokenizer"
+      ]
     },
     {
       "module": "dialects/",
       "responsibility": "Dialect-specific parsing and generation. Each dialect file (bigquery.py, postgres.py, snowflake.py, etc.) subclasses Parser and Generator, overriding parsing rules and output formatting. Handles dialect-specific functions (e.g., EDITDISTANCE -> LEVENSHTEIN mapping).",
-      "key_types": ["Dialect", "Parser subclass per dialect", "Generator subclass per dialect"]
+      "key_types": [
+        "Dialect",
+        "Parser subclass per dialect",
+        "Generator subclass per dialect"
+      ]
     },
     {
       "module": "optimizer/",
       "responsibility": "AST transformation and optimization. Modules: annotate_types.py (type inference), qualify_columns.py (scope resolution), simplify.py (constant folding), push_predicates.py (WHERE optimization). Operates on expression trees post-parse.",
-      "key_types": ["annotate_types", "qualify_columns", "simplify", "scope"]
+      "key_types": [
+        "annotate_types",
+        "qualify_columns",
+        "simplify",
+        "scope"
+      ]
     },
     {
       "module": "executor/",
       "responsibility": "Query execution engine for standalone execution (no database). python.py interprets expressions into Python operations. context.py manages execution state. Limited to expressions, not full SQL semantics.",
-      "key_types": ["PythonExecutor", "ExecutionContext"]
+      "key_types": [
+        "PythonExecutor",
+        "ExecutionContext"
+      ]
     }
   ],
   "pipeline_trace": [
@@ -43,25 +74,33 @@
       "stage": "1. Tokenization",
       "module": "tokens.py, tokenizer_core.py",
       "key_function": "Tokenizer.tokenize(sql: str) -> List[Token]",
-      "types_produced": ["Token (with TokenType, value, line, col)"]
+      "types_produced": [
+        "Token (with TokenType, value, line, col)"
+      ]
     },
     {
       "stage": "2. Parsing",
       "module": "parser.py (+ dialects/[dialect].py for dialect-specific rules)",
       "key_function": "Parser.parse(tokens: List[Token]) -> List[Expression]",
-      "types_produced": ["Expression subclasses (Select, Insert, Func, Binary, Literal, etc.)"]
+      "types_produced": [
+        "Expression subclasses (Select, Insert, Func, Binary, Literal, etc.)"
+      ]
     },
     {
       "stage": "3. Semantic Analysis (Optional)",
       "module": "optimizer/",
       "key_function": "optimizer.optimize(ast: Expression, schema: Schema) -> Expression",
-      "types_produced": ["Annotated Expression tree (types inferred, columns qualified)"]
+      "types_produced": [
+        "Annotated Expression tree (types inferred, columns qualified)"
+      ]
     },
     {
       "stage": "4. Generation (Transpilation)",
       "module": "generator.py (+ dialects/[dialect].py for dialect output rules)",
       "key_function": "Generator.generate(ast: Expression) -> str",
-      "types_produced": ["SQL string in target dialect"]
+      "types_produced": [
+        "SQL string in target dialect"
+      ]
     }
   ],
   "cross_module_hubs": [

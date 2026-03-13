@@ -67,7 +67,8 @@
         "native_calls": 17,
         "valid_output": true,
         "cost_usd": 0.1676,
-        "total_tokens": 947264
+        "total_tokens": 947264,
+        "other_calls": 2
       }
     },
     "A2": {
@@ -81,7 +82,8 @@
         "native_calls": 37,
         "valid_output": true,
         "cost_usd": 0.5172,
-        "total_tokens": 2397459
+        "total_tokens": 2397459,
+        "other_calls": 3
       }
     },
     "A3": {
@@ -95,7 +97,8 @@
         "native_calls": 18,
         "valid_output": true,
         "cost_usd": 0.1817,
-        "total_tokens": 1183427
+        "total_tokens": 1183427,
+        "other_calls": 2
       }
     },
     "A4": {
@@ -109,7 +112,8 @@
         "native_calls": 18,
         "valid_output": true,
         "cost_usd": 0.1943,
-        "total_tokens": 1409010
+        "total_tokens": 1409010,
+        "other_calls": 2
       }
     },
     "A5": {
@@ -123,7 +127,8 @@
         "native_calls": 20,
         "valid_output": true,
         "cost_usd": 0.2987,
-        "total_tokens": 1837019
+        "total_tokens": 1837019,
+        "other_calls": 2
       }
     },
     "B1": {
@@ -137,7 +142,8 @@
         "native_calls": 33,
         "valid_output": true,
         "cost_usd": 0.2992,
-        "total_tokens": 2299861
+        "total_tokens": 2299861,
+        "other_calls": 1
       }
     },
     "B2": {
@@ -151,7 +157,8 @@
         "native_calls": 12,
         "valid_output": true,
         "cost_usd": 0.2085,
-        "total_tokens": 1386745
+        "total_tokens": 1386745,
+        "other_calls": 2
       }
     },
     "B3": {
@@ -165,7 +172,8 @@
         "native_calls": 9,
         "valid_output": true,
         "cost_usd": 0.2669,
-        "total_tokens": 1501157
+        "total_tokens": 1501157,
+        "other_calls": 2
       }
     },
     "B4": {
@@ -179,7 +187,8 @@
         "native_calls": 10,
         "valid_output": true,
         "cost_usd": 0.2827,
-        "total_tokens": 1631688
+        "total_tokens": 1631688,
+        "other_calls": 2
       }
     },
     "B5": {
@@ -193,7 +202,8 @@
         "native_calls": 16,
         "valid_output": true,
         "cost_usd": 0.2995,
-        "total_tokens": 1842744
+        "total_tokens": 1842744,
+        "other_calls": 2
       }
     }
   },
@@ -204,7 +214,7 @@
       "cost_usd per condition",
       "effective_cost_per_qp = cost_usd / (quality_score * reliability)"
     ],
-    "tool_call_analysis": "Median tool_calls_total per condition; mcp_calls vs native_calls ratio in B",
+    "tool_call_analysis": "Median tool_calls_total per condition; mcp_calls vs native_calls ratio in B. tool_calls_total = mcp_calls + native_calls + other_calls. other_calls covers Write, Edit, and housekeeping Bash (mkdir, cat-verify) \u2014 output-production steps excluded from the efficiency rubric.",
     "composite_metric": "effective_cost_per_qp = cost_usd / (quality_score * reliability) where reliability = fraction of valid runs per condition",
     "cost_model": "Bedrock on-demand haiku-4-5: input=$0.80/M, cache_write=$1.00/M, cache_read=$0.08/M, output=$4.00/M"
   }

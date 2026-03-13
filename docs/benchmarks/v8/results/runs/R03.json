@@ -1,41 +1,67 @@
 {
-  "run_id": "R03",
+  "run_id": "B5",
   "condition": "B-treatment",
   "module_map": [
     {
       "module": "expressions/",
-      "responsibility": "AST node definitions for all SQL constructs. Hierarchical classes: Expression → Func → specific functions (e.g., Levenshtein, Soundex). Organized by domain: string.py, math.py, aggregate.py, temporal.py, query.py, dml.py.",
-      "key_types": ["Expression", "Func", "Levenshtein", "Soundex", "Binary"]
+      "responsibility": "AST node definitions for all SQL constructs. Hierarchical classes: Expression \u2192 Func \u2192 specific functions (e.g., Levenshtein, Soundex). Organized by domain: string.py, math.py, aggregate.py, temporal.py, query.py, dml.py.",
+      "key_types": [
+        "Expression",
+        "Func",
+        "Levenshtein",
+        "Soundex",
+        "Binary"
+      ]
     },
     {
       "module": "tokens.py",
       "responsibility": "Token definitions and Tokenizer class. Wraps _TokenizerCore (external Rust engine via sqlglotrs). Manages dialect-specific token mappings and quoting rules.",
-      "key_types": ["Token", "TokenType", "Tokenizer", "_TokenizerBase"]
+      "key_types": [
+        "Token",
+        "TokenType",
+        "Tokenizer",
+        "_TokenizerBase"
+      ]
     },
     {
       "module": "parser.py",
       "responsibility": "SQL parser: consumes Token stream from Tokenizer, produces Expression AST tree. Handles dialect-specific parsing via function_parsers dict. 425+ functions, 9508 lines.",
-      "key_types": ["Parser", "Token stream to Expression tree"]
+      "key_types": [
+        "Parser",
+        "Token stream to Expression tree"
+      ]
     },
     {
       "module": "generator.py",
       "responsibility": "SQL code generator: converts Expression tree back to SQL string. Dialect-specific generation via generate_* methods. 454+ functions, 5744 lines.",
-      "key_types": ["Generator", "Expression tree to SQL string"]
+      "key_types": [
+        "Generator",
+        "Expression tree to SQL string"
+      ]
     },
     {
       "module": "dialects/",
       "responsibility": "Dialect-specific implementations. Each dialect (e.g., bigquery.py, postgres.py) extends Dialect, Parser, and Generator. Registers function name mappings (e.g., EDITDISTANCE to Levenshtein). Central hub: dialect.py (91,948 bytes).",
-      "key_types": ["Dialect", "DialectType", "dialect.py (registry)"]
+      "key_types": [
+        "Dialect",
+        "DialectType",
+        "dialect.py (registry)"
+      ]
     },
     {
       "module": "optimizer/",
       "responsibility": "AST optimization passes: scope analysis, type annotation, predicate pushdown, join elimination, etc. Operates on Expression trees. 15+ optimizer modules.",
-      "key_types": ["Scope", "TypeInfo"]
+      "key_types": [
+        "Scope",
+        "TypeInfo"
+      ]
     },
     {
       "module": "executor/",
       "responsibility": "Python-based SQL execution engine. Interprets Expression trees and executes operations. Minimal use in core pipeline; optional feature.",
-      "key_types": ["Executor"]
+      "key_types": [
+        "Executor"
+      ]
     }
   ],
   "pipeline_trace": [
@@ -44,35 +70,49 @@
       "module": "tokens.py",
       "key_function": "Tokenizer.tokenize(sql: str) returns List[Token]",
       "description": "SQL string split into tokens using dialect-specific rules. Calls sqlglotrs (Rust backend) via _TokenizerCore.",
-      "types_produced": ["Token (contains type: TokenType, text: str, line: int, col: int)"]
+      "types_produced": [
+        "Token (contains type: TokenType, text: str, line: int, col: int)"
+      ]
     },
     {
       "stage": "2. Parsing",
       "module": "parser.py",
       "key_function": "Parser.parse(tokens: List[Token]) returns List[Expression]",
       "description": "Token stream consumed via recursive descent parsing. Dialect-specific function_parsers dict maps SQL func names (e.g., LEVENSHTEIN) to parser builders. Returns Expression tree.",
-      "types_produced": ["Expression (root)", "Select", "Levenshtein (for LEVENSHTEIN(str1, str2))", "Literal", "Identifier"]
+      "types_produced": [
+        "Expression (root)",
+        "Select",
+        "Levenshtein (for LEVENSHTEIN(str1, str2))",
+        "Literal",
+        "Identifier"
+      ]
     },
     {
       "stage": "3. AST Construction",
       "module": "expressions/core.py + domain modules",
       "key_function": "Expression subclasses with arg_types dict",
       "description": "Parser creates typed Expression nodes. Example: Levenshtein(this=Identifier(col1), expression=Identifier(col2)) with optional max_dist arg.",
-      "types_produced": ["Expression tree (fully typed AST)"]
+      "types_produced": [
+        "Expression tree (fully typed AST)"
+      ]
     },
     {
       "stage": "4. Optimization (optional)",
       "module": "optimizer/",
       "key_function": "optimize(ast: Expression, schema: Schema) returns Expression",
       "description": "AST transformation passes. Type annotation, scope binding, predicate pushdown. Mutates Expression tree in place.",
-      "types_produced": ["Expression tree (optimized)"]
+      "types_produced": [
+        "Expression tree (optimized)"
+      ]
     },
     {
       "stage": "5. Dialect-Specific Generation",
       "module": "generator.py + dialects/",
       "key_function": "Generator.generate(expr: Expression) returns str",
       "description": "Expression tree traversed, generate_*() methods called per node type. Dialect subclasses override to emit dialect-specific SQL. Example: Levenshtein produces LEVENSHTEIN(...), EDITDISTANCE(...), or LEVENSHTEIN_DISTANCE(...).",
-      "types_produced": ["SQL string (dialect-native syntax)"]
+      "types_produced": [
+        "SQL string (dialect-native syntax)"
+      ]
     }
   ],
   "cross_module_hubs": [
