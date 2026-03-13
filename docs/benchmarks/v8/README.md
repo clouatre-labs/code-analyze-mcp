@@ -80,6 +80,8 @@ Mann-Whitney U=20.0, z=1.57, r=-0.60 (medium-large effect favouring A). N=5 per 
 
 B costs 63% more per quality point. Median total tokens: A=1.41M, B=1.63M (+16%). The cost premium comes from MCP responses writing more to the prompt cache (median cache_write: A=49K tokens, B=98K tokens), inflating cache_read costs on every subsequent turn.
 
+**Caching Confound:** v8 did not disable prompt caching (both conditions ran with Bedrock default-on caching). Caches are not reused across independent benchmark runs; cache_write overhead accumulates with limited within-run reuse benefit, disproportionately inflating the cost premium for Condition B which writes ~2x more to the cache. See v9 benchmark (#268) which repeats v8 with `DISABLE_PROMPT_CACHING=1` to isolate the MCP efficiency signal from the platform-specific caching overhead.
+
 ### Hypotheses
 
 | | Result |

@@ -861,7 +861,7 @@ impl ServerHandler for CodeAnalyzer {
             .with_description("MCP server for code structure analysis using tree-sitter");
         InitializeResult::new(capabilities)
             .with_server_info(server_info)
-            .with_instructions("Use analyze_directory to map a codebase (pass a directory). Use analyze_file to extract functions, classes, and imports from a specific file (pass a file path). Use analyze_symbol to trace call graphs for a named function or class (pass a directory and set symbol to the function name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes next_cursor, pass it back as cursor to retrieve the next page.")
+            .with_instructions("Use analyze_directory to map a codebase (pass a directory). Use analyze_file to extract functions, classes, and imports from a specific file (pass a file path). Use analyze_symbol to trace call graphs for a named function or class (pass a directory and set symbol to the function name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes a NEXT_CURSOR: line, pass that value back as cursor to retrieve the next page. For non-interactive single-session workflows (e.g. subagents), disable prompt caching to avoid redundant cache writes: DISABLE_PROMPT_CACHING=1.")
     }
 
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
