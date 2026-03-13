@@ -374,7 +374,7 @@ pub fn analyze_focused_with_progress(
         .chain(graph.callers.keys())
         .chain(graph.callees.keys())
         .cloned()
-        .collect::<std::collections::HashSet<_>>()
+        .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect();
 

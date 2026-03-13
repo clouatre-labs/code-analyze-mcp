@@ -14,8 +14,8 @@ type FunctionTypeInfo = (PathBuf, usize, Vec<String>, Option<String>);
 
 #[derive(Debug, Error)]
 pub enum GraphError {
-    #[error("Symbol not found: '{0}'. Try match_mode=insensitive for a case-insensitive search.")]
-    SymbolNotFound(String),
+    #[error("Symbol not found: '{symbol}'. {hint}")]
+    SymbolNotFound { symbol: String, hint: String },
     #[error(
         "Multiple candidates matched '{query}': {candidates}. Refine the symbol name or use a stricter match_mode.",
         candidates = .candidates.join(", ")
@@ -38,7 +38,7 @@ pub fn resolve_symbol<'a>(
     mode: &SymbolMatchMode,
 ) -> Result<String, GraphError> {
     let query_lower = query.to_lowercase();
-    let matches: Vec<String> = known_symbols
+    let mut matches: Vec<String> = known_symbols
         .filter(|s| match mode {
             SymbolMatchMode::Exact => s.as_str() == query,
             SymbolMatchMode::Insensitive => s.to_lowercase() == query_lower,
@@ -47,6 +47,7 @@ pub fn resolve_symbol<'a>(
         })
         .cloned()
         .collect();
+    matches.sort();
 
     debug!(
         query,
@@ -57,7 +58,18 @@ pub fn resolve_symbol<'a>(
 
     match matches.len() {
         1 => Ok(matches.into_iter().next().expect("len==1")),
-        0 => Err(GraphError::SymbolNotFound(query.to_string())),
+        0 => {
+            let hint = match mode {
+                SymbolMatchMode::Exact => {
+                    "Try match_mode=insensitive for a case-insensitive search.".to_string()
+                }
+                _ => "No symbols matched; try a shorter query or match_mode=contains.".to_string(),
+            };
+            Err(GraphError::SymbolNotFound {
+                symbol: query.to_string(),
+                hint,
+            })
+        }
         _ => Err(GraphError::MultipleCandidates {
             query: query.to_string(),
             candidates: matches,
@@ -416,7 +428,10 @@ impl CallGraph {
         };
 
         if !self.definitions.contains_key(symbol) && !graph_map.contains_key(symbol) {
-            return Err(GraphError::SymbolNotFound(symbol.to_string()));
+            return Err(GraphError::SymbolNotFound {
+                symbol: symbol.to_string(),
+                hint: "Try match_mode=insensitive for a case-insensitive search.".to_string(),
+            });
         }
 
         let mut chains = Vec::new();
@@ -839,7 +854,7 @@ mod tests {
     fn test_resolve_symbol_exact_no_match() {
         let syms = known(&["ParseConfig"]);
         let err = resolve_symbol(syms.iter(), "parse_config", &SymbolMatchMode::Exact).unwrap_err();
-        assert!(matches!(err, GraphError::SymbolNotFound(_)));
+        assert!(matches!(err, GraphError::SymbolNotFound { .. }));
     }
 
     #[test]
@@ -854,7 +869,7 @@ mod tests {
         let syms = known(&["unrelated"]);
         let err =
             resolve_symbol(syms.iter(), "parseconfig", &SymbolMatchMode::Insensitive).unwrap_err();
-        assert!(matches!(err, GraphError::SymbolNotFound(_)));
+        assert!(matches!(err, GraphError::SymbolNotFound { .. }));
     }
 
     #[test]
@@ -885,6 +900,6 @@ mod tests {
     fn test_resolve_symbol_contains_no_match() {
         let syms = known(&["parse_config", "build_artifact"]);
         let err = resolve_symbol(syms.iter(), "deploy", &SymbolMatchMode::Contains).unwrap_err();
-        assert!(matches!(err, GraphError::SymbolNotFound(_)));
+        assert!(matches!(err, GraphError::SymbolNotFound { .. }));
     }
 }
