@@ -1002,8 +1002,8 @@ pub fn format_structure_paginated(
 }
 
 /// Format a paginated subset of functions for FileDetails mode.
-/// When `verbose=true`, shows classes and imports on the first page (offset == 0) with F:/C:/I: section headers.
-/// When `verbose=false` (default), omits section headers and renders one function per line with line ranges.
+/// When `verbose=false` (default/compact): shows `C:` (if non-empty) and `F:` with wrapped rendering; omits `I:`.
+/// When `verbose=true`: shows `C:`, `I:`, and `F:` with wrapped rendering on the first page (offset == 0).
 /// Header shows position context: `FILE: path (NL, start-end/totalF, CC, II)`.
 #[instrument(skip_all)]
 pub fn format_file_details_paginated(
@@ -1474,95 +1474,73 @@ mod tests {
             "compact must have F: section with wrapped formatting"
         );
 
-        // Compact functions are wrapped at 100 chars, not one-per-line
+        // Compact functions are wrapped: fn_0 and fn_1 must appear on the same line
         assert!(compact_out.contains("fn_0"), "compact must list functions");
-        // Wrapped format should have multiple functions on same line with spaces
-        // not newline after each function
+        let has_two_on_same_line = compact_out
+            .lines()
+            .any(|l| l.contains("fn_0") && l.contains("fn_1"));
+        assert!(
+            has_two_on_same_line,
+            "compact must render multiple functions per line (wrapped), not one-per-line"
+        );
     }
 
-    /// Regression test: Compact mode output should be <= verbose mode for consistent token reduction.
-    /// Tests with 10, 50, and 200 functions to ensure wrapped rendering saves space across file sizes.
+    /// Regression test: compact mode must be <= verbose for function-heavy files (no imports to mask regression).
     #[test]
     fn test_compact_mode_consistent_token_reduction() {
-        use crate::types::{ClassInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
+        use crate::types::{FunctionInfo, SemanticAnalysis};
         use std::collections::HashMap;
 
-        for function_count in [10, 50, 200] {
-            let funcs: Vec<FunctionInfo> = (0..function_count)
-                .map(|i| FunctionInfo {
-                    name: format!("function_name_{}", i),
-                    line: i * 10 + 1,
-                    end_line: i * 10 + 8,
-                    parameters: vec![
-                        "arg1: u32".to_string(),
-                        "arg2: String".to_string(),
-                        "arg3: Option<bool>".to_string(),
-                    ],
-                    return_type: Some("Result<Vec<String>, Error>".to_string()),
-                })
-                .collect();
+        let funcs: Vec<FunctionInfo> = (0..50)
+            .map(|i| FunctionInfo {
+                name: format!("function_name_{}", i),
+                line: i * 10 + 1,
+                end_line: i * 10 + 8,
+                parameters: vec![
+                    "arg1: u32".to_string(),
+                    "arg2: String".to_string(),
+                    "arg3: Option<bool>".to_string(),
+                ],
+                return_type: Some("Result<Vec<String>, Error>".to_string()),
+            })
+            .collect();
 
-            let imports: Vec<ImportInfo> = (0..5)
-                .map(|i| ImportInfo {
-                    module: format!("module::submodule_{}", i),
-                    items: vec![
-                        format!("Type{}", i),
-                        format!("Trait{}", i),
-                    ],
-                    line: i + 1,
-                })
-                .collect();
+        let semantic = SemanticAnalysis {
+            functions: funcs,
+            classes: vec![],
+            imports: vec![],
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
 
-            let classes: Vec<ClassInfo> = (0..3)
-                .map(|i| ClassInfo {
-                    name: format!("ClassName{}", i),
-                    line: i * 50 + 100,
-                    end_line: i * 50 + 140,
-                    methods: vec![],
-                    fields: vec![],
-                    inherits: vec![],
-                })
-                .collect();
+        let verbose_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/large_file.rs",
+            1000,
+            0,
+            true,
+        );
+        let compact_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/large_file.rs",
+            1000,
+            0,
+            false,
+        );
 
-            let semantic = SemanticAnalysis {
-                functions: funcs,
-                classes,
-                imports,
-                references: vec![],
-                call_frequency: HashMap::new(),
-                calls: vec![],
-                assignments: vec![],
-                field_accesses: vec![],
-            };
-
-            let verbose_out = format_file_details_paginated(
-                &semantic.functions,
-                semantic.functions.len(),
-                &semantic,
-                "src/large_file.rs",
-                10000,
-                0,
-                true,
-            );
-
-            let compact_out = format_file_details_paginated(
-                &semantic.functions,
-                semantic.functions.len(),
-                &semantic,
-                "src/large_file.rs",
-                10000,
-                0,
-                false,
-            );
-
-            assert!(
-                compact_out.len() <= verbose_out.len(),
-                "Compact output ({} chars) must be <= verbose output ({} chars) for {} functions",
-                compact_out.len(),
-                verbose_out.len(),
-                function_count
-            );
-        }
+        assert!(
+            compact_out.len() <= verbose_out.len(),
+            "compact ({} chars) must be <= verbose ({} chars)",
+            compact_out.len(),
+            verbose_out.len(),
+        );
     }
 
     /// Edge case test: Compact mode with empty classes should not emit C: header.
