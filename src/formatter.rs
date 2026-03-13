@@ -960,6 +960,7 @@ pub fn format_structure_paginated(
     total_files: usize,
     max_depth: Option<u32>,
     base_path: Option<&Path>,
+    verbose: bool,
 ) -> String {
     let mut output = String::new();
 
@@ -978,14 +979,20 @@ pub fn format_structure_paginated(
     let test_files: Vec<&FileInfo> = paginated_files.iter().filter(|f| f.is_test).collect();
 
     if !prod_files.is_empty() {
-        output.push_str("FILES [LOC, FUNCTIONS, CLASSES]\n");
+        if verbose {
+            output.push_str("FILES [LOC, FUNCTIONS, CLASSES]\n");
+        }
         for file in &prod_files {
             output.push_str(&format_file_entry(file, base_path));
         }
     }
 
     if !test_files.is_empty() {
-        output.push_str("\nTEST FILES [LOC, FUNCTIONS, CLASSES]\n");
+        if verbose {
+            output.push_str("\nTEST FILES [LOC, FUNCTIONS, CLASSES]\n");
+        } else if !prod_files.is_empty() {
+            output.push('\n');
+        }
         for file in &test_files {
             output.push_str(&format_file_entry(file, base_path));
         }
@@ -1005,6 +1012,7 @@ pub fn format_file_details_paginated(
     path: &str,
     line_count: usize,
     offset: usize,
+    verbose: bool,
 ) -> String {
     let mut output = String::new();
 
@@ -1022,19 +1030,26 @@ pub fn format_file_details_paginated(
         semantic.imports.len(),
     ));
 
-    // Classes and imports sections only on first page
-    if offset == 0 {
+    // Classes and imports sections only on first page (verbose mode only)
+    if offset == 0 && verbose {
         output.push_str(&format_classes_section(&semantic.classes));
         output.push_str(&format_imports_section(&semantic.imports));
     }
 
     // F: section with paginated function slice
     if !functions_page.is_empty() {
-        output.push_str("F:\n");
-        output.push_str(&format_function_list_wrapped(
-            functions_page.iter(),
-            &semantic.call_frequency,
-        ));
+        if verbose {
+            output.push_str("F:\n");
+            output.push_str(&format_function_list_wrapped(
+                functions_page.iter(),
+                &semantic.call_frequency,
+            ));
+        } else {
+            // Compact format: one line per function (compact_signature includes :start-end)
+            for func in functions_page {
+                output.push_str(&format!("  {}\n", func.compact_signature()));
+            }
+        }
     }
 
     output
@@ -1071,7 +1086,9 @@ pub fn format_focused_paginated(
     def_count: usize,
     offset: usize,
     base_path: Option<&Path>,
+    verbose: bool,
 ) -> String {
+    let _ = verbose;
     let start = offset + 1; // 1-indexed
     let end = offset + paginated_chains.len();
 
@@ -1382,6 +1399,90 @@ mod tests {
         let result = format_function_list_wrapped(funcs.iter(), &freq);
         // Should contain bullet (U+2022) followed by count
         assert!(result.contains("\u{2022}5"));
+    }
+
+    #[test]
+    fn test_compact_format_omits_sections() {
+        use crate::types::{ClassInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
+        use std::collections::HashMap;
+
+        let funcs: Vec<FunctionInfo> = (0..10)
+            .map(|i| FunctionInfo {
+                name: format!("fn_{}", i),
+                line: i * 5 + 1,
+                end_line: i * 5 + 4,
+                parameters: vec![format!("x: u32")],
+                return_type: Some("bool".to_string()),
+            })
+            .collect();
+        let imports: Vec<ImportInfo> = vec![ImportInfo {
+            module: "std::collections".to_string(),
+            items: vec!["HashMap".to_string()],
+            line: 1,
+        }];
+        let classes: Vec<ClassInfo> = vec![ClassInfo {
+            name: "MyStruct".to_string(),
+            line: 5,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+        let semantic = SemanticAnalysis {
+            functions: funcs,
+            classes,
+            imports,
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
+
+        let verbose_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/lib.rs",
+            100,
+            0,
+            true,
+        );
+        let compact_out = format_file_details_paginated(
+            &semantic.functions,
+            semantic.functions.len(),
+            &semantic,
+            "src/lib.rs",
+            100,
+            0,
+            false,
+        );
+
+        // Verbose includes C:, I:, F: section headers
+        assert!(verbose_out.contains("C:\n"), "verbose must have C: section");
+        assert!(verbose_out.contains("I:\n"), "verbose must have I: section");
+        assert!(verbose_out.contains("F:\n"), "verbose must have F: section");
+
+        // Compact omits C:, I:, F: headers
+        assert!(
+            !compact_out.contains("C:\n"),
+            "compact must not have C: section"
+        );
+        assert!(
+            !compact_out.contains("I:\n"),
+            "compact must not have I: section"
+        );
+        assert!(
+            !compact_out.contains("F:\n"),
+            "compact must not have F: section"
+        );
+
+        // Compact still shows functions with line numbers
+        assert!(compact_out.contains("fn_0"), "compact must list functions");
+        assert!(
+            compact_out.contains(":1-4"),
+            "compact must include line range from compact_signature"
+        );
     }
 }
 

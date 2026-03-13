@@ -2866,6 +2866,7 @@ fn test_file_details_pagination_first_page() {
         "src/lib.rs",
         500,
         0,
+        true,
     );
 
     // Assert: header shows position, F: section present
@@ -2931,6 +2932,7 @@ fn test_file_details_pagination_last_page() {
         "src/lib.rs",
         500,
         10,
+        true,
     );
 
     // Assert: header shows correct range
@@ -3071,6 +3073,7 @@ fn test_symbol_focus_callers_pagination_second_page() {
             output.def_count,
             cursor_data.offset,
             Some(temp_dir.path()),
+            true,
         );
 
         // Assert: header shows correct range for page 2
@@ -3120,6 +3123,7 @@ fn test_symbol_focus_callees_pagination() {
             output.def_count,
             0,
             Some(temp_dir.path()),
+            true,
         );
 
         assert!(
@@ -3210,8 +3214,15 @@ fn test_format_file_details_paginated_unit() {
     };
 
     // Act: format page 2 (offset=10)
-    let formatted =
-        format_file_details_paginated(&page_functions, 30, &semantic, "src/formatter.rs", 750, 10);
+    let formatted = format_file_details_paginated(
+        &page_functions,
+        30,
+        &semantic,
+        "src/formatter.rs",
+        750,
+        10,
+        true,
+    );
 
     // Assert: header shows correct range
     assert!(
@@ -3275,6 +3286,7 @@ fn test_format_focused_paginated_unit() {
         1,
         0,
         None,
+        true,
     );
 
     // Assert: header present

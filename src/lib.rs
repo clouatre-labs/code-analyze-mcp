@@ -579,6 +579,7 @@ impl CodeAnalyzer {
                 paginated.total,
                 params.max_depth,
                 Some(Path::new(&params.path)),
+                params.output_control.verbose.unwrap_or(false),
             );
         }
 
@@ -698,6 +699,7 @@ impl CodeAnalyzer {
                 &params.path,
                 line_count,
                 offset,
+                params.output_control.verbose.unwrap_or(false),
             );
         }
 
@@ -795,6 +797,7 @@ impl CodeAnalyzer {
                         output.def_count,
                         offset,
                         Some(base_path),
+                        params.output_control.verbose.unwrap_or(false),
                     );
                     paginated_next
                 } else {
@@ -822,6 +825,7 @@ impl CodeAnalyzer {
                         output.def_count,
                         offset,
                         Some(base_path),
+                        params.output_control.verbose.unwrap_or(false),
                     );
                     paginated_next
                 } else {

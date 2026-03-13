@@ -22,6 +22,8 @@ pub struct OutputControlParams {
     pub force: Option<bool>,
     /// true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars.
     pub summary: Option<bool>,
+    /// true = full output with section headers and imports (Markdown-style); false or unset = compact one-line-per-item format (default).
+    pub verbose: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
