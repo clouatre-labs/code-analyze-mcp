@@ -34,3 +34,5 @@ Thumbs.db
 
 # Override global .gitignore to track MCP config
 !.mcp.json
+__pycache__/
+*.pyc
