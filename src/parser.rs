@@ -392,16 +392,6 @@ impl SemanticExtractor {
                 .ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))
         })?;
 
-        let mut functions = Vec::new();
-        let mut classes = Vec::new();
-        let mut imports = Vec::new();
-        let mut references = Vec::new();
-        let mut call_frequency = HashMap::new();
-        let mut calls = Vec::new();
-        let mut assignments: Vec<AssignmentInfo> = Vec::new();
-        let mut field_accesses: Vec<FieldAccessInfo> = Vec::new();
-
-        // Validate and convert ast_recursion_limit once
         let max_depth: Option<u32> = ast_recursion_limit
             .map(|limit| {
                 u32::try_from(limit).map_err(|_| {
@@ -414,31 +404,83 @@ impl SemanticExtractor {
             })
             .transpose()?;
 
-        // Extract functions and classes
         let compiled = get_compiled_queries(language)?;
+        let root = tree.root_node();
+
+        let mut functions = Vec::new();
+        let mut classes = Vec::new();
+        let mut imports = Vec::new();
+        let mut references = Vec::new();
+        let mut call_frequency = HashMap::new();
+        let mut calls = Vec::new();
+        let mut assignments: Vec<AssignmentInfo> = Vec::new();
+        let mut field_accesses: Vec<FieldAccessInfo> = Vec::new();
+
+        Self::extract_elements(
+            source,
+            compiled,
+            root,
+            max_depth,
+            &lang_info,
+            &mut functions,
+            &mut classes,
+        );
+        Self::extract_calls(
+            source,
+            compiled,
+            root,
+            max_depth,
+            &mut calls,
+            &mut call_frequency,
+        );
+        Self::extract_imports(source, compiled, root, max_depth, &mut imports);
+        Self::extract_impl_methods(source, compiled, root, max_depth, &mut classes);
+        Self::extract_references(source, compiled, root, max_depth, &mut references);
+        Self::extract_assignments(source, compiled, root, max_depth, &mut assignments);
+        Self::extract_field_accesses(source, compiled, root, max_depth, &mut field_accesses);
+
+        tracing::debug!(language = %language, functions = functions.len(), classes = classes.len(), imports = imports.len(), references = references.len(), calls = calls.len(), "extraction complete");
+
+        Ok(SemanticAnalysis {
+            functions,
+            classes,
+            imports,
+            references,
+            call_frequency,
+            calls,
+            assignments,
+            field_accesses,
+        })
+    }
+
+    fn extract_elements(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        max_depth: Option<u32>,
+        lang_info: &crate::languages::LanguageInfo,
+        functions: &mut Vec<FunctionInfo>,
+        classes: &mut Vec<ClassInfo>,
+    ) {
         let mut cursor = QueryCursor::new();
         if let Some(depth) = max_depth {
             cursor.set_max_start_depth(Some(depth));
         }
-
-        let mut matches = cursor.matches(&compiled.element, tree.root_node(), source.as_bytes());
+        let mut matches = cursor.matches(&compiled.element, root, source.as_bytes());
         let mut seen_functions = std::collections::HashSet::new();
 
         while let Some(mat) = matches.next() {
             for capture in mat.captures {
                 let capture_name = compiled.element.capture_names()[capture.index as usize];
                 let node = capture.node;
-
                 match capture_name {
                     "function" => {
                         if let Some(name_node) = node.child_by_field_name("name") {
                             let name =
                                 source[name_node.start_byte()..name_node.end_byte()].to_string();
                             let func_key = (name.clone(), node.start_position().row);
-
                             if !seen_functions.contains(&func_key) {
                                 seen_functions.insert(func_key);
-
                                 let params = node
                                     .child_by_field_name("parameters")
                                     .map(|p| source[p.start_byte()..p.end_byte()].to_string())
@@ -446,7 +488,6 @@ impl SemanticExtractor {
                                 let return_type = node
                                     .child_by_field_name("return_type")
                                     .map(|r| source[r.start_byte()..r.end_byte()].to_string());
-
                                 functions.push(FunctionInfo {
                                     name,
                                     line: node.start_position().row + 1,
@@ -484,284 +525,313 @@ impl SemanticExtractor {
                 }
             }
         }
+    }
 
-        // Extract calls
+    fn extract_calls(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        max_depth: Option<u32>,
+        calls: &mut Vec<CallInfo>,
+        call_frequency: &mut HashMap<String, usize>,
+    ) {
         let mut cursor = QueryCursor::new();
         if let Some(depth) = max_depth {
             cursor.set_max_start_depth(Some(depth));
         }
+        let mut matches = cursor.matches(&compiled.call, root, source.as_bytes());
 
-        let mut matches = cursor.matches(&compiled.call, tree.root_node(), source.as_bytes());
         while let Some(mat) = matches.next() {
             for capture in mat.captures {
                 let capture_name = compiled.call.capture_names()[capture.index as usize];
-                if capture_name == "call" {
+                if capture_name != "call" {
+                    continue;
+                }
+                let node = capture.node;
+                let call_name = source[node.start_byte()..node.end_byte()].to_string();
+                *call_frequency.entry(call_name.clone()).or_insert(0) += 1;
+
+                let mut current = node;
+                let mut caller = "<module>".to_string();
+                while let Some(parent) = current.parent() {
+                    if parent.kind() == "function_item"
+                        && let Some(name_node) = parent.child_by_field_name("name")
+                    {
+                        caller = source[name_node.start_byte()..name_node.end_byte()].to_string();
+                        break;
+                    }
+                    current = parent;
+                }
+
+                let mut arg_count = None;
+                let mut arg_node = node;
+                while let Some(parent) = arg_node.parent() {
+                    if parent.kind() == "call_expression" {
+                        if let Some(args) = parent.child_by_field_name("arguments") {
+                            arg_count = Some(args.named_child_count());
+                        }
+                        break;
+                    }
+                    arg_node = parent;
+                }
+
+                calls.push(CallInfo {
+                    caller,
+                    callee: call_name,
+                    line: node.start_position().row + 1,
+                    column: node.start_position().column,
+                    arg_count,
+                });
+            }
+        }
+    }
+
+    fn extract_imports(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        max_depth: Option<u32>,
+        imports: &mut Vec<ImportInfo>,
+    ) {
+        let Some(ref import_query) = compiled.import else {
+            return;
+        };
+        let mut cursor = QueryCursor::new();
+        if let Some(depth) = max_depth {
+            cursor.set_max_start_depth(Some(depth));
+        }
+        let mut matches = cursor.matches(import_query, root, source.as_bytes());
+
+        while let Some(mat) = matches.next() {
+            for capture in mat.captures {
+                let capture_name = import_query.capture_names()[capture.index as usize];
+                if capture_name == "import_path" {
                     let node = capture.node;
-                    let call_name = source[node.start_byte()..node.end_byte()].to_string();
-                    *call_frequency.entry(call_name.clone()).or_insert(0) += 1;
-
-                    // Find the enclosing function for this call
-                    let mut current = node;
-                    let mut caller = "<module>".to_string();
-                    while let Some(parent) = current.parent() {
-                        if parent.kind() == "function_item"
-                            && let Some(name_node) = parent.child_by_field_name("name")
-                        {
-                            caller =
-                                source[name_node.start_byte()..name_node.end_byte()].to_string();
-                            break;
-                        }
-                        current = parent;
-                    }
-
-                    // Extract argument count from call_expression
-                    let mut arg_count = None;
-                    let mut arg_node = node;
-                    while let Some(parent) = arg_node.parent() {
-                        if parent.kind() == "call_expression" {
-                            if let Some(args) = parent.child_by_field_name("arguments") {
-                                arg_count = Some(args.named_child_count());
-                            }
-                            break;
-                        }
-                        arg_node = parent;
-                    }
-
-                    calls.push(CallInfo {
-                        caller,
-                        callee: call_name,
-                        line: node.start_position().row + 1,
-                        column: node.start_position().column,
-                        arg_count,
-                    });
+                    let line = node.start_position().row + 1;
+                    extract_imports_from_node(&node, source, "", line, imports);
                 }
             }
         }
+    }
 
-        // Extract imports
-        if let Some(ref import_query) = compiled.import {
-            let mut cursor = QueryCursor::new();
-            if let Some(depth) = max_depth {
-                cursor.set_max_start_depth(Some(depth));
+    fn extract_impl_methods(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        max_depth: Option<u32>,
+        classes: &mut [ClassInfo],
+    ) {
+        let Some(ref impl_query) = compiled.impl_block else {
+            return;
+        };
+        let mut cursor = QueryCursor::new();
+        if let Some(depth) = max_depth {
+            cursor.set_max_start_depth(Some(depth));
+        }
+        let mut matches = cursor.matches(impl_query, root, source.as_bytes());
+
+        while let Some(mat) = matches.next() {
+            let mut impl_type_name = String::new();
+            let mut method_name = String::new();
+            let mut method_line = 0usize;
+            let mut method_end_line = 0usize;
+            let mut method_params = String::new();
+            let mut method_return_type: Option<String> = None;
+
+            for capture in mat.captures {
+                let capture_name = impl_query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                match capture_name {
+                    "impl_type" => {
+                        impl_type_name = source[node.start_byte()..node.end_byte()].to_string();
+                    }
+                    "method_name" => {
+                        method_name = source[node.start_byte()..node.end_byte()].to_string();
+                    }
+                    "method_params" => {
+                        method_params = source[node.start_byte()..node.end_byte()].to_string();
+                    }
+                    "method" => {
+                        method_line = node.start_position().row + 1;
+                        method_end_line = node.end_position().row + 1;
+                        method_return_type = node
+                            .child_by_field_name("return_type")
+                            .map(|r| source[r.start_byte()..r.end_byte()].to_string());
+                    }
+                    _ => {}
+                }
             }
 
-            let mut matches = cursor.matches(import_query, tree.root_node(), source.as_bytes());
-            while let Some(mat) = matches.next() {
-                for capture in mat.captures {
-                    let capture_name = import_query.capture_names()[capture.index as usize];
-                    if capture_name == "import_path" {
-                        let node = capture.node;
-                        let line = node.start_position().row + 1;
-                        extract_imports_from_node(&node, source, "", line, &mut imports);
-                    }
+            if !impl_type_name.is_empty() && !method_name.is_empty() {
+                let func = FunctionInfo {
+                    name: method_name,
+                    line: method_line,
+                    end_line: method_end_line,
+                    parameters: if method_params.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![method_params]
+                    },
+                    return_type: method_return_type,
+                };
+                if let Some(class) = classes.iter_mut().find(|c| c.name == impl_type_name) {
+                    class.methods.push(func);
                 }
             }
         }
+    }
 
-        // Populate class methods from impl blocks
-        if let Some(ref impl_query) = compiled.impl_block {
-            let mut cursor = QueryCursor::new();
-            if let Some(depth) = max_depth {
-                cursor.set_max_start_depth(Some(depth));
-            }
+    fn extract_references(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        max_depth: Option<u32>,
+        references: &mut Vec<ReferenceInfo>,
+    ) {
+        let Some(ref ref_query) = compiled.reference else {
+            return;
+        };
+        let mut cursor = QueryCursor::new();
+        if let Some(depth) = max_depth {
+            cursor.set_max_start_depth(Some(depth));
+        }
+        let mut seen_refs = std::collections::HashSet::new();
+        let mut matches = cursor.matches(ref_query, root, source.as_bytes());
 
-            let mut matches = cursor.matches(impl_query, tree.root_node(), source.as_bytes());
-            while let Some(mat) = matches.next() {
-                let mut impl_type_name = String::new();
-                let mut method_name = String::new();
-                let mut method_line = 0usize;
-                let mut method_end_line = 0usize;
-                let mut method_params = String::new();
-                let mut method_return_type: Option<String> = None;
-
-                for capture in mat.captures {
-                    let capture_name = impl_query.capture_names()[capture.index as usize];
+        while let Some(mat) = matches.next() {
+            for capture in mat.captures {
+                let capture_name = ref_query.capture_names()[capture.index as usize];
+                if capture_name == "type_ref" {
                     let node = capture.node;
-                    match capture_name {
-                        "impl_type" => {
-                            impl_type_name = source[node.start_byte()..node.end_byte()].to_string();
-                        }
-                        "method_name" => {
-                            method_name = source[node.start_byte()..node.end_byte()].to_string();
-                        }
-                        "method_params" => {
-                            method_params = source[node.start_byte()..node.end_byte()].to_string();
-                        }
-                        "method" => {
-                            method_line = node.start_position().row + 1;
-                            method_end_line = node.end_position().row + 1;
-                            method_return_type = node
-                                .child_by_field_name("return_type")
-                                .map(|r| source[r.start_byte()..r.end_byte()].to_string());
-                        }
-                        _ => {}
-                    }
-                }
-
-                if !impl_type_name.is_empty() && !method_name.is_empty() {
-                    let func = FunctionInfo {
-                        name: method_name,
-                        line: method_line,
-                        end_line: method_end_line,
-                        parameters: if method_params.is_empty() {
-                            Vec::new()
-                        } else {
-                            vec![method_params]
-                        },
-                        return_type: method_return_type,
-                    };
-                    if let Some(class) = classes.iter_mut().find(|c| c.name == impl_type_name) {
-                        class.methods.push(func);
+                    let type_ref = source[node.start_byte()..node.end_byte()].to_string();
+                    if seen_refs.insert(type_ref.clone()) {
+                        references.push(ReferenceInfo {
+                            symbol: type_ref,
+                            reference_type: ReferenceType::Usage,
+                            // location is intentionally empty here; set by the caller (analyze_file)
+                            location: String::new(),
+                            line: node.start_position().row + 1,
+                        });
                     }
                 }
             }
         }
+    }
 
-        // Extract references with line numbers
-        if let Some(ref ref_query) = compiled.reference {
-            let mut cursor = QueryCursor::new();
-            if let Some(depth) = max_depth {
-                cursor.set_max_start_depth(Some(depth));
+    fn extract_assignments(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        max_depth: Option<u32>,
+        assignments: &mut Vec<AssignmentInfo>,
+    ) {
+        let Some(ref assignment_query) = compiled.assignment else {
+            return;
+        };
+        let mut cursor = QueryCursor::new();
+        if let Some(depth) = max_depth {
+            cursor.set_max_start_depth(Some(depth));
+        }
+        let mut matches = cursor.matches(assignment_query, root, source.as_bytes());
+
+        while let Some(mat) = matches.next() {
+            let mut variable = String::new();
+            let mut value = String::new();
+            let mut line = 0usize;
+
+            for capture in mat.captures {
+                let capture_name = assignment_query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                match capture_name {
+                    "variable" => {
+                        variable = source[node.start_byte()..node.end_byte()].to_string();
+                    }
+                    "value" => {
+                        value = source[node.start_byte()..node.end_byte()].to_string();
+                        line = node.start_position().row + 1;
+                    }
+                    _ => {}
+                }
             }
 
-            let mut seen_refs = std::collections::HashSet::new();
-            let mut matches = cursor.matches(ref_query, tree.root_node(), source.as_bytes());
-            while let Some(mat) = matches.next() {
-                for capture in mat.captures {
-                    let capture_name = ref_query.capture_names()[capture.index as usize];
-                    if capture_name == "type_ref" {
-                        let node = capture.node;
-                        let type_ref = source[node.start_byte()..node.end_byte()].to_string();
-                        if seen_refs.insert(type_ref.clone()) {
-                            references.push(ReferenceInfo {
-                                symbol: type_ref,
-                                reference_type: ReferenceType::Usage,
-                                // location is intentionally empty here; set by the caller (analyze_file)
-                                location: String::new(),
-                                line: node.start_position().row + 1,
-                            });
-                        }
+            if !variable.is_empty() && !value.is_empty() {
+                let mut current = mat.captures[0].node;
+                let mut scope = "global".to_string();
+                while let Some(parent) = current.parent() {
+                    if parent.kind() == "function_item"
+                        && let Some(name_node) = parent.child_by_field_name("name")
+                    {
+                        scope = source[name_node.start_byte()..name_node.end_byte()].to_string();
+                        break;
                     }
+                    current = parent;
                 }
+                assignments.push(AssignmentInfo {
+                    variable,
+                    value,
+                    line,
+                    scope,
+                });
             }
         }
+    }
 
-        // Extract assignments
-        if let Some(ref assignment_query) = compiled.assignment {
-            let mut cursor = QueryCursor::new();
-            if let Some(depth) = max_depth {
-                cursor.set_max_start_depth(Some(depth));
+    fn extract_field_accesses(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        max_depth: Option<u32>,
+        field_accesses: &mut Vec<FieldAccessInfo>,
+    ) {
+        let Some(ref field_query) = compiled.field else {
+            return;
+        };
+        let mut cursor = QueryCursor::new();
+        if let Some(depth) = max_depth {
+            cursor.set_max_start_depth(Some(depth));
+        }
+        let mut matches = cursor.matches(field_query, root, source.as_bytes());
+
+        while let Some(mat) = matches.next() {
+            let mut object = String::new();
+            let mut field = String::new();
+            let mut line = 0usize;
+
+            for capture in mat.captures {
+                let capture_name = field_query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                match capture_name {
+                    "object" => {
+                        object = source[node.start_byte()..node.end_byte()].to_string();
+                    }
+                    "field" => {
+                        field = source[node.start_byte()..node.end_byte()].to_string();
+                        line = node.start_position().row + 1;
+                    }
+                    _ => {}
+                }
             }
 
-            let mut matches = cursor.matches(assignment_query, tree.root_node(), source.as_bytes());
-            while let Some(mat) = matches.next() {
-                let mut variable = String::new();
-                let mut value = String::new();
-                let mut line = 0usize;
-
-                for capture in mat.captures {
-                    let capture_name = assignment_query.capture_names()[capture.index as usize];
-                    let node = capture.node;
-                    match capture_name {
-                        "variable" => {
-                            variable = source[node.start_byte()..node.end_byte()].to_string();
-                        }
-                        "value" => {
-                            value = source[node.start_byte()..node.end_byte()].to_string();
-                            line = node.start_position().row + 1;
-                        }
-                        _ => {}
+            if !object.is_empty() && !field.is_empty() {
+                let mut current = mat.captures[0].node;
+                let mut scope = "global".to_string();
+                while let Some(parent) = current.parent() {
+                    if parent.kind() == "function_item"
+                        && let Some(name_node) = parent.child_by_field_name("name")
+                    {
+                        scope = source[name_node.start_byte()..name_node.end_byte()].to_string();
+                        break;
                     }
+                    current = parent;
                 }
-
-                if !variable.is_empty() && !value.is_empty() {
-                    let mut current = mat.captures[0].node;
-                    let mut scope = "global".to_string();
-                    while let Some(parent) = current.parent() {
-                        if parent.kind() == "function_item"
-                            && let Some(name_node) = parent.child_by_field_name("name")
-                        {
-                            scope =
-                                source[name_node.start_byte()..name_node.end_byte()].to_string();
-                            break;
-                        }
-                        current = parent;
-                    }
-
-                    assignments.push(AssignmentInfo {
-                        variable,
-                        value,
-                        line,
-                        scope,
-                    });
-                }
+                field_accesses.push(FieldAccessInfo {
+                    object,
+                    field,
+                    line,
+                    scope,
+                });
             }
         }
-
-        // Extract field accesses
-        if let Some(ref field_query) = compiled.field {
-            let mut cursor = QueryCursor::new();
-            if let Some(depth) = max_depth {
-                cursor.set_max_start_depth(Some(depth));
-            }
-
-            let mut matches = cursor.matches(field_query, tree.root_node(), source.as_bytes());
-            while let Some(mat) = matches.next() {
-                let mut object = String::new();
-                let mut field = String::new();
-                let mut line = 0usize;
-
-                for capture in mat.captures {
-                    let capture_name = field_query.capture_names()[capture.index as usize];
-                    let node = capture.node;
-                    match capture_name {
-                        "object" => {
-                            object = source[node.start_byte()..node.end_byte()].to_string();
-                        }
-                        "field" => {
-                            field = source[node.start_byte()..node.end_byte()].to_string();
-                            line = node.start_position().row + 1;
-                        }
-                        _ => {}
-                    }
-                }
-
-                if !object.is_empty() && !field.is_empty() {
-                    let mut current = mat.captures[0].node;
-                    let mut scope = "global".to_string();
-                    while let Some(parent) = current.parent() {
-                        if parent.kind() == "function_item"
-                            && let Some(name_node) = parent.child_by_field_name("name")
-                        {
-                            scope =
-                                source[name_node.start_byte()..name_node.end_byte()].to_string();
-                            break;
-                        }
-                        current = parent;
-                    }
-
-                    field_accesses.push(FieldAccessInfo {
-                        object,
-                        field,
-                        line,
-                        scope,
-                    });
-                }
-            }
-        }
-
-        tracing::debug!(language = %language, functions = functions.len(), classes = classes.len(), imports = imports.len(), references = references.len(), calls = calls.len(), "extraction complete");
-
-        Ok(SemanticAnalysis {
-            functions,
-            classes,
-            imports,
-            references,
-            call_frequency,
-            calls,
-            assignments,
-            field_accesses,
-        })
     }
 }
 
