@@ -114,7 +114,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run Clippy lints
-        run: cargo clippy -- -D warnings
+        run: cargo clippy -- -D warnings -W clippy::cognitive_complexity
 
   test:
     name: Test
