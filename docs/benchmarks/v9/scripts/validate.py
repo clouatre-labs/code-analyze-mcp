@@ -41,10 +41,12 @@ MCP_TOOL_NAMES = {
 }
 NATIVE_TOOL_NAMES = {"Glob", "Grep", "Read", "Bash"}
 SYSTEM_BASH_PATTERNS = {"mkdir", "cd", "git", "cat", "pwd", "touch", "rm", "cp", "mv", "ls"}
-# Paths that are NOT the target codebase — reading/writing these is allowed
+# Derived from script location so the prefix is portable across checkouts
 OUTPUT_PATH_PREFIXES = (
-    "/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks",
+    str(Path(__file__).resolve().parent.parent),
 )
+# Paths that indicate target-codebase access — Bash commands touching these are NOT exempt
+TARGET_REPO_INDICATORS = ("/tmp/benchmark-repos",)
 
 
 def load_jsonl(path: Path) -> List[Dict]:
@@ -97,8 +99,9 @@ def is_output_verification_call(tool_name: str, tool_input: Dict) -> bool:
         return any(path.startswith(p) for p in OUTPUT_PATH_PREFIXES)
     if tool_name == "Bash":
         cmd = tool_input.get("command", "")
-        # Check if every path-like token in the command points to the output dir
-        return any(p in cmd for p in OUTPUT_PATH_PREFIXES)
+        touches_output = any(p in cmd for p in OUTPUT_PATH_PREFIXES)
+        touches_target = any(t in cmd for t in TARGET_REPO_INDICATORS)
+        return touches_output and not touches_target
     return False
 
 

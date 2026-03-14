@@ -58,20 +58,20 @@ case "$CONDITION" in
   A)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a-control.md"
     MODEL="claude-sonnet-4-6"
-    # Disallow MCP tools; native tools allowed
-    DISALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol"
+    # Disallow MCP tools (both prefixed and unprefixed variants); native tools allowed
+    DISALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,analyze_directory,analyze_file,analyze_symbol"
     ;;
   B)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-b-treatment-haiku.md"
     MODEL="claude-haiku-4-5"
-    # Disallow native file-exploration tools
-    DISALLOWED_TOOLS="Glob,Grep,Read"
+    # Disallow native file-exploration tools (Bash included to match validate.py constraints)
+    DISALLOWED_TOOLS="Glob,Grep,Read,Bash"
     ;;
   C)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-c-treatment-sonnet.md"
     MODEL="claude-sonnet-4-6"
-    # Disallow native file-exploration tools
-    DISALLOWED_TOOLS="Glob,Grep,Read"
+    # Disallow native file-exploration tools (Bash included to match validate.py constraints)
+    DISALLOWED_TOOLS="Glob,Grep,Read,Bash"
     ;;
   *)
     echo "Unknown condition: $CONDITION" >&2
@@ -94,6 +94,9 @@ echo "Model: $MODEL"
 echo "Disallowed tools: $DISALLOWED_TOOLS"
 echo ""
 
+# Touch marker before the run so find -newer captures the session JSONL written during the run
+touch /tmp/.v9-run-marker
+
 # Record session start time to find the session JSONL later
 SESSION_START_TS=$(date -u +%s)
 
@@ -112,7 +115,7 @@ echo ""
 echo "Run completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Log: $LOG_FILE"
 
-# Find the most recent session JSONL written after the run started
+# Find the most recent session JSONL written after the pre-run marker
 # Claude Code stores sessions under ~/.claude/projects/<slug>/ where slug = path with / replaced by -
 SESSION_DIR="$HOME/.claude/projects/-Users-hugues-clouatre-git-clouatre-labs-code-analyze-mcp"
 if [[ -d "$SESSION_DIR" ]]; then
@@ -139,5 +142,3 @@ else
   echo "Check $LOG_FILE for agent output" >&2
 fi
 
-# Create timestamp marker for next run
-touch /tmp/.v9-run-marker
