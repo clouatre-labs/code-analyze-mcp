@@ -1,0 +1,14 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v9/results/runs/R04-report.json`.
+
+Summary of findings:
+
+**Module map:** 13 top-level packages documented. `conf` and `utils` are the lowest-level foundations; `core`, `http`, `urls`, `db`, `views`, `template`, `middleware` form the request pipeline; `forms`, `apps`, `dispatch`, `contrib` are higher-level consumers.
+
+**Pipeline trace:** 7 stages from WSGI/ASGI entry → middleware chain → URL resolution (`URLResolver.resolve`) → view dispatch (`View.as_view`) → ORM query (`QuerySet._fetch_all` / `SQLCompiler`) → template rendering → response delivery with `request_finished` signal.
+
+**Cross-module hubs:**
+1. `conf` -- imported by every module for settings access
+2. `utils` -- foundational primitives with no circular risk
+3. `db` -- ORM consumed by views, forms, admin, auth, sessions, test; high inbound degree
+
+**Change proposal:** `StructuredLoggingMiddleware` with `async_capable=True`, time.monotonic() timing, `connection.queries` ORM counting (DEBUG-gated), and `request.resolver_match` for view name. Main risks: thread-local query state in async contexts, DEBUG requirement for query counting, and log volume at scale.

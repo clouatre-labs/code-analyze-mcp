@@ -1,0 +1,8 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v9/results/runs/R06-report.json`.
+
+**Summary of findings:**
+
+- **Module map**: 12 modules documented. `conf` and `utils` are the deepest leaves (no django/ dependencies); `core` orchestrates the full pipeline.
+- **Pipeline trace**: 7 stages from WSGI/ASGI entry → middleware chain → URL resolution (URLResolver/ResolverMatch) → view dispatch → ORM QuerySet → template rendering → response return.
+- **Cross-module hubs**: `utils` (273 importers), `core` (252 importers), `conf` (165 importers). All three are high fan-in; `conf` and `utils` have near-zero outbound deps, making them stable foundations.
+- **Change proposal**: `StructuredLoggingMiddleware` following the `MiddlewareMixin` + `sync_capable/async_capable` dual-mode pattern. Key risks are ORM query counting requiring `DEBUG=True` or custom instrumentation, and async thread-local isolation for per-request query counts.

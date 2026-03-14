@@ -13,5 +13,5 @@
 13. Condition B, rep 3
 14. Condition C, rep 4
 15. Condition A, rep 1
-# pinned_commit: TBD
+# pinned_commit: 6b90f8a8d6994dc62cd91dde911fe56ec3389494
 # blinding_map: R01=A4, R02=C2, R03=C5, R04=A5, R05=B4, R06=A2, R07=C3, R08=B5, R09=C1, R10=B2, R11=B1, R12=A3, R13=B3, R14=C4, R15=A1

@@ -1,16 +1,15 @@
-<!-- TARGET REPO: TBD -- update task description below before running -->
+<!-- TARGET REPO: django/django @ 6b90f8a8d6994dc62cd91dde911fe56ec3389494 -->
+<!-- LOCAL PATH: /tmp/benchmark-repos/django -->
 
 # Benchmark Task: Cross-Module Code Research
 
 ## Target Repository
 
-Repository to be determined. Selection criteria:
-- Large project (500,000+ lines of code)
-- Deep module hierarchy with 5+ top-level packages
-- Complex dependency graph
-- Realistic code analysis scenarios (e.g., multi-dialect parser, ORM, framework)
-
-Once selected, pin commit SHA in `run-order.txt` and update this section.
+**Repository:** django/django
+**Commit:** `6b90f8a8d6994dc62cd91dde911fe56ec3389494`
+**Local path:** `/tmp/benchmark-repos/django`
+**Size:** ~510K LOC total (162K in core `django/` package), 902 Python source files
+**Top-level packages:** `apps`, `conf`, `contrib`, `core`, `db`, `dispatch`, `forms`, `http`, `middleware`, `template`, `templatetags`, `test`, `urls`, `utils`, `views`
 
 ## Task Description
 
@@ -18,15 +17,15 @@ Analyze the codebase to answer:
 
 1. **Module map:** What are the top-level modules and their responsibilities? How do subsidiary packages relate to the core pipeline or API layer? What are the key abstractions (types, classes, protocols)?
 
-2. **Pipeline trace:** Trace a primary data flow through the system (e.g., user input → parsing → transformation → output). Identify the key types/classes passed between modules at each stage. Document intermediate representations and data structures.
+2. **Pipeline trace:** Trace a primary data flow through the system: HTTP request → URL routing → view dispatch → ORM query → response. Identify the key types/classes passed between modules at each stage. Document intermediate representations and data structures.
 
 3. **Cross-module hubs:** Which top-level modules have the most cross-module imports or dependencies? Identify the top 3 most-connected modules and explain why they are architectural hubs.
 
-4. **Change proposal:** Propose where to add a new feature or capability. Identify:
+4. **Change proposal:** Propose adding an async-compatible structured logging middleware that captures per-request metadata (view name, ORM query count, response time) and emits it as a structured log entry. Identify:
    - Which files and modules would require modification
-   - Which existing patterns or conventions to follow
+   - Which existing patterns or conventions to follow (e.g., existing middleware classes)
    - What new types or classes might be needed
-   - How the new feature integrates with the module system
+   - How the new feature integrates with the middleware stack
    - Potential risks (maintainability, compatibility, performance)
 
 ## Deliverable Format

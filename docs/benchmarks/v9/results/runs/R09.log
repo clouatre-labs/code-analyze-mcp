@@ -1,0 +1,11 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v9/results/runs/R09-report.json`.
+
+**Summary of findings (4 MCP calls used):**
+
+- **Module map:** 12 top-level modules documented. `conf`, `core.exceptions`, and `utils.functional` are the three architectural hubs due to near-universal import counts with minimal outbound deps.
+
+- **Pipeline trace:** 7 stages from socket → middleware chain → URL resolution (`URLResolver.resolve` → `ResolverMatch`) → view dispatch (`BaseHandler._get_response[_async]`) → ORM (`QuerySet` → `SQLCompiler`) → template rendering → HTTP response serialization.
+
+- **Key architectural insight:** `BaseHandler.load_middleware()` in `core/handlers/base.py` is the central wiring point — it reads `settings.MIDDLEWARE`, imports each class, detects async capability via `iscoroutinefunction`, and wraps sync/async via asgiref's `sync_to_async`/`async_to_sync`.
+
+- **Change proposal:** New `StructuredLogMiddleware` following the `MiddlewareMixin` pattern from `middleware/common.py`, using `process_request`/`process_response` hooks, `time.monotonic()` for latency, and `connection.queries` for ORM count. Main risks are query counting requiring DEBUG or execute_wrapper instrumentation, and blocking log handlers under async views.
