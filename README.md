@@ -230,6 +230,10 @@ analyze_directory path: /huge/codebase summary: true
 analyze_directory path: /project summary: false
 ```
 
+## Non-Interactive Pipelines
+
+In single-pass subagent sessions, prompt caches are written but never reused. Benchmarks showed MCP responses writing ~2x more to cache than native-only workflows, adding cost with no quality gain. Set `DISABLE_PROMPT_CACHING=1` (or `DISABLE_PROMPT_CACHING_HAIKU=1` for Haiku-specific pipelines) to avoid this overhead.
+
 ## Supported Languages
 
 | Language | Extensions | Status |
