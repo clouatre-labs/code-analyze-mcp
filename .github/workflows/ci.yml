@@ -11,6 +11,13 @@ on:
       - '.github/workflows/**'
       - 'tests/**'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'clippy.toml'
+      - '.github/workflows/**'
+      - 'tests/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
