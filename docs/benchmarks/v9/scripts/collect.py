@@ -42,9 +42,17 @@ SONNET_OUTPUT_COST_PER_M = 15.00
 HAIKU_INPUT_COST_PER_M = 0.80
 HAIKU_OUTPUT_COST_PER_M = 4.00
 
-MCP_TOOL_NAMES = {"analyze_directory", "analyze_file", "analyze_symbol"}
+MCP_TOOL_NAMES = {
+    "analyze_directory", "analyze_file", "analyze_symbol",
+    "mcp__code-analyze__analyze_directory",
+    "mcp__code-analyze__analyze_file",
+    "mcp__code-analyze__analyze_symbol",
+}
 NATIVE_TOOL_NAMES = {"Glob", "Grep", "Read", "Bash"}
 SYSTEM_BASH_PATTERNS = {"mkdir", "cd", "git", "cat", "pwd", "touch", "rm", "cp", "mv", "ls"}
+OUTPUT_PATH_PREFIXES = (
+    "/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks",
+)
 
 
 def load_jsonl(path: Path) -> List[Dict]:
@@ -62,10 +70,13 @@ def load_jsonl(path: Path) -> List[Dict]:
 
 
 def extract_timestamps(messages: List[Dict]) -> Tuple[Optional[datetime], Optional[datetime]]:
-    """Return (first_ts, last_ts) from message timestamps."""
+    """Return (first_ts, last_ts) from message timestamps.
+
+    Timestamps are at the top-level entry (not inside "message") in Claude Code JSONL.
+    """
     timestamps = []
-    for msg in messages:
-        ts = msg.get("timestamp") or msg.get("created_at")
+    for entry in messages:
+        ts = entry.get("timestamp") or entry.get("created_at")
         if ts is None:
             continue
         try:
@@ -84,11 +95,13 @@ def extract_tool_calls(messages: List[Dict]) -> List[Dict]:
     """
     Extract all tool_use blocks from assistant messages.
 
-    Claude Code JSONL format: each message has a "role" and "content" field.
-    content is a list of blocks; tool_use blocks have {"type": "tool_use", "name": ..., "input": ...}.
+    Claude Code JSONL wraps the message in a "message" key:
+      {"type": "assistant", "message": {"role": "assistant", "content": [...]}}
+    Also supports unwrapped format for compatibility.
     """
     tools = []
-    for msg in messages:
+    for entry in messages:
+        msg = entry.get("message", entry)
         if msg.get("role") != "assistant":
             continue
         content = msg.get("content", [])
@@ -105,6 +118,19 @@ def extract_tool_calls(messages: List[Dict]) -> List[Dict]:
     return tools
 
 
+def is_output_verification_call(tool_name: str, tool_input: Dict) -> bool:
+    """Detect if a Read or Bash call targets the benchmark output dir, not the codebase."""
+    if tool_input is None:
+        return False
+    if tool_name == "Read":
+        path = tool_input.get("file_path", "")
+        return any(path.startswith(p) for p in OUTPUT_PATH_PREFIXES)
+    if tool_name == "Bash":
+        cmd = tool_input.get("command", "")
+        return any(p in cmd for p in OUTPUT_PATH_PREFIXES)
+    return False
+
+
 def is_system_bash_call(tool_input: Dict) -> bool:
     """Detect if a Bash call is a housekeeping command (mkdir, cd, git, etc.)."""
     if tool_input is None:
@@ -112,7 +138,6 @@ def is_system_bash_call(tool_input: Dict) -> bool:
     cmd = tool_input.get("command", "").strip()
     if not cmd:
         return False
-    # Check if command starts with a system pattern
     first_word = cmd.split()[0] if cmd.split() else ""
     return first_word in SYSTEM_BASH_PATTERNS
 
@@ -133,6 +158,8 @@ def categorize_tools(tools: List[Dict]) -> Tuple[int, int, int, int]:
         elif tool_name in NATIVE_TOOL_NAMES:
             if tool_name == "Bash" and is_system_bash_call(tool_input):
                 system_bash += 1
+            elif is_output_verification_call(tool_name, tool_input):
+                other += 1  # output verification, not codebase exploration
             else:
                 native += 1
         else:
@@ -164,10 +191,13 @@ def extract_cache_tokens(messages: List[Dict]) -> Tuple[int, int]:
     """
     Extract cache_write_tokens and cache_read_tokens from usage block.
     Returns (cache_write, cache_read); default to 0 if not present.
+
+    Usage is in entry["message"]["usage"] in Claude Code JSONL.
     """
     cache_write = 0
     cache_read = 0
-    for msg in messages:
+    for entry in messages:
+        msg = entry.get("message", entry)
         if msg.get("role") != "assistant":
             continue
         usage = msg.get("usage") or {}
@@ -180,18 +210,17 @@ def extract_token_usage(messages: List[Dict]) -> Tuple[int, int]:
     """
     Sum input_tokens and output_tokens across all assistant messages.
 
-    Claude Code embeds usage in the message or in a trailing metadata object.
-    Looks for: msg["usage"]["input_tokens"] / msg["usage"]["output_tokens"]
-    Also handles top-level "input_tokens"/"output_tokens" fields.
+    Usage is in entry["message"]["usage"] in Claude Code JSONL.
     """
     input_tokens = 0
     output_tokens = 0
-    for msg in messages:
+    for entry in messages:
+        msg = entry.get("message", entry)
         if msg.get("role") != "assistant":
             continue
         usage = msg.get("usage") or {}
-        input_tokens += usage.get("input_tokens", 0) or msg.get("input_tokens", 0)
-        output_tokens += usage.get("output_tokens", 0) or msg.get("output_tokens", 0)
+        input_tokens += usage.get("input_tokens", 0) or 0
+        output_tokens += usage.get("output_tokens", 0) or 0
     return input_tokens, output_tokens
 
 

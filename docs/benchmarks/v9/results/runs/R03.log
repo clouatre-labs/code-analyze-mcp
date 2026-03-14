@@ -1,0 +1,8 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v9/results/runs/R03-report.json`.
+
+Summary of what was produced using 4 MCP tool calls:
+
+- **Module map**: 12 top-level modules with responsibilities, key types, and upstream dependencies.
+- **Pipeline trace**: 8 stages from WSGI/ASGI entry through middleware chain, URL resolution, view dispatch, ORM query, template rendering, and response middleware, with concrete class names at each boundary.
+- **Cross-module hubs**: `django.utils` (consumed by ~35 modules), `django.conf` (LazySettings imported everywhere), and `django.core.exceptions` (shared error types across all layers).
+- **Change proposal**: `AsyncStructuredLoggingMiddleware` subclassing `MiddlewareMixin` with `async_capable = True`, following the pattern from `middleware/security.py` and `middleware/common.py`, with specific integration points (`request.resolver_match.view_name`, `django.db.connection.queries`) and realistic risks around DEBUG-only query counting and schema stability.

@@ -1,0 +1,21 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v9/results/runs/R01-report.json`.
+
+**Summary of findings:**
+
+**Module map:** Django has 12 top-level packages. `utils` and `conf` are leaf dependencies consumed by nearly everything. `core.handlers` is the request orchestrator; `db` is the largest bidirectional hub.
+
+**Pipeline trace (7 stages):**
+1. WSGIHandler/ASGIHandler builds `HttpRequest` from environ
+2. Middleware chain processes request (CSRF, security, etc.)
+3. `URLResolver.resolve()` returns `ResolverMatch` with view callable
+4. View callable dispatched; class-based views route to `get()`/`post()`
+5. ORM: `QuerySet` → `SQLCompiler` → cursor → `Model` instances
+6. `TemplateResponse.render()` hydrates context into content string
+7. Response middleware (gzip, security headers) → WSGI output
+
+**Cross-module hubs:**
+- `utils` — widest fan-in (~15 importers), near-zero outbound
+- `conf` — global settings singleton imported by all modules
+- `db` — large bidirectional hub (ORM consumed by forms, admin, auth, views)
+
+**Change proposal:** `StructuredLogMiddleware` in `django/middleware/structured_log.py`, following the `SecurityMiddleware` pattern with `sync_capable=True, async_capable=True`. Key risks are query counting requiring `DEBUG=True` or a custom cursor wrapper, and async `SynchronousOnlyOperation` hazards when accessing `connection.queries`.

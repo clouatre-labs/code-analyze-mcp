@@ -1,0 +1,12 @@
+Report written to `R14-report.json`. Summary of findings:
+
+**Module map:** 12 top-level modules documented. `http`, `conf`, and `utils` are the architectural hubs with the broadest inbound dependency counts.
+
+**Pipeline trace:** 8 stages from WSGI/ASGI entry through middleware chain, URL resolution (URLResolver → ResolverMatch), view dispatch (BaseHandler._get_response), ORM query (QuerySet → SQLCompiler), response construction (TemplateResponse), middleware response pass, and final output.
+
+**Cross-module hubs:**
+- `django.http` — universal carrier type (HttpRequest/HttpResponse), imported by every pipeline layer
+- `django.conf` — zero-dependency settings root imported by ~35 modules
+- `django.utils` — diffuse infrastructure hub (MiddlewareMixin, lazy, encoding, log_response)
+
+**Change proposal:** `StructuredLoggingMiddleware` following the `MiddlewareMixin` + `SecurityMiddleware` async-dual pattern. Key risks: ORM query counting requires `DEBUG=True` or custom instrumentation, async time measurement must use `asyncio` time in the async path, and exception paths may bypass `process_response`.

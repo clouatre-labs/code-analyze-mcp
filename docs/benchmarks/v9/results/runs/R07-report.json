@@ -1,0 +1,183 @@
+{
+  "run_id": "R07",
+  "condition": "C-treatment",
+  "module_map": [
+    {
+      "module": "core",
+      "responsibility": "Framework internals: request handlers (WSGI/ASGI), exception hierarchy, validators, signals, paginator, signing. The BaseHandler class in core/handlers/base.py owns the middleware chain assembly and request/response dispatch loop.",
+      "key_types": ["BaseHandler", "ImproperlyConfigured", "MiddlewareNotUsed", "ValidationError", "Paginator"],
+      "depends_on": ["conf", "db", "urls", "utils"]
+    },
+    {
+      "module": "http",
+      "responsibility": "HTTP primitives: HttpRequest (parsing headers, body, cookies, querystring), HttpResponse hierarchy (streaming, file, JSON), multipart parser. All view-layer data flows through these types.",
+      "key_types": ["HttpRequest", "QueryDict", "HttpResponse", "JsonResponse", "StreamingHttpResponse", "FileResponse"],
+      "depends_on": ["utils", "conf"]
+    },
+    {
+      "module": "urls",
+      "responsibility": "URL routing: pattern compilation (RegexPattern, RoutePattern), recursive resolution (URLResolver), view-callable lookup, reverse URL generation. Produces ResolverMatch that carries the view callback and captured kwargs.",
+      "key_types": ["URLPattern", "URLResolver", "ResolverMatch", "RoutePattern", "RegexPattern", "Resolver404", "NoReverseMatch"],
+      "depends_on": ["conf", "utils", "core.exceptions"]
+    },
+    {
+      "module": "db",
+      "responsibility": "ORM layer: model definition, QuerySet API, SQL compilation, connection management, transactions, migrations. Central abstraction for all persistence.",
+      "key_types": ["Model", "QuerySet", "Manager", "Field", "DatabaseWrapper", "connection", "transaction"],
+      "depends_on": ["conf", "utils", "dispatch"]
+    },
+    {
+      "module": "middleware",
+      "responsibility": "Request/response processing pipeline stages: CSRF protection, security headers, caching, GZIP, locale, common redirects, CSP. Each class follows the MiddlewareMixin interface exposing process_request / process_response / process_exception hooks.",
+      "key_types": ["CommonMiddleware", "CsrfViewMiddleware", "SecurityMiddleware", "GZipMiddleware", "CacheMiddleware", "MiddlewareMixin"],
+      "depends_on": ["http", "utils", "conf", "urls", "core.exceptions"]
+    },
+    {
+      "module": "views",
+      "responsibility": "View layer: class-based views (View, TemplateView, ListView, etc.), error pages, CSRF error view, static file serving, i18n. Views receive an HttpRequest and return an HttpResponse.",
+      "key_types": ["View", "TemplateView", "ListView", "DetailView", "FormView"],
+      "depends_on": ["http", "template", "urls", "db"]
+    },
+    {
+      "module": "template",
+      "responsibility": "Template engine: parsing, compilation, rendering. Engine registry, Context, Template, Node classes. TemplateResponse lazily renders at response finalization.",
+      "key_types": ["Engine", "Template", "Context", "RequestContext", "TemplateResponse", "SimpleTemplateResponse"],
+      "depends_on": ["utils", "conf"]
+    },
+    {
+      "module": "conf",
+      "responsibility": "Settings management via lazy LazySettings proxy. Global settings defaults in global_settings.py. The settings object is imported everywhere; it is a root dependency of the entire framework.",
+      "key_types": ["LazySettings", "Settings", "UserSettingsHolder"],
+      "depends_on": []
+    },
+    {
+      "module": "utils",
+      "responsibility": "Shared utility library used across all modules: encoding, HTML escaping, functional helpers (lazy, cached_property), deprecation, async helpers (asyncio.py), logging, datastructures, decorators, crypto, HTTP utilities.",
+      "key_types": ["MiddlewareMixin", "SafeString", "LazyObject", "cached_property"],
+      "depends_on": ["conf"]
+    },
+    {
+      "module": "dispatch",
+      "responsibility": "Signal/slot event system (Signal, receiver). Used by models (pre_save, post_save), requests, migrations, and test framework for decoupled inter-module communication.",
+      "key_types": ["Signal", "receiver"],
+      "depends_on": []
+    },
+    {
+      "module": "apps",
+      "responsibility": "Application registry (Apps). Tracks installed apps, manages AppConfig instances, drives the ready() lifecycle and model/signal wiring at startup.",
+      "key_types": ["Apps", "AppConfig"],
+      "depends_on": ["conf", "utils"]
+    },
+    {
+      "module": "forms",
+      "responsibility": "Form and field validation layer: Form, ModelForm, Field, Widget, FormSet. Bridges user input (HttpRequest.POST) to validated Python types and model instances.",
+      "key_types": ["Form", "ModelForm", "Field", "Widget", "BoundField", "ValidationError"],
+      "depends_on": ["db", "utils", "template"]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. HTTP Ingress",
+      "module": "core/handlers/wsgi.py or core/handlers/asgi.py",
+      "description": "WSGI/ASGI server calls WSGIHandler.__call__ or ASGIHandler.__call__. Raw environ dict is converted into an HttpRequest object. Handler inherits BaseHandler.",
+      "key_types": ["WSGIHandler", "ASGIHandler", "HttpRequest"],
+      "next_stage": "2. Middleware chain (request phase)"
+    },
+    {
+      "stage": "2. Middleware chain (request phase)",
+      "module": "core/handlers/base.py + middleware/*",
+      "description": "BaseHandler._middleware_chain is a composed callable built by load_middleware(). Each middleware's process_request hook is called in order. Hooks may short-circuit and return an HttpResponse (e.g. CSRF rejection). adapt_method_mode wraps sync/async mismatches transparently.",
+      "key_types": ["BaseHandler", "MiddlewareMixin", "HttpRequest", "HttpResponse"],
+      "next_stage": "3. URL Resolution"
+    },
+    {
+      "stage": "3. URL Resolution",
+      "module": "urls/resolvers.py",
+      "description": "BaseHandler.resolve_request calls get_resolver(urlconf).resolve(request.path_info). URLResolver walks the registered URLPattern/URLResolver tree matching patterns. Returns a ResolverMatch containing the view callable, positional args, kwargs, and url_name.",
+      "key_types": ["URLResolver", "URLPattern", "ResolverMatch", "RoutePattern", "RegexPattern"],
+      "next_stage": "4. View Dispatch"
+    },
+    {
+      "stage": "4. View Dispatch",
+      "module": "core/handlers/base.py + views/",
+      "description": "BaseHandler._get_response/_get_response_async calls process_view middlewares, then invokes the resolved callback (function view or View.as_view()). make_view_atomic wraps the callback in a DB transaction if ATOMIC_REQUESTS is set. The callback receives request plus captured URL kwargs.",
+      "key_types": ["ResolverMatch", "HttpRequest", "View", "HttpResponse"],
+      "next_stage": "5. ORM Query"
+    },
+    {
+      "stage": "5. ORM Query",
+      "module": "db/models/ + db/backends/",
+      "description": "View logic calls Model.objects.filter(...) or similar QuerySet methods. QuerySet is lazy; SQL is compiled and executed when iterated. The database cursor returns rows that are hydrated back into Model instances.",
+      "key_types": ["QuerySet", "Manager", "Model", "DatabaseWrapper"],
+      "next_stage": "6. Response Construction"
+    },
+    {
+      "stage": "6. Response Construction",
+      "module": "http/response.py + template/response.py",
+      "description": "View returns an HttpResponse or TemplateResponse. TemplateResponse.render() is called lazily before the middleware response phase. Response carries status code, headers, and content.",
+      "key_types": ["HttpResponse", "TemplateResponse", "SimpleTemplateResponse"],
+      "next_stage": "7. Middleware chain (response phase)"
+    },
+    {
+      "stage": "7. Middleware chain (response phase)",
+      "module": "core/handlers/base.py + middleware/*",
+      "description": "Each middleware's process_response hook is called in reverse order (LIFO). Middlewares can mutate headers (caching, security, GZIP, CSP). process_exception hooks fire if an unhandled exception propagated.",
+      "key_types": ["HttpResponse", "MiddlewareMixin"],
+      "next_stage": "8. HTTP Egress"
+    },
+    {
+      "stage": "8. HTTP Egress",
+      "module": "core/handlers/wsgi.py or core/handlers/asgi.py",
+      "description": "Final HttpResponse is serialized: status line and headers sent via start_response, body chunked via __iter__. ASGI handler sends http.response.start and http.response.body ASGI events.",
+      "key_types": ["HttpResponse", "WSGIHandler"],
+      "next_stage": null
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "utils",
+      "inbound_deps": 12,
+      "outbound_deps": 1,
+      "reason": "Pure utility library imported by every other module. Provides MiddlewareMixin (used by all middleware), functional helpers (lazy, cached_property), encoding, HTML safety types (SafeString), deprecation machinery, async wrappers, and logging helpers. No module in django/ avoids importing utils, making it the most universally depended-upon package."
+    },
+    {
+      "module": "conf",
+      "inbound_deps": 12,
+      "outbound_deps": 0,
+      "reason": "The global `settings` object (from django.conf import settings) is imported by virtually every module: middleware, ORM, templates, URL routing, validators, forms. It is a singleton dependency root with almost no outbound deps of its own, making it the highest inbound-dependency hub in the codebase."
+    },
+    {
+      "module": "core",
+      "inbound_deps": 8,
+      "outbound_deps": 5,
+      "reason": "Defines the central exception hierarchy (ValidationError, ImproperlyConfigured, PermissionDenied, SuspiciousOperation) imported by all other modules, and BaseHandler which integrates urls, db, middleware, and utils into the request pipeline. It is both a heavy importer and a heavily-imported exception/handler source."
+    }
+  ],
+  "change_proposal": {
+    "feature_summary": "Add an async-compatible StructuredLoggingMiddleware that captures per-request metadata (resolved view name, ORM query count, total response time, status code) and emits a single structured JSON log entry after each response.",
+    "files_to_modify": [
+      "django/middleware/structured_logging.py (new file — primary implementation)",
+      "django/conf/global_settings.py (add STRUCTURED_LOGGING_LOGGER_NAME default)",
+      "django/utils/log.py (optionally add StructuredJsonFormatter helper class)"
+    ],
+    "new_types": [
+      "StructuredLoggingMiddleware: inherits MiddlewareMixin from django/utils/deprecation.py; sets async_capable=True and sync_capable=True; overrides __call__ to record time.monotonic() before passing to inner handler, then post-response reads request.resolver_match.view_name, len(connection.queries), response.status_code, and emits a JSON-serializable dict via Python stdlib logging.",
+      "RequestLogRecord: TypedDict with fields view_name: str, method: str, path: str, status_code: int, query_count: int, response_time_ms: float — constructed in the middleware and passed as the log message extra."
+    ],
+    "pattern_to_follow": "Follow the MiddlewareMixin pattern used by all classes in django/middleware/. The mixin (django/utils/deprecation.py) provides sync/async dual-mode dispatch. For a __call__-override approach (needed for accurate timing wrapping the entire chain), reference CsrfViewMiddleware which overrides __call__ directly while still honoring async_capable/sync_capable flags. For logging conventions, follow django/utils/log.py (AdminEmailHandler, CallbackFilter) and the existing log_response() helper in that module.",
+    "integration_point": "Placed as the first (outermost) entry in the MIDDLEWARE setting so it wraps the full chain and measures total wall-clock time. The view name is read from request.resolver_match, which BaseHandler.resolve_request populates before view dispatch (core/handlers/base.py:302-317). ORM query count uses django.db.connection.queries (available when DEBUG=True) or a custom db signal counter for production.",
+    "risks": [
+      "ORM query count via connection.queries only works when DEBUG=True; a production-safe alternative requires listening to the django.db.backends signal (execute_wrapper) or a thread/task-local counter, adding non-trivial complexity.",
+      "Timing a StreamingHttpResponse is inaccurate because the body is consumed lazily after __call__ returns; the logged response_time_ms will only cover time-to-first-byte, not full transfer time.",
+      "In async views, incorrect async_capable / sync_capable configuration or a missing await in __call__ will cause silent synchronous wrapping via async_to_sync, potentially deadlocking under high concurrency in an async server.",
+      "Adding the middleware to MIDDLEWARE at position 0 means every request pays the overhead; it should be opt-in and not included in the default MIDDLEWARE list.",
+      "JSON serialization of log records in the hot path adds measurable per-request latency at high throughput; the implementation should defer serialization to the logging Handler/Formatter layer rather than doing it inline in the middleware."
+    ]
+  },
+  "tool_usage": [
+    {"tool": "mcp__code-analyze__analyze_directory", "params": "path=/tmp/benchmark-repos/django/django, max_depth=2, summary=true"},
+    {"tool": "mcp__code-analyze__analyze_file", "params": "path=django/core/handlers/base.py, summary=true"},
+    {"tool": "mcp__code-analyze__analyze_file", "params": "path=django/middleware/common.py, summary=true"},
+    {"tool": "mcp__code-analyze__analyze_file", "params": "path=django/urls/resolvers.py, summary=true"}
+  ]
+}

@@ -1,0 +1,14 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v9/results/runs/R12-report.json`.
+
+Summary of findings:
+
+**Module map:** 12 top-level modules documented. `conf` is the foundational singleton; `utils` and `http` are the highest fan-in hubs.
+
+**Pipeline trace:** 7 stages from WSGI entry through middleware chain, URL resolution (`URLResolver` → `ResolverMatch`), view dispatch (`View.dispatch`), ORM query (`QuerySet` → `SQLCompiler` → `Connection`), response construction, and middleware post-processing.
+
+**Cross-module hubs:**
+1. `django.conf` -- zero upward deps, imported by everything
+2. `django.utils` -- MiddlewareMixin, cached_property, log_response; high fan-in from all layers
+3. `django.http` -- HttpRequest/HttpResponse are the shared data contract across every pipeline stage
+
+**Change proposal:** `StructuredLoggingMiddleware` following the `MiddlewareMixin` dual sync/async pattern, placed after `SecurityMiddleware` in `MIDDLEWARE`. Key risks: `connection.queries` only works with `DEBUG=True`, async thread-local query tracking is unreliable, and the feature overlaps well-maintained third-party packages.

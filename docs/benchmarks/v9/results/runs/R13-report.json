@@ -1,0 +1,314 @@
+{
+  "run_id": "R13",
+  "condition": "B-treatment",
+  "module_map": [
+    {
+      "module": "http",
+      "responsibility": "HTTP protocol layer: request parsing, response serialization, headers, cookies, query parameters, POST/file uploads",
+      "key_types": [
+        "HttpRequest",
+        "HttpHeaders",
+        "QueryDict",
+        "HttpResponse",
+        "MediaType"
+      ],
+      "depends_on": [
+        "core.exceptions",
+        "utils.datastructures",
+        "utils.encoding",
+        "utils.functional"
+      ]
+    },
+    {
+      "module": "urls",
+      "responsibility": "URL routing and pattern matching: resolve incoming HTTP paths to view functions, reverse URL generation from view names",
+      "key_types": [
+        "URLPattern",
+        "URLResolver",
+        "ResolverMatch",
+        "RegexPattern",
+        "RoutePattern"
+      ],
+      "depends_on": [
+        "core.exceptions",
+        "utils.regex_helper",
+        "utils.translation",
+        "dispatch"
+      ]
+    },
+    {
+      "module": "views",
+      "responsibility": "View handlers: generic views (class-based), error views (404/500), static file serving, debug utilities",
+      "key_types": [
+        "View",
+        "generic.View",
+        "ExceptionReporter",
+        "ResolverMatch"
+      ],
+      "depends_on": [
+        "http",
+        "urls",
+        "template",
+        "forms",
+        "db"
+      ]
+    },
+    {
+      "module": "middleware",
+      "responsibility": "HTTP request/response processing pipeline: security (CSRF, CSP), compression, caching, locale negotiation",
+      "key_types": [
+        "MiddlewareMixin",
+        "CommonMiddleware",
+        "CsrfViewMiddleware",
+        "SecurityMiddleware"
+      ],
+      "depends_on": [
+        "http",
+        "urls",
+        "utils.deprecation",
+        "conf"
+      ]
+    },
+    {
+      "module": "template",
+      "responsibility": "Template rendering: engine initialization, context building, tag/filter loading, template caching",
+      "key_types": [
+        "Template",
+        "Context",
+        "Engine",
+        "Library",
+        "TemplateResponse"
+      ],
+      "depends_on": [
+        "http",
+        "utils.text",
+        "utils.html",
+        "utils.safestring"
+      ]
+    },
+    {
+      "module": "forms",
+      "responsibility": "Form rendering and validation: model forms, widgets, field validation, form error handling",
+      "key_types": [
+        "Form",
+        "ModelForm",
+        "Field",
+        "Widget",
+        "BoundField"
+      ],
+      "depends_on": [
+        "utils.html",
+        "utils.text",
+        "core.validators",
+        "core.exceptions"
+      ]
+    },
+    {
+      "module": "db",
+      "responsibility": "Database abstraction layer: connection management, transaction support, ORM query interface",
+      "key_types": [
+        "connections",
+        "DEFAULT_DB_ALIAS",
+        "ConnectionHandler",
+        "ConnectionRouter"
+      ],
+      "depends_on": [
+        "core.signals",
+        "core.exceptions"
+      ]
+    },
+    {
+      "module": "core",
+      "responsibility": "Core utilities: exceptions, validators, signing, pagination, settings resolution",
+      "key_types": [
+        "ImproperlyConfigured",
+        "ValidationError",
+        "SuspiciousOperation",
+        "Paginator",
+        "TimestampSigner"
+      ],
+      "depends_on": [
+        "utils"
+      ]
+    },
+    {
+      "module": "utils",
+      "responsibility": "Utility functions and data structures: text encoding, HTML escaping, caching, deprecation helpers, tree structures",
+      "key_types": [
+        "cached_property",
+        "lazy",
+        "SafeString",
+        "MultiValueDict",
+        "CaseInsensitiveMapping"
+      ],
+      "depends_on": []
+    },
+    {
+      "module": "dispatch",
+      "responsibility": "Signal/event dispatcher for decoupled communication between Django components",
+      "key_types": [
+        "Signal",
+        "Receiver"
+      ],
+      "depends_on": []
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. HTTP Request Input",
+      "module": "http.request",
+      "description": "WSGI/ASGI environ dict parsed into HttpRequest object; headers extracted, query string parsed into QueryDict",
+      "key_types": [
+        "HttpRequest",
+        "HttpHeaders",
+        "QueryDict (GET/POST/FILES)"
+      ],
+      "next_stage": "2. URL Resolution"
+    },
+    {
+      "stage": "2. URL Resolution",
+      "module": "urls.resolvers",
+      "description": "URLResolver.resolve(path) matches HTTP path against URLPattern list; returns ResolverMatch with view function, kwargs, namespace",
+      "key_types": [
+        "URLResolver",
+        "ResolverMatch (func, args, kwargs, url_name)"
+      ],
+      "next_stage": "3. View Dispatch"
+    },
+    {
+      "stage": "3. View Dispatch",
+      "module": "core.handlers.base / core.handlers.wsgi",
+      "description": "Handler instantiates middleware, calls view callable with (request, *args, **kwargs), catches exceptions",
+      "key_types": [
+        "HttpRequest",
+        "ResolverMatch data",
+        "View exception handling"
+      ],
+      "next_stage": "4. Middleware Processing (Response Phase)"
+    },
+    {
+      "stage": "4a. View Logic (ORM Phase)",
+      "module": "db.models",
+      "description": "View executes QuerySet operations; database queries constructed, prepared statements executed, cursor results mapped to model instances",
+      "key_types": [
+        "QuerySet",
+        "Query (AST representation)",
+        "DatabaseError exceptions",
+        "Model instances"
+      ],
+      "next_stage": "4b. Rendering Phase"
+    },
+    {
+      "stage": "4b. Template Rendering",
+      "module": "template.engine / template.base",
+      "description": "Template string compiled to AST, Context variables injected, tag/filter nodes evaluated, output HTML/JSON serialized",
+      "key_types": [
+        "Template",
+        "Context",
+        "TemplateResponse"
+      ],
+      "next_stage": "5. Response Finalization"
+    },
+    {
+      "stage": "5. Middleware Response Phase",
+      "module": "middleware",
+      "description": "Response processed through middleware in reverse order (process_response); headers set, compression applied, caching headers added",
+      "key_types": [
+        "HttpResponse",
+        "Headers dict"
+      ],
+      "next_stage": "6. HTTP Response Output"
+    },
+    {
+      "stage": "6. HTTP Response Output",
+      "module": "http.response",
+      "description": "HttpResponse serialized to bytes, status + headers + body sent to WSGI/ASGI server",
+      "key_types": [
+        "HttpResponse",
+        "Iterator[bytes]"
+      ],
+      "next_stage": "end"
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "http",
+      "inbound_deps": 12,
+      "outbound_deps": 8,
+      "reason": "Central data model for all request/response handling. Middleware, views, handlers, template response, form processing all depend on HttpRequest/HttpResponse classes. Carries all client metadata through the pipeline."
+    },
+    {
+      "module": "core.handlers.base",
+      "inbound_deps": 10,
+      "outbound_deps": 15,
+      "reason": "Orchestrates entire request lifecycle: imports middleware, urls, views, exception handling, signals. Implements WSGI/ASGI protocol and middleware ordering. Coordinates timing of request → view → response flow."
+    },
+    {
+      "module": "urls.resolvers",
+      "inbound_deps": 9,
+      "outbound_deps": 7,
+      "reason": "Bridges routing layer to view dispatch. Used by handlers to resolve path to view, by template tags for reverse URL generation, by debugging tools. Central coordination point for URL space."
+    }
+  ],
+  "change_proposal": {
+    "feature_summary": "Add async-compatible structured logging middleware that captures per-request metadata (view name, ORM query count, response time, user info) and emits as JSON-compatible log records.",
+    "files_to_modify": [
+      "django/middleware/__init__.py (export)",
+      "django/middleware/structured_logging.py (new file)",
+      "django/core/handlers/base.py (integrate with handler timings)",
+      "django/conf/global_settings.py (add LOGGING defaults)"
+    ],
+    "new_types": [
+      "StructuredLoggingMiddleware (class extending MiddlewareMixin)",
+      "RequestMetadata (dataclass: view_name, query_count, response_time, user_id, status_code)",
+      "StructuredLogRecord (namedtuple or Protocol for structured output)"
+    ],
+    "pattern_to_follow": "Follow MiddlewareMixin pattern from django/utils/deprecation.py. Follow async support pattern from CSRFMiddleware (process_request, process_response as sync stubs calling _process_*_async if available). Follow logging pattern from django/utils/log.py (use logging.getLogger, emit as dict via extra= param).",
+    "integration_point": "Middleware stack processes all requests/responses. Hook process_request to capture start_time + view resolution. Hook process_response to measure end_time, capture QuerySet.query_log from connection.queries. Query logging already available via django.db.utils or via SQL_DEBUG + connection.queries_log mechanism. Emit structured record via logging.handlers supporting JSON formatters.",
+    "risks": [
+      "Query logging overhead: enabling connection.queries_log for all requests in production (even filtered middleware) adds 5-10% latency; recommend opt-in via setting or decorator.",
+      "Async compatibility: process_request/process_response must remain sync; structured logging data collection must not block. Defer JSON serialization to logging handler thread.",
+      "Circular imports: middleware module may import from views or handlers for introspection; avoid importing request/response types at module level if those already import middleware.",
+      "Memory: storing QuerySet objects or full stack traces in log records can leak memory if logging handlers buffer; recommend streaming or immediate flush.",
+      "Compatibility with third-party middleware: order matters; place early in stack (before CSRF) to capture full query count, but after error handlers to avoid logging 500 responses twice."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "analyze_directory",
+      "params": "Path: /tmp/benchmark-repos/django/django; summary=true; max_depth=2. Retrieved 136 files across 15 top-level packages, LOC and function counts per module."
+    },
+    {
+      "tool": "analyze_file",
+      "params": "Path: /tmp/benchmark-repos/django/django/http/request.py; summary=true. Extracted HttpRequest class, QueryDict, MediaType; 74 functions across 6 classes; identified POST/file parsing flow."
+    },
+    {
+      "tool": "analyze_file",
+      "params": "Path: /tmp/benchmark-repos/django/django/urls/resolvers.py; summary=true. Extracted URLResolver, URLPattern, ResolverMatch; 53 functions; traced URL matching and reverse logic."
+    },
+    {
+      "tool": "analyze_file",
+      "params": "Path: /tmp/benchmark-repos/django/django/views/debug.py; summary=true. Extracted ExceptionReporter; 31 functions; identified traceback capture and rendering flow."
+    },
+    {
+      "tool": "analyze_symbol",
+      "params": "Path: /tmp/benchmark-repos/django/django; symbol: HttpRequest; follow_depth=1. Confirmed HttpRequest has no direct callers in module scope (used via test client)."
+    },
+    {
+      "tool": "analyze_file",
+      "params": "Path: /tmp/benchmark-repos/django/django/middleware/common.py; summary=true. Extracted CommonMiddleware, BrokenLinkEmailsMiddleware; 7 functions; traced request/response processing."
+    },
+    {
+      "tool": "analyze_file",
+      "params": "Path: /tmp/benchmark-repos/django/django/core/wsgi.py; summary=true. Extracted get_wsgi_application(); 1 function; traced entry point to WSGIHandler."
+    },
+    {
+      "tool": "analyze_directory",
+      "params": "Path: /tmp/benchmark-repos/django/django/core/handlers; summary=true; max_depth=1. Retrieved 5 files: exception.py, asgi.py, base.py, wsgi.py; handler architecture."
+    },
+    {
+      "tool": "analyze_file",
+      "params": "Path: /tmp/benchmark-repos/django/django/db/__init__.py; summary=true. Extracted ConnectionHandler, ConnectionRouter; traced db.connection proxies and reset_queries signal."
+    }
+  ]
+}

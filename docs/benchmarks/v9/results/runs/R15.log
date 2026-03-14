@@ -1,0 +1,8 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v9/results/runs/R15-report.json`.
+
+**Summary of findings:**
+
+- **Module map**: 12 top-level packages traced. `conf` and `utils` are pure foundation layers; `core` is the spine; `db`, `http`, `urls`, `views`, `middleware`, `template` form the request pipeline.
+- **Pipeline trace**: 7 stages from WSGI/ASGI entry → middleware chain → URL resolution (`URLResolver`) → view dispatch (callback + `ResolverMatch`) → ORM (`QuerySet` → `SQLCompiler`) → response construction (`TemplateResponse`) → middleware response path.
+- **Hubs**: `utils` (328 dependents), `core` (273), `conf` (165) — measured by rg import counts across the 902-file codebase.
+- **Change proposal**: `StructuredLoggingMiddleware` following the `sync_capable`/`async_capable` dual-mode pattern from existing middleware. Key risks: query counting only works under `DEBUG=True`, `resolver_match` may be `None` on 404s, and async/sync wrapping must be declared correctly to avoid event-loop blocking.

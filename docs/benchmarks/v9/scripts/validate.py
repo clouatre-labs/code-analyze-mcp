@@ -33,9 +33,18 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-MCP_TOOL_NAMES = {"analyze_directory", "analyze_file", "analyze_symbol"}
+MCP_TOOL_NAMES = {
+    "analyze_directory", "analyze_file", "analyze_symbol",
+    "mcp__code-analyze__analyze_directory",
+    "mcp__code-analyze__analyze_file",
+    "mcp__code-analyze__analyze_symbol",
+}
 NATIVE_TOOL_NAMES = {"Glob", "Grep", "Read", "Bash"}
 SYSTEM_BASH_PATTERNS = {"mkdir", "cd", "git", "cat", "pwd", "touch", "rm", "cp", "mv", "ls"}
+# Paths that are NOT the target codebase — reading/writing these is allowed
+OUTPUT_PATH_PREFIXES = (
+    "/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks",
+)
 
 
 def load_jsonl(path: Path) -> List[Dict]:
@@ -53,9 +62,15 @@ def load_jsonl(path: Path) -> List[Dict]:
 
 
 def extract_tool_calls(messages: List[Dict]) -> List[Tuple[str, Dict]]:
-    """Return list of (tool_name, input_dict) tuples from assistant messages."""
+    """Return list of (tool_name, input_dict) tuples from assistant messages.
+
+    Claude Code JSONL wraps the message in a "message" key:
+      {"type": "assistant", "message": {"role": "assistant", "content": [...]}}
+    """
     tools = []
-    for msg in messages:
+    for entry in messages:
+        # Support both wrapped (Claude Code JSONL) and unwrapped formats
+        msg = entry.get("message", entry)
         if msg.get("role") != "assistant":
             continue
         content = msg.get("content", [])
@@ -67,6 +82,24 @@ def extract_tool_calls(messages: List[Dict]) -> List[Tuple[str, Dict]]:
                 inp = block.get("input", {})
                 tools.append((name, inp))
     return tools
+
+
+def is_output_verification_call(tool_name: str, tool_input: Dict) -> bool:
+    """Detect if a Read or Bash call targets the benchmark output dir (not the codebase).
+
+    Agents may read/verify their own output file after writing it; this is not
+    codebase exploration and should not count as a native research call.
+    """
+    if tool_input is None:
+        return False
+    if tool_name == "Read":
+        path = tool_input.get("file_path", "")
+        return any(path.startswith(p) for p in OUTPUT_PATH_PREFIXES)
+    if tool_name == "Bash":
+        cmd = tool_input.get("command", "")
+        # Check if every path-like token in the command points to the output dir
+        return any(p in cmd for p in OUTPUT_PATH_PREFIXES)
+    return False
 
 
 def is_system_bash_call(tool_input: Dict) -> bool:
@@ -97,6 +130,8 @@ def count_tools(tools: List[Tuple[str, Dict]]) -> Tuple[Dict[str, int], int, int
         elif name in NATIVE_TOOL_NAMES:
             if name == "Bash" and is_system_bash_call(inp):
                 pass  # system bash, not research
+            elif is_output_verification_call(name, inp):
+                pass  # reading/verifying own output, not codebase exploration
             else:
                 native += 1
 
