@@ -1,0 +1,314 @@
+{
+  "benchmark": "v9-benchmark",
+  "version": 9,
+  "target_repo": "TBD",
+  "pinned_commit": "TBD",
+  "model_a": "claude-sonnet-4-6",
+  "model_b": "claude-haiku-4-5",
+  "model_c": "claude-sonnet-4-6",
+  "prompt_caching": "disabled",
+  "blinding_map": {
+    "R01": "A4",
+    "R02": "C2",
+    "R03": "C5",
+    "R04": "A5",
+    "R05": "B4",
+    "R06": "A2",
+    "R07": "C3",
+    "R08": "B5",
+    "R09": "C1",
+    "R10": "B2",
+    "R11": "B1",
+    "R12": "A3",
+    "R13": "B3",
+    "R14": "C4",
+    "R15": "A1"
+  },
+  "per_run_scores": {
+    "A1": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "A2": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "A3": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "A4": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "A5": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "B1": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "B2": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "B3": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "B4": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "B5": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "C1": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "C2": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "C3": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "C4": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    },
+    "C5": {
+      "structural_accuracy": null,
+      "cross_module_tracing": null,
+      "approach_quality": null,
+      "tool_efficiency": null,
+      "notes": null,
+      "metrics": {
+        "tool_calls_total": null,
+        "research_calls": null,
+        "mcp_calls": null,
+        "native_calls": null,
+        "cache_write_tokens": null,
+        "cache_read_tokens": null,
+        "cost_usd": null,
+        "total_tokens": null,
+        "protocol_violations": null,
+        "valid_output": null
+      }
+    }
+  }
+}

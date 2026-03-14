@@ -1,0 +1,17 @@
+1. Condition A, rep 4
+2. Condition C, rep 2
+3. Condition C, rep 5
+4. Condition A, rep 5
+5. Condition B, rep 4
+6. Condition A, rep 2
+7. Condition C, rep 3
+8. Condition B, rep 5
+9. Condition C, rep 1
+10. Condition B, rep 2
+11. Condition B, rep 1
+12. Condition A, rep 3
+13. Condition B, rep 3
+14. Condition C, rep 4
+15. Condition A, rep 1
+# pinned_commit: TBD
+# blinding_map: R01=A4, R02=C2, R03=C5, R04=A5, R05=B4, R06=A2, R07=C3, R08=B5, R09=C1, R10=B2, R11=B1, R12=A3, R13=B3, R14=C4, R15=A1

@@ -1,0 +1,94 @@
+{
+  "benchmark": "v9-benchmark",
+  "version": 9,
+  "target_repo": "TBD",
+  "model_a": "claude-sonnet-4-6",
+  "model_b": "claude-haiku-4-5",
+  "model_c": "claude-sonnet-4-6",
+  "prompt_caching": "disabled",
+  "blinding_map": {
+    "R01": "A4",
+    "R02": "C2",
+    "R03": "C5",
+    "R04": "A5",
+    "R05": "B4",
+    "R06": "A2",
+    "R07": "C3",
+    "R08": "B5",
+    "R09": "C1",
+    "R10": "B2",
+    "R11": "B1",
+    "R12": "A3",
+    "R13": "B3",
+    "R14": "C4",
+    "R15": "A1"
+  },
+  "rubric": {
+    "structural_accuracy": {
+      "3": "Correctly identifies all major top-level modules; responsibilities clearly defined; key types/classes accurately described; module boundaries respect design intent",
+      "2": "Identifies most modules; minor omissions; core functional areas present",
+      "1": "Partial coverage; missing 1-2 major modules or unclear responsibilities; vague on key abstractions",
+      "0": "Major components missing; fundamental misunderstanding of project structure"
+    },
+    "cross_module_tracing": {
+      "3": "Complete end-to-end trace through primary pipeline; intermediate types/classes identified at each stage; data flow clear; integration points noted",
+      "2": "Key stages present; minor gaps (one intermediate stage unclear, or one type missing); general flow understandable",
+      "1": "Partial trace; missing multiple stages or intermediate types; flow not end-to-end",
+      "0": "No meaningful trace or entirely incorrect"
+    },
+    "approach_quality": {
+      "3": "Change proposal identifies: correct files and classes; follows existing patterns; integration point appropriate; realistic risks identified; minimal disruption to existing code",
+      "2": "Reasonable proposal; most files and types identified; risks partially addressed",
+      "1": "Incomplete; missing files, unclear integration point, or no risk analysis",
+      "0": "Superficial or incorrect proposal"
+    },
+    "tool_efficiency": {
+      "3": "5 or fewer research tool calls; focused exploration; clear synthesis path",
+      "2": "6-10 research tool calls; somewhat exploratory but reaches conclusions",
+      "1": "11-20 research tool calls; extensive exploration; delayed synthesis",
+      "0": "More than 20 research tool calls; inefficient; redundant or circular exploration"
+    }
+  },
+  "hypotheses": {
+    "H1_mcp_quality": "Conditions B and C produce higher total rubric scores than Condition A",
+    "H2_model_quality": "Sonnet conditions (A, C) produce higher total rubric scores than Haiku condition (B)",
+    "H3_cost_effectiveness": "Condition C achieves lower effective_cost_per_qp = cost_usd / (quality_score * reliability) than Condition A",
+    "H0_null": "No significant difference in quality score distributions (Mann-Whitney U, Bonferroni alpha=0.017 for 3 pairwise tests)"
+  },
+  "scoring_instructions": {
+    "blinding": "Scorer reads outputs blindly (no condition labels visible). Blinding map reveals condition post-scoring.",
+    "dimensions": "Rate each dimension 0-3 per rubric. Total quality_score = sum of 4 dimensions (0-12).",
+    "tie_breaking": "On borderline scores, refer to rubric anchor descriptions. When uncertain, write notes in 'notes' field for review.",
+    "pacing": "Allow 15-30 minutes per output. Consistency check: review first 3 outputs after scoring all 15 for calibration drift."
+  },
+  "per_run_scores": {
+    "A1": null,
+    "A2": null,
+    "A3": null,
+    "A4": null,
+    "A5": null,
+    "B1": null,
+    "B2": null,
+    "B3": null,
+    "B4": null,
+    "B5": null,
+    "C1": null,
+    "C2": null,
+    "C3": null,
+    "C4": null,
+    "C5": null
+  },
+  "analysis_notes": {
+    "primary_outcome": "Quality score distribution (Mann-Whitney U: A vs B, A vs C, B vs C; Bonferroni alpha=0.017)",
+    "secondary_outcomes": [
+      "research_calls per condition",
+      "total_tokens per condition",
+      "cost_usd per condition",
+      "effective_cost_per_qp = cost_usd / (quality_score * reliability)",
+      "protocol_violations per condition",
+      "cache_write_tokens and cache_read_tokens (exploratory; caching disabled globally)"
+    ],
+    "reporting_frame": "All analyses are exploratory due to N=5 per condition. Effect sizes and practical significance weighted more than p-values.",
+    "statistical_method": "Mann-Whitney U with rank-biserial r effect size; scipy preferred if available, else normal approximation"
+  }
+}
