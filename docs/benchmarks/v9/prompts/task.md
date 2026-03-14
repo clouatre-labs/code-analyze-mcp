@@ -5,7 +5,7 @@
 ## Target Repository
 
 Repository to be determined. Selection criteria:
-- Large Python project (50,000+ lines of code)
+- Large project (500,000+ lines of code)
 - Deep module hierarchy with 5+ top-level packages
 - Complex dependency graph
 - Realistic code analysis scenarios (e.g., multi-dialect parser, ORM, framework)

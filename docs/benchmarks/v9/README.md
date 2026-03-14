@@ -24,7 +24,7 @@ Isolate the MCP efficiency signal from platform-specific overhead (prompt cachin
 | | Condition A — Control | Condition B — Treatment | Condition C — Treatment |
 |---|---|---|---|
 | **Model** | Sonnet | Haiku | Sonnet |
-| **Native tools** | Glob, Grep, Read, Bash | Not available | Glob, Grep, Read, Bash |
+| **Native tools** | Glob, Grep, Read, Bash | Not available | Not available |
 | **MCP tools** | Not available | analyze_directory / analyze_file / analyze_symbol | analyze_directory / analyze_file / analyze_symbol |
 | **Caching** | Disabled (`DISABLE_PROMPT_CACHING=1`) | Disabled | Disabled |
 

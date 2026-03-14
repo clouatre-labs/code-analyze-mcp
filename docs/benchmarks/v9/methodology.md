@@ -22,8 +22,8 @@ Does code-analyze-mcp semantic tools improve agent performance on deep cross-mod
 |---|---|---|---|
 | **Name** | Sonnet + native tools | Haiku + MCP tools | Sonnet + MCP tools |
 | **Model** | claude-sonnet-4-6 | claude-haiku-4-5 | claude-sonnet-4-6 |
-| **Native tools** | Glob, Grep, Read, Bash | Not available | Glob, Grep, Read, Bash |
-| **MCP tools** | Not available | Available (preferred) | Available (preferred) |
+| **Native tools** | Glob, Grep, Read, Bash | Not available | Not available |
+| **MCP tools** | Not available | Available (required) | Available (required) |
 | **Prompt caching** | Disabled | Disabled | Disabled |
 
 ### Participants
@@ -178,7 +178,7 @@ v9 runs use Claude Code. Sessions stored as JSONL files under `~/.claude/project
 **validate.py** extends v8 to:
 - Check Condition A: no MCP tools allowed
 - Check Condition B: MCP tools required; no native file exploration tools
-- Check Condition C: MCP tools required; native tools allowed
+- Check Condition C: MCP tools required; native tools not allowed
 - Check all conditions: research_calls ≤ 10 (post-hoc validation, not enforcement)
 
 **analyze.py** extends v8 to:

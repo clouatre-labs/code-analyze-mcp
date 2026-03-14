@@ -123,42 +123,31 @@ def validate_condition_a(tools: List[Tuple[str, Dict]]) -> Tuple[bool, List[str]
     return len([i for i in issues if i.startswith("ERROR")]) == 0, issues
 
 
-def validate_condition_b(tools: List[Tuple[str, Dict]]) -> Tuple[bool, List[str]]:
-    """Condition B: MCP only, no native file-exploration, research_calls <= 10."""
+def validate_mcp_only_condition(tools: List[Tuple[str, Dict]], label: str) -> Tuple[bool, List[str]]:
+    """Shared validator for MCP-only conditions (B and C): MCP required, no native file-exploration."""
     issues = []
     detail, mcp, native, research_calls = count_tools(tools)
 
-    has_mcp = mcp > 0
-    has_native = native > 0
-
-    if not has_mcp:
-        issues.append("ERROR: no MCP tools used (analyze_directory/analyze_file/analyze_symbol required for Condition B)")
-    if has_native:
-        native_used = [t for t, _ in tools if t in NATIVE_TOOL_NAMES and not (t == "Bash" and is_system_bash_call(_))]
-        issues.append(f"ERROR: native file-exploration tools used (forbidden for Condition B): {native_used}")
+    if mcp == 0:
+        issues.append(f"ERROR: no MCP tools used (analyze_directory/analyze_file/analyze_symbol required for Condition {label})")
+    if native > 0:
+        native_used = [t for t, inp in tools if t in NATIVE_TOOL_NAMES and not (t == "Bash" and is_system_bash_call(inp))]
+        if native_used:
+            issues.append(f"ERROR: native file-exploration tools used (forbidden for Condition {label}): {native_used}")
     if research_calls > 10:
         issues.append(f"WARN: research_calls ({research_calls}) exceeds budget (10)")
 
     return len([i for i in issues if i.startswith("ERROR")]) == 0, issues
+
+
+def validate_condition_b(tools: List[Tuple[str, Dict]]) -> Tuple[bool, List[str]]:
+    """Condition B: MCP only, no native file-exploration, research_calls <= 10."""
+    return validate_mcp_only_condition(tools, "B")
 
 
 def validate_condition_c(tools: List[Tuple[str, Dict]]) -> Tuple[bool, List[str]]:
     """Condition C: MCP only, no native file-exploration, research_calls <= 10."""
-    issues = []
-    detail, mcp, native, research_calls = count_tools(tools)
-
-    has_mcp = mcp > 0
-    has_native = native > 0
-
-    if not has_mcp:
-        issues.append("ERROR: no MCP tools used (analyze_directory/analyze_file/analyze_symbol required for Condition C)")
-    if has_native:
-        native_used = [t for t, _ in tools if t in NATIVE_TOOL_NAMES and not (t == "Bash" and is_system_bash_call(_))]
-        issues.append(f"ERROR: native file-exploration tools used (forbidden for Condition C): {native_used}")
-    if research_calls > 10:
-        issues.append(f"WARN: research_calls ({research_calls}) exceeds budget (10)")
-
-    return len([i for i in issues if i.startswith("ERROR")]) == 0, issues
+    return validate_mcp_only_condition(tools, "C")
 
 
 def main():
