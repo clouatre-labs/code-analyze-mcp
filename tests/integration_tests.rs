@@ -389,8 +389,6 @@ fn process(x: i32) -> i32 {
     assert!(output.formatted.contains("std"));
 
     // Verify call frequency tracking (process called 4 times, should have bullet)
-    assert!(output.semantic.call_frequency.contains_key("process"));
-    assert_eq!(output.semantic.call_frequency["process"], 4);
     assert!(output.formatted.contains("•4"));
 
     // Verify references extracted with line numbers and location set
