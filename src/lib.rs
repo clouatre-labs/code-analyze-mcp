@@ -36,6 +36,7 @@ use logging::LogEvent;
 use pagination::{
     CursorData, DEFAULT_PAGE_SIZE, PaginationMode, decode_cursor, encode_cursor, paginate_slice,
 };
+use parser::SemanticExtractor;
 use rmcp::handler::server::tool::{ToolRouter, schema_for_type};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -53,7 +54,10 @@ use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
-use types::{AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeSymbolParams};
+use types::{
+    AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
+    AnalyzeSymbolParams,
+};
 
 const SIZE_LIMIT: usize = 50_000;
 
@@ -866,6 +870,118 @@ impl CodeAnalyzer {
         let mut result = CallToolResult::success(vec![Content::text(final_text)])
             .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
+        result.structured_content = Some(structured);
+        Ok(result)
+    }
+
+    #[instrument(skip(self))]
+    #[tool(
+        name = "analyze_module",
+        description = "Extract minimal fixed schema from a single source file for lightweight code understanding. Returns name, line count, function list (name/line only), import list (module/items), and language. No call graphs, no field accesses, no complex types. Use analyze_file for detailed semantic analysis; use analyze_module when token budget is critical.",
+        output_schema = schema_for_type::<types::ModuleInfo>(),
+        annotations(
+            title = "Analyze Module",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn analyze_module(
+        &self,
+        params: Parameters<AnalyzeModuleParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+
+        // Read and validate file
+        let file_path = Path::new(&params.path);
+        let file_content = std::fs::read_to_string(file_path).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!("Failed to read file: {}", e),
+                error_meta("validation", false, "ensure file exists and is readable"),
+            )
+        })?;
+
+        // Determine language from file extension
+        let language = match file_path.extension().and_then(|s| s.to_str()) {
+            Some("rs") => "rust",
+            Some("py") => "python",
+            Some("go") => "go",
+            Some("java") => "java",
+            Some("ts" | "tsx" | "js" | "jsx") => "typescript",
+            Some(ext) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    format!("Unsupported file extension: {}", ext),
+                    error_meta("validation", false, "use a supported language file"),
+                ));
+            }
+            None => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "File has no extension".to_string(),
+                    error_meta("validation", false, "ensure file has a language extension"),
+                ));
+            }
+        };
+
+        // Extract semantic analysis using SemanticExtractor
+        let semantic = SemanticExtractor::extract(
+            &file_content,
+            language,
+            None, // ast_recursion_limit
+        )
+        .map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!("Semantic extraction failed: {}", e),
+                error_meta("validation", false, "check file syntax"),
+            )
+        })?;
+
+        // Project to ModuleInfo
+        let file_name = file_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let line_count = file_content.lines().count();
+
+        let functions = semantic
+            .functions
+            .into_iter()
+            .map(|f| types::ModuleFunctionInfo {
+                name: f.name,
+                line: f.line,
+            })
+            .collect();
+
+        let imports = semantic
+            .imports
+            .into_iter()
+            .map(|i| types::ModuleImportInfo {
+                module: i.module,
+                items: i.items,
+            })
+            .collect();
+
+        let module_info = types::ModuleInfo {
+            name: file_name,
+            line_count,
+            language: language.to_string(),
+            functions,
+            imports,
+        };
+
+        let mut result = CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&module_info).unwrap_or_default(),
+        )])
+        .with_meta(Some(no_cache_meta()));
+
+        let structured = serde_json::to_value(&module_info).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         Ok(result)
     }
