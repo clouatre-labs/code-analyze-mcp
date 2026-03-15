@@ -8,7 +8,7 @@
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
 - **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system
-- **Three focused MCP tools**: `analyze_directory`, `analyze_file`, and `analyze_symbol` -- each with a clear, explicit interface rather than a single tool with auto-detected modes
+- **Four focused MCP tools**: `analyze_directory`, `analyze_file`, `analyze_module`, and `analyze_symbol` -- each with a clear, explicit interface rather than a single tool with auto-detected modes
 - **Compatible with any MCP orchestrator**: Claude Code, Kiro, Fast-Agent, MCP-Agent, and others
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
 
@@ -17,8 +17,8 @@
 | Module | File | Responsibility |
 |--------|------|-----------------|
 | `main` | `src/main.rs` | MCP server entry point; initializes tracing and stdio transport |
-| `lib` | `src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_symbol` |
-| `analyze` | `src/analyze.rs` | High-level analysis orchestration; directory and file analysis |
+| `lib` | `src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
+| `analyze` | `src/analyze.rs` | High-level analysis orchestration; directory, file, and module analysis |
 | `parser` | `src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
 | `formatter` | `src/formatter.rs` | Output formatting for all three tools |
 | `traversal` | `src/traversal.rs` | Directory walking with .gitignore support via ignore crate |
@@ -35,6 +35,7 @@
 graph TD
     A["MCP Request"] --> B1["analyze_directory"]
     A --> B2["analyze_file"]
+    A --> B4["analyze_module"]
     A --> B3["analyze_symbol"]
     B1 --> M["walk_directory"]
     M --> N["Parallel Parse rayon"]
@@ -43,11 +44,15 @@ graph TD
     B2 --> J["Read File"]
     J --> K["SemanticExtractor"]
     K --> L["format_file_details"]
+    B4 --> R["Read File"]
+    R --> S["analyze_module_file"]
+    S --> T["format_module"]
     B3 --> G["walk_directory"]
     G --> H["Build CallGraph BFS"]
     H --> I["format_focused"]
     P --> Q["MCP Response"]
     L --> Q
+    T --> Q
     I --> Q
 ```
 
@@ -65,6 +70,13 @@ graph TD
 1. Detect language from extension
 2. SemanticExtractor parses the file: functions with signatures, classes/structs with fields, imports, type references
 3. Format as structured sections
+
+### analyze_module (Module Index)
+
+1. Detect language from extension
+2. `analyze_module_file` in `src/analyze.rs` reads the file and dispatches to `SemanticExtractor`
+3. Returns a minimal fixed schema: `name`, `line_count`, `language`, `functions[{name, line}]`, `imports[{module, items}]`
+4. No call graph, no type references, no field accesses -- output is ~75% smaller than `analyze_file`
 
 ### analyze_symbol (Symbol Call Graph)
 
@@ -112,6 +124,7 @@ Without resources, agents must read documentation out-of-band or infer capabilit
 | `catalog/modes` | Tool names, descriptions, when to use each | JSON |
 | `patterns/overview/examples` | Example queries for `analyze_directory` | JSON |
 | `patterns/file-details/examples` | Example queries for `analyze_file` | JSON |
+| `patterns/module/examples` | Example queries for `analyze_module` | JSON |
 | `patterns/symbol-focus/examples` | Example queries for `analyze_symbol` | JSON |
 | `performance/characteristics` | Token and latency estimates by codebase size | JSON |
 

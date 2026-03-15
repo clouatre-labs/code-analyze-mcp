@@ -16,7 +16,7 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It exposes three tools: `analyze_directory` (file tree with metrics), `analyze_file` (functions, classes, imports from a single file), and `analyze_symbol` (call graph for a named symbol). It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
+code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It exposes four tools: `analyze_directory` (file tree with metrics), `analyze_file` (functions, classes, imports from a single file), `analyze_module` (lightweight function/import index, ~75% smaller than `analyze_file`), and `analyze_symbol` (call graph for a named symbol). It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
 
 ## Installation
 
@@ -159,6 +159,35 @@ REFERENCES:
 analyze_file path: /path/to/file.rs
 analyze_file path: /path/to/file.rs page_size: 50
 analyze_file path: /path/to/file.rs cursor: eyJvZmZzZXQiOjUwfQ==
+```
+
+### `analyze_module`
+
+Extracts a minimal function/import index from a single file. ~75% smaller output than `analyze_file`. Use when you need function names and line numbers or the import list, without signatures, types, call graphs, or references.
+
+**Required:** `path` *(string)* -- file to analyze
+
+**Example output:**
+
+```json
+{
+  "name": "analyze.rs",
+  "line_count": 510,
+  "language": "rust",
+  "functions": [
+    { "name": "analyze_directory", "line": 174 },
+    { "name": "analyze_file", "line": 200 },
+    { "name": "analyze_module_file", "line": 460 }
+  ],
+  "imports": [
+    { "module": "crate::formatter", "items": ["format_file_details"] },
+    { "module": "std::path", "items": ["Path", "PathBuf"] }
+  ]
+}
+```
+
+```bash
+analyze_module path: /path/to/file.rs
 ```
 
 ### `analyze_symbol`
