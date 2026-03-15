@@ -9,6 +9,7 @@ repository = "https://github.com/clouatre-labs/code-analyze-mcp"
 homepage = "https://github.com/clouatre-labs/code-analyze-mcp"
 keywords = ["mcp", "code-analysis", "tree-sitter", "lsp"]
 categories = ["development-tools", "command-line-utilities"]
+exclude = ["docs/", "benches/", ".github/", "tests/"]
 
 [dependencies]
 rmcp = { version = "1", features = ["server", "macros", "transport-io"] }
