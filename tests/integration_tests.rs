@@ -3336,69 +3336,37 @@ fn test_call_tool_result_cache_hint_metadata() {
 
 #[test]
 fn test_analyze_module_rust_happy_path() {
-    use code_analyze_mcp::parser::SemanticExtractor;
-    use code_analyze_mcp::types::ModuleInfo;
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
 
-    let rust_code = r#"
-use std::collections::HashMap;
+    let rust_code = r#"use std::collections::HashMap;
 use std::fs;
 
-fn parse_config(path: &str) -> Result<Config, Error> {
-    let content = fs::read_to_string(path)?;
-    Ok(serde_json::from_str(&content)?)
+fn parse_config(path: &str) -> Result<(), ()> {
+    Ok(())
 }
 
 fn main() {
     println!("Hello, world!");
 }
-
-struct Config {
-    name: String,
-}
 "#;
 
-    let semantic = SemanticExtractor::extract(rust_code, "rust", None)
-        .expect("should extract semantic analysis");
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(rust_code.as_bytes()).expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
 
-    // Project to ModuleInfo
-    let module_info = ModuleInfo {
-        name: "lib.rs".to_string(),
-        line_count: rust_code.lines().count(),
-        language: "rust".to_string(),
-        functions: semantic
-            .functions
-            .into_iter()
-            .map(|f| code_analyze_mcp::types::ModuleFunctionInfo {
-                name: f.name,
-                line: f.line,
-            })
-            .collect(),
-        imports: semantic
-            .imports
-            .into_iter()
-            .map(|i| code_analyze_mcp::types::ModuleImportInfo {
-                module: i.module,
-                items: i.items,
-            })
-            .collect(),
-    };
+    let module_info = analyze_module_file(&path).expect("should analyze module");
 
-    // Assert: name is set
-    assert_eq!(module_info.name, "lib.rs");
-
-    // Assert: line_count > 0
+    assert!(module_info.name.ends_with(".rs"));
     assert!(module_info.line_count > 0);
-
-    // Assert: language is rust
     assert_eq!(module_info.language, "rust");
-
-    // Assert: functions are extracted (should have parse_config and main)
     assert!(!module_info.functions.is_empty());
     let func_names: Vec<_> = module_info.functions.iter().map(|f| &f.name).collect();
     assert!(func_names.contains(&&"parse_config".to_string()));
     assert!(func_names.contains(&&"main".to_string()));
-
-    // Assert: imports are extracted
     assert!(!module_info.imports.is_empty());
     let import_modules: Vec<_> = module_info.imports.iter().map(|i| &i.module).collect();
     assert!(import_modules.iter().any(|m| m.contains("collections")));
@@ -3406,134 +3374,84 @@ struct Config {
 
 #[test]
 fn test_analyze_module_empty_file() {
-    use code_analyze_mcp::parser::SemanticExtractor;
-    use code_analyze_mcp::types::ModuleInfo;
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
 
-    let empty_code = "";
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(b"").expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
 
-    let semantic = SemanticExtractor::extract(empty_code, "rust", None)
-        .expect("should extract semantic analysis for empty file");
+    let module_info = analyze_module_file(&path).expect("should analyze empty module");
 
-    let module_info = ModuleInfo {
-        name: "empty.rs".to_string(),
-        line_count: 1, // Empty string has 1 "line" (empty line)
-        language: "rust".to_string(),
-        functions: semantic
-            .functions
-            .into_iter()
-            .map(|f| code_analyze_mcp::types::ModuleFunctionInfo {
-                name: f.name,
-                line: f.line,
-            })
-            .collect(),
-        imports: semantic
-            .imports
-            .into_iter()
-            .map(|i| code_analyze_mcp::types::ModuleImportInfo {
-                module: i.module,
-                items: i.items,
-            })
-            .collect(),
-    };
-
-    // Assert: empty file has no functions
+    assert_eq!(module_info.line_count, 0);
     assert_eq!(module_info.functions.len(), 0);
-
-    // Assert: empty file has no imports
     assert_eq!(module_info.imports.len(), 0);
 }
 
 #[test]
 fn test_analyze_module_functions_only() {
-    use code_analyze_mcp::parser::SemanticExtractor;
-    use code_analyze_mcp::types::ModuleInfo;
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
 
-    let code = r#"
-fn add(a: i32, b: i32) -> i32 {
-    a + b
-}
+    let code = b"fn add(a: i32, b: i32) -> i32 { a + b }
+fn subtract(a: i32, b: i32) -> i32 { a - b }
+";
 
-fn subtract(a: i32, b: i32) -> i32 {
-    a - b
-}
-"#;
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(code).expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
 
-    let semantic =
-        SemanticExtractor::extract(code, "rust", None).expect("should extract semantic analysis");
+    let module_info = analyze_module_file(&path).expect("should analyze module");
 
-    let module_info = ModuleInfo {
-        name: "math.rs".to_string(),
-        line_count: code.lines().count(),
-        language: "rust".to_string(),
-        functions: semantic
-            .functions
-            .into_iter()
-            .map(|f| code_analyze_mcp::types::ModuleFunctionInfo {
-                name: f.name,
-                line: f.line,
-            })
-            .collect(),
-        imports: semantic
-            .imports
-            .into_iter()
-            .map(|i| code_analyze_mcp::types::ModuleImportInfo {
-                module: i.module,
-                items: i.items,
-            })
-            .collect(),
-    };
-
-    // Assert: has functions
     assert_eq!(module_info.functions.len(), 2);
     let func_names: Vec<_> = module_info.functions.iter().map(|f| &f.name).collect();
     assert!(func_names.contains(&&"add".to_string()));
     assert!(func_names.contains(&&"subtract".to_string()));
-
-    // Assert: no imports
     assert_eq!(module_info.imports.len(), 0);
 }
 
 #[test]
 fn test_analyze_module_imports_only() {
-    use code_analyze_mcp::parser::SemanticExtractor;
-    use code_analyze_mcp::types::ModuleInfo;
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
 
-    let code = r#"
-use std::collections::HashMap;
+    let code = b"use std::collections::HashMap;
 use std::fs::File;
-use serde::Deserialize;
-"#;
+";
 
-    let semantic =
-        SemanticExtractor::extract(code, "rust", None).expect("should extract semantic analysis");
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(code).expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
 
-    let module_info = ModuleInfo {
-        name: "imports.rs".to_string(),
-        line_count: code.lines().count(),
-        language: "rust".to_string(),
-        functions: semantic
-            .functions
-            .into_iter()
-            .map(|f| code_analyze_mcp::types::ModuleFunctionInfo {
-                name: f.name,
-                line: f.line,
-            })
-            .collect(),
-        imports: semantic
-            .imports
-            .into_iter()
-            .map(|i| code_analyze_mcp::types::ModuleImportInfo {
-                module: i.module,
-                items: i.items,
-            })
-            .collect(),
-    };
+    let module_info = analyze_module_file(&path).expect("should analyze module");
 
-    // Assert: no functions
     assert_eq!(module_info.functions.len(), 0);
-
-    // Assert: has imports
     assert!(!module_info.imports.is_empty());
     let import_modules: Vec<_> = module_info.imports.iter().map(|i| &i.module).collect();
     assert!(import_modules.iter().any(|m| m.contains("collections")));
+}
+
+#[test]
+fn test_analyze_module_unsupported_extension() {
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
+
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".txt")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(b"hello").expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
+
+    let result = analyze_module_file(&path);
+    assert!(result.is_err(), "expected error for unsupported extension");
 }

@@ -36,7 +36,6 @@ use logging::LogEvent;
 use pagination::{
     CursorData, DEFAULT_PAGE_SIZE, PaginationMode, decode_cursor, encode_cursor, paginate_slice,
 };
-use parser::SemanticExtractor;
 use rmcp::handler::server::tool::{ToolRouter, schema_for_type};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -894,87 +893,13 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
 
-        // Read and validate file
-        let file_path = Path::new(&params.path);
-        let file_content = std::fs::read_to_string(file_path).map_err(|e| {
+        let module_info = analyze::analyze_module_file(&params.path).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
-                format!("Failed to read file: {}", e),
-                error_meta("validation", false, "ensure file exists and is readable"),
+                format!("Failed to analyze module: {}", e),
+                error_meta("validation", false, "ensure file exists, is readable, and has a supported extension"),
             )
         })?;
-
-        // Determine language from file extension
-        let language = match file_path.extension().and_then(|s| s.to_str()) {
-            Some("rs") => "rust",
-            Some("py") => "python",
-            Some("go") => "go",
-            Some("java") => "java",
-            Some("ts" | "tsx" | "js" | "jsx") => "typescript",
-            Some(ext) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                    format!("Unsupported file extension: {}", ext),
-                    error_meta("validation", false, "use a supported language file"),
-                ));
-            }
-            None => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                    "File has no extension".to_string(),
-                    error_meta("validation", false, "ensure file has a language extension"),
-                ));
-            }
-        };
-
-        // Extract semantic analysis using SemanticExtractor
-        let semantic = SemanticExtractor::extract(
-            &file_content,
-            language,
-            None, // ast_recursion_limit
-        )
-        .map_err(|e| {
-            ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_PARAMS,
-                format!("Semantic extraction failed: {}", e),
-                error_meta("validation", false, "check file syntax"),
-            )
-        })?;
-
-        // Project to ModuleInfo
-        let file_name = file_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-
-        let line_count = file_content.lines().count();
-
-        let functions = semantic
-            .functions
-            .into_iter()
-            .map(|f| types::ModuleFunctionInfo {
-                name: f.name,
-                line: f.line,
-            })
-            .collect();
-
-        let imports = semantic
-            .imports
-            .into_iter()
-            .map(|i| types::ModuleImportInfo {
-                module: i.module,
-                items: i.items,
-            })
-            .collect();
-
-        let module_info = types::ModuleInfo {
-            name: file_name,
-            line_count,
-            language: language.to_string(),
-            functions,
-            imports,
-        };
 
         let mut result = CallToolResult::success(vec![Content::text(
             serde_json::to_string_pretty(&module_info).unwrap_or_default(),
