@@ -294,14 +294,18 @@ pub struct SemanticAnalysis {
     pub imports: Vec<ImportInfo>,
     pub references: Vec<ReferenceInfo>,
     /// Call frequency map (function name -> count).
+    #[serde(skip)]
+    #[schemars(skip)]
     pub call_frequency: HashMap<String, usize>,
     /// Caller-callee pairs extracted from call expressions.
     pub calls: Vec<CallInfo>,
     /// Variable assignments and reassignments.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip)]
+    #[schemars(skip)]
     pub assignments: Vec<AssignmentInfo>,
     /// Field access patterns.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip)]
+    #[schemars(skip)]
     pub field_accesses: Vec<FieldAccessInfo>,
 }
 

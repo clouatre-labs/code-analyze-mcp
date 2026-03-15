@@ -389,9 +389,12 @@ fn process(x: i32) -> i32 {
     assert!(output.formatted.contains("std"));
 
     // Verify call frequency tracking (process called 4 times, should have bullet)
-    assert!(output.semantic.call_frequency.contains_key("process"));
-    assert_eq!(output.semantic.call_frequency["process"], 4);
     assert!(output.formatted.contains("•4"));
+    // Verify advanced fields are excluded from JSON serialization
+    let serialized = serde_json::to_string(&output.semantic).unwrap();
+    assert!(!serialized.contains("call_frequency"));
+    assert!(!serialized.contains("assignments"));
+    assert!(!serialized.contains("field_accesses"));
 
     // Verify references extracted with line numbers and location set
     let point_ref = output
