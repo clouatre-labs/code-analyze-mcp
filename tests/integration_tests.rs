@@ -3355,7 +3355,8 @@ fn main() {
         .suffix(".rs")
         .tempfile()
         .expect("create temp file");
-    tmp.write_all(rust_code.as_bytes()).expect("write temp file");
+    tmp.write_all(rust_code.as_bytes())
+        .expect("write temp file");
     let path = tmp.path().to_str().expect("valid path").to_string();
 
     let module_info = analyze_module_file(&path).expect("should analyze module");

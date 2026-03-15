@@ -897,7 +897,11 @@ impl CodeAnalyzer {
             ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 format!("Failed to analyze module: {}", e),
-                error_meta("validation", false, "ensure file exists, is readable, and has a supported extension"),
+                error_meta(
+                    "validation",
+                    false,
+                    "ensure file exists, is readable, and has a supported extension",
+                ),
             )
         })?;
 
