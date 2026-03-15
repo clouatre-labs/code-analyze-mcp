@@ -876,7 +876,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self))]
     #[tool(
         name = "analyze_module",
-        description = "Extract minimal fixed schema from a single source file for lightweight code understanding. Returns name, line count, function list (name/line only), import list (module/items), and language. No call graphs, no field accesses, no complex types. Use analyze_file for detailed semantic analysis; use analyze_module when token budget is critical.",
+        description = "Index functions and imports in a single source file with minimal token cost. Returns name, line_count, language, function names with line numbers, and import list only -- no signatures, no types, no call graphs, no references. ~75% smaller output than analyze_file. Use analyze_file when you need function signatures, types, or class details; use analyze_module when you only need a function/import index to orient in a file or survey many files in sequence. Use analyze_directory for multi-file overviews; use analyze_symbol to trace call graphs for a specific function. Supported languages: Rust, Go, Java, Python, TypeScript, TSX; unsupported extensions return an error. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs",
         output_schema = schema_for_type::<types::ModuleInfo>(),
         annotations(
             title = "Analyze Module",
