@@ -1,3 +1,4 @@
+use code_analyze_mcp::types::SymbolMatchMode;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::path::Path;
 use std::sync::Arc;
@@ -55,6 +56,7 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
             code_analyze_mcp::analyze::analyze_focused_with_progress(
                 path,
                 focus,
+                SymbolMatchMode::Exact,
                 follow_depth,
                 max_depth,
                 ast_recursion_limit,
