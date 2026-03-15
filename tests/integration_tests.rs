@@ -3333,3 +3333,126 @@ fn test_call_tool_result_cache_hint_metadata() {
         json
     );
 }
+
+#[test]
+fn test_analyze_module_rust_happy_path() {
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
+
+    let rust_code = r#"use std::collections::HashMap;
+use std::fs;
+
+fn parse_config(path: &str) -> Result<(), ()> {
+    Ok(())
+}
+
+fn main() {
+    println!("Hello, world!");
+}
+"#;
+
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(rust_code.as_bytes())
+        .expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
+
+    let module_info = analyze_module_file(&path).expect("should analyze module");
+
+    assert!(module_info.name.ends_with(".rs"));
+    assert!(module_info.line_count > 0);
+    assert_eq!(module_info.language, "rust");
+    assert!(!module_info.functions.is_empty());
+    let func_names: Vec<_> = module_info.functions.iter().map(|f| &f.name).collect();
+    assert!(func_names.contains(&&"parse_config".to_string()));
+    assert!(func_names.contains(&&"main".to_string()));
+    assert!(!module_info.imports.is_empty());
+    let import_modules: Vec<_> = module_info.imports.iter().map(|i| &i.module).collect();
+    assert!(import_modules.iter().any(|m| m.contains("collections")));
+}
+
+#[test]
+fn test_analyze_module_empty_file() {
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
+
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(b"").expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
+
+    let module_info = analyze_module_file(&path).expect("should analyze empty module");
+
+    assert_eq!(module_info.line_count, 0);
+    assert_eq!(module_info.functions.len(), 0);
+    assert_eq!(module_info.imports.len(), 0);
+}
+
+#[test]
+fn test_analyze_module_functions_only() {
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
+
+    let code = b"fn add(a: i32, b: i32) -> i32 { a + b }
+fn subtract(a: i32, b: i32) -> i32 { a - b }
+";
+
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(code).expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
+
+    let module_info = analyze_module_file(&path).expect("should analyze module");
+
+    assert_eq!(module_info.functions.len(), 2);
+    let func_names: Vec<_> = module_info.functions.iter().map(|f| &f.name).collect();
+    assert!(func_names.contains(&&"add".to_string()));
+    assert!(func_names.contains(&&"subtract".to_string()));
+    assert_eq!(module_info.imports.len(), 0);
+}
+
+#[test]
+fn test_analyze_module_imports_only() {
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
+
+    let code = b"use std::collections::HashMap;
+use std::fs::File;
+";
+
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".rs")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(code).expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
+
+    let module_info = analyze_module_file(&path).expect("should analyze module");
+
+    assert_eq!(module_info.functions.len(), 0);
+    assert!(!module_info.imports.is_empty());
+    let import_modules: Vec<_> = module_info.imports.iter().map(|i| &i.module).collect();
+    assert!(import_modules.iter().any(|m| m.contains("collections")));
+}
+
+#[test]
+fn test_analyze_module_unsupported_extension() {
+    use code_analyze_mcp::analyze::analyze_module_file;
+    use std::io::Write;
+
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".txt")
+        .tempfile()
+        .expect("create temp file");
+    tmp.write_all(b"hello").expect("write temp file");
+    let path = tmp.path().to_str().expect("valid path").to_string();
+
+    let result = analyze_module_file(&path);
+    assert!(result.is_err(), "expected error for unsupported extension");
+}

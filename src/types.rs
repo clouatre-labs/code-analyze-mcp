@@ -56,6 +56,12 @@ pub struct AnalyzeFileParams {
     pub output_control: OutputControlParams,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AnalyzeModuleParams {
+    /// File path to analyze
+    pub path: String,
+}
+
 /// Symbol name matching strategy for analyze_symbol.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -307,6 +313,39 @@ pub struct SemanticAnalysis {
     #[serde(skip)]
     #[schemars(skip)]
     pub field_accesses: Vec<FieldAccessInfo>,
+}
+
+/// Minimal function info for analyze_module: name and line only.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ModuleFunctionInfo {
+    /// Function name
+    pub name: String,
+    /// Line number where function is defined
+    pub line: usize,
+}
+
+/// Minimal import info for analyze_module: module and items only.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ModuleImportInfo {
+    /// Full module path (e.g., 'std::collections' for 'use std::collections::HashMap')
+    pub module: String,
+    /// Imported symbols (e.g., ['HashMap'])
+    pub items: Vec<String>,
+}
+
+/// Minimal fixed schema for analyze_module: lightweight code understanding.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ModuleInfo {
+    /// File name (basename only, e.g., 'lib.rs')
+    pub name: String,
+    /// Total line count in file
+    pub line_count: usize,
+    /// Programming language (e.g., 'rust', 'python', 'go')
+    pub language: String,
+    /// Function definitions (name and line only)
+    pub functions: Vec<ModuleFunctionInfo>,
+    /// Import statements (module and items only)
+    pub imports: Vec<ModuleImportInfo>,
 }
 
 #[cfg(test)]

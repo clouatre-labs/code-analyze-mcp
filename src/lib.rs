@@ -53,7 +53,10 @@ use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
 use traversal::walk_directory;
-use types::{AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeSymbolParams};
+use types::{
+    AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
+    AnalyzeSymbolParams,
+};
 
 const SIZE_LIMIT: usize = 50_000;
 
@@ -869,6 +872,48 @@ impl CodeAnalyzer {
         result.structured_content = Some(structured);
         Ok(result)
     }
+
+    #[instrument(skip(self))]
+    #[tool(
+        name = "analyze_module",
+        description = "Extract minimal fixed schema from a single source file for lightweight code understanding. Returns name, line count, function list (name/line only), import list (module/items), and language. No call graphs, no field accesses, no complex types. Use analyze_file for detailed semantic analysis; use analyze_module when token budget is critical.",
+        output_schema = schema_for_type::<types::ModuleInfo>(),
+        annotations(
+            title = "Analyze Module",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn analyze_module(
+        &self,
+        params: Parameters<AnalyzeModuleParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+
+        let module_info = analyze::analyze_module_file(&params.path).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!("Failed to analyze module: {}", e),
+                error_meta(
+                    "validation",
+                    false,
+                    "ensure file exists, is readable, and has a supported extension",
+                ),
+            )
+        })?;
+
+        let mut result = CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&module_info).unwrap_or_default(),
+        )])
+        .with_meta(Some(no_cache_meta()));
+
+        let structured = serde_json::to_value(&module_info).unwrap_or(Value::Null);
+        result.structured_content = Some(structured);
+        Ok(result)
+    }
 }
 
 #[tool_handler]
@@ -885,7 +930,7 @@ impl ServerHandler for CodeAnalyzer {
             .with_description("MCP server for code structure analysis using tree-sitter");
         InitializeResult::new(capabilities)
             .with_server_info(server_info)
-            .with_instructions("Use analyze_directory to map a codebase (pass a directory). Use analyze_file to extract functions, classes, and imports from a specific file (pass a file path). Use analyze_symbol to trace call graphs for a named function or class (pass a directory and set symbol to the function name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes a NEXT_CURSOR: line, pass that value back as cursor to retrieve the next page. For non-interactive single-session workflows (e.g. subagents), disable prompt caching to avoid redundant cache writes: DISABLE_PROMPT_CACHING=1.")
+            .with_instructions("Use analyze_directory to map a codebase (pass a directory). Use analyze_file to extract functions, classes, and imports from a specific file (pass a file path). Use analyze_module to extract a minimal fixed schema (name, line count, functions, imports) from a single file when token budget is critical. Use analyze_symbol to trace call graphs for a named function or class (pass a directory and set symbol to the function name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes a NEXT_CURSOR: line, pass that value back as cursor to retrieve the next page. For non-interactive single-session workflows (e.g. subagents), disable prompt caching to avoid redundant cache writes: DISABLE_PROMPT_CACHING=1.")
     }
 
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {

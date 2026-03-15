@@ -453,3 +453,58 @@ pub fn analyze_focused(
         false,
     )
 }
+
+/// Analyze a single file and return a minimal fixed schema (name, line count, language,
+/// functions, imports) for lightweight code understanding.
+#[instrument(skip_all, fields(path))]
+pub fn analyze_module_file(path: &str) -> Result<crate::types::ModuleInfo, AnalyzeError> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|e| AnalyzeError::Parser(crate::parser::ParserError::ParseError(e.to_string())))?;
+
+    let file_path = Path::new(path);
+    let name = file_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let line_count = source.lines().count();
+
+    let language = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(language_from_extension)
+        .ok_or_else(|| {
+            AnalyzeError::Parser(crate::parser::ParserError::ParseError(
+                "unsupported or missing file extension".to_string(),
+            ))
+        })?;
+
+    let semantic = SemanticExtractor::extract(&source, language, None)?;
+
+    let functions = semantic
+        .functions
+        .into_iter()
+        .map(|f| crate::types::ModuleFunctionInfo {
+            name: f.name,
+            line: f.line,
+        })
+        .collect();
+
+    let imports = semantic
+        .imports
+        .into_iter()
+        .map(|i| crate::types::ModuleImportInfo {
+            module: i.module,
+            items: i.items,
+        })
+        .collect();
+
+    Ok(crate::types::ModuleInfo {
+        name,
+        line_count,
+        language: language.to_string(),
+        functions,
+        imports,
+    })
+}
