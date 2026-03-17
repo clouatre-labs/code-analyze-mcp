@@ -1413,16 +1413,6 @@ fn test_summary_top_hint_with_classes() {
     let summary =
         code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
-    // Debug output
-    eprintln!("Summary:\n{}", summary);
-    eprintln!("Files analyzed:");
-    for f in &output.files {
-        eprintln!(
-            "  {} - functions: {}, classes: {}",
-            f.path, f.function_count, f.class_count
-        );
-    }
-
     // Assert summary contains top hint with classes (C suffix)
     assert!(summary.contains("top:"), "Summary should contain top hint");
     assert!(

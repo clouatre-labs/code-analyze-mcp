@@ -844,9 +844,14 @@ pub fn format_summary(
                                 b.class_count
                                     .cmp(&a.class_count)
                                     .then(b.function_count.cmp(&a.function_count))
+                                    .then(a.path.cmp(&b.path))
                             });
                         } else {
-                            sorted.sort_unstable_by(|a, b| b.function_count.cmp(&a.function_count));
+                            sorted.sort_unstable_by(|a, b| {
+                                b.function_count
+                                    .cmp(&a.function_count)
+                                    .then(a.path.cmp(&b.path))
+                            });
                         }
                         let dir_base = Path::new(&dir_path_str);
                         let top_n: Vec<String> = sorted
