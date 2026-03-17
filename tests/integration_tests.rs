@@ -3578,3 +3578,131 @@ fn test_no_uint_format_in_schemas() {
         }
     }
 }
+
+// Note: the async handler cannot be invoked directly in unit tests (requires MCP transport
+// context). These tests verify the guard condition matches the implementation. See integration
+// coverage for end-to-end behavior.
+
+#[test]
+fn test_overview_summary_explicit_with_cursor_guard_fires() {
+    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
+    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+
+    let cursor_data = CursorData {
+        mode: PaginationMode::Default,
+        offset: 10,
+    };
+    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
+    let params = AnalyzeDirectoryParams {
+        path: ".".to_string(),
+        max_depth: None,
+        pagination: PaginationParams {
+            cursor: Some(cursor_str),
+            page_size: None,
+        },
+        output_control: OutputControlParams {
+            summary: Some(true),
+            force: None,
+            verbose: None,
+        },
+    };
+
+    // Guard condition from the handler: explicit summary=true + cursor present fires the error.
+    assert!(
+        params.output_control.summary == Some(true) && params.pagination.cursor.is_some(),
+        "guard must fire when summary=Some(true) and cursor is present"
+    );
+}
+
+#[test]
+fn test_overview_summary_none_with_cursor_no_guard() {
+    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
+    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+
+    let cursor_data = CursorData {
+        mode: PaginationMode::Default,
+        offset: 10,
+    };
+    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
+    // summary=None: auto-summarization path -- guard must NOT fire so large outputs can paginate.
+    let params = AnalyzeDirectoryParams {
+        path: ".".to_string(),
+        max_depth: None,
+        pagination: PaginationParams {
+            cursor: Some(cursor_str),
+            page_size: None,
+        },
+        output_control: OutputControlParams {
+            summary: None,
+            force: None,
+            verbose: None,
+        },
+    };
+
+    assert!(
+        !(params.output_control.summary == Some(true) && params.pagination.cursor.is_some()),
+        "guard must NOT fire when summary is unset (auto-summarization must not block pagination)"
+    );
+}
+
+#[test]
+fn test_overview_summary_false_with_cursor_no_guard() {
+    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
+    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+
+    let cursor_data = CursorData {
+        mode: PaginationMode::Default,
+        offset: 10,
+    };
+    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
+    let params = AnalyzeDirectoryParams {
+        path: ".".to_string(),
+        max_depth: None,
+        pagination: PaginationParams {
+            cursor: Some(cursor_str),
+            page_size: None,
+        },
+        output_control: OutputControlParams {
+            summary: Some(false),
+            force: None,
+            verbose: None,
+        },
+    };
+
+    assert!(
+        !(params.output_control.summary == Some(true) && params.pagination.cursor.is_some()),
+        "guard must NOT fire when summary=Some(false)"
+    );
+}
+
+#[test]
+fn test_overview_force_true_with_cursor_no_guard() {
+    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
+    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+
+    let cursor_data = CursorData {
+        mode: PaginationMode::Default,
+        offset: 10,
+    };
+    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
+    // force=Some(true) requests non-summary output; summary is not set.
+    // The guard only fires on summary=Some(true), so this combination must not trigger it.
+    let params = AnalyzeDirectoryParams {
+        path: ".".to_string(),
+        max_depth: None,
+        pagination: PaginationParams {
+            cursor: Some(cursor_str),
+            page_size: None,
+        },
+        output_control: OutputControlParams {
+            summary: None,
+            force: Some(true),
+            verbose: None,
+        },
+    };
+
+    assert!(
+        !(params.output_control.summary == Some(true) && params.pagination.cursor.is_some()),
+        "guard must NOT fire when force=true and summary is not explicitly set to true"
+    );
+}

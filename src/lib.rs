@@ -524,7 +524,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_directory",
-        description = "Analyze directory structure and code metrics for multi-file overview. Use this tool for directories; use analyze_file for a single file. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore (results may differ from raw filesystem listing because .gitignore rules are applied). For repos with 1000+ files, use max_depth=2-3 and summary=true to stay within token budgets. Note: max_depth controls what is analyzed (traversal depth), while page_size controls how results are returned (chunking); these are independent. Strategy comparison: prefer pagination (page_size=50) over force=true to reduce per-call token overhead; use summary=true when counts and structure are sufficient and no pagination is needed; force=true is an escape hatch for exceptional cases. Empty directories return an empty tree with zero counts. Output auto-summarizes at 50K chars; use summary=true to force compact output. Paginate large results with cursor and page_size. Example queries: Analyze the src/ directory to understand module structure; What files are in the tests/ directory and how large are they?",
+        description = "Analyze directory structure and code metrics for multi-file overview. Use this tool for directories; use analyze_file for a single file. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore (results may differ from raw filesystem listing because .gitignore rules are applied). For repos with 1000+ files, use max_depth=2-3 and summary=true to stay within token budgets. Note: max_depth controls what is analyzed (traversal depth), while page_size controls how results are returned (chunking); these are independent. Strategy comparison: prefer pagination (page_size=50) over force=true to reduce per-call token overhead; use summary=true when counts and structure are sufficient and no pagination is needed; force=true is an escape hatch for exceptional cases. Empty directories return an empty tree with zero counts. Output auto-summarizes at 50K chars; use summary=true to force compact output. Paginate large results with cursor and page_size. Example queries: Analyze the src/ directory to understand module structure; What files are in the tests/ directory and how large are they? summary=true and cursor are mutually exclusive; passing both returns an error.",
         output_schema = schema_for_type::<analyze::AnalysisOutput>(),
         annotations(
             title = "Analyze Directory",
@@ -544,6 +544,17 @@ impl CodeAnalyzer {
 
         // Call handler for analysis and progress tracking
         let mut output = self.handle_overview_mode(&params, ct).await?;
+
+        // summary=true (explicit) and cursor are mutually exclusive.
+        // Auto-summarization (summary=None + large output) must NOT block cursor pagination.
+        if params.output_control.summary == Some(true) && params.pagination.cursor.is_some() {
+            return Err(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "summary=true is incompatible with a pagination cursor; use one or the other"
+                    .to_string(),
+                error_meta("validation", false, "remove cursor or set summary=false"),
+            ));
+        }
 
         // Apply summary/output size limiting logic
         let use_summary = if params.output_control.force == Some(true) {
