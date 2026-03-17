@@ -30,7 +30,7 @@ pub mod types;
 use cache::AnalysisCache;
 use formatter::{
     format_file_details_paginated, format_file_details_summary, format_focused_paginated,
-    format_structure_paginated, format_summary,
+    format_module_info, format_structure_paginated, format_summary,
 };
 use logging::LogEvent;
 use pagination::{
@@ -876,7 +876,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self))]
     #[tool(
         name = "analyze_module",
-        description = "Index functions and imports in a single source file with minimal token cost. Returns name, line_count, language, function names with line numbers, and import list only -- no signatures, no types, no call graphs, no references. ~75% smaller output than analyze_file. Use analyze_file when you need function signatures, types, or class details; use analyze_module when you only need a function/import index to orient in a file or survey many files in sequence. Use analyze_directory for multi-file overviews; use analyze_symbol to trace call graphs for a specific function. Supported languages: Rust, Go, Java, Python, TypeScript, TSX; unsupported extensions return an error. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs",
+        description = "Index functions and imports in a single source file with minimal token cost. Returns name, line_count, language, function names with line numbers, and import list only -- no signatures, no types, no call graphs, no references. ~75% smaller output than analyze_file. Use analyze_file when you need function signatures, types, or class details; use analyze_module when you only need a function/import index to orient in a file or survey many files in sequence. Use analyze_directory for multi-file overviews; use analyze_symbol to trace call graphs for a specific function. Supported languages: Rust, Go, Java, Python, TypeScript, TSX; unsupported extensions return an error. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs Pagination, summary, force, and verbose parameters are not supported by this tool.",
         output_schema = schema_for_type::<types::ModuleInfo>(),
         annotations(
             title = "Analyze Module",
@@ -905,12 +905,16 @@ impl CodeAnalyzer {
             )
         })?;
 
-        let mut result = CallToolResult::success(vec![Content::text(
-            serde_json::to_string_pretty(&module_info).unwrap_or_default(),
-        )])
-        .with_meta(Some(no_cache_meta()));
-
-        let structured = serde_json::to_value(&module_info).unwrap_or(Value::Null);
+        let text = format_module_info(&module_info);
+        let mut result =
+            CallToolResult::success(vec![Content::text(text)]).with_meta(Some(no_cache_meta()));
+        let structured = serde_json::to_value(&module_info).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("serialization failed: {}", e),
+                error_meta("transient", false, "report this as a bug"),
+            )
+        })?;
         result.structured_content = Some(structured);
         Ok(result)
     }
