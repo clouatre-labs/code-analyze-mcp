@@ -23,6 +23,7 @@ pub mod languages;
 pub mod logging;
 pub mod pagination;
 pub mod parser;
+pub mod schema_helpers;
 pub mod test_detection;
 pub mod traversal;
 pub mod types;

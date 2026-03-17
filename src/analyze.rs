@@ -63,6 +63,7 @@ pub struct FileAnalysisOutput {
     #[schemars(description = "Semantic analysis data including functions, classes, and imports")]
     pub semantic: SemanticAnalysis,
     #[schemars(description = "Total line count of the analyzed file")]
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(

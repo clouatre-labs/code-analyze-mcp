@@ -3541,3 +3541,33 @@ fn test_analyze_module_unsupported_extension() {
     let result = analyze_module_file(&path);
     assert!(result.is_err(), "expected error for unsupported extension");
 }
+
+#[test]
+fn test_no_uint_format_in_schemas() {
+    use code_analyze_mcp::types::AnalyzeDirectoryParams;
+    use code_analyze_mcp::types::FileInfo;
+    use schemars::SchemaGenerator;
+
+    let mut schema_gen = SchemaGenerator::default();
+    let file_info_schema = schema_gen.subschema_for::<FileInfo>();
+    let schema_str = serde_json::to_string(&file_info_schema).unwrap();
+    assert!(
+        !schema_str.contains("\"uint\""),
+        "FileInfo schema contains non-standard 'uint' format"
+    );
+    assert!(
+        !schema_str.contains("\"uint32\""),
+        "FileInfo schema contains non-standard 'uint32' format"
+    );
+    assert!(
+        !schema_str.contains("\"uint64\""),
+        "FileInfo schema contains non-standard 'uint64' format"
+    );
+
+    let dir_params_schema = schema_gen.subschema_for::<AnalyzeDirectoryParams>();
+    let dir_str = serde_json::to_string(&dir_params_schema).unwrap();
+    assert!(
+        !dir_str.contains("\"uint32\""),
+        "AnalyzeDirectoryParams schema contains non-standard 'uint32' format"
+    );
+}
