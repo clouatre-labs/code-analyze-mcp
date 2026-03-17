@@ -829,9 +829,70 @@ pub fn format_summary(
                 let dir_functions: usize = files_in_dir.iter().map(|f| f.function_count).sum();
                 let dir_classes: usize = files_in_dir.iter().map(|f| f.class_count).sum();
 
+                // Build hint: top-N files sorted by class_count desc, fallback to function_count
+                let hint = if files_in_dir.len() > 1 && (dir_classes > 0 || dir_functions > 0) {
+                    let mut top_files = files_in_dir.clone();
+                    top_files.sort_unstable_by(|a, b| {
+                        b.class_count
+                            .cmp(&a.class_count)
+                            .then(b.function_count.cmp(&a.function_count))
+                            .then(a.path.cmp(&b.path))
+                    });
+
+                    let has_classes = top_files.iter().any(|f| f.class_count > 0);
+
+                    // Re-sort for function fallback if no classes
+                    if !has_classes {
+                        top_files.sort_unstable_by(|a, b| {
+                            b.function_count
+                                .cmp(&a.function_count)
+                                .then(a.path.cmp(&b.path))
+                        });
+                    }
+
+                    let dir_path = Path::new(&dir_path_str);
+                    let top_n: Vec<String> = top_files
+                        .iter()
+                        .take(3)
+                        .filter(|f| {
+                            if has_classes {
+                                f.class_count > 0
+                            } else {
+                                f.function_count > 0
+                            }
+                        })
+                        .map(|f| {
+                            let rel = Path::new(&f.path)
+                                .strip_prefix(dir_path)
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .unwrap_or_else(|_| {
+                                    Path::new(&f.path)
+                                        .file_name()
+                                        .and_then(|n| n.to_str())
+                                        .map(|s| s.to_owned())
+                                        .unwrap_or_else(|| "?".to_owned())
+                                });
+                            let count = if has_classes {
+                                f.class_count
+                            } else {
+                                f.function_count
+                            };
+                            let suffix = if has_classes { 'C' } else { 'F' };
+                            format!("{}({}{})", rel, count, suffix)
+                        })
+                        .collect();
+                    if top_n.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" top: {}", top_n.join(", "))
+                    }
+                } else {
+                    String::new()
+                };
+
                 output.push_str(&format!(
-                    "  {}/ [{} files, {}L, {}F, {}C]\n",
-                    name, dir_file_count, dir_loc, dir_functions, dir_classes
+                    "  {}/ [{} files, {}L, {}F, {}C]{}\n",
+                    name, dir_file_count, dir_loc, dir_functions, dir_classes, hint
                 ));
             } else {
                 output.push_str(&format!("  {}/\n", name));
