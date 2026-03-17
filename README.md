@@ -81,7 +81,7 @@ Or add manually to `.mcp.json` at your project root (shared with your team via v
 
 ## Tools
 
-All optional parameters may be omitted. Shared optional parameters across tools:
+All optional parameters may be omitted. Shared optional parameters for `analyze_directory`, `analyze_file`, and `analyze_symbol` (`analyze_module` does not support these):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -172,13 +172,10 @@ Extracts a minimal function/import index from a single file. ~75% smaller output
 
 ```
 FILE: analyze.rs (510L, 3F, 2I)
-
 F:
   analyze_directory:174, analyze_file:200, analyze_module_file:460
-
 I:
-  crate::formatter - format_file_details
-  std::path - Path, PathBuf
+  crate::formatter:format_file_details; std::path:Path, PathBuf
 ```
 
 ```bash
@@ -200,9 +197,9 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
 - `match_mode` *(string, default exact)* -- Symbol lookup strategy:
   - `exact`: Case-sensitive exact match (default)
   - `insensitive`: Case-insensitive exact match
-  - `prefix`: Case-insensitive prefix match (returns all matching symbols)
-  - `contains`: Case-insensitive substring match (returns all matching symbols)
-  When exact match fails or prefix/contains returns multiple candidates, an error lists all options for refinement.
+  - `prefix`: Case-insensitive prefix match; returns an error listing candidates when multiple symbols match
+  - `contains`: Case-insensitive substring match; returns an error listing candidates when multiple symbols match
+  All non-exact modes return an error with candidate names when the match is ambiguous; use the listed candidates to refine to a unique match.
 
 **Example output:**
 
