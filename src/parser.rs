@@ -347,6 +347,10 @@ fn extract_imports_from_node(
                 });
             }
         }
+        // Python import_from_statement: `from module import name` or `from . import *`
+        "import_from_statement" => {
+            extract_python_import_from(node, source, line, imports);
+        }
         // Fallback for non-Rust import nodes: capture full text as module
         _ => {
             let text = source[node.start_byte()..node.end_byte()]
@@ -360,6 +364,90 @@ fn extract_imports_from_node(
                 });
             }
         }
+    }
+}
+
+/// Extract an item name from a dotted_name or aliased_import child node.
+fn extract_import_item_name(child: &Node, source: &str) -> Option<String> {
+    match child.kind() {
+        "dotted_name" => {
+            let name = source[child.start_byte()..child.end_byte()]
+                .trim()
+                .to_string();
+            if name.is_empty() { None } else { Some(name) }
+        }
+        "aliased_import" => child.child_by_field_name("name").and_then(|n| {
+            let name = source[n.start_byte()..n.end_byte()].trim().to_string();
+            if name.is_empty() { None } else { Some(name) }
+        }),
+        _ => None,
+    }
+}
+
+/// Collect wildcard/named imports from an import_list node or from direct named children.
+fn collect_import_items(
+    node: &Node,
+    source: &str,
+    is_wildcard: &mut bool,
+    items: &mut Vec<String>,
+) {
+    // Prefer import_list child (wraps `from x import a, b`)
+    if let Some(import_list) = node.child_by_field_name("import_list") {
+        let mut cursor = import_list.walk();
+        for child in import_list.named_children(&mut cursor) {
+            if child.kind() == "wildcard_import" {
+                *is_wildcard = true;
+            } else if let Some(name) = extract_import_item_name(&child, source) {
+                items.push(name);
+            }
+        }
+        return;
+    }
+    // No import_list: single-name or wildcard as direct child (skip first named child = module_name)
+    let mut cursor = node.walk();
+    let mut first = true;
+    for child in node.named_children(&mut cursor) {
+        if first {
+            first = false;
+            continue;
+        }
+        if child.kind() == "wildcard_import" {
+            *is_wildcard = true;
+        } else if let Some(name) = extract_import_item_name(&child, source) {
+            items.push(name);
+        }
+    }
+}
+
+/// Handle Python `import_from_statement` node.
+fn extract_python_import_from(
+    node: &Node,
+    source: &str,
+    line: usize,
+    imports: &mut Vec<ImportInfo>,
+) {
+    let module = if let Some(m) = node.child_by_field_name("module_name") {
+        source[m.start_byte()..m.end_byte()].trim().to_string()
+    } else if let Some(r) = node.child_by_field_name("relative_import") {
+        source[r.start_byte()..r.end_byte()].trim().to_string()
+    } else {
+        String::new()
+    };
+
+    let mut is_wildcard = false;
+    let mut items = Vec::new();
+    collect_import_items(node, source, &mut is_wildcard, &mut items);
+
+    if !module.is_empty() {
+        imports.push(ImportInfo {
+            module,
+            items: if is_wildcard {
+                vec!["*".to_string()]
+            } else {
+                items
+            },
+            line,
+        });
     }
 }
 
