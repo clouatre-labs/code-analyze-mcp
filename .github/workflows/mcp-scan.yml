@@ -30,7 +30,7 @@ jobs:
           toolchain: stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@bc1860267c1b189716ecde249f61cf86e8408d91
+        uses: Swatinem/rust-cache@85fb4247b71961ec8fe7c885c0814d47486c6ce0
         with:
           save-if: "true"
 
