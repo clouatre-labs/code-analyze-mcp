@@ -820,7 +820,7 @@ pub fn format_summary(
             let dir_path_str = entry.path.display().to_string();
             let files_in_dir: Vec<&FileInfo> = analysis_results
                 .iter()
-                .filter(|f| f.path.starts_with(&dir_path_str))
+                .filter(|f| Path::new(&f.path).starts_with(&entry.path))
                 .collect();
 
             if !files_in_dir.is_empty() {
