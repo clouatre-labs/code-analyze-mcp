@@ -818,9 +818,13 @@ pub fn format_summary(
         if entry.is_dir {
             // For directories, aggregate stats from all files under this directory
             let dir_path_str = entry.path.display().to_string();
+            let dir_path_normalized = Path::new(&dir_path_str);
             let files_in_dir: Vec<&FileInfo> = analysis_results
                 .iter()
-                .filter(|f| f.path.starts_with(&dir_path_str))
+                .filter(|f| {
+                    let file_path = Path::new(&f.path);
+                    file_path.starts_with(dir_path_normalized)
+                })
                 .collect();
 
             if !files_in_dir.is_empty() {
@@ -829,9 +833,67 @@ pub fn format_summary(
                 let dir_functions: usize = files_in_dir.iter().map(|f| f.function_count).sum();
                 let dir_classes: usize = files_in_dir.iter().map(|f| f.class_count).sum();
 
+                // Build top-N hint for summary mode
+                let hint = if files_in_dir.len() > 1 {
+                    let has_classes = files_in_dir.iter().any(|f| f.class_count > 0);
+                    let has_functions = files_in_dir.iter().any(|f| f.function_count > 0);
+                    if has_classes || has_functions {
+                        let mut sorted = files_in_dir.clone();
+                        if has_classes {
+                            sorted.sort_unstable_by(|a, b| {
+                                b.class_count
+                                    .cmp(&a.class_count)
+                                    .then(b.function_count.cmp(&a.function_count))
+                            });
+                        } else {
+                            sorted.sort_unstable_by(|a, b| b.function_count.cmp(&a.function_count));
+                        }
+                        let dir_base = Path::new(&dir_path_str);
+                        let top_n: Vec<String> = sorted
+                            .iter()
+                            .filter(|f| {
+                                if has_classes {
+                                    f.class_count > 0
+                                } else {
+                                    f.function_count > 0
+                                }
+                            })
+                            .take(3)
+                            .map(|f| {
+                                let rel = Path::new(&f.path)
+                                    .strip_prefix(dir_base)
+                                    .map(|p| p.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|_| {
+                                        Path::new(&f.path)
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("?")
+                                            .to_owned()
+                                    });
+                                let count = if has_classes {
+                                    f.class_count
+                                } else {
+                                    f.function_count
+                                };
+                                let suffix = if has_classes { 'C' } else { 'F' };
+                                format!("{}({}{})", rel, count, suffix)
+                            })
+                            .collect();
+                        if top_n.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" top: {}", top_n.join(", "))
+                        }
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
+
                 output.push_str(&format!(
-                    "  {}/ [{} files, {}L, {}F, {}C]\n",
-                    name, dir_file_count, dir_loc, dir_functions, dir_classes
+                    "  {}/ [{} files, {}L, {}F, {}C]{}\n",
+                    name, dir_file_count, dir_loc, dir_functions, dir_classes, hint
                 ));
             } else {
                 output.push_str(&format!("  {}/\n", name));
