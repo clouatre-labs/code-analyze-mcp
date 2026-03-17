@@ -11,7 +11,7 @@ use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
-use crate::types::{AnalysisMode, FileInfo, SemanticAnalysis, SymbolMatchMode};
+use crate::types::{AnalysisMode, FileInfo, ImportInfo, SemanticAnalysis, SymbolMatchMode};
 use rayon::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -222,6 +222,11 @@ pub fn analyze_file(
     // Populate the file path on references now that the path is known
     for r in &mut semantic.references {
         r.location = path.to_string();
+    }
+
+    // Resolve Python wildcard imports
+    if ext == "python" {
+        resolve_wildcard_imports(Path::new(path), &mut semantic.imports);
     }
 
     // Detect if this is a test file
@@ -508,4 +513,230 @@ pub fn analyze_module_file(path: &str) -> Result<crate::types::ModuleInfo, Analy
         functions,
         imports,
     })
+}
+
+/// Resolve Python wildcard imports to actual symbol names.
+///
+/// For each import with items=["*"], this function:
+/// 1. Parses the relative dots (if any) and climbs the directory tree
+/// 2. Finds the target .py file or __init__.py
+/// 3. Extracts symbols (functions and classes) from the target
+/// 4. Honors __all__ if defined, otherwise uses function+class names
+///
+/// All resolution failures are non-fatal: debug-logged and the wildcard is preserved.
+fn resolve_wildcard_imports(file_path: &Path, imports: &mut [ImportInfo]) {
+    use std::collections::HashMap;
+
+    let mut resolved_cache: HashMap<PathBuf, Vec<String>> = HashMap::new();
+    let file_path_canonical = match file_path.canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            tracing::debug!(file = ?file_path, "unable to canonicalize current file path");
+            return;
+        }
+    };
+
+    for import in imports.iter_mut() {
+        if import.items != ["*"] {
+            continue;
+        }
+        resolve_single_wildcard(import, file_path, &file_path_canonical, &mut resolved_cache);
+    }
+}
+
+/// Resolve one wildcard import in place. On any failure the import is left unchanged.
+fn resolve_single_wildcard(
+    import: &mut ImportInfo,
+    file_path: &Path,
+    file_path_canonical: &Path,
+    resolved_cache: &mut std::collections::HashMap<PathBuf, Vec<String>>,
+) {
+    let module = import.module.clone();
+    let dot_count = module.chars().take_while(|c| *c == '.').count();
+    let module_path = module.trim_start_matches('.');
+
+    let target_to_read = match locate_target_file(file_path, dot_count, module_path, &module) {
+        Some(p) => p,
+        None => return,
+    };
+
+    let canonical = match target_to_read.canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            tracing::debug!(target = ?target_to_read, import = %module, "unable to canonicalize path");
+            return;
+        }
+    };
+
+    if canonical == file_path_canonical {
+        tracing::debug!(target = ?canonical, import = %module, "cannot import from self");
+        return;
+    }
+
+    if let Some(cached) = resolved_cache.get(&canonical) {
+        tracing::debug!(import = %module, symbols_count = cached.len(), "using cached symbols");
+        import.items = cached.clone();
+        return;
+    }
+
+    if let Some(symbols) = parse_target_symbols(&target_to_read, &module) {
+        tracing::debug!(import = %module, resolved_count = symbols.len(), "wildcard import resolved");
+        import.items = symbols.clone();
+        resolved_cache.insert(canonical, symbols);
+    }
+}
+
+/// Locate the .py file that a wildcard import refers to. Returns None if not found.
+fn locate_target_file(
+    file_path: &Path,
+    dot_count: usize,
+    module_path: &str,
+    module: &str,
+) -> Option<PathBuf> {
+    let mut target_dir = file_path.parent()?.to_path_buf();
+
+    for _ in 1..dot_count {
+        if !target_dir.pop() {
+            tracing::debug!(import = %module, "unable to climb {} levels", dot_count);
+            return None;
+        }
+    }
+
+    let target_file = if module_path.is_empty() {
+        target_dir.join("__init__.py")
+    } else {
+        let rel_path = module_path.replace('.', "/");
+        target_dir.join(format!("{rel_path}.py"))
+    };
+
+    if target_file.exists() {
+        Some(target_file)
+    } else if target_file.with_extension("").is_dir() {
+        Some(target_file.with_extension("").join("__init__.py"))
+    } else {
+        tracing::debug!(target = ?target_file, import = %module, "target file not found");
+        None
+    }
+}
+
+/// Read and parse a target .py file, returning its exported symbols.
+fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>> {
+    let source = match std::fs::read_to_string(target_path) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::debug!(target = ?target_path, import = %module, error = %e, "unable to read target file");
+            return None;
+        }
+    };
+
+    if let Some(symbols) = extract_all_from_ast(&source, "python") {
+        tracing::debug!(import = %module, symbols = ?symbols, "using __all__ symbols");
+        return Some(symbols);
+    }
+
+    let semantic = match SemanticExtractor::extract(&source, "python", None) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::debug!(target = ?target_path, import = %module, error = ?e, "unable to parse target file");
+            return None;
+        }
+    };
+
+    let mut out = Vec::new();
+    for f in &semantic.functions {
+        if !f.name.starts_with('_') {
+            out.push(f.name.clone());
+        }
+    }
+    for c in &semantic.classes {
+        if !c.name.starts_with('_') {
+            out.push(c.name.clone());
+        }
+    }
+    tracing::debug!(import = %module, fallback_symbols = ?out, "using fallback function/class names");
+    Some(out)
+}
+
+/// Extract __all__ from Python file's AST.
+///
+/// Looks for assignment_statement with __all__ as the target, returning the list of names
+/// if found and parseable. Returns None if __all__ not defined.
+fn extract_all_from_ast(source: &str, language: &str) -> Option<Vec<String>> {
+    use tree_sitter::Parser;
+
+    let lang_info = crate::languages::get_language_info(language)?;
+
+    let mut parser = Parser::new();
+    if parser.set_language(&lang_info.language).is_err() {
+        return None;
+    }
+
+    let tree = parser.parse(source, None)?;
+
+    let root = tree.root_node();
+    let mut result = Vec::new();
+
+    // Scan only top-level statements (direct children of module root)
+    // In tree-sitter-python, simple_statement nodes are at top level and contain assignment
+    let mut cursor = root.walk();
+    for child in root.children(&mut cursor) {
+        if child.kind() == "simple_statement" {
+            // simple_statement contains assignment and other statement types
+            let mut simple_cursor = child.walk();
+            for simple_child in child.children(&mut simple_cursor) {
+                if simple_child.kind() == "assignment"
+                    && let Some(left) = simple_child.child_by_field_name("left")
+                {
+                    let target_text = source[left.start_byte()..left.end_byte()].trim();
+                    if target_text == "__all__"
+                        && let Some(right) = simple_child.child_by_field_name("right")
+                    {
+                        extract_string_list_from_list_node(&right, source, &mut result);
+                    }
+                }
+            }
+        } else if child.kind() == "expression_statement" {
+            // Fallback for older Python AST structures
+            let mut stmt_cursor = child.walk();
+            for stmt_child in child.children(&mut stmt_cursor) {
+                if stmt_child.kind() == "assignment"
+                    && let Some(left) = stmt_child.child_by_field_name("left")
+                {
+                    let target_text = source[left.start_byte()..left.end_byte()].trim();
+                    if target_text == "__all__"
+                        && let Some(right) = stmt_child.child_by_field_name("right")
+                    {
+                        extract_string_list_from_list_node(&right, source, &mut result);
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::debug!(result_count = result.len(), "extract_all_from_ast: done");
+
+    if result.is_empty() {
+        None
+    } else {
+        Some(result)
+    }
+}
+
+/// Extract string literals from a Python list node.
+fn extract_string_list_from_list_node(
+    list_node: &tree_sitter::Node,
+    source: &str,
+    result: &mut Vec<String>,
+) {
+    let mut cursor = list_node.walk();
+    for child in list_node.named_children(&mut cursor) {
+        if child.kind() == "string" {
+            let raw = source[child.start_byte()..child.end_byte()].trim();
+            // Strip quotes: "name" -> name
+            let unquoted = raw.trim_matches('"').trim_matches('\'').to_string();
+            if !unquoted.is_empty() {
+                result.push(unquoted);
+            }
+        }
+    }
 }
