@@ -1239,7 +1239,7 @@ fn format_file_entry(file: &FileInfo, base_path: Option<&Path>) -> String {
 ///
 /// Output format:
 /// ```text
-/// FILE: <name> (<line_count>L, <language>) <N>F <M>I
+/// FILE: <name> (<line_count>L, <fn_count>F, <import_count>I)
 /// F:
 ///   func1:10, func2:42
 /// I:
@@ -1256,8 +1256,8 @@ pub fn format_module_info(info: &ModuleInfo) -> String {
     let mut out = String::with_capacity(64 + fn_count * 24 + import_count * 32);
     let _ = writeln!(
         out,
-        "FILE: {} ({}L, {}) {}F {}I",
-        info.name, info.line_count, info.language, fn_count, import_count
+        "FILE: {} ({}L, {}F, {}I)",
+        info.name, info.line_count, fn_count, import_count
     );
     if !info.functions.is_empty() {
         out.push_str("F:\n  ");
@@ -1626,7 +1626,7 @@ mod tests {
             ],
         };
         let result = format_module_info(&info);
-        assert!(result.starts_with("FILE: parser.rs (312L, rust) 2F 2I"));
+        assert!(result.starts_with("FILE: parser.rs (312L, 2F, 2I"));
         assert!(result.contains("F:"));
         assert!(result.contains("parse_file:24"));
         assert!(result.contains("parse_block:58"));
@@ -1648,7 +1648,7 @@ mod tests {
             imports: vec![],
         };
         let result = format_module_info(&info);
-        assert!(result.starts_with("FILE: empty.rs (0L, rust) 0F 0I"));
+        assert!(result.starts_with("FILE: empty.rs (0L, 0F, 0I"));
         assert!(!result.contains("F:"));
         assert!(!result.contains("I:"));
     }
