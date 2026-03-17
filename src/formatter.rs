@@ -1235,12 +1235,28 @@ fn format_file_entry(file: &FileInfo, base_path: Option<&Path>) -> String {
     }
 }
 
+/// Format a [`ModuleInfo`] into a compact single-block string.
+///
+/// Output format:
+/// ```text
+/// FILE: <name> (<line_count>L, <language>) <N>F <M>I
+/// F:
+///   func1:10, func2:42
+/// I:
+///   module1:item1, item2 | module2:item1
+/// ```
+///
+/// The `F:` section is omitted when there are no functions; likewise `I:` when
+/// there are no imports.
 #[instrument(skip_all)]
 pub fn format_module_info(info: &ModuleInfo) -> String {
+    use std::fmt::Write as _;
     let fn_count = info.functions.len();
     let import_count = info.imports.len();
-    let mut out = format!(
-        "FILE: {} ({}L, {}) {}F {}I\n",
+    let mut out = String::with_capacity(64 + fn_count * 24 + import_count * 32);
+    let _ = writeln!(
+        out,
+        "FILE: {} ({}L, {}) {}F {}I",
         info.name, info.line_count, info.language, fn_count, import_count
     );
     if !info.functions.is_empty() {
@@ -1258,7 +1274,7 @@ pub fn format_module_info(info: &ModuleInfo) -> String {
         let parts: Vec<String> = info
             .imports
             .iter()
-            .map(|i| format!("{}: {}", i.module, i.items.join(", ")))
+            .map(|i| format!("{}:{}", i.module, i.items.join(", ")))
             .collect();
         out.push_str(&parts.join(" | "));
         out.push('\n');
@@ -1609,8 +1625,8 @@ mod tests {
         assert!(result.contains("parse_file:24"));
         assert!(result.contains("parse_block:58"));
         assert!(result.contains("I:"));
-        assert!(result.contains("crate::types: Token, Expr"));
-        assert!(result.contains("std::io: BufReader"));
+        assert!(result.contains("crate::types:Token, Expr"));
+        assert!(result.contains("std::io:BufReader"));
         assert!(!result.contains('{'));
     }
 
