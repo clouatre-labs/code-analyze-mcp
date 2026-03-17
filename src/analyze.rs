@@ -553,6 +553,9 @@ fn resolve_single_wildcard(
 ) {
     let module = import.module.clone();
     let dot_count = module.chars().take_while(|c| *c == '.').count();
+    if dot_count == 0 {
+        return;
+    }
     let module_path = module.trim_start_matches('.');
 
     let target_to_read = match locate_target_file(file_path, dot_count, module_path, &module) {
@@ -597,7 +600,7 @@ fn locate_target_file(
 
     for _ in 1..dot_count {
         if !target_dir.pop() {
-            tracing::debug!(import = %module, "unable to climb {} levels", dot_count);
+            tracing::debug!(import = %module, "unable to climb {} levels", dot_count.saturating_sub(1));
             return None;
         }
     }
@@ -612,7 +615,8 @@ fn locate_target_file(
     if target_file.exists() {
         Some(target_file)
     } else if target_file.with_extension("").is_dir() {
-        Some(target_file.with_extension("").join("__init__.py"))
+        let init = target_file.with_extension("").join("__init__.py");
+        if init.exists() { Some(init) } else { None }
     } else {
         tracing::debug!(target = ?target_file, import = %module, "target file not found");
         None
@@ -629,55 +633,54 @@ fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>>
         }
     };
 
-    if let Some(symbols) = extract_all_from_ast(&source, "python") {
-        tracing::debug!(import = %module, symbols = ?symbols, "using __all__ symbols");
-        return Some(symbols);
-    }
-
-    let semantic = match SemanticExtractor::extract(&source, "python", None) {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::debug!(target = ?target_path, import = %module, error = ?e, "unable to parse target file");
-            return None;
-        }
-    };
-
-    let mut out = Vec::new();
-    for f in &semantic.functions {
-        if !f.name.starts_with('_') {
-            out.push(f.name.clone());
-        }
-    }
-    for c in &semantic.classes {
-        if !c.name.starts_with('_') {
-            out.push(c.name.clone());
-        }
-    }
-    tracing::debug!(import = %module, fallback_symbols = ?out, "using fallback function/class names");
-    Some(out)
-}
-
-/// Extract __all__ from Python file's AST.
-///
-/// Looks for assignment_statement with __all__ as the target, returning the list of names
-/// if found and parseable. Returns None if __all__ not defined.
-fn extract_all_from_ast(source: &str, language: &str) -> Option<Vec<String>> {
+    // Parse once with tree-sitter
     use tree_sitter::Parser;
-
-    let lang_info = crate::languages::get_language_info(language)?;
-
+    let lang_info = crate::languages::get_language_info("python")?;
     let mut parser = Parser::new();
     if parser.set_language(&lang_info.language).is_err() {
         return None;
     }
+    let tree = parser.parse(&source, None)?;
 
-    let tree = parser.parse(source, None)?;
+    // First, try to extract __all__ from the same tree
+    let mut symbols = Vec::new();
+    extract_all_from_tree(&tree, &source, &mut symbols);
+    if !symbols.is_empty() {
+        tracing::debug!(import = %module, symbols = ?symbols, "using __all__ symbols");
+        return Some(symbols);
+    }
 
+    // Fallback: extract functions/classes from the tree
     let root = tree.root_node();
-    let mut result = Vec::new();
+    let mut cursor = root.walk();
+    for child in root.children(&mut cursor) {
+        match child.kind() {
+            "function_definition" => {
+                if let Some(name_node) = child.child_by_field_name("name") {
+                    let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
+                    if !name.starts_with('_') {
+                        symbols.push(name);
+                    }
+                }
+            }
+            "class_definition" => {
+                if let Some(name_node) = child.child_by_field_name("name") {
+                    let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
+                    if !name.starts_with('_') {
+                        symbols.push(name);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    tracing::debug!(import = %module, fallback_symbols = ?symbols, "using fallback function/class names");
+    Some(symbols)
+}
 
-    // Scan only top-level statements (direct children of module root)
-    // In tree-sitter-python, simple_statement nodes are at top level and contain assignment
+/// Extract __all__ from a tree-sitter tree.
+fn extract_all_from_tree(tree: &tree_sitter::Tree, source: &str, result: &mut Vec<String>) {
+    let root = tree.root_node();
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
         if child.kind() == "simple_statement" {
@@ -691,7 +694,7 @@ fn extract_all_from_ast(source: &str, language: &str) -> Option<Vec<String>> {
                     if target_text == "__all__"
                         && let Some(right) = simple_child.child_by_field_name("right")
                     {
-                        extract_string_list_from_list_node(&right, source, &mut result);
+                        extract_string_list_from_list_node(&right, source, result);
                     }
                 }
             }
@@ -706,19 +709,11 @@ fn extract_all_from_ast(source: &str, language: &str) -> Option<Vec<String>> {
                     if target_text == "__all__"
                         && let Some(right) = stmt_child.child_by_field_name("right")
                     {
-                        extract_string_list_from_list_node(&right, source, &mut result);
+                        extract_string_list_from_list_node(&right, source, result);
                     }
                 }
             }
         }
-    }
-
-    tracing::debug!(result_count = result.len(), "extract_all_from_ast: done");
-
-    if result.is_empty() {
-        None
-    } else {
-        Some(result)
     }
 }
 

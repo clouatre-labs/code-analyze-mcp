@@ -3823,3 +3823,54 @@ fn test_python_wildcard_import_target_not_found() {
         "expected fallback to ['*'] when target not found"
     );
 }
+
+#[test]
+fn test_python_named_import_from_statement() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create test.py with named imports
+    let test_path = temp_dir.path().join("test.py");
+    fs::write(&test_path, "from os import path, getcwd\n").unwrap();
+
+    let output = analyze_file(test_path.to_str().unwrap(), None).unwrap();
+
+    assert!(!output.semantic.imports.is_empty(), "expected imports");
+    let named_import = output
+        .semantic
+        .imports
+        .iter()
+        .find(|i| i.module == "os")
+        .expect("expected os import");
+
+    assert_eq!(
+        named_import.items,
+        vec!["path", "getcwd"],
+        "expected named import items [path, getcwd]"
+    );
+}
+
+#[test]
+fn test_python_aliased_import_from_statement() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create test.py with aliased import
+    let test_path = temp_dir.path().join("test.py");
+    fs::write(&test_path, "from os import path as p\n").unwrap();
+
+    let output = analyze_file(test_path.to_str().unwrap(), None).unwrap();
+
+    assert!(!output.semantic.imports.is_empty(), "expected imports");
+    let aliased_import = output
+        .semantic
+        .imports
+        .iter()
+        .find(|i| i.module == "os")
+        .expect("expected os import");
+
+    // Should use the original name, not the alias
+    assert_eq!(
+        aliased_import.items,
+        vec!["path"],
+        "expected original name [path], not alias [p]"
+    );
+}
