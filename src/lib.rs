@@ -61,6 +61,10 @@ use types::{
 
 const SIZE_LIMIT: usize = 50_000;
 
+pub fn summary_cursor_conflict(summary: Option<bool>, cursor: Option<&str>) -> bool {
+    summary == Some(true) && cursor.is_some()
+}
+
 fn error_meta(
     category: &'static str,
     is_retryable: bool,
@@ -547,7 +551,10 @@ impl CodeAnalyzer {
 
         // summary=true (explicit) and cursor are mutually exclusive.
         // Auto-summarization (summary=None + large output) must NOT block cursor pagination.
-        if params.output_control.summary == Some(true) && params.pagination.cursor.is_some() {
+        if summary_cursor_conflict(
+            params.output_control.summary,
+            params.pagination.cursor.as_deref(),
+        ) {
             return Err(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 "summary=true is incompatible with a pagination cursor; use one or the other"

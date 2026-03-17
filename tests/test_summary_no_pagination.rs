@@ -3,67 +3,6 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn test_summary_true_clears_next_cursor() {
-    // Arrange: Create a directory with many files
-    let temp_dir = TempDir::new().unwrap();
-    let root = temp_dir.path();
-    fs::create_dir(root.join("src")).unwrap();
-
-    // Create 110 Rust files to exceed DEFAULT_PAGE_SIZE (100)
-    for i in 0..110 {
-        fs::write(root.join(format!("src/file_{:03}.rs", i)), "fn func() {}").unwrap();
-    }
-
-    // Act: Call analyze_directory with summary=true
-    let output = analyze_directory(root, None).unwrap();
-
-    // Manually apply summary logic and pagination logic (simulating what the tool handler does)
-    let use_summary = true;
-    let next_cursor = if use_summary {
-        None
-    } else {
-        output.next_cursor.clone()
-    };
-
-    // Assert: next_cursor should be None when use_summary=true
-    assert_eq!(
-        next_cursor, None,
-        "next_cursor should be None when summary=true"
-    );
-}
-
-#[test]
-fn test_summary_no_next_cursor_text() {
-    // Arrange: Create directory with many files
-    let temp_dir = TempDir::new().unwrap();
-    let root = temp_dir.path();
-    fs::create_dir(root.join("src")).unwrap();
-
-    for i in 0..110 {
-        fs::write(root.join(format!("src/file_{:03}.rs", i)), "fn func() {}").unwrap();
-    }
-
-    // Act: Analyze directory
-    let output = analyze_directory(root, None).unwrap();
-
-    // Simulate the handler logic for summary mode
-    let use_summary = true;
-    let mut final_text = output.formatted.clone();
-
-    // The handler only appends NEXT_CURSOR if !use_summary
-    if !use_summary && let Some(cursor) = output.next_cursor {
-        final_text.push('\n');
-        final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
-    }
-
-    // Assert: final_text should NOT contain NEXT_CURSOR when use_summary=true
-    assert!(
-        !final_text.contains("NEXT_CURSOR:"),
-        "Summary output should not contain NEXT_CURSOR text"
-    );
-}
-
-#[test]
 fn test_format_summary_includes_subdirs() {
     // Arrange: Create nested directory structure with depth-2 subdirectories
     let temp_dir = TempDir::new().unwrap();

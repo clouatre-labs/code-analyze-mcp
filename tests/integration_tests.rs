@@ -3584,94 +3584,73 @@ fn test_no_uint_format_in_schemas() {
 // coverage for end-to-end behavior.
 
 #[test]
-fn test_overview_summary_explicit_with_cursor_guard_fires() {
-    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
-    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+fn test_summary_true_produces_summary_output_no_next_cursor() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    let src = root.join("src");
+    std::fs::create_dir(&src).unwrap();
+    for i in 0..110 {
+        std::fs::write(src.join(format!("file{i:03}.rs")), "fn f() {}").unwrap();
+    }
+    let output = analyze_directory(root, None).unwrap();
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    assert!(
+        summary.contains("SUMMARY:"),
+        "expected SUMMARY: in output but got:\n{summary}"
+    );
+    assert!(
+        !summary.contains("NEXT_CURSOR:"),
+        "expected no NEXT_CURSOR: in summary output but got:\n{summary}"
+    );
+}
 
-    let cursor_data = CursorData {
+#[test]
+fn test_summary_sub_annotation_present_for_nested_dirs() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join("core/handlers")).unwrap();
+    std::fs::create_dir_all(root.join("core/management")).unwrap();
+    std::fs::write(root.join("core/handlers/base.rs"), "fn f() {}").unwrap();
+    std::fs::write(root.join("core/management/cmd.rs"), "fn f() {}").unwrap();
+    let output = analyze_directory(root, None).unwrap();
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let core_line = summary
+        .lines()
+        .find(|l| l.contains("core/"))
+        .unwrap_or_else(|| panic!("expected core/ line in summary:\n{summary}"));
+    assert!(
+        core_line.contains("sub:"),
+        "expected 'sub:' annotation on core/ line but got:\n{core_line}"
+    );
+}
+
+#[test]
+fn test_summary_true_with_cursor_triggers_guard() {
+    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
+
+    let cursor_str = encode_cursor(&CursorData {
         mode: PaginationMode::Default,
         offset: 10,
-    };
-    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
-    let params = AnalyzeDirectoryParams {
-        path: ".".to_string(),
-        max_depth: None,
-        pagination: PaginationParams {
-            cursor: Some(cursor_str),
-            page_size: None,
-        },
-        output_control: OutputControlParams {
-            summary: Some(true),
-            force: None,
-            verbose: None,
-        },
-    };
+    })
+    .expect("encode should succeed");
 
-    // Guard condition from the handler: explicit summary=true + cursor present fires the error.
     assert!(
-        params.output_control.summary == Some(true) && params.pagination.cursor.is_some(),
+        code_analyze_mcp::summary_cursor_conflict(Some(true), Some(&cursor_str)),
         "guard must fire when summary=Some(true) and cursor is present"
     );
-}
-
-#[test]
-fn test_overview_summary_none_with_cursor_no_guard() {
-    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
-    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
-
-    let cursor_data = CursorData {
-        mode: PaginationMode::Default,
-        offset: 10,
-    };
-    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
-    // summary=None: auto-summarization path -- guard must NOT fire so large outputs can paginate.
-    let params = AnalyzeDirectoryParams {
-        path: ".".to_string(),
-        max_depth: None,
-        pagination: PaginationParams {
-            cursor: Some(cursor_str),
-            page_size: None,
-        },
-        output_control: OutputControlParams {
-            summary: None,
-            force: None,
-            verbose: None,
-        },
-    };
-
     assert!(
-        !(params.output_control.summary == Some(true) && params.pagination.cursor.is_some()),
-        "guard must NOT fire when summary is unset (auto-summarization must not block pagination)"
+        !code_analyze_mcp::summary_cursor_conflict(None, Some(&cursor_str)),
+        "guard must NOT fire when summary=None (auto-mode) and cursor is present"
     );
-}
-
-#[test]
-fn test_overview_summary_false_with_cursor_no_guard() {
-    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
-    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
-
-    let cursor_data = CursorData {
-        mode: PaginationMode::Default,
-        offset: 10,
-    };
-    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
-    let params = AnalyzeDirectoryParams {
-        path: ".".to_string(),
-        max_depth: None,
-        pagination: PaginationParams {
-            cursor: Some(cursor_str),
-            page_size: None,
-        },
-        output_control: OutputControlParams {
-            summary: Some(false),
-            force: None,
-            verbose: None,
-        },
-    };
-
     assert!(
-        !(params.output_control.summary == Some(true) && params.pagination.cursor.is_some()),
-        "guard must NOT fire when summary=Some(false)"
+        !code_analyze_mcp::summary_cursor_conflict(Some(false), Some(&cursor_str)),
+        "guard must NOT fire when summary=Some(false) and cursor is present"
+    );
+    assert!(
+        !code_analyze_mcp::summary_cursor_conflict(Some(true), None),
+        "guard must NOT fire when summary=Some(true) but no cursor"
     );
 }
 
