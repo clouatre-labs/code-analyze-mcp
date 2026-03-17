@@ -8,7 +8,7 @@ use crate::graph::CallGraph;
 use crate::pagination::PaginationMode;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
-use crate::types::{ClassInfo, FileInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
+use crate::types::{ClassInfo, FileInfo, FunctionInfo, ImportInfo, ModuleInfo, SemanticAnalysis};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::path::Path;
@@ -1235,6 +1235,59 @@ fn format_file_entry(file: &FileInfo, base_path: Option<&Path>) -> String {
     }
 }
 
+/// Format a [`ModuleInfo`] into a compact single-block string.
+///
+/// Output format:
+/// ```text
+/// FILE: <name> (<line_count>L, <language>) <N>F <M>I
+/// F:
+///   func1:10, func2:42
+/// I:
+///   module1:item1, item2; module2:item1; module3
+/// ```
+///
+/// The `F:` section is omitted when there are no functions; likewise `I:` when
+/// there are no imports.
+#[instrument(skip_all)]
+pub fn format_module_info(info: &ModuleInfo) -> String {
+    use std::fmt::Write as _;
+    let fn_count = info.functions.len();
+    let import_count = info.imports.len();
+    let mut out = String::with_capacity(64 + fn_count * 24 + import_count * 32);
+    let _ = writeln!(
+        out,
+        "FILE: {} ({}L, {}) {}F {}I",
+        info.name, info.line_count, info.language, fn_count, import_count
+    );
+    if !info.functions.is_empty() {
+        out.push_str("F:\n  ");
+        let parts: Vec<String> = info
+            .functions
+            .iter()
+            .map(|f| format!("{}:{}", f.name, f.line))
+            .collect();
+        out.push_str(&parts.join(", "));
+        out.push('\n');
+    }
+    if !info.imports.is_empty() {
+        out.push_str("I:\n  ");
+        let parts: Vec<String> = info
+            .imports
+            .iter()
+            .map(|i| {
+                if i.items.is_empty() {
+                    i.module.clone()
+                } else {
+                    format!("{}:{}", i.module, i.items.join(", "))
+                }
+            })
+            .collect();
+        out.push_str(&parts.join("; "));
+        out.push('\n');
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1544,6 +1597,62 @@ mod tests {
     }
 
     /// Edge case test: Compact mode with empty classes should not emit C: header.
+    #[test]
+    fn test_format_module_info_happy_path() {
+        use crate::types::{ModuleFunctionInfo, ModuleImportInfo, ModuleInfo};
+        let info = ModuleInfo {
+            name: "parser.rs".to_string(),
+            line_count: 312,
+            language: "rust".to_string(),
+            functions: vec![
+                ModuleFunctionInfo {
+                    name: "parse_file".to_string(),
+                    line: 24,
+                },
+                ModuleFunctionInfo {
+                    name: "parse_block".to_string(),
+                    line: 58,
+                },
+            ],
+            imports: vec![
+                ModuleImportInfo {
+                    module: "crate::types".to_string(),
+                    items: vec!["Token".to_string(), "Expr".to_string()],
+                },
+                ModuleImportInfo {
+                    module: "std::io".to_string(),
+                    items: vec!["BufReader".to_string()],
+                },
+            ],
+        };
+        let result = format_module_info(&info);
+        assert!(result.starts_with("FILE: parser.rs (312L, rust) 2F 2I"));
+        assert!(result.contains("F:"));
+        assert!(result.contains("parse_file:24"));
+        assert!(result.contains("parse_block:58"));
+        assert!(result.contains("I:"));
+        assert!(result.contains("crate::types:Token, Expr"));
+        assert!(result.contains("std::io:BufReader"));
+        assert!(result.contains("; "));
+        assert!(!result.contains('{'));
+    }
+
+    #[test]
+    fn test_format_module_info_empty() {
+        use crate::types::ModuleInfo;
+        let info = ModuleInfo {
+            name: "empty.rs".to_string(),
+            line_count: 0,
+            language: "rust".to_string(),
+            functions: vec![],
+            imports: vec![],
+        };
+        let result = format_module_info(&info);
+        assert!(result.starts_with("FILE: empty.rs (0L, rust) 0F 0I"));
+        assert!(!result.contains("F:"));
+        assert!(!result.contains("I:"));
+    }
+
     #[test]
     fn test_compact_mode_empty_classes_no_header() {
         use crate::types::{FunctionInfo, SemanticAnalysis};
