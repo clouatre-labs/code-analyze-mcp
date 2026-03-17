@@ -7,7 +7,7 @@
 ## Design Goals
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
-- **Language-agnostic parsing via tree-sitter**: Support 5 languages with a unified query-based extraction system
+- **Language-agnostic parsing via tree-sitter**: Support 5 languages (plus TSX as a TypeScript variant) with a unified query-based extraction system
 - **Four focused MCP tools**: `analyze_directory`, `analyze_file`, `analyze_module`, and `analyze_symbol` -- each with a clear, explicit interface rather than a single tool with auto-detected modes
 - **Compatible with any MCP orchestrator**: Claude Code, Kiro, Fast-Agent, MCP-Agent, and others
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
@@ -20,13 +20,18 @@
 | `lib` | `src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
 | `analyze` | `src/analyze.rs` | High-level analysis orchestration; directory, file, and module analysis |
 | `parser` | `src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
-| `formatter` | `src/formatter.rs` | Output formatting for all three tools |
+| `formatter` | `src/formatter.rs` | Output formatting for all four tools |
 | `traversal` | `src/traversal.rs` | Directory walking with .gitignore support via ignore crate |
 | `types` | `src/types.rs` | Shared data structures (AnalyzeParams, AnalysisResult, etc.) |
 | `lang` | `src/lang.rs` | Extension-to-language mapping |
 | `languages/mod` | `src/languages/mod.rs` | LanguageInfo registry and handler function types |
 | `languages/rust` | `src/languages/rust.rs` | Rust-specific queries and semantic handlers |
 | `cache` | `src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
+| `completion` | `src/completion.rs` | Path completion support respecting .gitignore |
+| `logging` | `src/logging.rs` | MCP logging integration via tracing; McpLoggingLayer bridges events to MCP clients |
+| `schema_helpers` | `src/schema_helpers.rs` | JSON Schema helpers for integer and page_size field validation |
+| `test_detection` | `src/test_detection.rs` | Test file detection by path heuristics (directory and filename patterns) |
+| `pagination` | `src/pagination.rs` | Cursor-based pagination with CursorData and PaginationMode (Default, Callers, Callees) |
 | `graph` | `src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
 
 ## Data Flow
@@ -47,6 +52,7 @@ graph TD
     B4 --> R["Read File"]
     R --> S["analyze_module_file"]
     S --> T["format_module"]
+    T --> Q["MCP Response"]
     B3 --> G["walk_directory"]
     G --> H["Build CallGraph BFS"]
     H --> I["format_focused"]
@@ -90,15 +96,17 @@ graph TD
 
 Each language is registered in `languages/mod.rs` as a `LanguageInfo` with tree-sitter queries and optional handler functions:
 
-- `extract_function_name` -- resolve the name of a function node
-- `find_method_for_receiver` -- resolve the method called on a receiver expression
-- `find_receiver_type` -- resolve the type of a receiver
+- Mandatory queries: `element_query`, `call_query`
+- Optional queries: `reference_query`, `import_query`, `impl_query`, `assignment_query`, `field_query`
+- Handler functions: `extract_function_name`, `find_method_for_receiver`, `find_receiver_type`, `extract_inheritance` (optional)
 
 Adding a language requires: a tree-sitter grammar crate, a language module with `ELEMENT_QUERY` and `CALL_QUERY`, registration in `languages/mod.rs`, and extension mappings in `lang.rs`. See CONTRIBUTING.md for a step-by-step guide.
 
 ## Call Graph Design
 
 BFS from the target symbol outward, tracking callers and callees at each depth level. Visited symbols are memoized to avoid cycles. Call frequency is counted across the walk; symbols exceeding the threshold are annotated in output. Sentinel values (`<module>`, `<reference>`) represent call sites that have no enclosing function or are type-level references rather than call expressions.
+
+Symbol resolution uses SymbolMatchMode to locate the target symbol: Exact (case-sensitive, default), Insensitive (case-insensitive exact), Prefix (case-insensitive prefix match), and Contains (case-insensitive substring match). When multiple candidates match, resolve_symbol() returns an error listing candidates; clients must refine the query or use a stricter match_mode.
 
 ## MCP Resources (Planned)
 

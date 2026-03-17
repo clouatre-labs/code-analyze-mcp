@@ -81,7 +81,7 @@ Or add manually to `.mcp.json` at your project root (shared with your team via v
 
 ## Tools
 
-All optional parameters may be omitted. Shared optional parameters across tools:
+All optional parameters may be omitted. Shared optional parameters for `analyze_directory`, `analyze_file`, and `analyze_symbol` (`analyze_module` does not support these):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -89,6 +89,7 @@ All optional parameters may be omitted. Shared optional parameters across tools:
 | `cursor` | string | -- | Pagination cursor from a previous response's `next_cursor` |
 | `page_size` | integer | 100 | Items per page |
 | `force` | boolean | false | Bypass output size warning |
+| `verbose` | boolean | false | true = full output with section headers and imports (Markdown-style); false = compact one-line-per-item format |
 
 ### `analyze_directory`
 
@@ -169,21 +170,12 @@ Extracts a minimal function/import index from a single file. ~75% smaller output
 
 **Example output:**
 
-```json
-{
-  "name": "analyze.rs",
-  "line_count": 510,
-  "language": "rust",
-  "functions": [
-    { "name": "analyze_directory", "line": 174 },
-    { "name": "analyze_file", "line": 200 },
-    { "name": "analyze_module_file", "line": 460 }
-  ],
-  "imports": [
-    { "module": "crate::formatter", "items": ["format_file_details"] },
-    { "module": "std::path", "items": ["Path", "PathBuf"] }
-  ]
-}
+```
+FILE: analyze.rs (510L, 3F, 2I)
+F:
+  analyze_directory:174, analyze_file:200, analyze_module_file:460
+I:
+  crate::formatter:format_file_details; std::path:Path, PathBuf
 ```
 
 ```bash
@@ -202,6 +194,12 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
 - `follow_depth` *(integer, default 1)* -- call graph traversal depth
 - `max_depth` *(integer, default unlimited)* -- directory recursion limit
 - `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
+- `match_mode` *(string, default exact)* -- Symbol lookup strategy:
+  - `exact`: Case-sensitive exact match (default)
+  - `insensitive`: Case-insensitive exact match
+  - `prefix`: Case-insensitive prefix match; returns an error listing candidates when multiple symbols match
+  - `contains`: Case-insensitive substring match; returns an error listing candidates when multiple symbols match
+  All non-exact modes return an error with candidate names when the match is ambiguous; use the listed candidates to refine to a unique match.
 
 **Example output:**
 
