@@ -1454,19 +1454,19 @@ fn test_format_summary_sibling_dir_prefix() {
     let src_line = summary
         .lines()
         .find(|l| l.contains("src") && !l.contains("src_extra"))
-        .unwrap_or("");
+        .expect("summary must contain a line for src/");
     let src_extra_line = summary
         .lines()
         .find(|l| l.contains("src_extra"))
-        .unwrap_or("");
+        .expect("summary must contain a line for src_extra/");
 
     assert!(
-        !src_line.contains("2 files") && !src_line.contains("2 file"),
-        "src/ incorrectly counted files from src_extra/: {src_line}"
+        src_line.contains("[1 file"),
+        "src/ should show exactly 1 file: {src_line}"
     );
     assert!(
-        src_extra_line.contains("1 file") || src_extra_line.is_empty(),
-        "src_extra/ should show 1 file: {src_extra_line}"
+        src_extra_line.contains("[1 file"),
+        "src_extra/ should show exactly 1 file: {src_extra_line}"
     );
 }
 
