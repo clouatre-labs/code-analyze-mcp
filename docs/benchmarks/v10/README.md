@@ -10,10 +10,10 @@
 
 | ID | Model | Provider | Tools | N | Runs | Notes |
 |----|-------|----------|-------|---|------|-------|
-| A | claude-sonnet-4-6 | gcp_vertex_ai | Native | 4 | A1, A2, A3, A4 | Reused from v9 (highest quality_score) |
+| A | claude-sonnet-4-6 | gcp_vertex_ai | Native | 4 | A1, A2, A3, A4 | New runs |
 | A2 | claude-haiku-4-5 | gcp_vertex_ai | Native | 4 | A2_1, A2_2, A2_3, A2_4 | New runs (baseline for H2, H3) |
-| B | claude-haiku-4-5 | gcp_vertex_ai | MCP | 4 | B1, B2, B3, B4 | New runs (post-fix; NOT rerun of v9 B) |
-| C | claude-sonnet-4-6 | gcp_vertex_ai | MCP | 4 | C1, C2, C3, C4 | Reused from v9 (post-fix server behavior) |
+| B | claude-haiku-4-5 | gcp_vertex_ai | MCP | 4 | B1, B2, B3, B4 | New runs (post-fix; server behavior changed) |
+| C | claude-sonnet-4-6 | gcp_vertex_ai | MCP | 4 | C1, C2, C3, C4 | New runs |
 | D | minimax/minimax-m2.5 | openrouter | MCP | 4 | D1, D2, D3, D4 | New runs (open-weight baseline) |
 | E | mistralai/mistral-small-2603 | openrouter | MCP | 4 | E1, E2, E3, E4 | New runs (cost-efficient open-weight) |
 
@@ -33,7 +33,7 @@
 | File | Purpose |
 |------|---------|
 | `methodology.md` | Full experimental design, rubric, statistical method, provider cost model |
-| `run-order.txt` | 24 randomized runs (seed=42) with blinding map and reuse comments |
+| `run-order.txt` | 24 randomized runs (seed=42) with blinding map |
 | `scores-template.json` | Template for scoring all 24 runs; fill in per_run_scores after blind evaluation |
 | `README.md` | This file; quick-start guide and execution checklist |
 
@@ -46,26 +46,9 @@
 
 ## Execution
 
-### Step 1: Prepare Reused Runs
+### Step 1: Execute All Runs
 
-For Conditions A and C, reuse v9 scores directly:
-
-```bash
-# A1 = v9_R15 (quality_score=11)
-# A2 = v9_R06 (quality_score=12)
-# A3 = v9_R12 (quality_score=11)
-# A4 = v9_R01 (quality_score=11)
-# C1 = v9_R09 (quality_score=12)
-# C2 = v9_R02 (quality_score=12)
-# C3 = v9_R07 (quality_score=12)
-# C4 = v9_R14 (quality_score=12)
-```
-
-Copy v9 scores.json entries for these runs into v10 scores-template.json per_run_scores.
-
-### Step 2: Execute New Runs
-
-For Conditions A2, B, D, E (16 new runs), execute in the order specified in `run-order.txt`:
+All 24 runs are fresh. Execute in the order specified in `run-order.txt`:
 
 1. Open Claude Code
 2. Clone target repository at pinned commit

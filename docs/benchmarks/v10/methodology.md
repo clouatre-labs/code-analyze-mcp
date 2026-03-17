@@ -20,10 +20,10 @@
 
 | Condition | Model | Provider | Tool Set | N | Notes |
 |-----------|-------|----------|----------|---|-------|
-| A | claude-sonnet-4-6 | gcp_vertex_ai | Native (Glob, Grep, Read, Bash) | 4 | Reused from v9: A1=v9_R15, A2=v9_R06, A3=v9_R12, A4=v9_R01 |
+| A | claude-sonnet-4-6 | gcp_vertex_ai | Native (Glob, Grep, Read, Bash) | 4 | New runs: A1, A2, A3, A4 |
 | A2 | claude-haiku-4-5 | gcp_vertex_ai | Native (Glob, Grep, Read, Bash) | 4 | New runs: A2_1, A2_2, A2_3, A2_4 |
-| B | claude-haiku-4-5 | gcp_vertex_ai | MCP (analyze_directory, analyze_file, analyze_symbol) | 4 | New runs: B1, B2, B3, B4 (NOT rerun of v9 B; server-side tool behavior changed post C1/C2/C3 fixes) |
-| C | claude-sonnet-4-6 | gcp_vertex_ai | MCP (analyze_directory, analyze_file, analyze_symbol) | 4 | Reused from v9: C1=v9_R09, C2=v9_R02, C3=v9_R07, C4=v9_R14 |
+| B | claude-haiku-4-5 | gcp_vertex_ai | MCP (analyze_directory, analyze_file, analyze_symbol) | 4 | New runs: B1, B2, B3, B4 (server-side tool behavior changed post C1/C2/C3 fixes) |
+| C | claude-sonnet-4-6 | gcp_vertex_ai | MCP (analyze_directory, analyze_file, analyze_symbol) | 4 | New runs: C1, C2, C3, C4 |
 | D | minimax/minimax-m2.5 | openrouter | MCP (analyze_directory, analyze_file, analyze_symbol) | 4 | New runs: D1, D2, D3, D4 |
 | E | mistralai/mistral-small-2603 | openrouter | MCP (analyze_directory, analyze_file, analyze_symbol) | 4 | New runs: E1, E2, E3, E4 |
 
@@ -49,16 +49,22 @@ Commit SHA will be pinned at benchmark execution and recorded in `run-order.txt`
 
 ### Run Order (seed = 42)
 
-See `run-order.txt` for the complete randomized order with blinding map and reuse comments.
+See `run-order.txt` for the complete randomized order with blinding map.
 
 ## Validity Controls
 
-### Reuse Criteria
+### No v9 Reuse
 
-Runs reused from v9 were selected based on highest quality_score within each condition:
+All 24 runs are executed fresh against the current server version. v9 A and C runs are not reused because multiple `src/` changes landed between v9 execution (commit `ff4e299`, 2026-03-14) and v10:
 
-- **Condition A:** All 4 v9 A runs reused (quality_scores: 11, 12, 11, 11). A5 excluded (not needed for N=4; surplus 5th rep).
-- **Condition C:** All 4 v9 C runs reused (quality_scores: 12, 12, 12, 12). C5 excluded (not needed for N=4; surplus 5th rep).
+- `#295` -- pruned `call_frequency`, `field_accesses`, `assignments` from `analyze_file` output; agents using MCP see different data
+- `#316` -- path prefix matching fix; directory listings may differ
+- `#312` -- `analyze_module` FILE header now includes function/import counts
+- `#320` -- C1/C2/C3 pagination fixes (the primary change under test)
+- `#327` -- cursor error on `summary=true` in `analyze_directory`
+- `#330` -- Python wildcard import parsing fix
+
+Reusing v9 A/C runs would compare native-tool outputs produced against a different server version against MCP outputs produced against the fixed server, invalidating cross-condition comparisons.
 
 ### Exclusion of v9 B
 
@@ -77,7 +83,7 @@ Conditions C1, C2, C3 (and by extension B) were affected by pagination bugs in t
 - Missed intermediate types in cross-module traces
 - Inflated research_calls due to retry loops
 
-Post-fix (v10), the server correctly handles pagination. v10 C runs reuse v9 C scores (same condition, same server behavior post-fix). v10 B is a fresh condition to measure fix efficacy.
+Post-fix (v10), the server correctly handles pagination. All v10 B, C, D, and E runs are executed fresh against the fixed server.
 
 ## Rubric (0–3 per dimension, max 12)
 

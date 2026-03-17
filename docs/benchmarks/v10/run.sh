@@ -8,7 +8,7 @@
 #
 # Each run:
 #   1. Substitutes placeholders in the condition system prompt
-#   2. Invokes the appropriate runner (claude CLI for A2/B, goose for D/E, reuse for A/C)
+#   2. Invokes the appropriate runner (claude CLI for A/A2/B, goose for D/E)
 #   3. The agent writes the JSON report to results/runs/<RUN_ID>-report.json
 #   4. Saves the session JSONL alongside the run file
 #
@@ -67,12 +67,10 @@ echo ""
 # Select system prompt, model, and runner based on condition
 case "$CONDITION" in
   A)
-    echo "=== REUSE RUN: Copy from v9 ==="
-    echo "This condition reuses v9 results. Copy the appropriate v9 run files:"
-    echo "  A1=v9_R15, A2=v9_R06, A3=v9_R12, A4=v9_R01"
-    echo "  cp docs/benchmarks/v9/results/runs/R<NN>-report.json $OUTPUT_FILE"
-    echo "  cp docs/benchmarks/v9/results/runs/R<NN>-session.jsonl ${OUTPUT_FILE/-report.json/-session.jsonl}"
-    exit 0
+    SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a-control.md"
+    MODEL="claude-sonnet-4-6"
+    DISALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,analyze_directory,analyze_file,analyze_symbol"
+    RUNNER="claude_cli"
     ;;
   A2)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a2-haiku-native.md"
@@ -87,12 +85,10 @@ case "$CONDITION" in
     RUNNER="claude_cli"
     ;;
   C)
-    echo "=== REUSE RUN: Copy from v9 ==="
-    echo "This condition reuses v9 results. Copy the appropriate v9 run files:"
-    echo "  C1=v9_R09, C2=v9_R02, C3=v9_R07, C4=v9_R14"
-    echo "  cp docs/benchmarks/v9/results/runs/R<NN>-report.json $OUTPUT_FILE"
-    echo "  cp docs/benchmarks/v9/results/runs/R<NN>-session.jsonl ${OUTPUT_FILE/-report.json/-session.jsonl}"
-    exit 0
+    SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-c-treatment-sonnet.md"
+    MODEL="claude-sonnet-4-6"
+    DISALLOWED_TOOLS="Glob,Grep,Read,Bash"
+    RUNNER="claude_cli"
     ;;
   D)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-d-treatment-minimax.md"

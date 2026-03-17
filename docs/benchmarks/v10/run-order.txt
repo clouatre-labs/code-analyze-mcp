@@ -22,10 +22,7 @@
 22. Condition A, rep 1
 23. Condition A, rep 4
 24. Condition E, rep 1
-# pinned_commit: 6b90f8a8d6994dc62cd91dde911fe56ec3389494
+# pinned_commit: TBD (record at execution time)
 # seed: 42
 # blinding_map: R01=C4, R02=A22, R03=D3, R04=E4, R05=C2, R06=B3, R07=D2, R08=B4, R09=C3, R10=D1, R11=A2, R12=C1, R13=E2, R14=A23, R15=B2, R16=A3, R17=E3, R18=A21, R19=D4, R20=A24, R21=B1, R22=A1, R23=A4, R24=E1
-# Reuse from v9: A1=v9_R15, A2=v9_R06, A3=v9_R12, A4=v9_R01
-# Reuse from v9: C1=v9_R09, C2=v9_R02, C3=v9_R07, C4=v9_R14
-# New runs (execute fresh): A2 (1-4), B (1-4), D (1-4), E (1-4)
-# v9 B runs EXCLUDED: pagination bug (C1/C2/C3) confounds comparison; v10 B is NOT a rerun of v9 B
+# All 24 runs are fresh (no v9 reuse): src/ changes since v9 affect MCP output format
