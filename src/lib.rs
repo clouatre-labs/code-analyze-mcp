@@ -545,6 +545,17 @@ impl CodeAnalyzer {
         // Call handler for analysis and progress tracking
         let mut output = self.handle_overview_mode(&params, ct).await?;
 
+        // summary=true (explicit) and cursor are mutually exclusive.
+        // Auto-summarization (summary=None + large output) must NOT block cursor pagination.
+        if params.output_control.summary == Some(true) && params.pagination.cursor.is_some() {
+            return Err(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "summary=true is incompatible with a pagination cursor; use one or the other"
+                    .to_string(),
+                error_meta("validation", false, "remove cursor or set summary=false"),
+            ));
+        }
+
         // Apply summary/output size limiting logic
         let use_summary = if params.output_control.force == Some(true) {
             false
@@ -563,16 +574,6 @@ impl CodeAnalyzer {
                 params.max_depth,
                 Some(Path::new(&params.path)),
             );
-        }
-
-        // summary and cursor are mutually exclusive
-        if use_summary && params.pagination.cursor.is_some() {
-            return Err(ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_PARAMS,
-                "summary=true is incompatible with a pagination cursor; use one or the other"
-                    .to_string(),
-                error_meta("validation", false, "remove cursor or set summary=false"),
-            ));
         }
 
         // Decode pagination cursor if provided
