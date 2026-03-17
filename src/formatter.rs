@@ -890,9 +890,31 @@ pub fn format_summary(
                     String::new()
                 };
 
+                // Collect depth-2 sub-package directories (immediate children of this directory)
+                let dir_path = Path::new(&dir_path_str);
+                let mut subdirs: Vec<String> = entries
+                    .iter()
+                    .filter(|e| e.depth == 2 && e.is_dir && e.path.starts_with(dir_path))
+                    .filter_map(|e| {
+                        e.path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|s| s.to_owned())
+                    })
+                    .collect();
+                subdirs.sort();
+                subdirs.dedup();
+                let subdir_suffix = if subdirs.is_empty() {
+                    String::new()
+                } else {
+                    let subdirs_capped: Vec<String> =
+                        subdirs.iter().take(5).map(|s| format!("{}/", s)).collect();
+                    format!("  sub: {}", subdirs_capped.join(", "))
+                };
+
                 output.push_str(&format!(
-                    "  {}/ [{} files, {}L, {}F, {}C]{}\n",
-                    name, dir_file_count, dir_loc, dir_functions, dir_classes, hint
+                    "  {}/ [{} files, {}L, {}F, {}C]{}{}\n",
+                    name, dir_file_count, dir_loc, dir_functions, dir_classes, hint, subdir_suffix
                 ));
             } else {
                 output.push_str(&format!("  {}/\n", name));

@@ -591,7 +591,7 @@ impl CodeAnalyzer {
         })?;
 
         let verbose = params.output_control.verbose.unwrap_or(false);
-        if paginated.next_cursor.is_some() || offset > 0 || !verbose {
+        if !use_summary && (paginated.next_cursor.is_some() || offset > 0 || !verbose) {
             output.formatted = format_structure_paginated(
                 &paginated.items,
                 paginated.total,
@@ -601,12 +601,16 @@ impl CodeAnalyzer {
             );
         }
 
-        // Update next_cursor in output after pagination
-        output.next_cursor = paginated.next_cursor.clone();
+        // Update next_cursor in output after pagination (unless using summary mode)
+        if use_summary {
+            output.next_cursor = None;
+        } else {
+            output.next_cursor = paginated.next_cursor.clone();
+        }
 
-        // Build final text output with pagination cursor if present
+        // Build final text output with pagination cursor if present (unless using summary mode)
         let mut final_text = output.formatted.clone();
-        if let Some(cursor) = paginated.next_cursor {
+        if !use_summary && let Some(cursor) = paginated.next_cursor {
             final_text.push('\n');
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
@@ -711,7 +715,7 @@ impl CodeAnalyzer {
 
         // Regenerate formatted output from the paginated slice when pagination is active
         let verbose = params.output_control.verbose.unwrap_or(false);
-        if paginated.next_cursor.is_some() || offset > 0 || !verbose {
+        if !use_summary && (paginated.next_cursor.is_some() || offset > 0 || !verbose) {
             formatted = format_file_details_paginated(
                 &paginated.items,
                 paginated.total,
@@ -723,12 +727,16 @@ impl CodeAnalyzer {
             );
         }
 
-        // Capture next_cursor from pagination result
-        let next_cursor = paginated.next_cursor.clone();
+        // Capture next_cursor from pagination result (unless using summary mode)
+        let next_cursor = if use_summary {
+            None
+        } else {
+            paginated.next_cursor.clone()
+        };
 
-        // Build final text output with pagination cursor if present
+        // Build final text output with pagination cursor if present (unless using summary mode)
         let mut final_text = formatted.clone();
-        if let Some(ref cursor) = next_cursor {
+        if !use_summary && let Some(ref cursor) = next_cursor {
             final_text.push('\n');
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
