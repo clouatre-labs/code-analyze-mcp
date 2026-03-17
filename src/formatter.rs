@@ -1243,7 +1243,7 @@ fn format_file_entry(file: &FileInfo, base_path: Option<&Path>) -> String {
 /// F:
 ///   func1:10, func2:42
 /// I:
-///   module1:item1, item2 | module2:item1
+///   module1:item1, item2; module2:item1; module3
 /// ```
 ///
 /// The `F:` section is omitted when there are no functions; likewise `I:` when
@@ -1274,9 +1274,15 @@ pub fn format_module_info(info: &ModuleInfo) -> String {
         let parts: Vec<String> = info
             .imports
             .iter()
-            .map(|i| format!("{}:{}", i.module, i.items.join(", ")))
+            .map(|i| {
+                if i.items.is_empty() {
+                    i.module.clone()
+                } else {
+                    format!("{}:{}", i.module, i.items.join(", "))
+                }
+            })
             .collect();
-        out.push_str(&parts.join(" | "));
+        out.push_str(&parts.join("; "));
         out.push('\n');
     }
     out
@@ -1627,6 +1633,7 @@ mod tests {
         assert!(result.contains("I:"));
         assert!(result.contains("crate::types:Token, Expr"));
         assert!(result.contains("std::io:BufReader"));
+        assert!(result.contains("; "));
         assert!(!result.contains('{'));
     }
 
