@@ -1626,7 +1626,7 @@ mod tests {
             ],
         };
         let result = format_module_info(&info);
-        assert!(result.starts_with("FILE: parser.rs (312L, 2F, 2I"));
+        assert!(result.starts_with("FILE: parser.rs (312L, 2F, 2I)"));
         assert!(result.contains("F:"));
         assert!(result.contains("parse_file:24"));
         assert!(result.contains("parse_block:58"));
@@ -1648,7 +1648,7 @@ mod tests {
             imports: vec![],
         };
         let result = format_module_info(&info);
-        assert!(result.starts_with("FILE: empty.rs (0L, 0F, 0I"));
+        assert!(result.starts_with("FILE: empty.rs (0L, 0F, 0I)"));
         assert!(!result.contains("F:"));
         assert!(!result.contains("I:"));
     }
