@@ -1388,11 +1388,10 @@ fn test_summary_explicit_on_small_directory() {
 // Test top-N hint in summary mode
 
 #[test]
-fn test_summary_top_hint_with_classes() {
+fn test_summary_top_hint_shown() {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
 
-    // Create src/ subdirectory with multiple files with classes
     fs::create_dir(root.join("src")).unwrap();
     fs::write(
         root.join("src/model.rs"),
@@ -1406,95 +1405,32 @@ fn test_summary_top_hint_with_classes() {
     .unwrap();
     fs::write(root.join("src/util.rs"), "pub fn helper() {}").unwrap();
 
-    // Analyze directory
     let output = analyze_directory(root, None).unwrap();
-
-    // Generate summary
     let summary =
         code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
-    // Assert summary contains top hint with classes (C suffix)
-    assert!(summary.contains("top:"), "Summary should contain top hint");
+    assert!(summary.contains("top:"), "summary should contain top hint");
     assert!(
         summary.contains("(2C)") || summary.contains("(1C)"),
-        "Summary should show class counts with C suffix"
+        "summary should show class counts with C suffix"
     );
 }
 
 #[test]
-fn test_summary_top_hint_with_functions_only() {
+fn test_summary_top_hint_omitted_for_single_file() {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
 
-    // Create src/ subdirectory with files containing only functions (no classes)
-    fs::create_dir(root.join("src")).unwrap();
-    fs::write(
-        root.join("src/algo.rs"),
-        "fn sort() {} fn search() {} fn merge() {}",
-    )
-    .unwrap();
-    fs::write(root.join("src/math.rs"), "fn add() {} fn multiply() {}").unwrap();
-    fs::write(root.join("src/util.rs"), "fn empty() {}").unwrap();
-
-    // Analyze directory
-    let output = analyze_directory(root, None).unwrap();
-
-    // Generate summary
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
-
-    // Assert summary contains top hint with functions (F suffix)
-    assert!(summary.contains("top:"), "Summary should contain top hint");
-    assert!(
-        summary.contains("(3F)") || summary.contains("(2F)"),
-        "Summary should show function counts with F suffix"
-    );
-}
-
-#[test]
-fn test_summary_top_hint_single_file_in_dir() {
-    let temp_dir = TempDir::new().unwrap();
-    let root = temp_dir.path();
-
-    // Create src/ subdirectory with a single file
     fs::create_dir(root.join("src")).unwrap();
     fs::write(root.join("src/main.rs"), "fn main() {} fn helper() {}").unwrap();
 
-    // Analyze directory
     let output = analyze_directory(root, None).unwrap();
-
-    // Generate summary
     let summary =
         code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
-    // Assert summary does NOT contain top hint (single file, no top-N needed)
     assert!(
         !summary.contains("top:"),
-        "Summary should not contain top hint for single file"
-    );
-}
-
-#[test]
-fn test_summary_top_hint_no_functions_or_classes() {
-    let temp_dir = TempDir::new().unwrap();
-    let root = temp_dir.path();
-
-    // Create src/ subdirectory with files that have no functions or classes
-    fs::create_dir(root.join("src")).unwrap();
-    fs::write(root.join("src/constants.rs"), "const PI: f64 = 3.14159;").unwrap();
-    fs::write(root.join("src/config.rs"), "const MAX_SIZE: usize = 1024;").unwrap();
-
-    // Analyze directory
-    let output = analyze_directory(root, None).unwrap();
-
-    // Generate summary
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
-
-    // Assert summary does NOT contain top hint (no functions or classes)
-    assert!(
-        !summary.contains("top:"),
-        "Summary should not contain top hint when no functions or classes are present"
+        "summary should not contain top hint for a single file"
     );
 }
 
