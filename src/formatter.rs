@@ -891,10 +891,9 @@ pub fn format_summary(
                 };
 
                 // Collect depth-2 sub-package directories (immediate children of this directory)
-                let dir_path = Path::new(&dir_path_str);
                 let mut subdirs: Vec<String> = entries
                     .iter()
-                    .filter(|e| e.depth == 2 && e.is_dir && e.path.starts_with(dir_path))
+                    .filter(|e| e.depth == 2 && e.is_dir && e.path.starts_with(&entry.path))
                     .filter_map(|e| {
                         e.path
                             .file_name()
