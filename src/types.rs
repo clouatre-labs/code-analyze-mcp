@@ -12,6 +12,7 @@ pub struct PaginationParams {
     /// Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call.
     pub cursor: Option<String>,
     /// Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips.
+    #[schemars(schema_with = "crate::schema_helpers::option_page_size_schema")]
     pub page_size: Option<usize>,
 }
 
@@ -32,6 +33,7 @@ pub struct AnalyzeDirectoryParams {
     pub path: String,
 
     /// Maximum directory traversal depth for overview mode only. 0 or unset = unlimited depth. Use 1-3 for large monorepos to manage output size. Ignored in other modes.
+    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub max_depth: Option<u32>,
 
     #[serde(flatten)]
@@ -47,6 +49,7 @@ pub struct AnalyzeFileParams {
     pub path: String,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
+    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub ast_recursion_limit: Option<usize>,
 
     #[serde(flatten)]
@@ -89,12 +92,15 @@ pub struct AnalyzeSymbolParams {
     pub match_mode: Option<SymbolMatchMode>,
 
     /// Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2.
+    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub follow_depth: Option<u32>,
 
     /// Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos.
+    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub max_depth: Option<u32>,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
+    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub ast_recursion_limit: Option<usize>,
 
     #[serde(flatten)]
@@ -108,7 +114,9 @@ pub struct AnalyzeSymbolParams {
 pub struct AnalysisResult {
     pub path: String,
     pub mode: AnalysisMode,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub import_count: usize,
+    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub main_line: Option<usize>,
     pub files: Vec<FileInfo>,
     pub functions: Vec<FunctionInfo>,
@@ -120,8 +128,11 @@ pub struct AnalysisResult {
 pub struct FileInfo {
     pub path: String,
     pub language: String,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line_count: usize,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub function_count: usize,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub class_count: usize,
     /// Whether this file is a test file.
     pub is_test: bool,
@@ -130,7 +141,9 @@ pub struct FileInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FunctionInfo {
     pub name: String,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub end_line: usize,
     /// Parameter list as string representations (e.g., ["x: i32", "y: String"]).
     pub parameters: Vec<String>,
@@ -178,7 +191,9 @@ impl FunctionInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ClassInfo {
     pub name: String,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub end_line: usize,
     pub methods: Vec<FunctionInfo>,
     pub fields: Vec<String>,
@@ -191,10 +206,13 @@ pub struct ClassInfo {
 pub struct CallInfo {
     pub caller: String,
     pub callee: String,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub column: usize,
     /// Number of arguments passed at the call site.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub arg_count: Option<usize>,
 }
 
@@ -205,6 +223,7 @@ pub struct AssignmentInfo {
     /// Value expression being assigned
     pub value: String,
     /// Line number where assignment occurs
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
     /// Enclosing function scope or 'global'
     pub scope: String,
@@ -217,6 +236,7 @@ pub struct FieldAccessInfo {
     /// Field name being accessed
     pub field: String,
     /// Line number where field access occurs
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
     /// Enclosing function scope or 'global'
     pub scope: String,
@@ -227,6 +247,7 @@ pub struct ReferenceInfo {
     pub symbol: String,
     pub reference_type: ReferenceType,
     pub location: String,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
 }
 
@@ -264,6 +285,7 @@ pub enum AnalysisMode {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CallChain {
     pub chain: Vec<CallInfo>,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub depth: u32,
 }
 
@@ -279,6 +301,7 @@ pub struct FocusedAnalysisData {
 pub struct ElementQueryResult {
     pub query: String,
     pub results: Vec<String>,
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub count: usize,
 }
 
@@ -289,6 +312,7 @@ pub struct ImportInfo {
     /// Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap').
     pub items: Vec<String>,
     /// Line number where import appears.
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
 }
 
@@ -321,6 +345,7 @@ pub struct ModuleFunctionInfo {
     /// Function name
     pub name: String,
     /// Line number where function is defined
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line: usize,
 }
 
@@ -339,6 +364,7 @@ pub struct ModuleInfo {
     /// File name (basename only, e.g., 'lib.rs')
     pub name: String,
     /// Total line count in file
+    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub line_count: usize,
     /// Programming language (e.g., 'rust', 'python', 'go')
     pub language: String,
