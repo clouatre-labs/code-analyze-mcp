@@ -1,0 +1,131 @@
+{
+  "benchmark": "v10-benchmark",
+  "version": 10,
+  "target_repo": "TBD",
+  "model_a": "claude-sonnet-4-6",
+  "model_a2": "claude-haiku-4-5",
+  "model_b": "claude-haiku-4-5",
+  "model_c": "claude-sonnet-4-6",
+  "model_d": "minimax/minimax-m2.5",
+  "model_e": "mistralai/mistral-small-2603",
+  "provider_a": "gcp_vertex_ai",
+  "provider_a2": "gcp_vertex_ai",
+  "provider_b": "gcp_vertex_ai",
+  "provider_c": "gcp_vertex_ai",
+  "provider_d": "openrouter",
+  "provider_e": "openrouter",
+  "reasoning_mode": "disabled",
+  "blinding_map": {
+    "R01": "C4",
+    "R02": "A22",
+    "R03": "D3",
+    "R04": "E4",
+    "R05": "C2",
+    "R06": "B3",
+    "R07": "D2",
+    "R08": "B4",
+    "R09": "C3",
+    "R10": "D1",
+    "R11": "A2",
+    "R12": "C1",
+    "R13": "E2",
+    "R14": "A23",
+    "R15": "B2",
+    "R16": "A3",
+    "R17": "E3",
+    "R18": "A21",
+    "R19": "D4",
+    "R20": "A24",
+    "R21": "B1",
+    "R22": "A1",
+    "R23": "A4",
+    "R24": "E1"
+  },
+  "rubric": {
+    "structural_accuracy": {
+      "3": "Correctly identifies all major top-level modules; responsibilities clearly defined; key types/classes accurately described; module boundaries respect design intent",
+      "2": "Identifies most modules; minor omissions; core functional areas present",
+      "1": "Partial coverage; missing 1-2 major modules or unclear responsibilities; vague on key abstractions",
+      "0": "Major components missing; fundamental misunderstanding of project structure"
+    },
+    "cross_module_tracing": {
+      "3": "Complete end-to-end trace through primary pipeline; intermediate types/classes identified at each stage; data flow clear; integration points noted",
+      "2": "Key stages present; minor gaps (one intermediate stage unclear, or one type missing); general flow understandable",
+      "1": "Partial trace; missing multiple stages or intermediate types; flow not end-to-end",
+      "0": "No meaningful trace or entirely incorrect"
+    },
+    "approach_quality": {
+      "3": "Change proposal identifies: correct files and classes; follows existing patterns; integration point appropriate; realistic risks identified; minimal disruption to existing code",
+      "2": "Reasonable proposal; most files and types identified; risks partially addressed",
+      "1": "Incomplete; missing files, unclear integration point, or no risk analysis",
+      "0": "Superficial or incorrect proposal"
+    },
+    "tool_efficiency": {
+      "3": "5 or fewer research tool calls; focused exploration; clear synthesis path",
+      "2": "6-10 research tool calls; somewhat exploratory but reaches conclusions",
+      "1": "11-20 research tool calls; extensive exploration; delayed synthesis",
+      "0": "More than 20 research tool calls; inefficient; redundant or circular exploration"
+    }
+  },
+  "hypotheses": {
+    "H1_fix_efficacy": "v10 B median research_calls <= 5 vs v9 B ~11; quality_score non-inferior to v9 B",
+    "H2_model_size": "A (Sonnet+native) quality_score > A2 (Haiku+native)",
+    "H3_tool_type": "B (Haiku+MCP) quality_score > A2 (Haiku+native)",
+    "H4_open_weight": "D and E achieve quality_score >= v9 B baseline on structural_accuracy and cross_module_tracing",
+    "H5_cost_efficiency": "E (Mistral Small+MCP) effective_cost_per_qp < C (Sonnet+MCP)",
+    "H0_null": "No significant differences (15 pairwise Mann-Whitney U, Bonferroni alpha=0.0033)"
+  },
+  "scoring_instructions": {
+    "blinding": "Scorer reads outputs blindly (no condition labels visible). Blinding map reveals condition post-scoring.",
+    "dimensions": "Rate each dimension 0-3 per rubric. Total quality_score = sum of 4 dimensions (0-12).",
+    "tie_breaking": "On borderline scores, refer to rubric anchor descriptions. When uncertain, write notes in 'notes' field for review.",
+    "pacing": "Allow 15-30 minutes per output. Consistency check: review first 3 outputs after scoring all 24 for calibration drift."
+  },
+  "per_run_scores": {
+    "A1": null,
+    "A2": null,
+    "A3": null,
+    "A4": null,
+    "A2_1": null,
+    "A2_2": null,
+    "A2_3": null,
+    "A2_4": null,
+    "B1": null,
+    "B2": null,
+    "B3": null,
+    "B4": null,
+    "C1": null,
+    "C2": null,
+    "C3": null,
+    "C4": null,
+    "D1": null,
+    "D2": null,
+    "D3": null,
+    "D4": null,
+    "E1": null,
+    "E2": null,
+    "E3": null,
+    "E4": null
+  },
+  "per_run_score_schema": {
+    "structural_accuracy": "0-3 per rubric",
+    "cross_module_tracing": "0-3 per rubric",
+    "approach_quality": "0-3 per rubric",
+    "tool_efficiency": "0-3 per rubric",
+    "quality_score": "sum of 4 dimensions (0-12)",
+    "notes": "free-form text for scoring rationale",
+    "reasoning_mode": "always 'disabled' for v10"
+  },
+  "analysis_notes": {
+    "primary_outcome": "15 pairwise Mann-Whitney U tests (Bonferroni alpha=0.0033)",
+    "secondary_outcomes": [
+      "research_calls per condition",
+      "total_tokens per condition",
+      "cost_usd per condition",
+      "effective_cost_per_qp = cost_usd / (quality_score * reliability)",
+      "protocol_violations per condition"
+    ],
+    "reporting_frame": "All analyses are exploratory due to N=4 per condition. Effect sizes and practical significance weighted more than p-values.",
+    "statistical_method": "Mann-Whitney U with rank-biserial r effect size; scipy preferred if available, else normal approximation"
+  }
+}
