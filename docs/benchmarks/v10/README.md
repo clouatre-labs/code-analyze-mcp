@@ -94,7 +94,7 @@ Example entry:
 ### Step 5: Run Analysis
 
 ```bash
-python scripts/analyze.py scores-template.json
+python scripts/analyze.py --scores-file scores-template.json
 ```
 
 Outputs:

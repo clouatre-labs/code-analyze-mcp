@@ -24,7 +24,7 @@ Do NOT use:
 - `Read` — file content reading
 - `Bash` — shell commands for file exploration (cat, rg, find, head, tail, sed, awk)
 
-MCP tools are your only research tools in this condition. You may use Bash for non-file tasks (date, math, etc.) but not for code exploration.
+MCP tools are your only research tools in this condition. Do not use Bash at all; the runner disallows it entirely for this condition.
 
 ## Turn Budget
 

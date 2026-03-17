@@ -81,6 +81,9 @@ def split_conditions(
             continue
         val = data.get(field)
         if val is None and field == "total":
+            # Prefer explicit quality_score field first
+            val = data.get("quality_score")
+        if val is None and field == "total":
             dims = [
                 "structural_accuracy",
                 "cross_module_tracing",
@@ -91,7 +94,7 @@ def split_conditions(
             if all(v is not None for v in vals):
                 val = sum(vals)
         if val is not None:
-            condition = run_id[0:2] if run_id.startswith("A2") else run_id[0]
+            condition = "A2" if run_id.startswith("A2_") else run_id[0]
             val_float = float(val)
             if condition == "A2":
                 a2.append(val_float)
@@ -121,7 +124,7 @@ def split_metrics(
         metrics = data.get("metrics", {})
         val = metrics.get(metric) if metrics else None
         if val is not None:
-            condition = run_id[0:2] if run_id.startswith("A2") else run_id[0]
+            condition = "A2" if run_id.startswith("A2_") else run_id[0]
             val_float = float(val)
             if condition == "A2":
                 a2.append(val_float)
@@ -246,33 +249,37 @@ def print_provider_cost_table(per_run: Dict):
         split_conditions(per_run, "total")
     )
 
-    def format_cost(costs, quality):
+    def format_cost(costs, quality, reliability=None):
         if not costs or not quality:
             return "n/a", "n/a", "n/a"
         med_cost = statistics.median(costs)
         med_qual = statistics.median(quality)
-        eff_cost = med_cost / med_qual if med_qual > 0 else float("inf")
+        rel = statistics.mean(reliability) if reliability else 1.0
+        denom = med_qual * rel
+        eff_cost = med_cost / denom if denom > 0 else float("inf")
         eff_cost_str = f"{eff_cost:.4f}" if eff_cost != float("inf") else "inf"
         return f"{med_cost:.4f}", f"{med_qual:.1f}", eff_cost_str
 
+    a_rel, a2_rel, b_rel, c_rel, d_rel, e_rel = split_metrics(per_run, "valid_output")
+
     # GCP conditions: A, A2, B, C
-    a_cost, a_qual, a_eff = format_cost(a_costs, a_quality)
+    a_cost, a_qual, a_eff = format_cost(a_costs, a_quality, a_rel)
     print(f"| A | GCP | {a_cost} | {a_qual} | {a_eff} |")
 
-    a2_cost, a2_qual, a2_eff = format_cost(a2_costs, a2_quality)
+    a2_cost, a2_qual, a2_eff = format_cost(a2_costs, a2_quality, a2_rel)
     print(f"| A2 | GCP | {a2_cost} | {a2_qual} | {a2_eff} |")
 
-    b_cost, b_qual, b_eff = format_cost(b_costs, b_quality)
+    b_cost, b_qual, b_eff = format_cost(b_costs, b_quality, b_rel)
     print(f"| B | GCP | {b_cost} | {b_qual} | {b_eff} |")
 
-    c_cost, c_qual, c_eff = format_cost(c_costs, c_quality)
+    c_cost, c_qual, c_eff = format_cost(c_costs, c_quality, c_rel)
     print(f"| C | GCP | {c_cost} | {c_qual} | {c_eff} |")
 
     # OpenRouter conditions: D, E
-    d_cost, d_qual, d_eff = format_cost(d_costs, d_quality)
+    d_cost, d_qual, d_eff = format_cost(d_costs, d_quality, d_rel)
     print(f"| D | OpenRouter | {d_cost} | {d_qual} | {d_eff} |")
 
-    e_cost, e_qual, e_eff = format_cost(e_costs, e_quality)
+    e_cost, e_qual, e_eff = format_cost(e_costs, e_quality, e_rel)
     print(f"| E | OpenRouter | {e_cost} | {e_qual} | {e_eff} |")
 
 
@@ -289,7 +296,7 @@ def print_tool_call_table(per_run: Dict):
         if data is None:
             continue
         metrics = data.get("metrics", {}) or {}
-        cond = run_id[0:2] if run_id.startswith("A2") else run_id[0]
+        cond = "A2" if run_id.startswith("A2_") else run_id[0]
         print(
             f"| {run_id} | {cond} | {metrics.get('tool_calls_total', '-')} | {metrics.get('research_calls', '-')} | {metrics.get('mcp_calls', '-')} | {metrics.get('native_calls', '-')} |"
         )
@@ -310,7 +317,7 @@ def print_protocol_violations(per_run: Dict):
             continue
         metrics = data.get("metrics", {})
         violations = metrics.get("protocol_violations", 0) if metrics else 0
-        condition = run_id[0:2] if run_id.startswith("A2") else run_id[0]
+        condition = "A2" if run_id.startswith("A2_") else run_id[0]
         if condition == "A2":
             a2_violations += violations
         elif condition == "A":
@@ -409,7 +416,7 @@ def main():
     print(f"**Model B:** {scores.get('model_b', 'claude-haiku-4-5')}")
     print(f"**Model C:** {scores.get('model_c', 'claude-sonnet-4-6')}")
     print(f"**Model D:** {scores.get('model_d', 'minimax/minimax-m2.5')}")
-    print(f"**Model E:** {scores.get('model_e', 'mistral/mistral-7b')}")
+    print(f"**Model E:** {scores.get('model_e', 'mistralai/mistral-small-2603')}")
     print(f"**Target:** {scores.get('target_repo', 'TBD')}")
     print("**Runs:** 24 (4 per condition)\n")
 

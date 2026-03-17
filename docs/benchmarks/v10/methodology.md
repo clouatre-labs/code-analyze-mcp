@@ -38,14 +38,9 @@
 
 ### Target Repository
 
-**To be determined.** Repository selection criteria:
+**Django** (same as v9). Pinned commit SHA recorded in `run-order.txt` at execution time.
 
-- Python project with 50,000+ lines of code
-- Deep module hierarchy: 30+ files across 5+ top-level packages
-- Complex dependency graph with semantic relationships not obvious from file names
-- Representative of real-world code analysis tasks (e.g., multi-dialect SQL parser, ORM, framework)
-
-Commit SHA will be pinned at benchmark execution and recorded in `run-order.txt`.
+Selection rationale: Python project with 50,000+ lines, deep module hierarchy (http/, urls/, db/, views/, conf/, apps/ and more), and a complex cross-module dependency graph representative of real-world framework analysis tasks.
 
 ### Run Order (seed = 42)
 

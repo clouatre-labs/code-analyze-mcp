@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 RUNS_DIR="$SCRIPT_DIR/results/runs"
 PROMPTS_DIR="$SCRIPT_DIR/prompts"
+mkdir -p "$RUNS_DIR"
 TARGET_REPO="/tmp/benchmark-repos/django"
 
 if [[ $# -lt 1 ]]; then
@@ -138,9 +139,6 @@ if [[ "$RUNNER" == "claude_cli" ]]; then
   # Touch marker before the run so find -newer captures the session JSONL written during the run
   touch /tmp/.v10-run-marker
 
-  # Record session start time to find the session JSONL later
-  SESSION_START_TS=$(date -u +%s)
-
   # Execute the run with claude CLI
   DISABLE_PROMPT_CACHING=1 claude \
     -p \
@@ -157,10 +155,12 @@ if [[ "$RUNNER" == "claude_cli" ]]; then
   echo "Log: $LOG_FILE"
 
   # Find the most recent session JSONL written after the pre-run marker
-  # Claude Code stores sessions under ~/.claude/projects/<slug>/ where slug = path with / replaced by -
-  SESSION_DIR="$HOME/.claude/projects/-Users-hugues-clouatre-git-clouatre-labs-code-analyze-mcp"
+  # Claude Code stores sessions under ~/.claude/projects/<slug>/ where slug = REPO_ROOT with / replaced by -
+  # Allow override via CLAUDE_SESSION_DIR env var for portability across machines/checkouts
+  _REPO_SLUG="${REPO_ROOT//\//-}"
+  SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_REPO_SLUG}}"
   if [[ -d "$SESSION_DIR" ]]; then
-    LATEST_SESSION=$(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v10-run-marker 2>/dev/null | sort -t/ -k1 | tail -1)
+    LATEST_SESSION=$(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v10-run-marker 2>/dev/null       | xargs ls -t 2>/dev/null | head -1)
     if [[ -n "$LATEST_SESSION" ]]; then
       SESSION_COPY="$RUNS_DIR/${RUN_ID}-session.jsonl"
       cp "$LATEST_SESSION" "$SESSION_COPY"
