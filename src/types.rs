@@ -1,4 +1,4 @@
-use schemars::JsonSchema;
+use schemars::{JsonSchema, Schema};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -6,12 +6,24 @@ use std::fmt::Write;
 #[allow(unused_imports)]
 use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
 
+/// Remove the `"format"` key from a schema.
+///
+/// schemars 1.x emits non-standard format values such as `"uint"` and `"uint32"` for unsigned
+/// integer types. These values are not part of any JSON Schema draft and trigger warnings in
+/// strict MCP clients (e.g. opencode). Applying this transform to tool-parameter fields that
+/// use `usize` or `u32` keeps the schema valid while preserving `"type": "integer"` and the
+/// `"minimum": 0` constraint that `schemars` also emits for those types.
+fn strip_format(schema: &mut Schema) {
+    schema.remove("format");
+}
+
 /// Pagination parameters shared across all tools.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PaginationParams {
     /// Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call.
     pub cursor: Option<String>,
     /// Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips.
+    #[schemars(transform = strip_format)]
     pub page_size: Option<usize>,
 }
 
@@ -32,6 +44,7 @@ pub struct AnalyzeDirectoryParams {
     pub path: String,
 
     /// Maximum directory traversal depth for overview mode only. 0 or unset = unlimited depth. Use 1-3 for large monorepos to manage output size. Ignored in other modes.
+    #[schemars(transform = strip_format)]
     pub max_depth: Option<u32>,
 
     #[serde(flatten)]
@@ -47,6 +60,7 @@ pub struct AnalyzeFileParams {
     pub path: String,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
+    #[schemars(transform = strip_format)]
     pub ast_recursion_limit: Option<usize>,
 
     #[serde(flatten)]
@@ -89,12 +103,15 @@ pub struct AnalyzeSymbolParams {
     pub match_mode: Option<SymbolMatchMode>,
 
     /// Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2.
+    #[schemars(transform = strip_format)]
     pub follow_depth: Option<u32>,
 
     /// Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos.
+    #[schemars(transform = strip_format)]
     pub max_depth: Option<u32>,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
+    #[schemars(transform = strip_format)]
     pub ast_recursion_limit: Option<usize>,
 
     #[serde(flatten)]
