@@ -7,7 +7,7 @@
 ## Design Goals
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
-- **Language-agnostic parsing via tree-sitter**: Support 6 languages with a unified query-based extraction system
+- **Language-agnostic parsing via tree-sitter**: Support 5 languages (plus TSX as a TypeScript variant) with a unified query-based extraction system
 - **Four focused MCP tools**: `analyze_directory`, `analyze_file`, `analyze_module`, and `analyze_symbol` -- each with a clear, explicit interface rather than a single tool with auto-detected modes
 - **Compatible with any MCP orchestrator**: Claude Code, Kiro, Fast-Agent, MCP-Agent, and others
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
