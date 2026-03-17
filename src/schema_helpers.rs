@@ -25,3 +25,17 @@ pub fn option_integer_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
     .clone();
     Schema::from(map)
 }
+
+/// Returns a nullable integer schema for Option<usize> page_size fields.
+/// Enforces minimum: 1 to prevent callers from sending page_size=0, which
+/// would cause paginate_slice to make no progress and loop on the same cursor.
+pub fn option_page_size_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
+    let map = json!({
+        "type": ["integer", "null"],
+        "minimum": 1
+    })
+    .as_object()
+    .unwrap()
+    .clone();
+    Schema::from(map)
+}

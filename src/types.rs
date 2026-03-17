@@ -12,7 +12,7 @@ pub struct PaginationParams {
     /// Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call.
     pub cursor: Option<String>,
     /// Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips.
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[schemars(schema_with = "crate::schema_helpers::option_page_size_schema")]
     pub page_size: Option<usize>,
 }
 

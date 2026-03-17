@@ -3544,30 +3544,37 @@ fn test_analyze_module_unsupported_extension() {
 
 #[test]
 fn test_no_uint_format_in_schemas() {
-    use code_analyze_mcp::types::AnalyzeDirectoryParams;
-    use code_analyze_mcp::types::FileInfo;
-    use schemars::SchemaGenerator;
+    use code_analyze_mcp::types::{
+        AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeSymbolParams, FileInfo,
+    };
 
-    let mut schema_gen = SchemaGenerator::default();
-    let file_info_schema = schema_gen.subschema_for::<FileInfo>();
-    let schema_str = serde_json::to_string(&file_info_schema).unwrap();
-    assert!(
-        !schema_str.contains("\"uint\""),
-        "FileInfo schema contains non-standard 'uint' format"
-    );
-    assert!(
-        !schema_str.contains("\"uint32\""),
-        "FileInfo schema contains non-standard 'uint32' format"
-    );
-    assert!(
-        !schema_str.contains("\"uint64\""),
-        "FileInfo schema contains non-standard 'uint64' format"
-    );
+    // Use schema_for! (root schema) so $defs are included and $ref targets are
+    // fully present in the serialized JSON, not hidden behind unresolved $ref pointers.
+    let schemas = [
+        (
+            "FileInfo",
+            serde_json::to_string(&schemars::schema_for!(FileInfo)).unwrap(),
+        ),
+        (
+            "AnalyzeDirectoryParams",
+            serde_json::to_string(&schemars::schema_for!(AnalyzeDirectoryParams)).unwrap(),
+        ),
+        (
+            "AnalyzeFileParams",
+            serde_json::to_string(&schemars::schema_for!(AnalyzeFileParams)).unwrap(),
+        ),
+        (
+            "AnalyzeSymbolParams",
+            serde_json::to_string(&schemars::schema_for!(AnalyzeSymbolParams)).unwrap(),
+        ),
+    ];
 
-    let dir_params_schema = schema_gen.subschema_for::<AnalyzeDirectoryParams>();
-    let dir_str = serde_json::to_string(&dir_params_schema).unwrap();
-    assert!(
-        !dir_str.contains("\"uint32\""),
-        "AnalyzeDirectoryParams schema contains non-standard 'uint32' format"
-    );
+    for (name, schema_str) in &schemas {
+        for bad_format in &["\"uint\"", "\"uint32\"", "\"uint64\""] {
+            assert!(
+                !schema_str.contains(bad_format),
+                "{name} schema contains non-standard format {bad_format}"
+            );
+        }
+    }
 }
