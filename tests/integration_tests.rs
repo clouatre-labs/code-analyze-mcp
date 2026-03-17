@@ -3627,32 +3627,30 @@ fn test_summary_sub_annotation_present_for_nested_dirs() {
 }
 
 #[test]
-fn test_summary_true_with_cursor_returns_error() {
+fn test_summary_true_with_cursor_triggers_guard() {
     use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
-    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
 
-    let cursor_data = CursorData {
+    let cursor_str = encode_cursor(&CursorData {
         mode: PaginationMode::Default,
         offset: 10,
-    };
-    let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
-    let params = AnalyzeDirectoryParams {
-        path: ".".to_string(),
-        max_depth: None,
-        pagination: PaginationParams {
-            cursor: Some(cursor_str),
-            page_size: None,
-        },
-        output_control: OutputControlParams {
-            summary: Some(true),
-            force: None,
-            verbose: None,
-        },
-    };
+    })
+    .expect("encode should succeed");
 
     assert!(
-        params.output_control.summary == Some(true) && params.pagination.cursor.is_some(),
-        "guard condition must fire when summary=Some(true) and cursor is set"
+        code_analyze_mcp::summary_cursor_conflict(Some(true), Some(&cursor_str)),
+        "guard must fire when summary=Some(true) and cursor is present"
+    );
+    assert!(
+        !code_analyze_mcp::summary_cursor_conflict(None, Some(&cursor_str)),
+        "guard must NOT fire when summary=None (auto-mode) and cursor is present"
+    );
+    assert!(
+        !code_analyze_mcp::summary_cursor_conflict(Some(false), Some(&cursor_str)),
+        "guard must NOT fire when summary=Some(false) and cursor is present"
+    );
+    assert!(
+        !code_analyze_mcp::summary_cursor_conflict(Some(true), None),
+        "guard must NOT fire when summary=Some(true) but no cursor"
     );
 }
 
