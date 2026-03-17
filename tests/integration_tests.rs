@@ -1434,6 +1434,42 @@ fn test_summary_top_hint_omitted_for_single_file() {
     );
 }
 
+#[test]
+fn test_format_summary_sibling_dir_prefix() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    let src = root.join("src");
+    let src_extra = root.join("src_extra");
+    fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src_extra).unwrap();
+    fs::write(src.join("lib.rs"), "fn foo() {}").unwrap();
+    fs::write(src_extra.join("lib.rs"), "fn bar() {}").unwrap();
+
+    let output = analyze_directory(root, None).unwrap();
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+
+    // src/ should show exactly 1 file, not 2
+    let src_line = summary
+        .lines()
+        .find(|l| l.contains("src") && !l.contains("src_extra"))
+        .expect("summary must contain a line for src/");
+    let src_extra_line = summary
+        .lines()
+        .find(|l| l.contains("src_extra"))
+        .expect("summary must contain a line for src_extra/");
+
+    assert!(
+        src_line.contains("[1 file"),
+        "src/ should show exactly 1 file: {src_line}"
+    );
+    assert!(
+        src_extra_line.contains("[1 file"),
+        "src_extra/ should show exactly 1 file: {src_extra_line}"
+    );
+}
+
 // Reference extraction tests for Python, Java, and TypeScript
 
 #[test]
