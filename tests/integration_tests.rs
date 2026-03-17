@@ -1385,6 +1385,55 @@ fn test_summary_explicit_on_small_directory() {
     assert!(summary.contains("2 files"));
 }
 
+// Test top-N hint in summary mode
+
+#[test]
+fn test_summary_top_hint_shown() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/model.rs"),
+        "pub struct User { name: String }\npub struct Product { id: u32 }",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/handler.rs"),
+        "pub struct Handler { } impl Handler { pub fn handle() {} }",
+    )
+    .unwrap();
+    fs::write(root.join("src/util.rs"), "pub fn helper() {}").unwrap();
+
+    let output = analyze_directory(root, None).unwrap();
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+
+    assert!(summary.contains("top:"), "summary should contain top hint");
+    assert!(
+        summary.contains("(2C)") || summary.contains("(1C)"),
+        "summary should show class counts with C suffix"
+    );
+}
+
+#[test]
+fn test_summary_top_hint_omitted_for_single_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() {} fn helper() {}").unwrap();
+
+    let output = analyze_directory(root, None).unwrap();
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+
+    assert!(
+        !summary.contains("top:"),
+        "summary should not contain top hint for a single file"
+    );
+}
+
 // Reference extraction tests for Python, Java, and TypeScript
 
 #[test]
