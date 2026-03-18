@@ -77,6 +77,10 @@ fn error_meta(
     }))
 }
 
+fn err_to_tool_result(e: ErrorData) -> CallToolResult {
+    CallToolResult::error(vec![Content::text(e.message)])
+}
+
 fn no_cache_meta() -> Meta {
     let mut m = serde_json::Map::new();
     m.insert(
@@ -547,7 +551,10 @@ impl CodeAnalyzer {
         let ct = context.ct.clone();
 
         // Call handler for analysis and progress tracking
-        let mut output = self.handle_overview_mode(&params, ct).await?;
+        let mut output = match self.handle_overview_mode(&params, ct).await {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
 
         // summary=true (explicit) and cursor are mutually exclusive.
         // Auto-summarization (summary=None + large output) must NOT block cursor pagination.
@@ -555,12 +562,12 @@ impl CodeAnalyzer {
             params.output_control.summary,
             params.pagination.cursor.as_deref(),
         ) {
-            return Err(ErrorData::new(
+            return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 "summary=true is incompatible with a pagination cursor; use one or the other"
                     .to_string(),
                 error_meta("validation", false, "remove cursor or set summary=false"),
-            ));
+            )));
         }
 
         // Apply summary/output size limiting logic
@@ -586,27 +593,33 @@ impl CodeAnalyzer {
         // Decode pagination cursor if provided
         let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = if let Some(ref cursor_str) = params.pagination.cursor {
-            let cursor_data = decode_cursor(cursor_str).map_err(|e| {
+            let cursor_data = match decode_cursor(cursor_str).map_err(|e| {
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     e.to_string(),
                     error_meta("validation", false, "invalid cursor format"),
                 )
-            })?;
+            }) {
+                Ok(v) => v,
+                Err(e) => return Ok(err_to_tool_result(e)),
+            };
             cursor_data.offset
         } else {
             0
         };
 
         // Apply pagination to files
-        let paginated = paginate_slice(&output.files, offset, page_size, PaginationMode::Default)
-            .map_err(|e| {
-            ErrorData::new(
-                rmcp::model::ErrorCode::INTERNAL_ERROR,
-                e.to_string(),
-                error_meta("transient", true, "retry the request"),
-            )
-        })?;
+        let paginated =
+            match paginate_slice(&output.files, offset, page_size, PaginationMode::Default) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Ok(err_to_tool_result(ErrorData::new(
+                        rmcp::model::ErrorCode::INTERNAL_ERROR,
+                        e.to_string(),
+                        error_meta("transient", true, "retry the request"),
+                    )));
+                }
+            };
 
         let verbose = params.output_control.verbose.unwrap_or(false);
         if !use_summary && (paginated.next_cursor.is_some() || offset > 0 || !verbose) {
@@ -662,7 +675,10 @@ impl CodeAnalyzer {
         let _ct = context.ct.clone();
 
         // Call handler for analysis and caching
-        let arc_output = self.handle_file_details_mode(&params).await?;
+        let arc_output = match self.handle_file_details_mode(&params).await {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
 
         // Clone only the two fields that may be mutated per-request (formatted and
         // next_cursor). The heavy SemanticAnalysis data is shared via Arc and never
@@ -694,42 +710,47 @@ impl CodeAnalyzer {
                 formatted.len(),
                 estimated_tokens
             );
-            return Err(ErrorData::new(
+            return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 message,
                 error_meta("validation", false, "use force=true or narrow scope"),
-            ));
+            )));
         }
 
         // Decode pagination cursor if provided (analyze_file)
         let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = if let Some(ref cursor_str) = params.pagination.cursor {
-            let cursor_data = decode_cursor(cursor_str).map_err(|e| {
+            let cursor_data = match decode_cursor(cursor_str).map_err(|e| {
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     e.to_string(),
                     error_meta("validation", false, "invalid cursor format"),
                 )
-            })?;
+            }) {
+                Ok(v) => v,
+                Err(e) => return Ok(err_to_tool_result(e)),
+            };
             cursor_data.offset
         } else {
             0
         };
 
         // Paginate functions
-        let paginated = paginate_slice(
+        let paginated = match paginate_slice(
             &arc_output.semantic.functions,
             offset,
             page_size,
             PaginationMode::Default,
-        )
-        .map_err(|e| {
-            ErrorData::new(
-                rmcp::model::ErrorCode::INTERNAL_ERROR,
-                e.to_string(),
-                error_meta("transient", true, "retry the request"),
-            )
-        })?;
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    error_meta("transient", true, "retry the request"),
+                )));
+            }
+        };
 
         // Regenerate formatted output from the paginated slice when pagination is active
         let verbose = params.output_control.verbose.unwrap_or(false);
@@ -796,18 +817,24 @@ impl CodeAnalyzer {
         let ct = context.ct.clone();
 
         // Call handler for analysis and progress tracking
-        let mut output = self.handle_focused_mode(&params, ct).await?;
+        let mut output = match self.handle_focused_mode(&params, ct).await {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
 
         // Decode pagination cursor if provided (analyze_symbol)
         let page_size = params.pagination.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
         let offset = if let Some(ref cursor_str) = params.pagination.cursor {
-            let cursor_data = decode_cursor(cursor_str).map_err(|e| {
+            let cursor_data = match decode_cursor(cursor_str).map_err(|e| {
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     e.to_string(),
                     error_meta("validation", false, "invalid cursor format"),
                 )
-            })?;
+            }) {
+                Ok(v) => v,
+                Err(e) => return Ok(err_to_tool_result(e)),
+            };
             cursor_data.offset
         } else {
             0
@@ -824,12 +851,15 @@ impl CodeAnalyzer {
 
         let paginated_next_cursor = match cursor_mode {
             PaginationMode::Callers => {
-                let (paginated_items, paginated_next) = paginate_focus_chains(
+                let (paginated_items, paginated_next) = match paginate_focus_chains(
                     &output.prod_chains,
                     PaginationMode::Callers,
                     offset,
                     page_size,
-                )?;
+                ) {
+                    Ok(v) => v,
+                    Err(e) => return Ok(err_to_tool_result(e)),
+                };
 
                 let verbose = params.output_control.verbose.unwrap_or(false);
                 if paginated_next.is_some() || offset > 0 || !verbose {
@@ -853,12 +883,15 @@ impl CodeAnalyzer {
                 }
             }
             PaginationMode::Callees => {
-                let (paginated_items, paginated_next) = paginate_focus_chains(
+                let (paginated_items, paginated_next) = match paginate_focus_chains(
                     &output.outgoing_chains,
                     PaginationMode::Callees,
                     offset,
                     page_size,
-                )?;
+                ) {
+                    Ok(v) => v,
+                    Err(e) => return Ok(err_to_tool_result(e)),
+                };
 
                 let verbose = params.output_control.verbose.unwrap_or(false);
                 if paginated_next.is_some() || offset > 0 || !verbose {
@@ -920,7 +953,7 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
 
-        let module_info = analyze::analyze_module_file(&params.path).map_err(|e| {
+        let module_info = match analyze::analyze_module_file(&params.path).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 format!("Failed to analyze module: {}", e),
@@ -930,18 +963,24 @@ impl CodeAnalyzer {
                     "ensure file exists, is readable, and has a supported extension",
                 ),
             )
-        })?;
+        }) {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
 
         let text = format_module_info(&module_info);
         let mut result =
             CallToolResult::success(vec![Content::text(text)]).with_meta(Some(no_cache_meta()));
-        let structured = serde_json::to_value(&module_info).map_err(|e| {
+        let structured = match serde_json::to_value(&module_info).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("serialization failed: {}", e),
                 error_meta("internal", false, "report this as a bug"),
             )
-        })?;
+        }) {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         result.structured_content = Some(structured);
         Ok(result)
     }
