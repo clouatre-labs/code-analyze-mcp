@@ -3,6 +3,10 @@
 # Usage: ./run.sh <RUN_ID>
 # Example: ./run.sh R01
 #
+# Requires bash >= 4 (associative arrays). macOS ships bash 3.2; install via
+# Homebrew (`brew install bash`) and ensure it appears on PATH before /bin/bash.
+# Run `bash --version` to verify. On Linux the system bash is typically >= 4.
+#
 # Run order is defined in run-order.txt.
 # Condition mapping (blinding_map): R01=C4, R02=A22, R03=D3, ...
 #
@@ -16,8 +20,13 @@
 
 set -euo pipefail
 
+# Require bash >= 4 (associative arrays are not available in bash 3.x)
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "ERROR: bash >= 4 required (found ${BASH_VERSION}). Install via 'brew install bash' and re-run." >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 RUNS_DIR="$SCRIPT_DIR/results/runs"
 PROMPTS_DIR="$SCRIPT_DIR/prompts"
 mkdir -p "$RUNS_DIR"
@@ -69,25 +78,25 @@ echo ""
 case "$CONDITION" in
   A)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a-control.md"
-    MODEL="claude-sonnet-4-6"
+    MODEL="global.anthropic.claude-sonnet-4-6"
     DISALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,analyze_directory,analyze_file,analyze_symbol"
     RUNNER="claude_cli"
     ;;
   A2)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a2-haiku-native.md"
-    MODEL="claude-haiku-4-5"
+    MODEL="global.anthropic.claude-haiku-4-5-20251001-v1:0"
     DISALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,analyze_directory,analyze_file,analyze_symbol"
     RUNNER="claude_cli"
     ;;
   B)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-b-treatment-haiku.md"
-    MODEL="claude-haiku-4-5"
+    MODEL="global.anthropic.claude-haiku-4-5-20251001-v1:0"
     DISALLOWED_TOOLS="Glob,Grep,Read,Bash"
     RUNNER="claude_cli"
     ;;
   C)
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-c-treatment-sonnet.md"
-    MODEL="claude-sonnet-4-6"
+    MODEL="global.anthropic.claude-sonnet-4-6"
     DISALLOWED_TOOLS="Glob,Grep,Read,Bash"
     RUNNER="claude_cli"
     ;;
@@ -155,12 +164,15 @@ if [[ "$RUNNER" == "claude_cli" ]]; then
   echo "Log: $LOG_FILE"
 
   # Find the most recent session JSONL written after the pre-run marker
-  # Claude Code stores sessions under ~/.claude/projects/<slug>/ where slug = REPO_ROOT with / replaced by -
-  # Allow override via CLAUDE_SESSION_DIR env var for portability across machines/checkouts
-  _REPO_SLUG="${REPO_ROOT//\//-}"
-  SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_REPO_SLUG}}"
+  # Claude Code stores sessions under ~/.claude/projects/<slug>/ where slug = CWD with / and . replaced by -
+  # SCRIPT_DIR is the CWD from which claude is invoked, so its slug is the correct lookup key.
+  # Allow override via CLAUDE_SESSION_DIR env var for portability across machines/checkouts.
+  _SESSION_SLUG="${SCRIPT_DIR//\//-}"
+  _SESSION_SLUG="${_SESSION_SLUG//./-}"
+  SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_SESSION_SLUG}}"
   if [[ -d "$SESSION_DIR" ]]; then
-    LATEST_SESSION=$(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v10-run-marker 2>/dev/null       | xargs ls -t 2>/dev/null | head -1)
+    LATEST_SESSION=$(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v10-run-marker 2>/dev/null \
+      | xargs -r ls -t 2>/dev/null | head -1)
     if [[ -n "$LATEST_SESSION" ]]; then
       SESSION_COPY="$RUNS_DIR/${RUN_ID}-session.jsonl"
       cp "$LATEST_SESSION" "$SESSION_COPY"
