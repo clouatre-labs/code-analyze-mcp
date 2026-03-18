@@ -1,7 +1,11 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # v10 benchmark runner
 # Usage: ./run.sh <RUN_ID>
 # Example: ./run.sh R01
+#
+# Requires bash >= 4 (associative arrays). macOS ships bash 3.2; install via
+# Homebrew (`brew install bash`) and ensure it appears on PATH before /bin/bash.
+# Run `bash --version` to verify. On Linux the system bash is typically >= 4.
 #
 # Run order is defined in run-order.txt.
 # Condition mapping (blinding_map): R01=C4, R02=A22, R03=D3, ...
@@ -15,6 +19,12 @@
 # Environment requires: DISABLE_PROMPT_CACHING=1 (set inline below for claude CLI runs)
 
 set -euo pipefail
+
+# Require bash >= 4 (associative arrays are not available in bash 3.x)
+if (( BASH_VERSINFO[0] < 4 )); then
+  echo "ERROR: bash >= 4 required (found ${BASH_VERSION}). Install via 'brew install bash' and re-run." >&2
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUNS_DIR="$SCRIPT_DIR/results/runs"
@@ -161,7 +171,8 @@ if [[ "$RUNNER" == "claude_cli" ]]; then
   _SESSION_SLUG="${_SESSION_SLUG//./-}"
   SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_SESSION_SLUG}}"
   if [[ -d "$SESSION_DIR" ]]; then
-    LATEST_SESSION=$(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v10-run-marker 2>/dev/null       | xargs ls -t 2>/dev/null | head -1)
+    LATEST_SESSION=$(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v10-run-marker 2>/dev/null \
+      | xargs -r ls -t 2>/dev/null | head -1)
     if [[ -n "$LATEST_SESSION" ]]; then
       SESSION_COPY="$RUNS_DIR/${RUN_ID}-session.jsonl"
       cp "$LATEST_SESSION" "$SESSION_COPY"

@@ -31,29 +31,29 @@ Execute runs in this exact order (seed=42 randomization, blinding maintained):
 
 | # | RUN_ID | Condition | Model | Runner |
 |---|--------|-----------|-------|--------|
-| 1 | R01 | C4 | claude-sonnet-4-6 | claude CLI |
-| 2 | R02 | A2_2 | claude-haiku-4-5 | claude CLI |
+| 1 | R01 | C4 | global.anthropic.claude-sonnet-4-6 | claude CLI |
+| 2 | R02 | A2_2 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
 | 3 | R03 | D3 | minimax/minimax-m2.5 | goose |
 | 4 | R04 | E4 | mistralai/mistral-small-2603 | goose |
-| 5 | R05 | C2 | claude-sonnet-4-6 | claude CLI |
-| 6 | R06 | B3 | claude-haiku-4-5 | claude CLI |
+| 5 | R05 | C2 | global.anthropic.claude-sonnet-4-6 | claude CLI |
+| 6 | R06 | B3 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
 | 7 | R07 | D2 | minimax/minimax-m2.5 | goose |
-| 8 | R08 | B4 | claude-haiku-4-5 | claude CLI |
-| 9 | R09 | C3 | claude-sonnet-4-6 | claude CLI |
+| 8 | R08 | B4 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
+| 9 | R09 | C3 | global.anthropic.claude-sonnet-4-6 | claude CLI |
 | 10 | R10 | D1 | minimax/minimax-m2.5 | goose |
-| 11 | R11 | A2 | claude-sonnet-4-6 | claude CLI |
-| 12 | R12 | C1 | claude-sonnet-4-6 | claude CLI |
+| 11 | R11 | A2 | global.anthropic.claude-sonnet-4-6 | claude CLI |
+| 12 | R12 | C1 | global.anthropic.claude-sonnet-4-6 | claude CLI |
 | 13 | R13 | E2 | mistralai/mistral-small-2603 | goose |
-| 14 | R14 | A2_3 | claude-haiku-4-5 | claude CLI |
-| 15 | R15 | B2 | claude-haiku-4-5 | claude CLI |
-| 16 | R16 | A3 | claude-sonnet-4-6 | claude CLI |
+| 14 | R14 | A2_3 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
+| 15 | R15 | B2 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
+| 16 | R16 | A3 | global.anthropic.claude-sonnet-4-6 | claude CLI |
 | 17 | R17 | E3 | mistralai/mistral-small-2603 | goose |
-| 18 | R18 | A2_1 | claude-haiku-4-5 | claude CLI |
+| 18 | R18 | A2_1 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
 | 19 | R19 | D4 | minimax/minimax-m2.5 | goose |
-| 20 | R20 | A2_4 | claude-haiku-4-5 | claude CLI |
-| 21 | R21 | B1 | claude-haiku-4-5 | claude CLI |
-| 22 | R22 | A1 | claude-sonnet-4-6 | claude CLI |
-| 23 | R23 | A4 | claude-sonnet-4-6 | claude CLI |
+| 20 | R20 | A2_4 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
+| 21 | R21 | B1 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
+| 22 | R22 | A1 | global.anthropic.claude-sonnet-4-6 | claude CLI |
+| 23 | R23 | A4 | global.anthropic.claude-sonnet-4-6 | claude CLI |
 | 24 | R24 | E1 | mistralai/mistral-small-2603 | goose |
 
 ---
@@ -138,7 +138,7 @@ python scripts/collect.py \
   --output-file results/runs/R01-report.json \
   --model sonnet \
   --provider gcp_vertex_ai \
-  --model-id claude-sonnet-4-6 \
+  --model-id global.anthropic.claude-sonnet-4-6 \
   > results/runs/R01-metrics.json
 
 # Conditions D (MiniMax):
@@ -182,11 +182,11 @@ Exit 0 = PASS. Exit 1 = FAIL (record violation in scores-template.json notes).
 
 ## Pinning the commit SHA
 
-Before starting, record the actual Django commit you checked out in `run-order.txt`:
+The commit SHA is already pinned in `run-order.txt` (`6b90f8a8d6994dc62cd91dde911fe56ec3389494`). If re-pinning after a fresh clone, replace the existing SHA:
 
 ```bash
 COMMIT=$(git -C /tmp/benchmark-repos/django rev-parse HEAD)
-sed -i "s/pinned_commit: TBD/pinned_commit: $COMMIT/" docs/benchmarks/v10/run-order.txt
+sed -i '' "s/pinned_commit: [0-9a-f]*/pinned_commit: $COMMIT/" docs/benchmarks/v10/run-order.txt
 ```
 
 ---
@@ -224,9 +224,9 @@ Outputs Markdown tables to stdout:
 
 | Condition | Model | System prompt file | Disallowed tools |
 |-----------|-------|--------------------|-----------------|
-| A | claude-sonnet-4-6 | condition-a-control.md | analyze_directory, analyze_file, analyze_symbol |
-| A2 | claude-haiku-4-5 | condition-a2-haiku-native.md | analyze_directory, analyze_file, analyze_symbol |
-| B | claude-haiku-4-5 | condition-b-treatment-haiku.md | Glob, Grep, Read, Bash |
-| C | claude-sonnet-4-6 | condition-c-treatment-sonnet.md | Glob, Grep, Read, Bash |
+| A | global.anthropic.claude-sonnet-4-6 | condition-a-control.md | analyze_directory, analyze_file, analyze_symbol |
+| A2 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | condition-a2-haiku-native.md | analyze_directory, analyze_file, analyze_symbol |
+| B | global.anthropic.claude-haiku-4-5-20251001-v1:0 | condition-b-treatment-haiku.md | Glob, Grep, Read, Bash |
+| C | global.anthropic.claude-sonnet-4-6 | condition-c-treatment-sonnet.md | Glob, Grep, Read, Bash |
 | D | minimax/minimax-m2.5 | condition-d-treatment-minimax.md | Glob, Grep, Read, Bash |
 | E | mistralai/mistral-small-2603 | condition-e-treatment-mistral.md | Glob, Grep, Read, Bash |
