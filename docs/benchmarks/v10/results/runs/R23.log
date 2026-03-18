@@ -1,0 +1,11 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R23-report.json`.
+
+Summary of findings:
+
+**Module map:** 12 modules documented. `conf` and `utils` are the foundation with zero upward deps; `core.handlers` owns the pipeline; `db` and `views` are the main application layer.
+
+**Pipeline trace:** 8 stages from WSGIHandler entry → middleware chain → URL resolution (URLResolver/ResolverMatch) → view dispatch (View.as_view) → ORM (QuerySet/SQLCompiler) → template rendering (TemplateResponse) → response middleware → delivery.
+
+**Cross-module hubs:** `utils` (imported by all 12 modules), `conf` (settings imported everywhere, zero deps), `core` (exception hub + pipeline root).
+
+**Change proposal:** `StructuredLoggingMiddleware` in `django/middleware/structured_logging.py` with `sync_capable=True, async_capable=True`. Key risks are query count accuracy (DEBUG-only `connection.queries`), async context isolation requiring `ContextVar` per request, and middleware ordering (view name only available post-`get_response`).

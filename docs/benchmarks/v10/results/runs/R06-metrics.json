@@ -1,0 +1,27 @@
+{
+  "session_file": "results/runs/R06-session.jsonl",
+  "provider": "gcp_vertex_ai",
+  "model_id": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+  "reasoning_mode": "disabled",
+  "input_tokens": 1052318,
+  "output_tokens": 5954,
+  "total_tokens": 1058272,
+  "cache_write_tokens": 0,
+  "cache_read_tokens": 0,
+  "cost_usd": 0.270522,
+  "wall_time_s": 68,
+  "tool_calls_total": 18,
+  "research_calls": 9,
+  "mcp_calls": 9,
+  "native_calls": 0,
+  "system_bash_calls": 0,
+  "other_calls": 9,
+  "tool_calls_detail": {
+    "mcp__code-analyze__analyze_directory": 2,
+    "mcp__code-analyze__analyze_file": 6,
+    "mcp__code-analyze__analyze_module": 8,
+    "mcp__code-analyze__analyze_symbol": 1,
+    "Write": 1
+  },
+  "valid_output": true
+}

@@ -1,0 +1,27 @@
+{
+  "session_file": "results/runs/R19-session.jsonl",
+  "provider": "openrouter",
+  "model_id": "minimax/minimax-m2.5",
+  "reasoning_mode": "disabled",
+  "input_tokens": 20747,
+  "output_tokens": 211,
+  "total_tokens": 20958,
+  "cache_write_tokens": 0,
+  "cache_read_tokens": 0,
+  "cost_usd": 0.006456,
+  "wall_time_s": 271,
+  "tool_calls_total": 22,
+  "research_calls": 20,
+  "mcp_calls": 20,
+  "native_calls": 0,
+  "system_bash_calls": 0,
+  "other_calls": 2,
+  "tool_calls_detail": {
+    "code-analyze-mcp__analyze_directory": 5,
+    "code-analyze-mcp__analyze_file": 13,
+    "code-analyze-mcp__analyze_symbol": 2,
+    "write": 1,
+    "shell": 1
+  },
+  "valid_output": true
+}

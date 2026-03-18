@@ -1,0 +1,175 @@
+{
+  "run_id": "R16",
+  "condition": "A-control",
+  "module_map": [
+    {
+      "module": "core",
+      "responsibility": "Central infrastructure: request handlers (WSGI/ASGI), exception handling, middleware loading, signals, management commands, mail, cache, and logging utilities.",
+      "key_types": ["BaseHandler", "WSGIHandler", "ASGIHandler", "AppConfig", "ImproperlyConfigured"],
+      "depends_on": ["conf", "urls", "db", "utils", "dispatch"]
+    },
+    {
+      "module": "http",
+      "responsibility": "HTTP request and response abstractions. Defines HttpRequest, HttpResponse hierarchy, QueryDict, cookies, and multipart parsing.",
+      "key_types": ["HttpRequest", "HttpResponse", "JsonResponse", "StreamingHttpResponse", "QueryDict", "HttpResponseRedirect"],
+      "depends_on": ["conf", "utils"]
+    },
+    {
+      "module": "urls",
+      "responsibility": "URL routing: pattern matching, resolver chain, reverse URL lookup, and URL conf loading.",
+      "key_types": ["URLResolver", "URLPattern", "ResolverMatch", "RoutePattern", "RegexPattern"],
+      "depends_on": ["conf", "core.exceptions", "utils"]
+    },
+    {
+      "module": "db",
+      "responsibility": "ORM layer: model definitions, query construction (QuerySet), SQL compilation, database backends, migrations, and connection management.",
+      "key_types": ["Model", "QuerySet", "Manager", "Field", "Connection", "SQLCompiler", "Q", "F"],
+      "depends_on": ["conf", "utils", "dispatch"]
+    },
+    {
+      "module": "views",
+      "responsibility": "Built-in view functions and class-based views (CBVs). Generic views for list, detail, create, update, delete, and static file serving.",
+      "key_types": ["View", "TemplateView", "ListView", "DetailView", "CreateView", "UpdateView", "DeleteView"],
+      "depends_on": ["http", "template", "urls", "utils"]
+    },
+    {
+      "module": "middleware",
+      "responsibility": "Request/response processing hooks: security headers, CSRF protection, session handling, GZip compression, locale detection, caching, and CSP.",
+      "key_types": ["MiddlewareMixin", "SecurityMiddleware", "CsrfViewMiddleware", "CommonMiddleware", "GZipMiddleware", "LocaleMiddleware"],
+      "depends_on": ["http", "conf", "utils", "urls"]
+    },
+    {
+      "module": "template",
+      "responsibility": "Template engine abstraction and Django's built-in template language: loading, parsing, rendering, context, and backends.",
+      "key_types": ["Engine", "Template", "Context", "RequestContext", "BaseEngine", "Node"],
+      "depends_on": ["conf", "utils", "core.exceptions"]
+    },
+    {
+      "module": "conf",
+      "responsibility": "Global settings container (LazySettings) and default settings. Acts as the configuration root for the entire framework.",
+      "key_types": ["LazySettings", "Settings", "UserSettingsHolder"],
+      "depends_on": []
+    },
+    {
+      "module": "dispatch",
+      "responsibility": "Signal/event system. Allows decoupled components to emit and receive notifications.",
+      "key_types": ["Signal", "receiver"],
+      "depends_on": []
+    },
+    {
+      "module": "utils",
+      "responsibility": "Shared utilities: encoding, functional helpers (lazy evaluation), module loading, deprecation, decorators, timezone, translation, and logging helpers.",
+      "key_types": ["LazyObject", "cached_property", "MiddlewareMixin", "timezone"],
+      "depends_on": ["conf"]
+    },
+    {
+      "module": "forms",
+      "responsibility": "Form and field definitions, validation, widget rendering, and model form integration.",
+      "key_types": ["Form", "ModelForm", "Field", "Widget", "ValidationError", "BoundField"],
+      "depends_on": ["db", "utils", "template"]
+    },
+    {
+      "module": "contrib",
+      "responsibility": "Optional bundled applications: admin, auth, sessions, staticfiles, contenttypes, messages, sitemaps, etc.",
+      "key_types": ["User", "Permission", "Session", "AdminSite", "ContentType"],
+      "depends_on": ["db", "http", "views", "template", "forms", "middleware"]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. HTTP Entry",
+      "module": "core.handlers.wsgi / core.handlers.asgi",
+      "description": "WSGI/ASGI server calls WSGIHandler.__call__(environ, start_response). WSGIRequest is constructed from environ, wrapping raw HTTP data into an HttpRequest object. ASGIHandler does the same from ASGI scope/receive.",
+      "key_types": ["WSGIRequest", "HttpRequest", "environ dict"],
+      "next_stage": "2. Middleware Chain"
+    },
+    {
+      "stage": "2. Middleware Chain",
+      "module": "core.handlers.base + middleware.*",
+      "description": "BaseHandler.load_middleware() builds a nested callable chain from settings.MIDDLEWARE (reversed). Each middleware wraps get_response. On inbound, process_request() hooks run in order; on outbound, process_response() hooks run in reverse. Supports both sync and async via adapt_method_mode().",
+      "key_types": ["BaseHandler", "MiddlewareMixin", "HttpRequest", "HttpResponse"],
+      "next_stage": "3. URL Resolution"
+    },
+    {
+      "stage": "3. URL Resolution",
+      "module": "urls.resolvers",
+      "description": "BaseHandler._get_response() calls self.resolve_request(request), which calls get_resolver(urlconf).resolve(path). URLResolver walks patterns recursively until a URLPattern matches, returning a ResolverMatch with callback (view), args, and kwargs.",
+      "key_types": ["URLResolver", "URLPattern", "ResolverMatch", "RoutePattern"],
+      "next_stage": "4. View Dispatch"
+    },
+    {
+      "stage": "4. View Dispatch",
+      "module": "core.handlers.base + views.*",
+      "description": "BaseHandler calls request.resolver_match.func(request, *args, **kwargs). For CBVs, View.as_view() returns a closure that calls dispatch() which routes to get()/post() etc. process_view() middleware hooks run just before the view callable.",
+      "key_types": ["View", "ResolverMatch", "HttpRequest", "HttpResponse"],
+      "next_stage": "5. ORM Query"
+    },
+    {
+      "stage": "5. ORM Query",
+      "module": "db.models.query + db.backends.*",
+      "description": "View logic calls QuerySet methods (filter, get, all, etc.). QuerySet is lazy; SQL is compiled only on evaluation (iteration, len, list). SQLCompiler translates the Query object to SQL, which is executed via the database backend Connection. Results are hydrated back into Model instances.",
+      "key_types": ["QuerySet", "Query", "SQLCompiler", "Connection", "Model", "Cursor"],
+      "next_stage": "6. Response Construction"
+    },
+    {
+      "stage": "6. Response Construction",
+      "module": "http.response + template",
+      "description": "View returns an HttpResponse (or subclass). For template views, TemplateResponse defers rendering until process_template_response middleware hooks complete. render() merges Context with Template to produce final HTML bytes set on the response.",
+      "key_types": ["HttpResponse", "TemplateResponse", "Template", "Context", "StreamingHttpResponse"],
+      "next_stage": "7. Response Middleware"
+    },
+    {
+      "stage": "7. Response Middleware & Return",
+      "module": "core.handlers.base + middleware.*",
+      "description": "process_response() hooks run in reverse middleware order (outbound). Headers, cookies, CSRF tokens, and compression may be added. WSGIHandler converts the final HttpResponse to a WSGI-compatible (status, headers, body) tuple returned to the server.",
+      "key_types": ["HttpResponse", "WSGIHandler", "start_response callable"],
+      "next_stage": null
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "django.conf (settings)",
+      "inbound_deps": 0,
+      "outbound_deps": 85,
+      "reason": "LazySettings is imported by virtually every other module (core, db, http, middleware, urls, template, contrib). It is the configuration root with no upstream Django dependencies, making it the highest fan-in dependency in the codebase."
+    },
+    {
+      "module": "django.utils",
+      "inbound_deps": 0,
+      "outbound_deps": 60,
+      "reason": "Provides foundational primitives (lazy evaluation, encoding, module loading, deprecation, functional decorators, timezone, translation) consumed by core, db, http, views, forms, middleware, and contrib. MiddlewareMixin itself lives here."
+    },
+    {
+      "module": "django.db",
+      "inbound_deps": 30,
+      "outbound_deps": 15,
+      "reason": "The ORM is consumed by forms (ModelForm), contrib.auth, contrib.admin, contrib.sessions, contrib.contenttypes and most user application code. It also imports from conf, utils, and dispatch, creating a dense cross-cutting dependency cluster."
+    }
+  ],
+  "change_proposal": {
+    "feature_summary": "Add an async-compatible structured logging middleware that captures per-request metadata (view name, ORM query count, response time) and emits a single structured log entry at response time.",
+    "files_to_modify": [
+      "django/middleware/structured_logging.py (new file)",
+      "django/conf/global_settings.py (add STRUCTURED_LOGGING_MIDDLEWARE_LEVEL default)",
+      "django/db/backends/base/base.py (expose queries_log count via connection.queries_executed property or rely on existing django.db.connection.queries)"
+    ],
+    "new_types": [
+      "StructuredLoggingMiddleware(MiddlewareMixin): sync_capable=True, async_capable=True; records request start time in process_request, resolves view name from request.resolver_match in process_response, reads len(connection.queries) for ORM count, and logs a structured dict via logging.getLogger('django.request').",
+      "RequestLogRecord(TypedDict): fields view_name: str, method: str, path: str, status_code: int, duration_ms: float, query_count: int — the structured payload emitted to the log."
+    ],
+    "pattern_to_follow": "Follow the MiddlewareMixin pattern used by all middleware in django/middleware/. For async support, mirror the sync_capable/async_capable dual-mode pattern from SecurityMiddleware (security.py) and use asgiref.sync.iscoroutinefunction checks as done in BaseHandler.adapt_method_mode(). Use time.monotonic() for wall-clock timing consistent with Django's own request logging in django/utils/log.py (log_response). Read ORM query count from django.db.connection.queries (already available, gated by DEBUG or explicit instrumentation).",
+    "integration_point": "Insert 'django.middleware.structured_logging.StructuredLoggingMiddleware' near the top of settings.MIDDLEWARE (after SecurityMiddleware, before CommonMiddleware) so it wraps the full request lifecycle including CSRF and session middleware. process_request records start time on the request object; process_response computes duration and emits the log entry before returning.",
+    "risks": [
+      "ORM query count via connection.queries is only populated when DEBUG=True or when using a custom DatabaseWrapper; production deployments need an alternative counter (e.g., wrapping execute() via a database signal or custom backend), otherwise query_count will always be 0.",
+      "Attaching state to the request object (start time) is not thread-safe if a single request object is shared across threads, though Django's request lifecycle prevents this in practice; ASGI concurrent requests each have their own scope so this is safe.",
+      "Middleware ordering is significant: placing this middleware outside the session/auth stack means view_name may be None for 404/500 responses where URL resolution failed — requires a None guard.",
+      "Structured log volume at high traffic can be significant; without sampling or log-level gating the middleware adds I/O overhead on every request.",
+      "Async path requires careful handling: process_request and process_response are called synchronously by MiddlewareMixin even in async mode unless __acall__ / async variants are explicitly implemented; an incorrect implementation could block the event loop."
+    ]
+  },
+  "tool_usage": [
+    {"tool": "Bash", "params": "ls django/ top-level modules and rg middleware files"},
+    {"tool": "Bash", "params": "rg class.*Middleware in middleware/ and core/; read core/handlers/base.py head"},
+    {"tool": "Bash", "params": "read middleware/common.py and core/handlers/wsgi.py; rg cross-module imports in base.py and urls/resolvers.py"}
+  ]
+}

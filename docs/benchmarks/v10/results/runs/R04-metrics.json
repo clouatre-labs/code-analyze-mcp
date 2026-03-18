@@ -1,0 +1,27 @@
+{
+  "session_file": "/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R04-session.jsonl",
+  "provider": "openrouter",
+  "model_id": "mistralai/mistral-small-2603",
+  "reasoning_mode": "disabled",
+  "input_tokens": 18714,
+  "output_tokens": 53,
+  "total_tokens": 18767,
+  "cache_write_tokens": 0,
+  "cache_read_tokens": 0,
+  "cost_usd": 0.002839,
+  "wall_time_s": 34,
+  "tool_calls_total": 14,
+  "research_calls": 13,
+  "mcp_calls": 13,
+  "native_calls": 0,
+  "system_bash_calls": 0,
+  "other_calls": 1,
+  "tool_calls_detail": {
+    "code-analyze-mcp__analyze_directory": 2,
+    "code-analyze-mcp__analyze_module": 7,
+    "code-analyze-mcp__analyze_symbol": 2,
+    "code-analyze-mcp__analyze_file": 2,
+    "write": 1
+  },
+  "valid_output": true
+}

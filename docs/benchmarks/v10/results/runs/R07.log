@@ -1,0 +1,312 @@
+
+    __( O)>  ● new session · openrouter minimax/minimax-m2.5
+   \____)    20260318_81 · /Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp
+     L L     goose is ready
+
+  ▸ analyze_directory code-analyze-mcp
+    path: /tmp/benchmark-repos/django
+    max_depth: 2
+    page_size: 50
+    summary: true
+
+
+  ▸ analyze_directory code-analyze-mcp
+    max_depth: 2
+    page_size: 50
+    path: /tmp/benchmark-repos/django/django
+    summary: true
+
+
+  ▸ analyze_file code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django/http/request.py
+    summary: null
+    page_size: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_directory code-analyze-mcp
+    max_depth: 1
+    page_size: 20
+    path: /tmp/benchmark-repos/django/django/core/handlers
+    summary: null
+
+
+  ▸ analyze_file code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django/core/handlers/base.py
+    page_size: null
+    summary: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_file code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django/urls/resolvers.py
+    page_size: null
+    summary: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_file code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django/middleware/common.py
+    page_size: null
+    summary: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_file code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django/utils/deprecation.py
+    page_size: null
+    summary: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_file code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django/db/__init__.py
+    page_size: null
+    summary: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_file code-analyze-mcp
+    page_size: null
+    path: /tmp/benchmark-repos/django/django/db/utils.py
+    summary: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_directory code-analyze-mcp
+    max_depth: 1
+    page_size: 20
+    path: /tmp/benchmark-repos/django/django/db/models
+    summary: null
+
+
+  ▸ analyze_file code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django/http/response.py
+    page_size: null
+    summary: null
+    ast_recursion_limit: null
+
+
+  ▸ analyze_symbol code-analyze-mcp
+    path: /tmp/benchmark-repos/django/django
+    symbol: _get_response
+    follow_depth: 1
+    max_depth: 2
+    ast_recursion_limit: null
+    page_size: null
+
+
+  ▸ analyze_symbol code-analyze-mcp
+    ast_recursion_limit: null
+    follow_depth: 1
+    max_depth: 2
+    page_size: null
+    path: /tmp/benchmark-repos/django/django
+    symbol: BaseHandler._get_response
+
+Now I'll write the report based on the gathered information.
+
+  ▸ write
+
+Error: Failed to parse arguments: missing field `path`
+  ▸ write
+    path ~/g/c/c/d/b/v/r/runs/R07-report.json
+    content: {
+  "run_id": "R07",
+  "condition": "D-treatment",
+  "module_map": [
+    {
+      "module": "django.http",
+      "responsibility": "HTTP request/response handling, including request parsing, cookies, multipart uploads, and response generation",
+      "key_types": ["HttpRequest", "HttpResponse", "HttpResponseBase", "StreamingHttpResponse", "QueryDict", "HttpHeaders"],
+      "depends_on": ["django.utils"]
+    },
+    {
+      "module": "django.core.handlers",
+      "responsibility": "Entry point for request processing, middleware orchestration, and view dispatch (both sync and async)",
+      "key_types": ["BaseHandler", "ASGIHandler", "WSGIHandler"],
+      "depends_on": ["django.urls", "django.views", "django.middleware"]
+    },
+    {
+      "module": "django.urls",
+      "responsibility": "URL routing, pattern matching, reverse URL resolution, and ResolverMatch generation",
+      "key_types": ["URLResolver", "URLPattern", "ResolverMatch", "RegexPattern", "RoutePattern"],
+      "depends_on": ["django.core"]
+    },
+    {
+      "module": "django.views",
+      "responsibility": "View functions, generic views, view decorators, and error handling",
+      "key_types": ["View", "TemplateView", "RedirectView"],
+      "depends_on": ["django.http", "django.template", "django.urls"]
+    },
+    {
+      "module": "django.db.models",
+      "responsibility": "ORM layer - Model definitions, QuerySet operations, database query building and execution",
+      "key_types": ["Model", "QuerySet", "Manager", "Q", "F", "Expression"],
+      "depends_on": ["django.db"]
+    },
+    {
+      "module": "django.middleware",
+      "responsibility": "Request/response processing pipeline hooks, including security, caching, CSRF, and session handling",
+      "key_types": ["MiddlewareMixin", "CommonMiddleware", "CsrfViewMiddleware", "AuthenticationMiddleware"],
+      "depends_on": ["django.utils"]
+    },
+    {
+      "module": "django.utils.deprecation",
+      "responsibility": "Utilities for deprecation warnings and middleware base classes for sync/async compatibility",
+      "key_types": ["MiddlewareMixin", "RemovedInDjango70Warning"],
+      "depends_on": []
+    },
+    {
+      "module": "django.db.utils",
+      "responsibility": "Database connection management, router configuration, and database error wrappers",
+      "key_types": ["ConnectionHandler", "ConnectionRouter", "DatabaseErrorWrapper"],
+      "depends_on": []
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. Input (HTTP Request)",
+      "module": "django.http.request",
+      "description": "HttpRequest object created from WSGI/ASGI environ dict. Parses headers, path, query string, cookies, and body. Supports multipart file uploads.",
+      "key_types": ["HttpRequest", "QueryDict", "HttpHeaders"],
+      "next_stage": "2. Middleware Chain (process_request)"
+    },
+    {
+      "stage": "2. Middleware Chain (process_request)",
+      "module": "django.middleware",
+      "description": "Middleware chain runs in order defined in settings.MIDDLEWARE. Each middleware's process_request can modify the request or return a response early (short-circuit).",
+      "key_types": ["HttpRequest", "HttpResponse"],
+      "next_stage": "3. URL Routing"
+    },
+    {
+      "stage": "3. URL Routing",
+      "module": "django.urls.resolvers",
+      "description": "URLResolver iterates through urlpatterns to find a matching pattern. Returns ResolverMatch with view callable, args, kwargs, and url_name.",
+      "key_types": ["URLResolver", "ResolverMatch", "URLPattern"],
+      "next_stage": "4. View Dispatch"
+    },
+    {
+      "stage": "4. View Dispatch",
+      "module": "django.core.handlers.base",
+      "description": "BaseHandler._get_response calls the resolved view with request, args, and kwargs. Handles URL namespace resolution and calls view inside transaction if needed.",
+      "key_types": ["ResolverMatch", "HttpRequest"],
+      "next_stage": "5. ORM Query (if view uses database)"
+    },
+    {
+      "stage": "5. ORM Query",
+      "module": "django.db.models",
+      "description": "View may call Model.objects.filter() or other QuerySet methods. Queries are executed via database backends. ConnectionHandler manages database connections.",
+      "key_types": ["QuerySet", "Model", "Manager"],
+      "next_stage": "6. Template Rendering (if applicable)"
+    },
+    {
+      "stage": "6. Template Rendering",
+      "module": "django.template",
+      "description": "Template engine renders context data into HTML or other formats. Uses template loaders to find templates and template tags for logic.",
+      "key_types": ["Template", "Context", "Engine"],
+      "next_stage": "7. Middleware Chain (process_response)"
+    },
+    {
+      "stage": "7. Middleware Chain (process_response)",
+      "module": "django.middleware",
+      "description": "Middleware chain runs in reverse order. Each middleware's process_response can modify the response, set headers, or handle exceptions.",
+      "key_types": ["HttpResponse", "HttpRequest"],
+      "next_stage": "8. Output (HTTP Response)"
+    },
+    {
+      "stage": "8. Output (HTTP Response)",
+      "module": "django.http.response",
+      "description": "HttpResponse or StreamingHttpResponse is serialized to bytes and sent back to client via WSGI write()/ASGI send().",
+      "key_types": ["HttpResponse", "StreamingHttpResponse", "HttpResponseBase"],
+      "next_stage": "End"
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "django.utils.deprecation",
+      "inbound_deps": 0,
+      "outbound_deps": 0,
+      "reason": "MiddlewareMixin is the base class for virtually all middleware. It provides sync/async adaptation and defines the __call__ interface used by BaseHandler. Every request passes through middleware, making this a central architectural hub."
+    },
+    {
+      "module": "django.core.handlers.base",
+      "inbound_deps": 0,
+      "outbound_deps": 0,
+      "reason": "BaseHandler orchestrates the entire request-response pipeline. It loads middleware, resolves URLs, calls views, handles exceptions, and manages transactions. It's the entry point from WSGI/ASGI and coordinates all other modules."
+    },
+    {
+      "module": "django.http.request",
+      "inbound_deps": 0,
+      "outbound_deps": 0,
+      "reason": "HttpRequest is the primary data container passed through the entire pipeline. Every middleware, view, and ORM operation receives and potentially modifies it. It's the central context object for the request lifecycle."
+    }
+  ],
+  "change_proposal": {
+    "feature_summary": "Add an async-compatible structured logging middleware that captures per-request metadata (view name, ORM query count, response time) and emits structured log entries.",
+    "files_to_modify": [
+      "django/middleware/logging.py (new file)",
+      "django/conf/global_settings.py (add default setting)",
+      "django/utils/log.py (check for existing logging utilities)"
+    ],
+    "new_types": [
+      "StructuredLoggingMiddleware: A MiddlewareMixin subclass that wraps request processing, tracks timing via time.time() or asyncio.get_event_loop().time(), counts queries via django.db.reset_queries() and len(django.db.connection.queries), captures ResolverMatch.url_name, and emits structured log dict via logging.info() with extra fields."
+    ],
+    "pattern_to_follow": "Use MiddlewareMixin from django.utils.deprecation as the base class, following the pattern in django/middleware/common.py (CommonMiddleware). Support both sync and async via __call__ and __acall__ methods. Store config in settings as Django LOGGING_CONFIG and use Django's logging framework.",
+    "integration_point": "Add to MIDDLEWARE setting (typically near the end to log after all other middleware have processed the request). Should be placed after AuthenticationMiddleware to have view name resolved. Example: 'django.middleware.logging.StructuredLoggingMiddleware'",
+    "risks": [
+      "Performance overhead: Each request now involves additional timing and query counting operations. Mitigate by only collecting detailed data when DEBUG=True or a specific log level is enabled.",
+      "Breaking async compatibility: Must implement both __call__ (sync) and __acall__ (async) properly. MiddlewareMixin provides both but custom code must call await super().__acall__(request) for async.",
+      "Query counting may be inaccurate if other middleware or views bypass Django ORM or manually reset queries. Document this limitation.",
+      "Response time includes middleware processing time, not just view execution time. This is acceptable but should be documented."
+    ]
+  },
+  "tool_usage": [
+    {"tool": "analyze_directory", "params": "Django repository root - top-level structure"},
+    {"tool": "analyze_directory", "params": "django/ package - core modules"},
+    {"tool": "analyze_file", "params": "django/http/request.py - HttpRequest class and QueryDict"},
+    {"tool": "analyze_file", "params": "django/core/handlers/base.py - BaseHandler pipeline"},
+    {"tool": "analyze_file", "params": "django/urls/resolvers.py - URLResolver and ResolverMatch"},
+    {"tool": "analyze_file", "params": "django/middleware/common.py - CommonMiddleware pattern"},
+    {"tool": "analyze_file", "params": "django/utils/deprecation.py - MiddlewareMixin base class"},
+    {"tool": "analyze_file", "params": "django/db/utils.py - ConnectionHandler and query tracking"},
+    {"tool": "analyze_file", "params": "django/db/models/ - ORM query module structure"},
+    {"tool": "analyze_file", "params": "django/http/response.py - HttpResponse classes"}
+  ]
+}
+
+
+Created /Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R07-report.json (163 lines)
+  ▸ shell
+    command: head -20 /Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R07-report.json
+
+{
+  "run_id": "R07",
+  "condition": "D-treatment",
+  "module_map": [
+    {
+      "module": "django.http",
+      "responsibility": "HTTP request/response handling, including request parsing, cookies, multipart uploads, and response generation",
+      "key_types": ["HttpRequest", "HttpResponse", "HttpResponseBase", "StreamingHttpResponse", "QueryDict", "HttpHeaders"],
+      "depends_on": ["django.utils"]
+    },
+    {
+      "module": "django.core.handlers",
+      "responsibility": "Entry point for request processing, middleware orchestration, and view dispatch (both sync and async)",
+      "key_types": ["BaseHandler", "ASGIHandler", "WSGIHandler"],
+      "depends_on": ["django.urls", "django.views", "django.middleware"]
+    },
+    {
+      "module": "django.urls",
+      "responsibility": "URL routing, pattern matching, reverse URL resolution, and ResolverMatch generation",
+      "key_types": ["URLResolver", "URLPattern", "ResolverMatch", "RegexPattern", "RoutePattern"],
+  ▸ shell
+    command: python3 -m json.tool /Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R07-report.json > /dev/null && echo "JSON is valid"
+
+JSON is validReport written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R07-report.json`.
+
+**Summary:**
+- **Module map:** Analyzed 8 key Django modules (http, core.handlers, urls, views, db.models, middleware, utils.deprecation, db.utils) with their responsibilities, key types, and dependencies.
+- **Pipeline trace:** Documented the full HTTP request lifecycle from Input → Middleware → URL Routing → View Dispatch → ORM Query → Template Rendering → Response Middleware → Output.
+- **Cross-module hubs:** Identified 3 architectural hubs: `MiddlewareMixin` (middleware base), `BaseHandler` (pipeline orchestration), and `HttpRequest` (central context object).
+- **Change proposal:** Proposed adding `StructuredLoggingMiddleware` in a new `django/middleware/logging.py` file, following the existing `MiddlewareMixin` pattern, with specific integration guidance and risk assessment.

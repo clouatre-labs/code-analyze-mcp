@@ -1,0 +1,14 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R05-report.json`.
+
+Summary of findings:
+
+**Module map:** 13 top-level modules traced. `core.handlers` is the WSGI/ASGI entry point; `urls` does routing; `middleware` wraps the chain; `db` handles ORM queries; `views` and `template` produce responses.
+
+**Pipeline trace:** 8 stages from raw WSGI/ASGI input through middleware chain, URL resolution, view dispatch, ORM query, template rendering, reverse middleware pass, and final serialization.
+
+**Cross-module hubs:**
+1. `utils` -- pure leaf, imported by ~every module (MiddlewareMixin, LazyObject, cached_property, crypto, log)
+2. `conf` -- settings singleton consumed everywhere; depends only on utils.functional
+3. `core.exceptions` -- exception hierarchy (ValidationError, Http404, ImproperlyConfigured) imported by db, forms, middleware, views, urls
+
+**Change proposal:** `StructuredLoggingMiddleware` subclassing `MiddlewareMixin`, added to `django/middleware/structured_logging.py`. Key risks: query count requires DEBUG=True (use db signals instead for production), async fallback silently wraps to sync if `__acall__` is not explicitly implemented, and `request.resolver_match` is None on routing failures.

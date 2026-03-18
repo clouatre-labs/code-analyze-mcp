@@ -1,0 +1,14 @@
+Report written to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R01-report.json`.
+
+Summary of findings:
+
+**Module map:** 12 top-level modules documented. `core.handlers` is the dispatch spine; `http` provides request/response primitives; `urls` does routing; `db` is the ORM; `middleware` is the pipeline hook layer.
+
+**Pipeline trace:** 8 stages from WSGI/ASGI entry through middleware → URL resolution → view dispatch → ORM query → template rendering → outbound middleware → response delivery.
+
+**Cross-module hubs:**
+1. `django.conf` (settings) — widest fan-out, imported by ~every module
+2. `django.utils` — foundational primitives, zero upstream deps
+3. `django.core.exceptions` — shared exception hierarchy consumed by 6+ packages
+
+**Change proposal:** `StructuredLoggingMiddleware` subclassing `MiddlewareMixin`, implementing both sync `process_request`/`process_response` and async `__acall__`. Key risk: query count via `connection.queries` only works with `DEBUG=True`; production use requires `execute_wrapper`.
