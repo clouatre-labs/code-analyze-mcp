@@ -63,6 +63,10 @@ MCP_TOOL_NAMES = {
     "mcp__code-analyze__analyze_directory",
     "mcp__code-analyze__analyze_file",
     "mcp__code-analyze__analyze_symbol",
+    "code-analyze-mcp__analyze_directory",
+    "code-analyze-mcp__analyze_file",
+    "code-analyze-mcp__analyze_symbol",
+    "code-analyze-mcp__analyze_module",
 }
 NATIVE_TOOL_NAMES = {"Glob", "Grep", "Read", "Bash"}
 SYSTEM_BASH_PATTERNS = {
@@ -287,6 +291,18 @@ def main():
     if not args.session_file.exists():
         print(f"FAIL: Session file not found: {args.session_file}")
         sys.exit(1)
+
+    # Check reasoning_mode field in corresponding metrics file
+    metrics_path = args.session_file.with_name(
+        args.session_file.name.replace("-session.jsonl", "-metrics.json")
+    )
+    if metrics_path.exists():
+        with open(metrics_path) as f:
+            metrics = json.load(f)
+        if "reasoning_mode" not in metrics:
+            logger.warning(
+                f"reasoning_mode field missing in {metrics_path.name}"
+            )
 
     messages = load_jsonl(args.session_file)
     if not messages:

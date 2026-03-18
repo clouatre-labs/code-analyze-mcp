@@ -61,6 +61,10 @@ MCP_TOOL_NAMES = {
     "mcp__code-analyze__analyze_directory",
     "mcp__code-analyze__analyze_file",
     "mcp__code-analyze__analyze_symbol",
+    "code-analyze-mcp__analyze_directory",
+    "code-analyze-mcp__analyze_file",
+    "code-analyze-mcp__analyze_symbol",
+    "code-analyze-mcp__analyze_module",
 }
 NATIVE_TOOL_NAMES = {"Glob", "Grep", "Read", "Bash"}
 SYSTEM_BASH_PATTERNS = {

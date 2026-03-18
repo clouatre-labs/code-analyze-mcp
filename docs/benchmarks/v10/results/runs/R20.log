@@ -1,0 +1,20 @@
+Perfect! I've completed the benchmark task and written the structured JSON report to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R20-report.json`.
+
+## Summary
+
+The analysis covers:
+
+1. **Module Map (14 modules)**: Documented Django's core architecture including conf, apps, core handlers, http, urls, views, db, middleware, template, dispatch, signals, utils, test, and forms with their responsibilities, key types, and dependencies.
+
+2. **Pipeline Trace (10 stages)**: Traced the complete HTTP request → response flow from WSGI entry through middleware chains, URL resolution, view dispatch, ORM queries, template rendering, and back through response middleware.
+
+3. **Cross-Module Hubs (5 identified)**: 
+   - `django.core.handlers.base` (orchestrator)
+   - `django.db` (ORM hub)
+   - `django.http` (request/response primitives)
+   - `django.urls.resolvers` (routing)
+   - `django.apps.registry` (app management)
+
+4. **Change Proposal**: Detailed specification for adding async-compatible structured logging middleware that captures view name, query count, and response time. Identified specific files to modify, new types needed, existing patterns to follow, integration points, and realistic risks (performance overhead from query counting, async thread-local issues, 404 edge cases, schema maintenance).
+
+All analysis used only native Claude Code tools: Bash, Glob, Grep, and Read—no MCP tools as required by condition A2.

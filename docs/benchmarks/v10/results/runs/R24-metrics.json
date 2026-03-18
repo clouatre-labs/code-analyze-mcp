@@ -1,0 +1,27 @@
+{
+  "session_file": "results/runs/R24-session.jsonl",
+  "provider": "openrouter",
+  "model_id": "mistralai/mistral-small-2603",
+  "reasoning_mode": "disabled",
+  "input_tokens": 15636,
+  "output_tokens": 41,
+  "total_tokens": 15677,
+  "cache_write_tokens": 0,
+  "cache_read_tokens": 0,
+  "cost_usd": 0.00237,
+  "wall_time_s": 46,
+  "tool_calls_total": 19,
+  "research_calls": 17,
+  "mcp_calls": 17,
+  "native_calls": 0,
+  "system_bash_calls": 0,
+  "other_calls": 2,
+  "tool_calls_detail": {
+    "code-analyze-mcp__analyze_directory": 5,
+    "code-analyze-mcp__analyze_file": 9,
+    "code-analyze-mcp__analyze_symbol": 3,
+    "code-analyze-mcp__conf__init_py": 1,
+    "write": 1
+  },
+  "valid_output": true
+}

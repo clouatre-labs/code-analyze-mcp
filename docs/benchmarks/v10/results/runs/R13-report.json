@@ -1,0 +1,310 @@
+{
+  "run_id": "R13",
+  "condition": "E-treatment",
+  "module_map": [
+    {
+      "module": "django.core",
+      "responsibility": "Core framework including request/response handling, middleware pipeline orchestration, and base handler infrastructure",
+      "key_types": [
+        "BaseHandler",
+        "HttpRequest",
+        "HttpResponse",
+        "MiddlewareMixin"
+      ],
+      "depends_on": [
+        "django.conf",
+        "django.db",
+        "django.urls",
+        "django.http"
+      ]
+    },
+    {
+      "module": "django.core.handlers",
+      "responsibility": "Request handling infrastructure including base handler implementations for WSGI/ASGI, middleware loading and execution pipeline",
+      "key_types": [
+        "BaseHandler",
+        "MiddlewareMixin"
+      ],
+      "depends_on": [
+        "django.conf",
+        "django.http",
+        "django.middleware"
+      ]
+    },
+    {
+      "module": "django.urls",
+      "responsibility": "URL routing and resolution system that maps HTTP requests to view functions via URL patterns and resolvers",
+      "key_types": [
+        "ResolverMatch",
+        "URLPattern",
+        "URLResolver"
+      ],
+      "depends_on": [
+        "django.http"
+      ]
+    },
+    {
+      "module": "django.http",
+      "responsibility": "HTTP layer defining request/response objects, query dictionaries, and multipart parsing for handling incoming/outgoing HTTP traffic",
+      "key_types": [
+        "HttpRequest",
+        "HttpResponse",
+        "QueryDict",
+        "MultiValueDict"
+      ],
+      "depends_on": [
+        "django.utils.datastructures"
+      ]
+    },
+    {
+      "module": "django.views",
+      "responsibility": "View layer providing base view classes and generic views for processing HTTP requests and returning responses",
+      "key_types": [
+        "View",
+        "TemplateView",
+        "as_view() decorator"
+      ],
+      "depends_on": [
+        "django.http",
+        "django.template"
+      ]
+    },
+    {
+      "module": "django.views.generic",
+      "responsibility": "Generic view classes implementing common web patterns (CRUD operations, form handling) as reusable components",
+      "key_types": [
+        "View",
+        "ListView",
+        "DetailView"
+      ],
+      "depends_on": [
+        "django.views"
+      ]
+    },
+    {
+      "module": "django.db.models",
+      "responsibility": "ORM layer defining models, managers, query sets, and database operations for CRUD functionality and data persistence",
+      "key_types": [
+        "Model",
+        "QuerySet",
+        "Manager",
+        "Field"
+      ],
+      "depends_on": [
+        "django.conf",
+        "django.db.backends.operations"
+      ]
+    },
+    {
+      "module": "django.db",
+      "responsibility": "Database layer providing connection management, transaction handling, and database router infrastructure",
+      "key_types": [
+        "connection",
+        "connections",
+        "DatabaseOperations"
+      ],
+      "depends_on": [
+        "django.conf"
+      ]
+    },
+    {
+      "module": "django.middleware",
+      "responsibility": "Middleware pipeline providing cross-cutting concerns (CSRF protection, session handling, security headers) executed around view processing",
+      "key_types": [
+        "MiddlewareMixin",
+        "CsrfViewMiddleware"
+      ],
+      "depends_on": [
+        "django.conf",
+        "django.http"
+      ]
+    },
+    {
+      "module": "django.conf",
+      "responsibility": "Configuration system handling Django settings with lazy evaluation and centralized configuration management",
+      "key_types": [
+        "settings object",
+        "LazySettings",
+        "configure() function"
+      ],
+      "depends_on": []
+    },
+    {
+      "module": "django.template",
+      "responsibility": "Template rendering system providing context processors, template engines, and response rendering for generating HTML/output",
+      "key_types": [
+        "Template",
+        "Context",
+        "TemplateResponse"
+      ],
+      "depends_on": [
+        "django.conf"
+      ]
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. HTTP Request Ingestion",
+      "module": "django.core.handlers.asgi/wsgi",
+      "description": "ASGI/WSGI handler receives incoming HTTP request, instantiates HttpRequest object with headers, body, and metadata. Validates host, decodes query parameters, and initializes middleware pipeline.",
+      "key_types": [
+        "HttpRequest",
+        "settings",
+        "MiddlewareMixin"
+      ],
+      "next_stage": "2. URL Routing"
+    },
+    {
+      "stage": "2. URL Routing",
+      "module": "django.urls.base",
+      "description": "URL resolver matches request path against URL patterns using ResolverMatch. Resolves view function/callable and captures named URL parameters. Sets up URLconf for the request lifecycle.",
+      "key_types": [
+        "resolver.resolve()",
+        "ResolverMatch",
+        "URLPattern"
+      ],
+      "next_stage": "3. Middleware Pipeline (Request Phase)"
+    },
+    {
+      "stage": "3. Middleware Pipeline (Request Phase)",
+      "module": "django.core.handlers.base",
+      "description": "Middleware classes process request in LIFO order using process_request() hooks. Each middleware can modify request, perform authentication, log, or short-circuit the pipeline. CSRF middleware validates tokens here.",
+      "key_types": [
+        "CsrfViewMiddleware",
+        "process_request() interface",
+        "MiddlewareMixin"
+      ],
+      "next_stage": "4. View Resolution & Invocation"
+    },
+    {
+      "stage": "4. View Resolution & Invocation",
+      "module": "django.views.generic.base",
+      "description": "View.as_view() converts class-based views to callable functions. Dispatch method selects appropriate HTTP method handler (get/post/etc.). URL parameters are bound to view function kwargs. Initialize response object and context.",
+      "key_types": [
+        "View.as_view()",
+        "dispatch() method",
+        "HttpResponse",
+        "Context"
+      ],
+      "next_stage": "5. Business Logic Execution"
+    },
+    {
+      "stage": "5. Business Logic Execution",
+      "module": "django.views",
+      "description": "View functions perform business logic: retrieve/persist data via ORM, process forms, call business services. May render templates, return static content, or redirect. Uses QuerySet operations for database access.",
+      "key_types": [
+        "View subclasses",
+        "QuerySet",
+        "Model",
+        "Manager"
+      ],
+      "next_stage": "6. Database Query Execution"
+    },
+    {
+      "stage": "6. Database Query Execution",
+      "module": "django.db.models.query",
+      "description": "QuerySet methods execute ORM queries against database backend. Includes filtering, ordering, aggregation, and joins. Database router selects appropriate database connection. Queries return QuerySet iterators that lazily execute SQL when consumed.",
+      "key_types": [
+        "QuerySet",
+        "filter()/exclude()/order_by()",
+        "connection",
+        "transaction"
+      ],
+      "next_stage": "7. Response Generation"
+    },
+    {
+      "stage": "7. Response Generation",
+      "module": "django.template.response",
+      "description": "TemplateResponse renders templates with context data. Can use Django template engine or pluggable template backends. Generates final HTTP response object with status code, headers, and body content.",
+      "key_types": [
+        "TemplateResponse",
+        "context data",
+        "template engine"
+      ],
+      "next_stage": "8. Middleware Pipeline (Response Phase)"
+    },
+    {
+      "stage": "8. Middleware Pipeline (Response Phase)",
+      "module": "django.core.handlers.base",
+      "description": "Middleware classes process response in FIFO order using process_response() hooks. Add headers, modify content, perform cleanup, log metrics. Final middleware closes database connections and signals request completion.",
+      "key_types": [
+        "process_response() interface",
+        "request_finished signal",
+        "connections"
+      ],
+      "next_stage": "9. HTTP Response Transmission"
+    },
+    {
+      "stage": "9. HTTP Response Transmission",
+      "module": "django.core.handlers.asgi/wsgi",
+      "description": "Handler transmits final HttpResponse object back through ASGI/WSGI server to client. Ensures proper HTTP headers and status codes. Cleanup of request-specific state.",
+      "key_types": [
+        "HttpResponse",
+        "ASGI adapter"
+      ],
+      "next_stage": null
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "django.conf",
+      "inbound_deps": 12,
+      "outbound_deps": 4,
+      "reason": "Central settings/configuration hub read by nearly all Django subsystems. Settings object provides global configuration needed by ORM, middleware, views, templates, and utilities. Configures database connections, authentication backends, template engines, and third-party integrations."
+    },
+    {
+      "module": "django.core.handlers.base",
+      "inbound_deps": 11,
+      "outbound_deps": 8,
+      "reason": "Middleware orchestration hub that coordinates the entire request/response pipeline. Controls middleware loading (load_middleware), execution order (_get_response), and exception handling (process_exception_by_middleware). Serves as the anchor for all cross-cutting concerns."
+    },
+    {
+      "module": "django.middleware",
+      "inbound_deps": 9,
+      "outbound_deps": 15,
+      "reason": "Cross-cutting concerns hub implementing authentication (SessionMiddleware), security (CSRF), performance (cache), and other middleware patterns. Every HTTP request passes through middleware pipeline, making it essential for dependency injection of common services."
+    }
+  ],
+  "change_proposal": {
+    "feature_summary": "Async-compatible structured logging middleware that captures per-request metadata (view name, ORM query count, response time) and emits structured log entries for observability and debugging.",
+    "files_to_modify": [
+      "/tmp/benchmark-repos/django/django/core/handlers/base.py",
+      "Create new: /tmp/benchmark-repos/django/django/middleware/logging.py",
+      "/tmp/benchmark-repos/django/django/middleware/__init__.py"
+    ],
+    "new_types": [
+      {
+        "name": "StructuredLoggingMiddleware",
+        "description": "Middleware class with async-compatible process_request/process_response hooks that captures timing, view identification, and database query metrics"
+      },
+      {
+        "name": "RequestContextLogger",
+        "description": "Context manager or decorator for view functions to track per-request ORM operations and timing"
+      },
+      {
+        "name": "RequestMetrics",
+        "description": "Data structure to store request-level metrics (start_time, query_count, view_name, status_code)"
+      }
+    ],
+    "pattern_to_follow": "Standard Django middleware pattern using MiddlewareMixin base class with process_request() and process_response() methods. Follow existing middleware like CsrfViewMiddleware and SessionMiddleware in structure and documentation patterns.",
+    "integration_point": "Middleware is injected at WSGI/ASGI handler startup via load_middleware() function in BaseHandler.load_middleware(). Register in MIDDLEWARE setting. Follows Django's middleware pipeline pattern with configurable execution order.",
+    "risks": [
+      "Performance overhead from query counting and timing instrumentation — must be opt-in via setting to avoid production impact",
+      "Thread/async-safety of metrics collection — must use thread-local or ASGI contexts to avoid race conditions in concurrent requests",
+      "Log volume explosion — structured logging can generate large volumes of log data; needs log rotation and sampling configuration",
+      "Initialization order — middleware must be registered after transaction middleware and database middleware to access accurate query counts"
+    ]
+  },
+  "tool_usage": [
+    {"tool": "analyze_directory", "params": "Analyzed /tmp/benchmark-repos/django to map top-level structure and 15 files"},
+    {"tool": "analyze_directory", "params": "Analyzed /tmp/benchmark-repos/django/django to identify 20 submodules and key packages"},
+    {"tool": "analyze_directory", "params": "Detailed analysis of /tmp/benchmark-repos/django/django/core/ with 107 files, 956 functions"},
+    {"tool": "analyze_file", "params": "Examined /tmp/benchmark-repos/django/django/core/handlers/base.py for handler and middleware infrastructure (375L, 11 functions)"},
+    {"tool": "analyze_module", "params": "Mapped /tmp/benchmark-repos/django/django/views/generic/base.py view infrastructure with 23 functions"},
+    {"tool": "analyze_module", "params": "Examined /tmp/benchmark-repos/django/django/db/models/base.py ORM model infrastructure (83 functions)"},
+    {"tool": "analyze_module", "params": "Analyzed /tmp/benchmark-repos/django/django/db/models/query.py ORM QuerySet operations (172 functions)"},
+    {"tool": "analyze_module", "params": "Mapped /tmp/benchmark-repos/django/django/db/models/manager.py manager layer infrastructure (22 functions)"},
+    {"tool": "analyze_file", "params": "Examined /tmp/benchmark-repos/django/django/middleware/csrf.py for middleware pattern (25 functions)"},
+    {"tool": "analyze_module", "params": "Mapped /tmp/benchmark-repos/django/django/http/request.py HTTP request layer (74 functions)"}
+  ]
+}

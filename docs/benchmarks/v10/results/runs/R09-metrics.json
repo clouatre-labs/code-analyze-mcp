@@ -1,0 +1,26 @@
+{
+  "session_file": "results/runs/R09-session.jsonl",
+  "provider": "gcp_vertex_ai",
+  "model_id": "global.anthropic.claude-sonnet-4-6",
+  "reasoning_mode": "disabled",
+  "input_tokens": 317201,
+  "output_tokens": 5076,
+  "total_tokens": 322277,
+  "cache_write_tokens": 0,
+  "cache_read_tokens": 0,
+  "cost_usd": 1.027743,
+  "wall_time_s": 174,
+  "tool_calls_total": 8,
+  "research_calls": 5,
+  "mcp_calls": 5,
+  "native_calls": 0,
+  "system_bash_calls": 0,
+  "other_calls": 3,
+  "tool_calls_detail": {
+    "ToolSearch": 2,
+    "mcp__code-analyze__analyze_directory": 1,
+    "mcp__code-analyze__analyze_file": 4,
+    "Write": 1
+  },
+  "valid_output": true
+}

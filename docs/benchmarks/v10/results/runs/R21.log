@@ -1,0 +1,40 @@
+Perfect! I've successfully analyzed the Django codebase and generated the required JSON report. Here's a summary of what I produced:
+
+## Analysis Complete
+
+I've written a comprehensive JSON report to `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R21-report.json` using MCP semantic analysis tools.
+
+### Key Findings:
+
+**Module Map** (12 core modules):
+- **django.core.handlers**: Central orchestrator of the HTTP pipeline
+- **django.middleware**: Request/response processing stack
+- **django.urls**: URL routing and view resolution
+- **django.http**: HTTP request/response abstractions
+- **django.views**: View layer with class-based and function-based views
+- **django.db**: ORM and database connection pooling
+- **django.dispatch**: Signal dispatcher for loose coupling
+- **Plus 5 more infrastructure modules** (template, conf, apps, exceptions, utils)
+
+**Pipeline Trace** (10-stage flow):
+1. HTTP Entry → WSGIHandler/ASGIHandler
+2. HttpRequest object creation
+3. Middleware request-phase processing
+4. URL routing (URLResolver)
+5. View dispatch (View.dispatch())
+6. ORM query execution
+7. Response generation
+8. Middleware response-phase processing
+9. Exception handling (if needed)
+10. HTTP response return to server
+
+**Cross-Module Hubs** (5 most-connected modules):
+- `core.handlers.base`: 8 inbound, 12 outbound deps
+- `http`: 10 inbound, 6 outbound deps
+- `utils`: 15 inbound, 3 outbound deps
+- `conf.settings`: 18 inbound, 0 outbound
+- `db`: 6 inbound, 4 outbound deps
+
+**Change Proposal**: Structured logging middleware with risk analysis covering async/sync compatibility, performance overhead, circular imports, and query counting accuracy.
+
+**Tool Usage**: 10 MCP calls total (7 analyze_directory, 3 analyze_module) — well within budget.

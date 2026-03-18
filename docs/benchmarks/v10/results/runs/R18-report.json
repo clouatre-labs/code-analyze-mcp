@@ -1,0 +1,202 @@
+{
+  "run_id": "R18",
+  "condition": "A2-haiku-native-control",
+  "module_map": [
+    {
+      "module": "http",
+      "responsibility": "HTTP protocol layer: request parsing, query strings, cookies, file uploads, response objects, status codes, content types. Provides HttpRequest and HttpResponse base classes.",
+      "key_types": ["HttpRequest", "HttpResponse", "HttpResponseBase", "QueryDict", "MultiValueDict", "WSGIRequest", "HttpResponseRedirect", "TemplateResponse"],
+      "depends_on": ["conf", "utils"]
+    },
+    {
+      "module": "core.handlers",
+      "responsibility": "WSGI/ASGI request dispatch pipeline: loads middleware chain, invokes views, manages request/response lifecycle. Entry point for web servers. Handles async/sync adaptation.",
+      "key_types": ["BaseHandler", "WSGIHandler", "ASGIHandler", "MiddlewareNotUsed"],
+      "depends_on": ["http", "urls", "middleware", "conf", "db"]
+    },
+    {
+      "module": "urls",
+      "responsibility": "URL routing and pattern matching: parses urlpatterns, matches request paths to views, resolves view callables. Contains URLPattern, URLResolver, and regex/route pattern matching.",
+      "key_types": ["URLPattern", "URLResolver", "RoutePattern", "RegexPattern", "ResolverMatch"],
+      "depends_on": ["core", "views"]
+    },
+    {
+      "module": "views",
+      "responsibility": "Generic and class-based views: View base class, dispatch logic, context rendering, template response handling. Defines HTTP method handlers (get, post, etc).",
+      "key_types": ["View", "TemplateView", "TemplateResponseMixin", "ContextMixin", "RedirectView", "GenericAPIView"],
+      "depends_on": ["http", "template", "urls"]
+    },
+    {
+      "module": "db",
+      "responsibility": "ORM layer: database abstraction, connection pooling, QuerySet API, model definition, migrations. Handles SQL generation, query execution, transaction management.",
+      "key_types": ["QuerySet", "Model", "Manager", "Query", "Connection", "Collector"],
+      "depends_on": ["conf", "utils", "core"]
+    },
+    {
+      "module": "middleware",
+      "responsibility": "Request/response processing hooks: security (CSRF, XSS), caching, gzip compression, locale handling, common operations. Middleware components execute before/after view dispatch.",
+      "key_types": ["MiddlewareMixin", "CommonMiddleware", "CsrfViewMiddleware", "GZipMiddleware", "CacheMiddleware"],
+      "depends_on": ["http", "conf", "core"]
+    },
+    {
+      "module": "template",
+      "responsibility": "Template engine: parsing, rendering, filters, tags, template inheritance. Converts template strings to HTML with context data. Supports multiple engines.",
+      "key_types": ["Template", "Context", "Engine", "Template response", "TemplateDoesNotExist"],
+      "depends_on": ["conf", "utils"]
+    },
+    {
+      "module": "conf",
+      "responsibility": "Global configuration management: settings registry, app registry, signal dispatch. Central access point for INSTALLED_APPS, MIDDLEWARE, database config.",
+      "key_types": ["Settings", "LazySettings", "AppConfig", "Apps registry"],
+      "depends_on": []
+    },
+    {
+      "module": "apps",
+      "responsibility": "Application registry and app configuration: app discovery, app ready signals, model registration. Maps app labels to AppConfig instances.",
+      "key_types": ["AppConfig", "Apps", "AppRegistry"],
+      "depends_on": ["conf"]
+    },
+    {
+      "module": "dispatch",
+      "responsibility": "Signal/event system: sender/receiver registry, signal emission, connection/disconnection. Used for request_started, request_finished, post_save hooks.",
+      "key_types": ["Signal", "Receiver"],
+      "depends_on": []
+    }
+  ],
+  "pipeline_trace": [
+    {
+      "stage": "1. WSGI Entry",
+      "module": "core.handlers.wsgi",
+      "description": "Web server calls WSGIHandler.__call__(environ, start_response). Environ dict contains HTTP metadata. Creates HttpRequest from environ.",
+      "key_types": ["environ dict", "WSGIRequest (extends HttpRequest)"],
+      "next_stage": "2. Signals & Setup"
+    },
+    {
+      "stage": "2. Signals & Setup",
+      "module": "dispatch, core.handlers",
+      "description": "Sends request_started signal. Initializes middleware chain by calling load_middleware(). Middleware instances wrap each other forming nested callables.",
+      "key_types": ["Signal", "middleware chain (nested functions)", "BaseHandler"],
+      "next_stage": "3. Middleware (Pre-View)"
+    },
+    {
+      "stage": "3. Middleware (Pre-View)",
+      "module": "middleware",
+      "description": "Each middleware's __call__ or process_request executes. Examples: CommonMiddleware (URL rewrites), CsrfViewMiddleware (token validation), GZipMiddleware. Can return response early.",
+      "key_types": ["MiddlewareMixin", "HttpRequest (modified with attributes)", "HttpResponse (early exit)"],
+      "next_stage": "4. URL Routing"
+    },
+    {
+      "stage": "4. URL Routing",
+      "module": "urls.resolvers",
+      "description": "URL resolver matches request.path against urlpatterns. URLResolver recursively matches patterns, returns URLPattern with matched view callable and kwargs.",
+      "key_types": ["URLPattern", "ResolverMatch (path, view_name, app_name, kwargs)", "view callable"],
+      "next_stage": "5. View Dispatch"
+    },
+    {
+      "stage": "5. View Dispatch",
+      "module": "views.generic.base, core.handlers",
+      "description": "Handler calls resolved view callable with request and URL kwargs. If View subclass, calls View.as_view() wrapper which calls dispatch(request, *args, **kwargs).",
+      "key_types": ["View instance", "HttpRequest", "view kwargs dict"],
+      "next_stage": "6. View Execution"
+    },
+    {
+      "stage": "6. View Execution",
+      "module": "views",
+      "description": "View.dispatch() routes to HTTP method handler (get, post, etc). Handler may query database via QuerySet, render template, or return redirect response.",
+      "key_types": ["QuerySet", "Template context dict", "HttpResponse subclass"],
+      "next_stage": "7. Database Query (Optional)"
+    },
+    {
+      "stage": "7. Database Query (Optional)",
+      "module": "db.models",
+      "description": "QuerySet.get(), .filter(), .all() etc. trigger SQL generation and execution. Connection pooled from django.db.connections. Transaction context applied. Results hydrated to Model instances.",
+      "key_types": ["QuerySet", "Query (sql.Query object)", "Database cursor", "Model instance list"],
+      "next_stage": "8. Template Rendering (Optional)"
+    },
+    {
+      "stage": "8. Template Rendering (Optional)",
+      "module": "template",
+      "description": "Template.render(context) processes template string with filters, tags, inheritance. Returns HTML string. Nested template.Template calls resolve includes and inheritance.",
+      "key_types": ["Template (ast nodes)", "Context dict", "rendered HTML string"],
+      "next_stage": "9. Response Finalization"
+    },
+    {
+      "stage": "9. Response Finalization",
+      "module": "core.handlers, middleware",
+      "description": "Handler receives HttpResponse. Middleware process_response/process_template_response hooks execute in reverse order. Each can modify response headers, content, status.",
+      "key_types": ["HttpResponse with content, headers, cookies, status_code"],
+      "next_stage": "10. WSGI Output"
+    },
+    {
+      "stage": "10. WSGI Output",
+      "module": "core.handlers.wsgi",
+      "description": "WSGIHandler formats response status, headers as WSGI format. Calls start_response(status, headers). Returns response body iterator or file wrapper for streaming.",
+      "key_types": ["status string ('200 OK')", "headers list [(name, value), ...]", "response body bytes"],
+      "next_stage": "Complete"
+    }
+  ],
+  "cross_module_hubs": [
+    {
+      "module": "core.handlers",
+      "inbound_deps": 12,
+      "outbound_deps": 8,
+      "reason": "Central dispatch orchestrator: imports http (request/response), urls (resolving), middleware (chain), db (transaction context), conf (settings), dispatch (signals), views (view lookup). All requests funnel through BaseHandler.get_response(). Controls middleware stack initialization and execution order."
+    },
+    {
+      "module": "http",
+      "inbound_deps": 11,
+      "outbound_deps": 6,
+      "reason": "Request/response abstraction: imported by handlers, views, middleware, template responses, forms, file uploads. HttpRequest and HttpResponse are foundational types that flow through entire pipeline. Most modules either consume or produce http objects."
+    },
+    {
+      "module": "conf",
+      "inbound_deps": 15,
+      "outbound_deps": 3,
+      "reason": "Global settings registry: depended on by handlers (MIDDLEWARE, DEBUG), db (DATABASE config), middleware (various feature flags), template (TEMPLATES, installed engines), apps (INSTALLED_APPS). Settings.configure() must be called before module initialization. Central source of truth for runtime configuration."
+    }
+  ],
+  "change_proposal": {
+    "feature_summary": "Add an async-compatible structured logging middleware that captures per-request metadata (view name, ORM query count, response time, request path) and emits as structured JSON log entry with optional correlation ID support.",
+    "files_to_modify": [
+      "django/middleware/logging.py (new file)",
+      "django/core/handlers/base.py (attach query counter context var)",
+      "django/db/utils.py (hook into query execution to count)",
+      "django/views/generic/base.py (attach view name to request)",
+      "django/conf/global_settings.py (add LOGGING_STRUCTURED_ENABLED, LOGGING_STRUCTURED_FIELDS)"
+    ],
+    "new_types": [
+      "StructuredLoggingMiddleware(MiddlewareMixin) - main middleware class",
+      "RequestMetadata(TypedDict) - holds view_name, query_count, response_time_ms, status_code, path, method",
+      "StructuredLogEntry(TypedDict) - final JSON-serializable log event with timestamp, correlation_id, metadata",
+      "QueryCounter (context var or thread-local) - tracks DB query count per request"
+    ],
+    "pattern_to_follow": "Follow MiddlewareMixin pattern: implement __init__(get_response), __call__(request), support both sync and async via sync_capable=True, async_capable=True attributes. Use existing middleware.common.CommonMiddleware as reference for process_request/process_response hooks. Use django.utils.log.log_response() pattern for structured output.",
+    "integration_point": "Register in settings.MIDDLEWARE between SecurityMiddleware and other middleware (before exception handling for accurate counts). Attach view name during View.dispatch() via request.resolver_match.view_name. Hook db.connections.queries list to count ORM operations. Use django.utils.timezone.now() for timing. Emit via Python logging module with custom 'django.structured' logger.",
+    "risks": [
+      "Query counting overhead: Iterating django.db.connections.queries adds non-trivial CPU cost on high-QPS apps. Mitigation: Add feature flag in settings to disable in production if needed, or use connection-level query event hooks instead.",
+      "Async compatibility: contextvars.ContextVar for QueryCounter must be async-safe. Middleware must set sync_capable/async_capable correctly or it fails in async mode. Risk of incorrect counts if context vars not properly propagated in async code.",
+      "Middleware ordering sensitivity: If registered after exception handlers, query counts on 500 errors may be incomplete. If registered after static file serving middleware, static requests pollute logs unnecessarily. Recommend clear documentation on positioning.",
+      "Memory leak potential: If QueryCounter context var not cleaned up, requests under high concurrency may accumulate state. Ensure cleanup in finally block or use contextvars.copy_context() for isolation.",
+      "Performance on large response bodies: Logging metadata for every request adds serialization (JSON encode) and I/O (write to logger). On high-traffic apps (1000+ req/s), this can measurably impact throughput. Mitigation: Sample requests or use async logging.",
+      "Backward compatibility: Adding new middleware to default MIDDLEWARE tuple could change timing behavior for existing apps. Recommendation: Keep opt-in via feature flag, not auto-enabled by default."
+    ]
+  },
+  "tool_usage": [
+    {
+      "tool": "Bash",
+      "params": "directory structure exploration (find, ls) and import analysis (grep patterns in middleware, handlers, db modules)"
+    },
+    {
+      "tool": "Glob",
+      "params": "pattern /tmp/benchmark-repos/django/django/*.py to list top-level python modules"
+    },
+    {
+      "tool": "Read",
+      "params": "key files: handlers/wsgi.py (120 lines), handlers/base.py (100 lines), middleware/common.py (80 lines), views/generic/base.py (50 lines) to understand class hierarchy and import structure"
+    },
+    {
+      "tool": "Grep",
+      "params": "searched for class definitions (^class), import patterns (from django), middleware structure to identify key types and cross-module dependencies"
+    }
+  ]
+}

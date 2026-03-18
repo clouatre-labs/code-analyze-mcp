@@ -1,0 +1,37 @@
+Perfect! I've completed the benchmark task. Here's a summary of what the report contains:
+
+## Report Summary (R18)
+
+**Deliverable:** `/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/docs/benchmarks/v10/results/runs/R18-report.json`
+
+### Key Findings:
+
+1. **Module Map** (10 core modules):
+   - `core.handlers` — WSGI/ASGI dispatch orchestrator
+   - `http` — request/response abstraction layer
+   - `urls` — URL routing and pattern matching
+   - `views` — generic and class-based views
+   - `db` — ORM QuerySet and model layer
+   - `middleware` — request/response processing hooks
+   - `template` — template rendering engine
+   - `conf` — global settings registry
+   - `apps` — application registry
+   - `dispatch` — signal/event system
+
+2. **Pipeline Trace** (10-stage request flow):
+   - WSGI entry → signals & setup → middleware (pre-view) → URL routing → view dispatch → view execution → optional DB query → optional template rendering → response finalization → WSGI output
+   - Identified key types passed at each stage (HttpRequest, QuerySet, ResolverMatch, Template context, etc.)
+
+3. **Cross-Module Hubs** (top 3):
+   - **core.handlers** (12 inbound, 8 outbound) — central dispatcher orchestrating all request handling
+   - **http** (11 inbound, 6 outbound) — foundational request/response types
+   - **conf** (15 inbound, 3 outbound) — global settings registry
+
+4. **Change Proposal**: Detailed structured logging middleware design including:
+   - 5 files to modify + 1 new file
+   - 4 new types (StructuredLoggingMiddleware, RequestMetadata, StructuredLogEntry, QueryCounter)
+   - Pattern to follow (MiddlewareMixin with sync/async support)
+   - Integration point (middleware stack with view name and query counting)
+   - 6 realistic risks (query counting overhead, async compatibility, middleware ordering, memory leaks, performance, backward compatibility)
+
+**Tool Usage**: 4 tools used across 8 tool calls, all within native control (no MCP tools).
