@@ -480,7 +480,10 @@ impl SemanticExtractor {
                 .ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))
         })?;
 
+        // 0 is not a useful depth (visits root node only, returning zero results).
+        // Treat 0 as None (unlimited). See #339.
         let max_depth: Option<u32> = ast_recursion_limit
+            .filter(|&limit| limit > 0)
             .map(|limit| {
                 u32::try_from(limit).map_err(|_| {
                     ParserError::ParseError(format!(
@@ -963,5 +966,25 @@ fn process(user: &User) {
                 .any(|fa| fa.object == "user" && fa.field == "name")
         );
         assert_eq!(analysis.field_accesses[0].scope, "process");
+    }
+
+    #[test]
+    fn test_ast_recursion_limit_zero_is_unlimited() {
+        let source = r#"fn hello() -> u32 { 42 }"#;
+        let result_none = SemanticExtractor::extract(source, "rust", None);
+        let result_zero = SemanticExtractor::extract(source, "rust", Some(0));
+        assert!(result_none.is_ok(), "extract with None failed");
+        assert!(result_zero.is_ok(), "extract with Some(0) failed");
+        let analysis_none = result_none.unwrap();
+        let analysis_zero = result_zero.unwrap();
+        assert!(
+            analysis_none.functions.len() >= 1,
+            "extract with None should find at least one function in the test source"
+        );
+        assert_eq!(
+            analysis_none.functions.len(),
+            analysis_zero.functions.len(),
+            "ast_recursion_limit=0 should behave identically to unset (unlimited)"
+        );
     }
 }
