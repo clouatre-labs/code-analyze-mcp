@@ -155,7 +155,6 @@ test_detection.rs [100L, 5F]
 **Example output (`summary=true`):**
 
 ```
-16 files, 7617L, 184F, 55C (rust 100%)
 SUMMARY:
 16 files (15 prod, 1 test), 7617L, 184F, 55C (max_depth=1)
 Languages: rust (100%)
