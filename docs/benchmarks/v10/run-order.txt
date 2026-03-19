@@ -8,7 +8,7 @@
 8. Condition B, rep 4
 9. Condition C, rep 3
 10. Condition D, rep 1
-11. Condition A, rep 2
+11. Condition A2, rep 0
 12. Condition C, rep 1
 13. Condition E, rep 2
 14. Condition A2, rep 3

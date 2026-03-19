@@ -41,7 +41,7 @@ Execute runs in this exact order (seed=42 randomization, blinding maintained):
 | 8 | R08 | B4 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
 | 9 | R09 | C3 | global.anthropic.claude-sonnet-4-6 | claude CLI |
 | 10 | R10 | D1 | minimax/minimax-m2.5 | goose |
-| 11 | R11 | A2 | global.anthropic.claude-sonnet-4-6 | claude CLI |
+| 11 | R11 | A2_0 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
 | 12 | R12 | C1 | global.anthropic.claude-sonnet-4-6 | claude CLI |
 | 13 | R13 | E2 | mistralai/mistral-small-2603 | goose |
 | 14 | R14 | A2_3 | global.anthropic.claude-haiku-4-5-20251001-v1:0 | claude CLI |
@@ -71,7 +71,7 @@ Example:
 
 ```bash
 ./run.sh R01   # C4: Sonnet + MCP
-./run.sh R11   # A2: Sonnet + native
+./run.sh R11   # A2_0: Haiku + native
 ./run.sh R06   # B3: Haiku + MCP
 ```
 
