@@ -19,7 +19,7 @@ Each line in the JSONL file is one JSON object:
 | `ts` | `u64` | Unix timestamp in milliseconds at handler return |
 | `tool` | `string` | One of: `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
 | `duration_ms` | `u64` | Wall-clock time from handler entry to return |
-| `output_chars` | `usize` | Character count of the final text returned; `0` on error paths |
+| `output_chars` | `usize` | Unicode scalar value count (`str::chars().count()`) of the final text returned; `0` on error paths |
 | `param_path_depth` | `usize` | `Path::components().count()` on `params.path` |
 | `max_depth` | `u32 \| null` | The `max_depth` param if present; `null` for `analyze_file` and `analyze_module` |
 | `result` | `string` | `"ok"` on success, `"error"` on early-exit error paths |
