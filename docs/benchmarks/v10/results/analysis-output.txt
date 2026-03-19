@@ -112,6 +112,91 @@ Bonferroni alpha = 0.05 / 15 = 0.0033 (15 pairwise contrasts)
 | D | 0 | 0 | 20210 |
 | E | 0 | 0 | 18396 |
 
+## v9 B Baseline (reference for H1 and H4)
+
+v9 B ran N=5 with claude-haiku-4-5 + MCP against the same Django target but against a pre-fix server
+(pagination bugs in analyze_directory and analyze_file were active).
+
+| Metric | v9 B (N=5) |
+|--------|-----------|
+| Median research_calls | 10 |
+| Median quality_score | 7 |
+| Run values (research_calls) | 9, 9, 10, 12, 14 |
+| Run values (quality_score) | 7, 7, 7, 7, 9 |
+
+Source: `docs/benchmarks/v9/scores.json`.
+
+## Hypothesis Verdicts
+
+### H1 (Fix Efficacy): REJECTED
+
+Prediction: v10 B median research_calls <= 5 (vs v9 B ~10); quality_score non-inferior to v9 B.
+
+Result: v10 B median research_calls = 12.5 (v9 B = 10). The post-fix server did not reduce call
+counts in Condition B; Haiku made more calls on average than the v9 B confounded baseline, not
+fewer. Quality score is non-inferior (v10 B = 7.5 vs v9 B = 7, median), but the primary efficacy
+criterion (research_calls <= 5) is not met. Root cause analysis (issues #339, #341, #342) identifies
+silent empty results from ast_recursion_limit=0 and repo-root drill-down as the drivers; these were
+not addressed by the C1/C2/C3 pagination fixes.
+
+### H2 (Model Size): SUPPORTED (exploratory, not statistically significant at Bonferroni threshold)
+
+Prediction: A (Sonnet + native) quality_score > A2 (Haiku + native).
+
+Result: Median A = 10.0, median A2 = 7.0. Direction is correct and effect size is large (r = -1.00),
+but p = 0.0325 does not survive Bonferroni correction (alpha = 0.0033). Treated as exploratory
+support: Sonnet consistently outperforms Haiku on native tools across all 4 quality dimensions.
+
+### H3 (Tool Type): NOT SUPPORTED
+
+Prediction: B (Haiku + MCP) quality_score > A2 (Haiku + native).
+
+Result: Median B = 7.5, median A2 = 7.0. Difference is negligible (U = 8, p = 0.7944, r = 0.15).
+MCP tools provide no measurable quality advantage over native tools for Haiku at current server
+behavior. Combined with H1 rejection, this suggests the MCP server needs further improvements
+(#339, #341, #342) before the efficiency benefit materializes for smaller models.
+
+### H4 (Open-Weight Models): NOT SUPPORTED
+
+Prediction: D (Minimax) and E (Mistral Small) achieve quality_score >= v9 B baseline (median = 7)
+on structural_accuracy and cross_module_tracing.
+
+Result: Median D = 5.5, median E = 5.0; both below the v9 B baseline of 7. On structural_accuracy
+specifically: D median = 1.0, E median = 1.5, both below the v9 B median of 2. On
+cross_module_tracing: D median = 2.0, E median = 1.5, both below v9 B median of 2.5 (v10 B = 2.5).
+Neither open-weight model reaches the baseline on either target dimension.
+
+### H5 (Cost Efficiency): SUPPORTED
+
+Prediction: E (Mistral Small + MCP) effective_cost_per_qp < C (Sonnet + MCP).
+
+Result: E effective_cost_per_qp = $0.0006, C = $0.0733. E is ~122x cheaper per quality point than
+C. Criterion met by a large margin. Caveat: E achieves median quality_score = 5.0 vs C = 10.5, so
+the cost advantage comes entirely from lower per-token pricing, not competitive quality output.
+
+Note: effective_cost_per_qp is computed as cost_usd / quality_score (reliability factor omitted;
+no per-run reliability measurement was defined in the scoring rubric).
+
+### H0 (Null): NOT REJECTED at Bonferroni threshold
+
+Prediction: No significant differences across 15 pairwise comparisons (alpha = 0.0033).
+
+Result: 0 of 15 pairwise Mann-Whitney U tests reach the Bonferroni-corrected threshold of p < 0.0033.
+All observed differences, including the large A vs A2 effect (r = -1.00), fail to reach significance
+at N=4 per condition. H0 cannot be rejected. All hypothesis verdicts above are treated as exploratory
+and weighted toward effect size rather than statistical significance.
+
+## Summary
+
+No hypothesis reaches statistical significance at N=4 per condition (Bonferroni alpha = 0.0033).
+Key exploratory findings:
+
+- Sonnet outperforms Haiku on both native and MCP tools (large effect, H2 direction supported).
+- The C1/C2/C3 pagination fixes did not reduce Haiku research_calls; the root cause is elsewhere (#339, #341, #342).
+- MCP provides no measurable quality advantage over native tools for Haiku at current server behavior (H3 not supported).
+- Open-weight models (Minimax, Mistral Small) fall short of the Haiku baseline on quality; extreme cost advantage does not compensate for quality gap at current model capability.
+- Sonnet + MCP (Condition C) is the most effective configuration: median quality 10.5, research_calls 4.0, $0.77/run.
+
 ---
 *Mann-Whitney U: scipy used when available; otherwise normal approximation (p shown as n/a).*
 *rank-biserial r: |r| >= 0.3 small effect, >= 0.5 medium, >= 0.7 large.*
