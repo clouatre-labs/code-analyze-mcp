@@ -180,17 +180,23 @@ jobs:
     name: Dependency Check (Renovate)
     runs-on: ubuntu-latest
     needs: changes
-    timeout-minutes: 5
+    timeout-minutes: 10
     if: github.actor == 'renovate[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      - name: Cache Cargo registry
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Install cargo-deny
         uses: taiki-e/install-action@e24b8b7a939c6a537188f34a4163cb153dd85cf6 # v2.69.1
         with:
           tool: cargo-deny
       - name: Check advisories and licenses
         run: cargo deny check advisories licenses
+      - name: Compile check
+        run: cargo check
 
   ci-result:
     name: CI Result
