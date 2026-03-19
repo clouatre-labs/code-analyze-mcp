@@ -6,6 +6,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org)
 [![MCP](https://img.shields.io/badge/protocol-MCP-purple.svg)](https://modelcontextprotocol.io)
+[![crates.io](https://img.shields.io/crates/v/code-analyze-mcp.svg)](https://crates.io/crates/code-analyze-mcp)
 
 Standalone MCP server for code structure analysis using tree-sitter.
 
@@ -16,7 +17,7 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 5 programming languages. It exposes four tools: `analyze_directory` (file tree with metrics), `analyze_file` (functions, classes, imports from a single file), `analyze_module` (lightweight function/import index, ~75% smaller than `analyze_file`), and `analyze_symbol` (call graph for a named symbol). It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
+code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 6 registered languages (Rust, Python, Go, Java, TypeScript, and TSX -- TypeScript and TSX use distinct grammars but share the same queries). It exposes four tools: `analyze_directory` (file tree with metrics, test/prod partitioning, and a SUGGESTION footer), `analyze_file` (functions, classes, and imports from a single file), `analyze_module` (lightweight function/import index, ~75% smaller than `analyze_file`), and `analyze_symbol` (call graph for a named symbol). The server implements MCP completions for path autocompletion and emits async JSONL metrics for observability. It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
 
 ## Installation
 
@@ -89,11 +90,13 @@ All optional parameters may be omitted. Shared optional parameters for `analyze_
 | `cursor` | string | -- | Pagination cursor from a previous response's `next_cursor` |
 | `page_size` | integer | 100 | Items per page |
 | `force` | boolean | false | Bypass output size warning |
-| `verbose` | boolean | false | true = full output with section headers and imports (Markdown-style); false = compact one-line-per-item format |
+| `verbose` | boolean | false | true = full output with section headers and imports (Markdown-style headers in `analyze_directory`; adds `I:` section in `analyze_file`); false = compact format |
+
+`summary=true` and `cursor` are mutually exclusive. Passing both returns an error.
 
 ### `analyze_directory`
 
-Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules.
+Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules. Output is partitioned into a `PATH` section (production files) and a `TEST FILES` section (test files), preceded by a `SUMMARY:` block with aggregate counts and a `SUGGESTION:` footer naming the largest source subdirectory.
 
 **Required:** `path` *(string)* -- directory to analyze
 
@@ -102,16 +105,25 @@ Walks a directory tree, counts lines of code, functions, and classes per file. R
 **Example output:**
 
 ```
-src/                                [328 LOC | F:28 C:5]
-  main.rs                           [18 LOC | F:1 C:0]
-  lib.rs                            [156 LOC | F:12 C:3]
-  parser.rs                         [89 LOC | F:8 C:2]
-  formatter.rs                      [65 LOC | F:7 C:0]
-  languages/                        [142 LOC | F:19 C:5]
-    mod.rs                          [45 LOC | F:5 C:2]
-    rust.rs                         [97 LOC | F:14 C:3]
+12 files, 843L, 42F, 0C (rust 100%)
+SUMMARY:
+Shown: 12 files (9 prod, 3 test), 843L, 42F, 0C (max_depth=2)
+Languages: rust (100%)
 
-Total: 4 files, 328 LOC, 28 functions, 5 classes
+PATH [LOC, FUNCTIONS, CLASSES]
+  main.rs [18L, 1F]
+  lib.rs [156L, 12F, 3C]
+  formatter.rs [210L, 14F]
+  languages/
+    rust.rs [97L, 8F, 2C]
+    python.rs [84L, 7F, 2C]
+
+TEST FILES [LOC, FUNCTIONS, CLASSES]
+  formatter_test.rs [143L, 9F]
+  languages/
+    rust_test.rs [65L, 5F]
+
+SUGGESTION: Largest source directory: src/ (9 files total). For module details, re-run with path=src/ and max_depth=2.
 ```
 
 ```bash
@@ -122,7 +134,7 @@ analyze_directory path: /path/to/project summary: true
 
 ### `analyze_file`
 
-Extracts functions, classes, imports, and type references from a single file.
+Extracts functions, classes, and imports from a single file.
 
 **Required:** `path` *(string)* -- file to analyze
 
@@ -131,29 +143,14 @@ Extracts functions, classes, imports, and type references from a single file.
 **Example output:**
 
 ```
-FILE: src/lib.rs [156 LOC | F:12 C:3]
-
-CLASSES:
-  CodeAnalyzer:20
-  SemanticExtractor:45
-
-FUNCTIONS:
-  new:27
-  analyze:35
-  extract:52
-  format_content:78
-  build_index:89
-
-IMPORTS:
-  rmcp (3)
-  serde (2)
-  tree_sitter (4)
-  thiserror (1)
-
-REFERENCES:
-  methods: [analyze, extract, format_content]
-  types: [AnalysisResult, SemanticData, ParseError]
-  fields: [path, mode, language]
+FILE: src/lib.rs(156L, 12F, 3C, 5I)
+C:
+  CodeAnalyzer:20; SemanticExtractor:45; ParseError:88
+F:
+  new:27, analyze:35, extract:52, format_content:78, build_index:89,
+  validate:102, run:115, reset:130
+I:
+  rmcp(3); serde(2); thiserror(1); tree_sitter(4); tracing(1)
 ```
 
 ```bash
@@ -164,7 +161,7 @@ analyze_file path: /path/to/file.rs cursor: eyJvZmZzZXQiOjUwfQ==
 
 ### `analyze_module`
 
-Extracts a minimal function/import index from a single file. ~75% smaller output than `analyze_file`. Use when you need function names and line numbers or the import list, without signatures, types, call graphs, or references.
+Extracts a minimal function/import index from a single file. ~75% smaller output than `analyze_file`. Use when you need function names and line numbers or the import list, without signatures, types, or call graphs. Returns an actionable error if called on a directory path, steering to `analyze_directory`.
 
 **Required:** `path` *(string)* -- file to analyze
 
@@ -204,19 +201,17 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
 **Example output:**
 
 ```
-FOCUS: analyze
+FOCUS: analyze (2 defs, 3 callers, 4 callees)
 DEPTH: 2
-FILES: 12 analyzed
-
 DEFINED:
   src/lib.rs:35
 
-CALLERS (incoming):
+CALLERS:
   main -> analyze [src/main.rs:12]
   <module> -> analyze [src/lib.rs:40]
   process_request -> analyze [src/handler.rs:88]
 
-CALLEES (outgoing):
+CALLEES:
   analyze -> determine_mode [src/analyze.rs:44]
   analyze -> format_output [src/formatter.rs:12] (•2)
   analyze -> validate_params [src/validation.rs:5]
@@ -235,7 +230,7 @@ For large codebases, two mechanisms prevent context overflow:
 
 **Pagination**
 
-`analyze_file` and `analyze_symbol` append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page.
+`analyze_file` and `analyze_symbol` append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page. `summary=true` and `cursor` are mutually exclusive; passing both returns an error.
 
 ```
 # Response ends with:
@@ -261,6 +256,12 @@ analyze_directory path: /project summary: false
 
 In single-pass subagent sessions, prompt caches are written but never reused. Benchmarks showed MCP responses writing ~2x more to cache than native-only workflows, adding cost with no quality gain. Set `DISABLE_PROMPT_CACHING=1` (or `DISABLE_PROMPT_CACHING_HAIKU=1` for Haiku-specific pipelines) to avoid this overhead.
 
+The server's own instructions expose a 4-step recommended workflow for unknown repositories: survey the repo root with `analyze_directory` at `max_depth=2`, drill into the source package, run `analyze_file` on key files, then use `analyze_symbol` to trace call graphs. MCP clients that surface server instructions will present this workflow automatically to the agent.
+
+## Observability
+
+All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code-analyze-mcp/` (fallback: `~/.local/share/code-analyze-mcp/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
+
 ## Supported Languages
 
 | Language | Extensions | Status |
@@ -275,6 +276,8 @@ In single-pass subagent sessions, prompt caches are written but never reused. Be
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Design goals, module map, data flow, language handler system, caching strategy
 - **[MCP, Agents, and Orchestration](docs/anthropic-mcp-agents-orchestration.md)** - Best practices for agentic loops, orchestration patterns, MCP tool design, memory management, and safety controls
+- **[OBSERVABILITY.md](docs/OBSERVABILITY.md)** - Metrics schema, JSONL format, and retention policy
+- **[ROADMAP.md](docs/ROADMAP.md)** - Development history and future direction
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development workflow, commit conventions, PR checklist
 - **[SECURITY.md](SECURITY.md)** - Security policy and vulnerability reporting
 

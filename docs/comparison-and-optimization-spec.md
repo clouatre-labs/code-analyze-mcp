@@ -5,7 +5,7 @@
 
 ## Executive Summary
 
-This document compares code-analyze-mcp against Goose's built-in analyzer and establishes an optimization roadmap. code-analyze-mcp is a standalone MCP server supporting 5 languages (Rust complete; Python, Go, Java, TypeScript partial with ELEMENT and CALL queries only; missing IMPORT and REFERENCE queries). Goose's analyzer is a platform extension supporting 10 languages with superior call graph resolution and inheritance extraction, but lacks caching, progress reporting, and portability. code-analyze-mcp already implements cycle detection, compact output notation (F:, C:, I:), caching, progress reporting, and cancellation. Our strategy: close language depth gaps (IMPORT and REFERENCE queries), improve call graph resolution, and leverage our architectural advantages (standalone MCP, caching, progressive output) to become the preferred code analysis server across all MCP clients.
+This document compares code-analyze-mcp against Goose's built-in analyzer and establishes an optimization roadmap. code-analyze-mcp is a standalone MCP server supporting 6 languages (Rust, Python, Go, Java, TypeScript, TSX -- TypeScript and TSX use distinct grammars but share the same queries). Goose's analyzer is a platform extension supporting 10 languages with superior call graph resolution and inheritance extraction, but lacks caching, progress reporting, and portability. code-analyze-mcp already implements cycle detection, compact output notation (F:, C:, I:), caching, progress reporting, and cancellation. Our strategy: close language depth gaps (IMPORT and REFERENCE queries), improve call graph resolution, and leverage our architectural advantages (standalone MCP, caching, progressive output) to become the preferred code analysis server across all MCP clients.
 
 Goose analyzer analysis based on [`block/goose` at 03b5bbb0](https://github.com/block/goose/tree/03b5bbb0/crates/goose/src/agents/platform_extensions/analyze) (2026-03-04). MCP best practices based on the [MCP specification](https://spec.modelcontextprotocol.io/).
 
@@ -20,7 +20,7 @@ Goose analyzer analysis based on [`block/goose` at 03b5bbb0](https://github.com/
 | Transport | stdio (Streamable HTTP: P1) | Goose IPC |
 | Caching | LRU cache (100 entries, mtime-based invalidation) | None |
 | Parallelism | rayon par_iter with thread-local parsers | rayon par_iter, new parser per file |
-| Languages (implemented) | 5 (Rust, Python, Go, Java, TypeScript/TSX) | 10 (Rust, Python, JS, TS, TSX, Go, Java, Kotlin, Swift, Ruby) |
+| Languages (implemented) | 6 (Rust, Python, Go, Java, TypeScript, TSX) | 10 (Rust, Python, JS, TS, TSX, Go, Java, Kotlin, Swift, Ruby) |
 
 *Table 1: Architecture comparison between code-analyze-mcp and Goose's built-in analyzer.*
 
