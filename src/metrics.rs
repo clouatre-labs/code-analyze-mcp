@@ -9,7 +9,7 @@ pub struct MetricEvent {
     pub ts: u64,
     pub tool: &'static str,
     pub duration_ms: u64,
-    pub output_bytes: usize,
+    pub output_chars: usize,
     pub param_path_depth: usize,
     pub max_depth: Option<u32>,
     pub result: &'static str,
@@ -221,7 +221,7 @@ mod tests {
             ts: 1_700_000_000_000,
             tool: "analyze_directory",
             duration_ms: 42,
-            output_bytes: 100,
+            output_chars: 100,
             param_path_depth: 3,
             max_depth: Some(2),
             result: "ok",
@@ -230,5 +230,25 @@ mod tests {
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("analyze_directory"));
         assert!(json.contains(r#""result":"ok""#));
+        assert!(json.contains(r#""output_chars":100"#));
+    }
+
+    #[test]
+    fn test_metric_event_serialization_error() {
+        let event = MetricEvent {
+            ts: 1_700_000_000_000,
+            tool: "analyze_directory",
+            duration_ms: 5,
+            output_chars: 0,
+            param_path_depth: 3,
+            max_depth: Some(3),
+            result: "error",
+            error_type: Some("invalid_params".to_string()),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""result":"error""#));
+        assert!(json.contains(r#""error_type":"invalid_params""#));
+        assert!(json.contains(r#""output_chars":0"#));
+        assert!(json.contains(r#""max_depth":3"#));
     }
 }
