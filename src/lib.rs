@@ -633,7 +633,7 @@ impl CodeAnalyzer {
             };
 
         let verbose = params.output_control.verbose.unwrap_or(false);
-        if !use_summary && (paginated.next_cursor.is_some() || offset > 0 || !verbose) {
+        if !use_summary {
             output.formatted = format_structure_paginated(
                 &paginated.items,
                 paginated.total,
@@ -776,9 +776,9 @@ impl CodeAnalyzer {
             }
         };
 
-        // Regenerate formatted output from the paginated slice when pagination is active
+        // Regenerate formatted output using the paginated formatter (handles verbose and pagination correctly)
         let verbose = params.output_control.verbose.unwrap_or(false);
-        if !use_summary && (paginated.next_cursor.is_some() || offset > 0 || !verbose) {
+        if !use_summary {
             formatted = format_file_details_paginated(
                 &paginated.items,
                 paginated.total,
@@ -1261,5 +1261,75 @@ mod tests {
         analyzer
             .emit_progress(None, &token, 0.0, 10.0, "test".to_string())
             .await;
+    }
+
+    #[tokio::test]
+    async fn test_handle_overview_mode_verbose_no_summary_block() {
+        use crate::pagination::{PaginationMode, paginate_slice};
+        use crate::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        std::fs::write(tmp.path().join("main.rs"), "fn main() {}").unwrap();
+
+        let peer = Arc::new(TokioMutex::new(None));
+        let log_level_filter = Arc::new(Mutex::new(LevelFilter::INFO));
+        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (metrics_tx, _metrics_rx) = tokio::sync::mpsc::unbounded_channel();
+        let analyzer = CodeAnalyzer::new(
+            peer,
+            log_level_filter,
+            rx,
+            crate::metrics::MetricsSender(metrics_tx),
+        );
+
+        let params = AnalyzeDirectoryParams {
+            path: tmp.path().to_str().unwrap().to_string(),
+            max_depth: None,
+            pagination: PaginationParams {
+                cursor: None,
+                page_size: None,
+            },
+            output_control: OutputControlParams {
+                summary: None,
+                force: None,
+                verbose: Some(true),
+            },
+        };
+
+        let ct = tokio_util::sync::CancellationToken::new();
+        let output = analyzer.handle_overview_mode(&params, ct).await.unwrap();
+
+        // Replicate the handler's formatting path (the fix site)
+        let use_summary = output.formatted.len() > SIZE_LIMIT; // summary=None, force=None, small output
+        let paginated =
+            paginate_slice(&output.files, 0, DEFAULT_PAGE_SIZE, PaginationMode::Default).unwrap();
+        let verbose = true;
+        let formatted = if !use_summary {
+            format_structure_paginated(
+                &paginated.items,
+                paginated.total,
+                params.max_depth,
+                Some(std::path::Path::new(&params.path)),
+                verbose,
+            )
+        } else {
+            output.formatted.clone()
+        };
+
+        // After the fix: verbose=true must not emit the SUMMARY: block
+        assert!(
+            !formatted.contains("SUMMARY:"),
+            "verbose=true must not emit SUMMARY: block; got: {}",
+            &formatted[..formatted.len().min(300)]
+        );
+        assert!(
+            formatted.contains("PAGINATED:"),
+            "verbose=true must emit PAGINATED: header"
+        );
+        assert!(
+            formatted.contains("FILES [LOC, FUNCTIONS, CLASSES]"),
+            "verbose=true must emit FILES section header"
+        );
     }
 }
