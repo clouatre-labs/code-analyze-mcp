@@ -28,8 +28,8 @@ pub fn option_integer_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
 
 /// Returns a nullable integer schema for Option<usize> ast_recursion_limit fields.
 /// Enforces minimum: 1 because 0 would limit tree-sitter traversal to the root
-/// node only, silently returning zero results. Values below 1 are treated as
-/// unlimited at runtime; the schema minimum signals to callers that 0 is not useful.
+/// node only, silently returning zero results. Passing 0 is treated as unlimited
+/// at runtime; the schema minimum signals to callers that 0 is not a useful value.
 pub fn option_ast_limit_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
     let map = json!({
         "type": ["integer", "null"],

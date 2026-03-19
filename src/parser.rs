@@ -977,6 +977,10 @@ fn process(user: &User) {
         assert!(result_zero.is_ok(), "extract with Some(0) failed");
         let analysis_none = result_none.unwrap();
         let analysis_zero = result_zero.unwrap();
+        assert!(
+            analysis_none.functions.len() >= 1,
+            "extract with None should find at least one function in the test source"
+        );
         assert_eq!(
             analysis_none.functions.len(),
             analysis_zero.functions.len(),

@@ -48,7 +48,7 @@ pub struct AnalyzeFileParams {
     /// File path to analyze
     pub path: String,
 
-    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
+    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code. Minimum value is 1; passing 0 is treated as unlimited (same as unset).
     #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
     pub ast_recursion_limit: Option<usize>,
 
@@ -99,7 +99,7 @@ pub struct AnalyzeSymbolParams {
     #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
     pub max_depth: Option<u32>,
 
-    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
+    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code. Minimum value is 1; passing 0 is treated as unlimited (same as unset).
     #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
     pub ast_recursion_limit: Option<usize>,
 
@@ -504,6 +504,24 @@ mod tests {
         assert!(
             symbol_props.contains_key("summary"),
             "summary must be top-level in AnalyzeSymbolParams schema"
+        );
+
+        // Verify ast_recursion_limit enforces minimum: 1 in both parameter schemas.
+        let file_ast = file_props
+            .get("ast_recursion_limit")
+            .expect("ast_recursion_limit must be present in AnalyzeFileParams schema");
+        assert_eq!(
+            file_ast.get("minimum").and_then(|v| v.as_u64()),
+            Some(1),
+            "ast_recursion_limit in AnalyzeFileParams must have minimum: 1"
+        );
+        let symbol_ast = symbol_props
+            .get("ast_recursion_limit")
+            .expect("ast_recursion_limit must be present in AnalyzeSymbolParams schema");
+        assert_eq!(
+            symbol_ast.get("minimum").and_then(|v| v.as_u64()),
+            Some(1),
+            "ast_recursion_limit in AnalyzeSymbolParams must have minimum: 1"
         );
     }
 }
