@@ -18,7 +18,7 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 6 programming languages (Rust, Python, TypeScript, TSX, Go, Java). It exposes four tools: `analyze_directory` (file tree with metrics, test/prod partitioning, and a SUGGESTION footer), `analyze_file` (functions, classes, and imports from a single file), `analyze_module` (lightweight function/import index, ~75% smaller than `analyze_file`), and `analyze_symbol` (call graph for a named symbol). The server implements MCP completions for path autocompletion and emits async JSONL metrics for observability. It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
+code-analyze-mcp is a Model Context Protocol server that analyzes code structure across 6 registered languages (Rust, Python, Go, Java, TypeScript, and TSX -- TypeScript and TSX use distinct grammars but share the same queries). It exposes four tools: `analyze_directory` (file tree with metrics, test/prod partitioning, and a SUGGESTION footer), `analyze_file` (functions, classes, and imports from a single file), `analyze_module` (lightweight function/import index, ~75% smaller than `analyze_file`), and `analyze_symbol` (call graph for a named symbol). The server implements MCP completions for path autocompletion and emits async JSONL metrics for observability. It integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others), minimizing token usage while giving the LLM precise structural context.
 
 ## Installation
 
@@ -91,9 +91,9 @@ All optional parameters may be omitted. Shared optional parameters for `analyze_
 | `cursor` | string | -- | Pagination cursor from a previous response's `next_cursor` |
 | `page_size` | integer | 100 | Items per page |
 | `force` | boolean | false | Bypass output size warning |
-| `verbose` | boolean | false | true = adds the I: (imports) section to the output; false = compact format without imports |
+| `verbose` | boolean | false | true = full output with section headers and imports (Markdown-style headers in `analyze_directory`; adds `I:` section in `analyze_file`); false = compact format |
 
-`summary` and `cursor` are mutually exclusive. Passing both returns an error.
+`summary=true` and `cursor` are mutually exclusive. Passing both returns an error.
 
 ### `analyze_directory`
 
@@ -231,7 +231,7 @@ For large codebases, two mechanisms prevent context overflow:
 
 **Pagination**
 
-`analyze_file` and `analyze_symbol` append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page. `summary` and `cursor` are mutually exclusive; passing both returns an error.
+`analyze_file` and `analyze_symbol` append a `NEXT_CURSOR:` line when output is truncated. Pass the token back as `cursor` to fetch the next page. `summary=true` and `cursor` are mutually exclusive; passing both returns an error.
 
 ```
 # Response ends with:
