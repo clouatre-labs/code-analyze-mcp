@@ -110,7 +110,7 @@ PAGINATED: showing 16 of 16 files (max_depth=1)
 analyze.rs [737L, 13F, 4C]
 cache.rs [105L, 5F, 2C]
 completion.rs [129L, 2F]
-formatter.rs [1895L, 32F, 2C]
+formatter.rs [1876L, 32F, 2C]
 graph.rs [926L, 34F, 3C]
 lang.rs [41L, 3F]
 lib.rs [1335L, 22F, 1C]
@@ -135,7 +135,7 @@ FILES [LOC, FUNCTIONS, CLASSES]
 analyze.rs [737L, 13F, 4C]
 cache.rs [105L, 5F, 2C]
 completion.rs [129L, 2F]
-formatter.rs [1895L, 32F, 2C]
+formatter.rs [1876L, 32F, 2C]
 graph.rs [926L, 34F, 3C]
 lang.rs [41L, 3F]
 lib.rs [1335L, 22F, 1C]
@@ -156,14 +156,14 @@ test_detection.rs [100L, 5F]
 
 ```
 SUMMARY:
-16 files (15 prod, 1 test), 7617L, 184F, 55C (max_depth=1)
+16 files (15 prod, 1 test), 7598L, 184F, 55C (max_depth=1)
 Languages: rust (100%)
 
 STRUCTURE (depth 1):
   analyze.rs [737L, 13F, 4C]
   cache.rs [105L, 5F, 2C]
   completion.rs [129L, 2F]
-  formatter.rs [1895L, 32F, 2C]
+  formatter.rs [1876L, 32F, 2C]
   graph.rs [926L, 34F, 3C]
   lang.rs [41L, 3F]
   languages/
@@ -197,30 +197,30 @@ Extracts functions, classes, and imports from a single file.
 
 **Additional optional:** `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
-**Example output:**
+**Example output (default, page 1 of 2):**
 
 ```
-FILE: src/lib.rs (1335L, 1-22/22F, 1C, 66I)
+FILE: src/lib.rs (1335L, 1-10/22F, 1C, 66I)
 C:
   CodeAnalyzer:143
 F:
   summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
   no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
-  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303,
-  analyze_directory:553, analyze_file:691, analyze_symbol:846,
-  analyze_module:998, get_info:1079
-I:
-  formatter(6); pagination(6); rmcp(6); rmcp::model(19); types(5)
+  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303
+
+NEXT_CURSOR: eyJtb2RlIjoiZGVmYXVsdCIsIm9mZnNldCI6MTB9
 ```
 
 **Example output (`verbose=true`, adds `I:` section before `F:`):**
 
 ```
-FILE: src/lib.rs (1335L, 1-22/22F, 1C, 66I)
+FILE: src/lib.rs (1335L, 1-10/22F, 1C, 66I)
 C:
   CodeAnalyzer:143
 I:
   cache(1)
+  crate::pagination(2)
+  crate::types(3)
   formatter(6)
   pagination(6)
   rmcp(6)
@@ -229,9 +229,9 @@ I:
 F:
   summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
   no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
-  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303,
-  analyze_directory:553, analyze_file:691, analyze_symbol:846,
-  analyze_module:998, get_info:1079
+  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303
+
+NEXT_CURSOR: eyJtb2RlIjoiZGVmYXVsdCIsIm9mZnNldCI6MTB9
 ```
 
 ```bash
@@ -254,12 +254,13 @@ F:
   summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
   no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
   emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303,
-  analyze_directory:553, analyze_file:691, analyze_symbol:846,
-  analyze_module:998, get_info:1079, on_initialized:1106, on_cancelled:1154,
-  complete:1167, set_level:1221
+  handle_focused_mode:344, analyze_directory:553, analyze_file:691,
+  analyze_symbol:846, analyze_module:998, get_info:1079, on_initialized:1106,
+  on_cancelled:1154, complete:1167, set_level:1221
 I:
   cache:AnalysisCache; formatter:format_structure_paginated;
-  pagination:paginate_slice; rmcp::model:CallToolResult; types:AnalyzeDirectoryParams
+  pagination:paginate_slice; rmcp::model:CallToolResult;
+  types:AnalyzeDirectoryParams
 ```
 
 ```bash
