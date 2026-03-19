@@ -480,6 +480,8 @@ impl SemanticExtractor {
                 .ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))
         })?;
 
+        // 0 is not a useful depth (visits root node only, returning zero results).
+        // Treat 0 as None (unlimited). See #339.
         let max_depth: Option<u32> = ast_recursion_limit
             .filter(|&limit| limit > 0)
             .map(|limit| {
