@@ -3950,3 +3950,33 @@ async fn test_metrics_writer_produces_jsonl_line() {
     assert_eq!(v["result"], "ok");
     assert_eq!(v["output_chars"], 42);
 }
+
+#[test]
+fn test_analyze_directory_verbose_no_summary() {
+    use code_analyze_mcp::formatter::format_structure_paginated;
+    use code_analyze_mcp::types::FileInfo;
+
+    let files = vec![FileInfo {
+        path: "src/main.rs".to_string(),
+        language: "rust".to_string(),
+        line_count: 10,
+        function_count: 1,
+        class_count: 0,
+        is_test: false,
+    }];
+
+    // verbose=true: format_structure_paginated must emit PAGINATED header, not SUMMARY
+    let output = format_structure_paginated(&files, 1, None, None, true);
+    assert!(
+        !output.contains("SUMMARY:"),
+        "verbose=true output must not contain SUMMARY: block"
+    );
+    assert!(
+        output.contains("PAGINATED:"),
+        "verbose=true output must start with PAGINATED: header"
+    );
+    assert!(
+        output.contains("FILES [LOC, FUNCTIONS, CLASSES]"),
+        "verbose=true output must contain FILES section header"
+    );
+}

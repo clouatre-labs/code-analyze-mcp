@@ -96,13 +96,13 @@ All optional parameters may be omitted. Shared optional parameters for `analyze_
 
 ### `analyze_directory`
 
-Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules. Output is partitioned into a `PATH` section (production files) and a `TEST FILES` section (test files), preceded by a `SUMMARY:` block with aggregate counts and a `SUGGESTION:` footer naming the largest source subdirectory.
+Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules. Output is partitioned into a `FILES` section (production files) and a `TEST FILES` section (test files). Without `verbose=true`, a `SUMMARY:` block with aggregate counts precedes the file list; with `verbose=true`, full section headers are shown without the `SUMMARY:` block.
 
 **Required:** `path` *(string)* -- directory to analyze
 
 **Additional optional:** `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
 
-**Example output:**
+**Example output (default):**
 
 ```
 12 files, 843L, 42F, 0C (rust 100%)
@@ -126,10 +126,30 @@ TEST FILES [LOC, FUNCTIONS, CLASSES]
 SUGGESTION: Largest source directory: src/ (9 files total). For module details, re-run with path=src/ and max_depth=2.
 ```
 
+**Example output (`verbose=true`):**
+
+```
+PAGINATED: showing 7 of 12 files (max_depth=2)
+
+FILES [LOC, FUNCTIONS, CLASSES]
+  main.rs [18L, 1F]
+  lib.rs [156L, 12F, 3C]
+  formatter.rs [210L, 14F]
+  languages/
+    rust.rs [97L, 8F, 2C]
+    python.rs [84L, 7F, 2C]
+
+TEST FILES [LOC, FUNCTIONS, CLASSES]
+  formatter_test.rs [143L, 9F]
+  languages/
+    rust_test.rs [65L, 5F]
+```
+
 ```bash
 analyze_directory path: /path/to/project
 analyze_directory path: /path/to/project max_depth: 2
 analyze_directory path: /path/to/project summary: true
+analyze_directory path: /path/to/project verbose: true
 ```
 
 ### `analyze_file`
