@@ -233,8 +233,8 @@ MCP supports three transport mechanisms (MCP specification, basic/transports):
 | Transport | Use Case | Protocol |
 |---|---|---|
 | STDIO | Local integrations, CLI tools, same-host servers | Standard input/output streams, bidirectional |
-| HTTP/SSE (legacy, pre-2025-03-26) | Distributed systems, remote servers | Legacy transport (pre-2025-03-26). Supported for backwards compatibility. |
-| Streamable HTTP (preferred) | Bidirectional streaming over HTTP | Preferred since 2025-03-26. |
+| HTTP/SSE | Distributed systems, remote servers (legacy, pre-2025-03-26) | HTTP POST for requests, persistent SSE stream for responses |
+| Streamable HTTP | Distributed systems, remote servers (preferred since 2025-03-26) | HTTP POST to single `/mcp` endpoint; inline response (stateless) or streaming session (stateful) |
 
 *Table 2: MCP transport types, use cases, and protocols.*
 
@@ -351,7 +351,7 @@ The MCP specification extends this with an optional `outputSchema` field that do
 }
 ```
 
-**Structured output:** When a tool defines `outputSchema`, compliant tool results must include a `structuredContent` field matching that schema alongside the traditional `content` array. The `content` array remains as the human-readable fallback. FastMCP automatically populates `structuredContent` from the tool's return type annotation -- explicit `output_schema` is optional in FastMCP but required for non-FastMCP servers to be spec-compliant. Example result:
+**Structured output:** `outputSchema` is optional. If defined, tool results must include a `structuredContent` field matching that schema alongside the traditional `content` array. The `content` array remains as the human-readable fallback. Some SDKs (including FastMCP) automatically populate `structuredContent` from the return type annotation; servers not using such an SDK must populate it explicitly. Example result:
 
 ```json
 {
