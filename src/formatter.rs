@@ -749,25 +749,6 @@ pub fn format_summary(
     }
     let total_files = analysis_results.len();
 
-    // Leading summary line with totals
-    let primary_lang = lang_counts
-        .iter()
-        .max_by_key(|&(_, count)| count)
-        .map(|(name, count)| {
-            let percentage = if total_files > 0 {
-                (*count * 100) / total_files
-            } else {
-                0
-            };
-            format!("{} {}%", name, percentage)
-        })
-        .unwrap_or_else(|| "unknown 0%".to_string());
-
-    output.push_str(&format!(
-        "{} files, {}L, {}F, {}C ({})\n",
-        total_files, total_loc, total_functions, total_classes, primary_lang
-    ));
-
     // SUMMARY block
     output.push_str("SUMMARY:\n");
     let depth_label = match max_depth {

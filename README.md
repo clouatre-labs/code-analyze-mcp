@@ -96,7 +96,7 @@ All optional parameters may be omitted. Shared optional parameters for `analyze_
 
 ### `analyze_directory`
 
-Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules. Output is partitioned into a `FILES` section (production files) and a `TEST FILES` section (test files). Without `verbose=true`, a `SUMMARY:` block with aggregate counts precedes the file list; with `verbose=true`, full section headers are shown without the `SUMMARY:` block.
+Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules. Default output is a flat `PAGINATED` list. Pass `verbose=true` for `FILES` / `TEST FILES` section headers. Pass `summary=true` for a compact `STRUCTURE` tree with aggregate counts.
 
 **Required:** `path` *(string)* -- directory to analyze
 
@@ -105,44 +105,81 @@ Walks a directory tree, counts lines of code, functions, and classes per file. R
 **Example output (default):**
 
 ```
-12 files, 843L, 42F, 0C (rust 100%)
-SUMMARY:
-Shown: 12 files (9 prod, 3 test), 843L, 42F, 0C (max_depth=2)
-Languages: rust (100%)
+PAGINATED: showing 16 of 16 files (max_depth=1)
 
-PATH [LOC, FUNCTIONS, CLASSES]
-  main.rs [18L, 1F]
-  lib.rs [156L, 12F, 3C]
-  formatter.rs [210L, 14F]
-  languages/
-    rust.rs [97L, 8F, 2C]
-    python.rs [84L, 7F, 2C]
+analyze.rs [737L, 13F, 4C]
+cache.rs [105L, 5F, 2C]
+completion.rs [129L, 2F]
+formatter.rs [1876L, 32F, 2C]
+graph.rs [926L, 34F, 3C]
+lang.rs [41L, 3F]
+lib.rs [1335L, 22F, 1C]
+logging.rs [136L, 11F, 3C]
+main.rs [50L, 1F]
+metrics.rs [254L, 13F, 3C]
+pagination.rs [198L, 11F, 4C]
+parser.rs [990L, 19F, 4C]
+schema_helpers.rs [56L, 4F]
+traversal.rs [90L, 1F, 2C]
+types.rs [575L, 8F, 27C]
 
-TEST FILES [LOC, FUNCTIONS, CLASSES]
-  formatter_test.rs [143L, 9F]
-  languages/
-    rust_test.rs [65L, 5F]
-
-SUGGESTION: Largest source directory: src/ (9 files total). For module details, re-run with path=src/ and max_depth=2.
+test_detection.rs [100L, 5F]
 ```
 
 **Example output (`verbose=true`):**
 
 ```
-PAGINATED: showing 7 of 12 files (max_depth=2)
+PAGINATED: showing 16 of 16 files (max_depth=1)
 
 FILES [LOC, FUNCTIONS, CLASSES]
-  main.rs [18L, 1F]
-  lib.rs [156L, 12F, 3C]
-  formatter.rs [210L, 14F]
-  languages/
-    rust.rs [97L, 8F, 2C]
-    python.rs [84L, 7F, 2C]
+analyze.rs [737L, 13F, 4C]
+cache.rs [105L, 5F, 2C]
+completion.rs [129L, 2F]
+formatter.rs [1876L, 32F, 2C]
+graph.rs [926L, 34F, 3C]
+lang.rs [41L, 3F]
+lib.rs [1335L, 22F, 1C]
+logging.rs [136L, 11F, 3C]
+main.rs [50L, 1F]
+metrics.rs [254L, 13F, 3C]
+pagination.rs [198L, 11F, 4C]
+parser.rs [990L, 19F, 4C]
+schema_helpers.rs [56L, 4F]
+traversal.rs [90L, 1F, 2C]
+types.rs [575L, 8F, 27C]
 
 TEST FILES [LOC, FUNCTIONS, CLASSES]
-  formatter_test.rs [143L, 9F]
+test_detection.rs [100L, 5F]
+```
+
+**Example output (`summary=true`):**
+
+```
+SUMMARY:
+16 files (15 prod, 1 test), 7598L, 184F, 55C (max_depth=1)
+Languages: rust (100%)
+
+STRUCTURE (depth 1):
+  analyze.rs [737L, 13F, 4C]
+  cache.rs [105L, 5F, 2C]
+  completion.rs [129L, 2F]
+  formatter.rs [1876L, 32F, 2C]
+  graph.rs [926L, 34F, 3C]
+  lang.rs [41L, 3F]
   languages/
-    rust_test.rs [65L, 5F]
+  lib.rs [1335L, 22F, 1C]
+  logging.rs [136L, 11F, 3C]
+  main.rs [50L, 1F]
+  metrics.rs [254L, 13F, 3C]
+  pagination.rs [198L, 11F, 4C]
+  parser.rs [990L, 19F, 4C]
+  schema_helpers.rs [56L, 4F]
+  test_detection.rs [100L, 5F]
+  traversal.rs [90L, 1F, 2C]
+  types.rs [575L, 8F, 27C]
+
+SUGGESTION:
+Use a narrower path for details (e.g., analyze src/core/)
 ```
 
 ```bash
@@ -160,17 +197,41 @@ Extracts functions, classes, and imports from a single file.
 
 **Additional optional:** `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
-**Example output:**
+**Example output (default, page 1 of 2):**
 
 ```
-FILE: src/lib.rs(156L, 12F, 3C, 5I)
+FILE: src/lib.rs (1335L, 1-10/22F, 1C, 66I)
 C:
-  CodeAnalyzer:20; SemanticExtractor:45; ParseError:88
+  CodeAnalyzer:143
 F:
-  new:27, analyze:35, extract:52, format_content:78, build_index:89,
-  validate:102, run:115, reset:130
+  summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
+  no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
+  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303
+
+NEXT_CURSOR: eyJtb2RlIjoiZGVmYXVsdCIsIm9mZnNldCI6MTB9
+```
+
+**Example output (`verbose=true`, adds `I:` section before `F:`):**
+
+```
+FILE: src/lib.rs (1335L, 1-10/22F, 1C, 66I)
+C:
+  CodeAnalyzer:143
 I:
-  rmcp(3); serde(2); thiserror(1); tree_sitter(4); tracing(1)
+  cache(1)
+  crate::pagination(2)
+  crate::types(3)
+  formatter(6)
+  pagination(6)
+  rmcp(6)
+  rmcp::model(19)
+  types(5)
+F:
+  summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
+  no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
+  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303
+
+NEXT_CURSOR: eyJtb2RlIjoiZGVmYXVsdCIsIm9mZnNldCI6MTB9
 ```
 
 ```bash
@@ -188,11 +249,18 @@ Extracts a minimal function/import index from a single file. ~75% smaller output
 **Example output:**
 
 ```
-FILE: analyze.rs (510L, 3F, 2I)
+FILE: lib.rs (1335L, 22F, 66I)
 F:
-  analyze_directory:174, analyze_file:200, analyze_module_file:460
+  summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
+  no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
+  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303,
+  handle_focused_mode:344, analyze_directory:553, analyze_file:691,
+  analyze_symbol:846, analyze_module:998, get_info:1079, on_initialized:1106,
+  on_cancelled:1154, complete:1167, set_level:1221
 I:
-  crate::formatter:format_file_details; std::path:Path, PathBuf
+  cache:AnalysisCache; formatter:format_structure_paginated;
+  pagination:paginate_slice; rmcp::model:CallToolResult;
+  types:AnalyzeDirectoryParams
 ```
 
 ```bash
@@ -221,21 +289,11 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
 **Example output:**
 
 ```
-FOCUS: analyze (2 defs, 3 callers, 4 callees)
-DEPTH: 2
-DEFINED:
-  src/lib.rs:35
-
-CALLERS:
-  main -> analyze [src/main.rs:12]
-  <module> -> analyze [src/lib.rs:40]
-  process_request -> analyze [src/handler.rs:88]
-
-CALLEES:
-  analyze -> determine_mode [src/analyze.rs:44]
-  analyze -> format_output [src/formatter.rs:12] (•2)
-  analyze -> validate_params [src/validation.rs:5]
-  determine_mode -> is_directory [src/utils.rs:23]
+FOCUS: format_structure_paginated (1 defs, 1 callers, 3 callees)
+CALLERS (1-1 of 1):
+  format_structure_paginated <- analyze_directory
+    <- format_structure_paginated
+CALLEES: 3 (use cursor for callee pagination)
 ```
 
 ```bash
