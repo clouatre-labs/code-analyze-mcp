@@ -216,14 +216,15 @@ MCP tool definitions support annotations that communicate the behavioral charact
 
 | Annotation | Type | Meaning |
 |---|---|---|
-| `read_only_hint` | `boolean` | Tool does not modify external state. Safe to call without confirmation. |
-| `destructive_hint` | `boolean` | Tool may delete or overwrite data. Requires user confirmation before calling. |
-| `idempotent_hint` | `boolean` | Calling the tool multiple times with the same input produces the same result. Safe to retry on failure. |
-| `open_world_hint` | `boolean` | Tool accesses external services or data sources outside the server's control. Results may vary. |
+| `title` | `string` | Human-readable display name for the tool, shown in client confirmation UI. Distinct from the machine-readable `name` used in tool calls. |
+| `readOnlyHint` | `boolean` | Tool does not modify external state. Safe to call without confirmation. |
+| `destructiveHint` | `boolean` | Tool may delete or overwrite data. Requires user confirmation before calling. |
+| `idempotentHint` | `boolean` | Calling the tool multiple times with the same input produces the same result. Safe to retry on failure. |
+| `openWorldHint` | `boolean` | Tool accesses external services or data sources outside the server's control. Results may vary. |
 
 *Table 1: MCP tool annotation fields and their semantics.*
 
-Annotate every tool. An unannotated tool is treated as potentially destructive by cautious clients. Marking a read-only search tool as `read_only_hint: true` allows clients to call it autonomously without a confirmation step, reducing latency and friction.
+Annotate every tool. An unannotated tool is treated as potentially destructive by cautious clients. Marking a read-only search tool as `readOnlyHint: true` allows clients to call it autonomously without a confirmation step, reducing latency and friction.
 
 ### 3.4 Transport Types
 
@@ -232,14 +233,46 @@ MCP supports three transport mechanisms (MCP specification, basic/transports):
 | Transport | Use Case | Protocol |
 |---|---|---|
 | STDIO | Local integrations, CLI tools, same-host servers | Standard input/output streams, bidirectional |
-| HTTP/SSE | Distributed systems, remote servers | HTTP POST for client messages, Server-Sent Events for server responses |
-| Streamable HTTP | Bidirectional streaming over HTTP | HTTP POST with JSON-RPC messaging, replaces SSE in newer deployments |
+| HTTP/SSE (legacy, pre-2025-03-26) | Distributed systems, remote servers | Legacy transport (pre-2025-03-26). Supported for backwards compatibility. |
+| Streamable HTTP (preferred) | Bidirectional streaming over HTTP | Preferred since 2025-03-26. |
 
 *Table 2: MCP transport types, use cases, and protocols.*
 
-For HTTP/SSE: the client sends a JSON-RPC message via HTTP POST to the MCP endpoint. The server responds with HTTP 202 Accepted and opens an SSE stream carrying the JSON-RPC response. The stream closes after the response is sent unless the session is kept alive. A disconnection must not be interpreted as the client cancelling the request (MCP specification, draft/basic/transports).
+For **HTTP/SSE** (legacy, deprecated since 2025-03-26): the client sends requests via HTTP POST and receives responses via a persistent Server-Sent Events stream. New server implementations should prefer Streamable HTTP.
+
+For **Streamable HTTP** (preferred since 2025-03-26): the client POSTs JSON-RPC messages to a single `/mcp` endpoint. The server responds inline in the HTTP response body (stateless mode) or upgrades to a streaming session by returning a stream ID and subsequent events on the same endpoint (stateful mode). Proxy- and load-balancer-friendly because it does not require persistent SSE connections.
 
 ---
+
+### 3.5 Elicitation
+
+Elicitation (introduced in MCP 2025-06-18) allows a server to pause tool execution and request additional information from the user via a structured client-side form. This is the spec's mechanism for human-in-the-loop within a single tool call, without requiring the orchestrator to restart the call with new parameters.
+
+**How it works:** During tool execution the server sends an `elicitation/create` request to the client, containing a human-readable message and an optional JSON Schema describing the expected input. The client presents this to the user and returns their response. Execution then resumes with the collected data.
+
+**Two modes:**
+
+| Mode | Description | Use case |
+|------|-------------|----------|
+| Form mode | Server provides a JSON Schema; client renders a structured form | Collecting missing parameters, confirmations |
+| URL mode | Server provides an external URL; client opens it | OAuth flows, sensitive credential entry |
+
+**Constraints:**
+- Servers MUST NOT request sensitive credentials (passwords, API keys) via form mode. Use URL mode for sensitive flows.
+- Clients may decline elicitation; servers must handle a declined or empty response gracefully.
+
+**FastMCP usage:**
+```python
+result = await ctx.elicit(
+    message="Which environment should this deploy to?",
+    schema={"type": "object", "properties": {"env": {"type": "string", "enum": ["staging", "production"]}}, "required": ["env"]}
+)
+if result.action == "accept":
+    env = result.data["env"]
+```
+
+**Reference:** [MCP 2025-06-18 Elicitation spec](https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation)
+
 
 ## 4. Tool Use Best Practices
 
@@ -295,6 +328,39 @@ The MCP specification extends this with an optional `outputSchema` field that do
       }
     },
     "required": ["origin", "destination", "date"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "flights": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "flight_number": {"type": "string"},
+            "departure_time": {"type": "string"},
+            "arrival_time": {"type": "string"},
+            "price": {"type": "number"}
+          }
+        }
+      },
+      "total_count": {"type": "integer"}
+    },
+    "required": ["flights"]
+  }
+}
+```
+
+**Structured output:** When a tool defines `outputSchema`, compliant tool results must include a `structuredContent` field matching that schema alongside the traditional `content` array. The `content` array remains as the human-readable fallback. FastMCP automatically populates `structuredContent` from the tool's return type annotation -- explicit `output_schema` is optional in FastMCP but required for non-FastMCP servers to be spec-compliant. Example result:
+
+```json
+{
+  "content": [{"type": "text", "text": "Found 42 flights from SFO to JFK"}],
+  "structuredContent": {
+    "flights": [
+      {"flight_number": "AA123", "departure_time": "2025-06-15T08:00:00Z", "arrival_time": "2025-06-15T11:30:00Z", "price": 299.99}
+    ],
+    "total_count": 42
   }
 }
 ```
@@ -493,7 +559,7 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 
 **Autonomous action on low-confidence decisions.** An agent that proceeds with a borderline decision to avoid the latency of escalation will eventually take a wrong action at scale. Configure confidence thresholds and respect them. The cost of a false positive or a destructive action exceeds the cost of a human review pause.
 
-**Unannotated tools.** Tools without annotations are treated as potentially destructive. This forces unnecessary confirmation steps on read-only operations, adding latency and friction. Annotate all tools with at minimum `read_only_hint` or `destructive_hint`.
+**Unannotated tools.** Tools without annotations are treated as potentially destructive. This forces unnecessary confirmation steps on read-only operations, adding latency and friction. Annotate all tools with at minimum `readOnlyHint` or `destructiveHint`.
 
 **Trusting external content as instructions.** An agent that retrieves a document and treats its content with the same authority as its system prompt is vulnerable to indirect prompt injection. Treat all external content, including retrieved documents, web pages, and API responses, as data, not instructions (OWASP, LLM Prompt Injection Prevention Cheat Sheet).
 
@@ -520,7 +586,7 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 | Chain-of-Thought | Complex classification or multi-criteria decisions | Require reasoning before final answer |
 | Multi-Pass Review | Large-scale review pipelines requiring low false positives | Separate extraction, classification, and decision passes |
 | Structured Errors | All tool error responses | Include: category, retryable flag, user-facing message |
-| Tool Annotation | All MCP tool definitions | Annotate `read_only_hint` or `destructive_hint` at minimum |
+| Tool Annotation | All MCP tool definitions | Annotate `readOnlyHint` or `destructiveHint` at minimum |
 | Batch Processing | Large independent item sets, non-real-time | Use Message Batches API; handle per-item errors independently |
 | Input Validation | Any user-supplied input or external data | Sanitize before LLM processing; separate from system instructions |
 | Privilege Minimization | All agent and tool permission grants | Grant minimum permissions required for the specific function |
