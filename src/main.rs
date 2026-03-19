@@ -1,4 +1,8 @@
-use code_analyze_mcp::{CodeAnalyzer, logging::McpLoggingLayer};
+use code_analyze_mcp::{
+    CodeAnalyzer,
+    logging::McpLoggingLayer,
+    metrics::{MetricEvent, MetricsSender, MetricsWriter},
+};
 use rmcp::serve_server;
 use rmcp::transport::stdio;
 use std::sync::{Arc, Mutex};
@@ -32,7 +36,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(mcp_logging_layer)
         .init();
 
-    let analyzer = CodeAnalyzer::new(peer, log_level_filter, event_rx);
+    // Create metrics channel and spawn writer
+    let (metrics_tx, metrics_rx) = tokio::sync::mpsc::unbounded_channel::<MetricEvent>();
+    tokio::spawn(MetricsWriter::new(metrics_rx, None).run());
+
+    let analyzer = CodeAnalyzer::new(peer, log_level_filter, event_rx, MetricsSender(metrics_tx));
     let (stdin, stdout) = stdio();
 
     let service = serve_server(analyzer, (stdin, stdout)).await?;

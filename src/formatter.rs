@@ -15,6 +15,17 @@ use std::path::Path;
 use thiserror::Error;
 use tracing::instrument;
 
+pub(crate) const EXCLUDED_DIRS: &[&str] = &[
+    "node_modules",
+    "vendor",
+    ".git",
+    "__pycache__",
+    "target",
+    "dist",
+    "build",
+    ".venv",
+];
+
 const MULTILINE_THRESHOLD: usize = 10;
 
 /// Format a list of function signatures wrapped at 100 characters with bullet annotation.
@@ -808,6 +819,11 @@ pub fn format_summary(
     let mut depth1_entries: Vec<&WalkEntry> = entries.iter().filter(|e| e.depth == 1).collect();
     depth1_entries.sort_by(|a, b| a.path.cmp(&b.path));
 
+    // Track largest non-excluded directory for SUGGESTION
+    let mut largest_dir_name: Option<String> = None;
+    let mut largest_dir_path: Option<String> = None;
+    let mut largest_dir_count: usize = 0;
+
     for entry in depth1_entries {
         let name = entry
             .path
@@ -828,6 +844,23 @@ pub fn format_summary(
                 let dir_loc: usize = files_in_dir.iter().map(|f| f.line_count).sum();
                 let dir_functions: usize = files_in_dir.iter().map(|f| f.function_count).sum();
                 let dir_classes: usize = files_in_dir.iter().map(|f| f.class_count).sum();
+
+                // Track largest non-excluded directory for SUGGESTION
+                let entry_name_str = name.to_string();
+                if !EXCLUDED_DIRS.contains(&entry_name_str.as_str())
+                    && files_in_dir.len() > largest_dir_count
+                {
+                    largest_dir_count = files_in_dir.len();
+                    largest_dir_name = Some(entry_name_str);
+                    largest_dir_path = Some(
+                        entry
+                            .path
+                            .canonicalize()
+                            .unwrap_or_else(|_| entry.path.clone())
+                            .display()
+                            .to_string(),
+                    );
+                }
 
                 // Build hint: top-N files sorted by class_count desc, fallback to function_count
                 let hint = if files_in_dir.len() > 1 && (dir_classes > 0 || dir_functions > 0) {
@@ -937,8 +970,15 @@ pub fn format_summary(
     output.push('\n');
 
     // SUGGESTION block
-    output.push_str("SUGGESTION:\n");
-    output.push_str("Use a narrower path for details (e.g., analyze src/core/)\n");
+    if let (Some(name), Some(path)) = (largest_dir_name, largest_dir_path) {
+        output.push_str(&format!(
+            "SUGGESTION: Largest source directory: {}/ ({} files total). For module details, re-run with path={} and max_depth=2.\n",
+            name, largest_dir_count, path
+        ));
+    } else {
+        output.push_str("SUGGESTION:\n");
+        output.push_str("Use a narrower path for details (e.g., analyze src/core/)\n");
+    }
 
     output
 }

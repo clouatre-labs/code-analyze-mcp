@@ -3,6 +3,7 @@
 ## See Also
 
 - [anthropic-mcp-agents-orchestration.md](anthropic-mcp-agents-orchestration.md) - MCP tool design principles and annotation semantics that informed this server's interface design
+- [ROADMAP.md](ROADMAP.md) - Wave history, benchmark-driven development process, small-model-first constraint
 
 ## Design Goals
 

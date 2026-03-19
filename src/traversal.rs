@@ -85,5 +85,6 @@ pub fn walk_directory(
         "walk complete"
     );
 
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(entries)
 }
