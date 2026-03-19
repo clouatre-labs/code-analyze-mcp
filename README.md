@@ -96,34 +96,63 @@ All optional parameters may be omitted. Shared optional parameters for `analyze_
 
 ### `analyze_directory`
 
-Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules. Output is partitioned into a `PATH` section (production files) and a `TEST FILES` section (test files), preceded by a `SUMMARY:` block with aggregate counts and a `SUGGESTION:` footer naming the largest source subdirectory.
+Walks a directory tree, counts lines of code, functions, and classes per file. Respects `.gitignore` rules. Default output is a `PAGINATED` flat list partitioned into production files and test files. Pass `verbose=true` to get `PATH` / `TEST FILES` section headers. Pass `summary=true` for a compact `STRUCTURE` tree with a `SUGGESTION` footer naming the largest subdirectory.
 
 **Required:** `path` *(string)* -- directory to analyze
 
 **Additional optional:** `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
 
-**Example output:**
+**Example output** (default):
 
 ```
-12 files, 843L, 42F, 0C (rust 100%)
+PAGINATED: showing 6 of 6 files (max_depth=2)
+
+main.rs [50L, 1F]
+lib.rs [156L, 12F, 3C]
+formatter.rs [210L, 14F]
+languages/
+  rust.rs [114L, 4F]
+  python.rs [51L, 1F]
+
+test_detection.rs [100L, 5F]
+```
+
+**Example output** (`summary=true`):
+
+```
+6 files, 681L, 33F, 3C (rust 100%)
 SUMMARY:
-Shown: 12 files (9 prod, 3 test), 843L, 42F, 0C (max_depth=2)
+6 files (5 prod, 1 test), 681L, 33F, 3C (max_depth=2)
+Languages: rust (100%)
+
+STRUCTURE (depth 1):
+  main.rs [50L, 1F]
+  lib.rs [156L, 12F, 3C]
+  formatter.rs [210L, 14F]
+  languages/ [2 files, 165L, 5F] top: rust.rs
+  test_detection.rs [100L, 5F]
+
+SUGGESTION: Largest source directory: languages/ (2 files total). For module details, re-run with path=.../src/languages and max_depth=2.
+```
+
+**Example output** (`verbose=true`):
+
+```
+6 files, 681L, 33F, 3C (rust 100%)
+SUMMARY:
+Shown: 6 files (5 prod, 1 test), 681L, 33F, 3C
 Languages: rust (100%)
 
 PATH [LOC, FUNCTIONS, CLASSES]
-  main.rs [18L, 1F]
-  lib.rs [156L, 12F, 3C]
-  formatter.rs [210L, 14F]
-  languages/
-    rust.rs [97L, 8F, 2C]
-    python.rs [84L, 7F, 2C]
+main.rs [50L, 1F]
+lib.rs [156L, 12F, 3C]
+formatter.rs [210L, 14F]
+languages/
+  rust.rs [114L, 4F]
+  python.rs [51L, 1F]
 
 TEST FILES [LOC, FUNCTIONS, CLASSES]
-  formatter_test.rs [143L, 9F]
-  languages/
-    rust_test.rs [65L, 5F]
-
-SUGGESTION: Largest source directory: src/ (9 files total). For module details, re-run with path=src/ and max_depth=2.
+test_detection.rs [100L, 5F]
 ```
 
 ```bash
@@ -134,23 +163,28 @@ analyze_directory path: /path/to/project summary: true
 
 ### `analyze_file`
 
-Extracts functions, classes, and imports from a single file.
+Extracts functions, classes, and imports from a single file. Functions include full signatures and line ranges. The FILE header uses the format `path (LOC, start-end/NF, NC, NI)`. Imports are shown only in verbose mode (`verbose=true`).
 
 **Required:** `path` *(string)* -- file to analyze
 
 **Additional optional:** `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
 
-**Example output:**
+**Example output** (default):
 
 ```
-FILE: src/lib.rs(156L, 12F, 3C, 5I)
-C:
-  CodeAnalyzer:20; SemanticExtractor:45; ParseError:88
+FILE: src/main.rs (50L, 1-1/1F, 0C, 13I)
 F:
-  new:27, analyze:35, extract:52, format_content:78, build_index:89,
-  validate:102, run:115, reset:130
+  main(()) -> Result<(), Box<dyn std::error::Error>> :15-50
+```
+
+**Example output** (`verbose=true`, adds imports, strips path prefix):
+
+```
+FILE: main.rs(50L, 1F, 0C, 13I)
+F:
+  main(()) -> Result<(), Box<dyn std::error::Error>> :15-50
 I:
-  rmcp(3); serde(2); thiserror(1); tree_sitter(4); tracing(1)
+  code_analyze_mcp(1); rmcp(1); rmcp::transport(1); std::sync(2); tokio::sync(1); tracing_subscriber::filter(1); tracing_subscriber::layer(1); tracing_subscriber::util(1)
 ```
 
 ```bash
@@ -168,11 +202,11 @@ Extracts a minimal function/import index from a single file. ~75% smaller output
 **Example output:**
 
 ```
-FILE: analyze.rs (510L, 3F, 2I)
+FILE: main.rs (50L, 1F, 13I)
 F:
-  analyze_directory:174, analyze_file:200, analyze_module_file:460
+  main:15
 I:
-  crate::formatter:format_file_details; std::path:Path, PathBuf
+  code_analyze_mcp:CodeAnalyzer; rmcp:serve_server; std::sync:Arc; tokio::sync:TokioMutex; tracing_subscriber::layer:SubscriberExt
 ```
 
 ```bash
@@ -181,7 +215,7 @@ analyze_module path: /path/to/file.rs
 
 ### `analyze_symbol`
 
-Builds a call graph for a named symbol across all files in a directory. Uses sentinel values `<module>` (top-level calls) and `<reference>` (type references). Functions called >3 times show `(•N)` notation.
+Builds a call graph for a named symbol across all files in a directory. Uses sentinel values `<module>` (top-level calls) and `<reference>` (type references). Functions called >3 times show `•N` notation on their definition line.
 
 **Required:**
 - `path` *(string)* -- directory to search
@@ -201,21 +235,15 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
 **Example output:**
 
 ```
-FOCUS: analyze (2 defs, 3 callers, 4 callees)
-DEPTH: 2
-DEFINED:
-  src/lib.rs:35
-
-CALLERS:
-  main -> analyze [src/main.rs:12]
-  <module> -> analyze [src/lib.rs:40]
-  process_request -> analyze [src/handler.rs:88]
-
-CALLEES:
-  analyze -> determine_mode [src/analyze.rs:44]
-  analyze -> format_output [src/formatter.rs:12] (•2)
-  analyze -> validate_params [src/validation.rs:5]
-  determine_mode -> is_directory [src/utils.rs:23]
+FOCUS: format_structure (1 defs, 3 callers, 5 callees)
+CALLERS (1-3 of 3):
+  format_structure <- analyze_directory
+    <- analyze_directory_with_progress
+  format_structure <- analyze_directory_with_progress
+    <- analyze_directory_with_progress
+  format_structure <- handle_overview_mode
+    <- analyze_directory_with_progress
+CALLEES: 5 (use cursor for callee pagination)
 ```
 
 ```bash
