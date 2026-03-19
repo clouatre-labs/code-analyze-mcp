@@ -365,7 +365,7 @@ The MCP specification extends this with an optional `outputSchema` field that do
 }
 ```
 
-*Code Snippet 4: MCP tool definition using inputSchema with format constraints.*
+*Code Snippet 4: MCP tool definition using inputSchema with format constraints and outputSchema for structured results.*
 
 ### 4.2 Specificity and Naming
 
