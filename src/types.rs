@@ -49,7 +49,7 @@ pub struct AnalyzeFileParams {
     pub path: String,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
     pub ast_recursion_limit: Option<usize>,
 
     #[serde(flatten)]
@@ -100,7 +100,7 @@ pub struct AnalyzeSymbolParams {
     pub max_depth: Option<u32>,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code.
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
     pub ast_recursion_limit: Option<usize>,
 
     #[serde(flatten)]
