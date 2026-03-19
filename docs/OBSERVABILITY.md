@@ -19,7 +19,7 @@ Each line in the JSONL file is one JSON object:
 | `ts` | `u64` | Unix timestamp in milliseconds at handler return |
 | `tool` | `string` | One of: `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
 | `duration_ms` | `u64` | Wall-clock time from handler entry to return |
-| `output_bytes` | `usize` | Byte count of the final text returned; `0` on error paths |
+| `output_chars` | `usize` | Unicode scalar value count (`str::chars().count()`) of the final text returned; `0` on error paths |
 | `param_path_depth` | `usize` | `Path::components().count()` on `params.path` |
 | `max_depth` | `u32 \| null` | The `max_depth` param if present; `null` for `analyze_file` and `analyze_module` |
 | `result` | `string` | `"ok"` on success, `"error"` on early-exit error paths |
@@ -28,7 +28,7 @@ Each line in the JSONL file is one JSON object:
 ### Example record
 
 ```json
-{"ts":1700000042000,"tool":"analyze_directory","duration_ms":87,"output_bytes":1423,"param_path_depth":4,"max_depth":2,"result":"ok","error_type":null}
+{"ts":1700000042000,"tool":"analyze_directory","duration_ms":87,"output_chars":1423,"param_path_depth":4,"max_depth":2,"result":"ok","error_type":null}
 ```
 
 ## Daily Rotation and 30-Day Retention
