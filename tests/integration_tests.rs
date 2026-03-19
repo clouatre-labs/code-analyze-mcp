@@ -3913,3 +3913,40 @@ fn test_python_aliased_import_from_statement() {
         "expected original name [path], not alias [p]"
     );
 }
+
+#[tokio::test]
+async fn test_metrics_writer_produces_jsonl_line() {
+    let tmp = tempfile::TempDir::new().unwrap();
+
+    let (metrics_tx, metrics_rx) = tokio::sync::mpsc::unbounded_channel();
+    let writer =
+        code_analyze_mcp::metrics::MetricsWriter::new(metrics_rx, Some(tmp.path().to_path_buf()));
+    let writer_handle = tokio::spawn(writer.run());
+
+    let ev = code_analyze_mcp::metrics::MetricEvent {
+        ts: code_analyze_mcp::metrics::unix_ms(),
+        tool: "analyze_module",
+        duration_ms: 10,
+        output_chars: 42,
+        param_path_depth: 3,
+        max_depth: None,
+        result: "ok",
+        error_type: None,
+    };
+    metrics_tx.send(ev).unwrap();
+    drop(metrics_tx);
+    writer_handle.await.unwrap();
+
+    let files: Vec<_> = std::fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert_eq!(files.len(), 1);
+    let content = std::fs::read_to_string(files[0].path()).unwrap();
+    let lines: Vec<&str> = content.lines().collect();
+    assert_eq!(lines.len(), 1);
+    let v: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    assert_eq!(v["tool"], "analyze_module");
+    assert_eq!(v["result"], "ok");
+    assert_eq!(v["output_chars"], 42);
+}
