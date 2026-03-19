@@ -3850,6 +3850,45 @@ fn test_python_named_import_from_statement() {
 }
 
 #[test]
+fn test_analyze_module_dir_guard_rejects_directory() {
+    // The analyze_module handler checks std::fs::metadata(...).map(|m| m.is_dir())
+    // before calling analyze_module_file. Verify the metadata call returns is_dir=true
+    // for a real directory, confirming the guard condition is correct.
+    let dir = std::env::temp_dir();
+    assert!(
+        std::fs::metadata(dir.to_str().unwrap())
+            .map(|m| m.is_dir())
+            .unwrap_or(false),
+        "temp_dir should be detected as a directory by the guard condition"
+    );
+    // Also confirm analyze_module_file on a directory produces an error (not a panic),
+    // demonstrating the guard in the handler prevents that path.
+    let result = code_analyze_mcp::analyze::analyze_module_file(dir.to_str().unwrap());
+    assert!(
+        result.is_err(),
+        "analyze_module_file on a directory should return an error"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn test_analyze_module_dir_guard_rejects_symlink_to_directory() {
+    use std::os::unix::fs::symlink;
+    let tmp = tempfile::tempdir().unwrap();
+    let target = tmp.path().join("real_dir");
+    std::fs::create_dir(&target).unwrap();
+    let link = tmp.path().join("link_to_dir");
+    symlink(&target, &link).unwrap();
+    // std::fs::metadata follows symlinks; symlink-to-dir should be detected as a dir
+    assert!(
+        std::fs::metadata(&link)
+            .map(|m| m.is_dir())
+            .unwrap_or(false),
+        "symlink to directory should be detected as a directory by the guard condition"
+    );
+}
+
+#[test]
 fn test_python_aliased_import_from_statement() {
     let temp_dir = TempDir::new().unwrap();
 

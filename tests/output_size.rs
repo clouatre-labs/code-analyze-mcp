@@ -3,7 +3,7 @@ use std::path::Path;
 
 #[test]
 fn test_overview_output_size() {
-    let output = analyze::analyze_directory(Path::new("src"), None).unwrap();
+    let output = analyze::analyze_directory(Path::new("."), None).unwrap();
     let char_count = output.formatted.len();
 
     println!("Overview output size: {} chars", char_count);
@@ -45,7 +45,7 @@ fn test_symbol_focus_output_size() {
 fn test_summary_mode_produces_smaller_output() {
     use code_analyze_mcp::formatter::format_summary;
 
-    let output = analyze::analyze_directory(Path::new("src"), None).unwrap();
+    let output = analyze::analyze_directory(Path::new("."), None).unwrap();
     let full_len = output.formatted.len();
     let summarized = format_summary(&output.entries, &output.files, None, None);
     let summary_len = summarized.len();

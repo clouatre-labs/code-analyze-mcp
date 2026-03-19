@@ -21,6 +21,7 @@ pub mod graph;
 pub mod lang;
 pub mod languages;
 pub mod logging;
+pub mod metrics;
 pub mod pagination;
 pub mod parser;
 pub(crate) mod schema_helpers;
@@ -145,14 +146,20 @@ pub struct CodeAnalyzer {
     peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
     log_level_filter: Arc<Mutex<LevelFilter>>,
     event_rx: Arc<TokioMutex<Option<mpsc::UnboundedReceiver<LogEvent>>>>,
+    metrics_tx: crate::metrics::MetricsSender,
 }
 
 #[tool_router]
 impl CodeAnalyzer {
+    pub fn list_tools() -> Vec<rmcp::model::Tool> {
+        Self::tool_router().list_all()
+    }
+
     pub fn new(
         peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
         log_level_filter: Arc<Mutex<LevelFilter>>,
         event_rx: mpsc::UnboundedReceiver<LogEvent>,
+        metrics_tx: crate::metrics::MetricsSender,
     ) -> Self {
         CodeAnalyzer {
             tool_router: Self::tool_router(),
@@ -160,6 +167,7 @@ impl CodeAnalyzer {
             peer,
             log_level_filter,
             event_rx: Arc::new(TokioMutex::new(Some(event_rx))),
+            metrics_tx,
         }
     }
 
@@ -549,6 +557,9 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
+        let _t_start = std::time::Instant::now();
+        let _param_path = params.path.clone();
+        let _max_depth_val = params.max_depth;
 
         // Call handler for analysis and progress tracking
         let mut output = match self.handle_overview_mode(&params, ct).await {
@@ -646,10 +657,21 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut result = CallToolResult::success(vec![Content::text(final_text)])
+        let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
             .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
+        let _dur = _t_start.elapsed().as_millis() as u64;
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "analyze_directory",
+            duration_ms: _dur,
+            output_bytes: final_text.len(),
+            param_path_depth: crate::metrics::path_component_count(&_param_path),
+            max_depth: _max_depth_val,
+            result: "ok",
+            error_type: None,
+        });
         Ok(result)
     }
 
@@ -673,6 +695,8 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let _ct = context.ct.clone();
+        let _t_start = std::time::Instant::now();
+        let _param_path = params.path.clone();
 
         // Call handler for analysis and caching
         let arc_output = match self.handle_file_details_mode(&params).await {
@@ -788,10 +812,21 @@ impl CodeAnalyzer {
             next_cursor,
         };
 
-        let mut result = CallToolResult::success(vec![Content::text(final_text)])
+        let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
             .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
+        let _dur = _t_start.elapsed().as_millis() as u64;
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "analyze_file",
+            duration_ms: _dur,
+            output_bytes: final_text.len(),
+            param_path_depth: crate::metrics::path_component_count(&_param_path),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+        });
         Ok(result)
     }
 
@@ -815,6 +850,9 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
+        let _t_start = std::time::Instant::now();
+        let _param_path = params.path.clone();
+        let _max_depth_val = params.follow_depth;
 
         // Call handler for analysis and progress tracking
         let mut output = match self.handle_focused_mode(&params, ct).await {
@@ -926,10 +964,21 @@ impl CodeAnalyzer {
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
 
-        let mut result = CallToolResult::success(vec![Content::text(final_text)])
+        let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
             .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
+        let _dur = _t_start.elapsed().as_millis() as u64;
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "analyze_symbol",
+            duration_ms: _dur,
+            output_bytes: final_text.len(),
+            param_path_depth: crate::metrics::path_component_count(&_param_path),
+            max_depth: _max_depth_val,
+            result: "ok",
+            error_type: None,
+        });
         Ok(result)
     }
 
@@ -952,6 +1001,34 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _t_start = std::time::Instant::now();
+        let _param_path = params.path.clone();
+
+        // Issue 340: Guard against directory paths
+        if std::fs::metadata(&params.path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
+            let _dur = _t_start.elapsed().as_millis() as u64;
+            self.metrics_tx.send(crate::metrics::MetricEvent {
+                ts: crate::metrics::unix_ms(),
+                tool: "analyze_module",
+                duration_ms: _dur,
+                output_bytes: 0,
+                param_path_depth: crate::metrics::path_component_count(&_param_path),
+                max_depth: None,
+                result: "error",
+                error_type: Some("invalid_params".to_string()),
+            });
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!(
+                    "'{}' is a directory. Use analyze_directory to analyze a directory, or pass a specific file path to analyze_module.",
+                    params.path
+                ),
+                error_meta("validation", false, "use analyze_directory for directories"),
+            )));
+        }
 
         let module_info = match analyze::analyze_module_file(&params.path).map_err(|e| {
             ErrorData::new(
@@ -969,8 +1046,8 @@ impl CodeAnalyzer {
         };
 
         let text = format_module_info(&module_info);
-        let mut result =
-            CallToolResult::success(vec![Content::text(text)]).with_meta(Some(no_cache_meta()));
+        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
+            .with_meta(Some(no_cache_meta()));
         let structured = match serde_json::to_value(&module_info).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -982,6 +1059,17 @@ impl CodeAnalyzer {
             Err(e) => return Ok(err_to_tool_result(e)),
         };
         result.structured_content = Some(structured);
+        let _dur = _t_start.elapsed().as_millis() as u64;
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "analyze_module",
+            duration_ms: _dur,
+            output_bytes: text.len(),
+            param_path_depth: crate::metrics::path_component_count(&_param_path),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+        });
         Ok(result)
     }
 }
@@ -989,6 +1077,18 @@ impl CodeAnalyzer {
 #[tool_handler]
 impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
+        let excluded = crate::formatter::EXCLUDED_DIRS.join(", ");
+        let instructions = format!(
+            "Recommended workflow for unknown repositories:\n\
+            1. Start with analyze_directory(path=<repo_root>, max_depth=2, summary=true) to identify the source package directory \
+            (typically the largest directory by file count; exclude {excluded}).\n\
+            2. Re-run analyze_directory(path=<source_package>, max_depth=2, summary=true) for a module map with per-package class and function counts.\n\
+            3. Use analyze_file on key files identified in step 2 (prefer files with high class counts for framework entry points).\n\
+            4. Use analyze_symbol to trace call graphs for specific functions found in step 3.\n\
+            Use analyze_module for a minimal schema (name, line count, functions, imports) when token budget is critical. \
+            Prefer summary=true on large directories (1000+ files). Set max_depth=2 for the first call; increase only if packages are too large to differentiate. \
+            Paginate with cursor/page_size. For subagents: DISABLE_PROMPT_CACHING=1."
+        );
         let capabilities = ServerCapabilities::builder()
             .enable_logging()
             .enable_tools()
@@ -1000,7 +1100,7 @@ impl ServerHandler for CodeAnalyzer {
             .with_description("MCP server for code structure analysis using tree-sitter");
         InitializeResult::new(capabilities)
             .with_server_info(server_info)
-            .with_instructions("Use analyze_directory to map a codebase (pass a directory). Use analyze_file to extract functions, classes, and imports from a specific file (pass a file path). Use analyze_module to extract a minimal fixed schema (name, line count, functions, imports) from a single file when token budget is critical. Use analyze_symbol to trace call graphs for a named function or class (pass a directory and set symbol to the function name, case-sensitive). Prefer summary=true on large directories to reduce output size. When the response includes a NEXT_CURSOR: line, pass that value back as cursor to retrieve the next page. For non-interactive single-session workflows (e.g. subagents), disable prompt caching to avoid redundant cache writes: DISABLE_PROMPT_CACHING=1.")
+            .with_instructions(&instructions)
     }
 
     async fn on_initialized(&self, context: NotificationContext<RoleServer>) {
@@ -1149,7 +1249,13 @@ mod tests {
         let peer = Arc::new(TokioMutex::new(None));
         let log_level_filter = Arc::new(Mutex::new(LevelFilter::INFO));
         let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let analyzer = CodeAnalyzer::new(peer, log_level_filter, rx);
+        let (metrics_tx, _metrics_rx) = tokio::sync::mpsc::unbounded_channel();
+        let analyzer = CodeAnalyzer::new(
+            peer,
+            log_level_filter,
+            rx,
+            crate::metrics::MetricsSender(metrics_tx),
+        );
         let token = ProgressToken(NumberOrString::String("test".into()));
         // Should complete without panic
         analyzer
