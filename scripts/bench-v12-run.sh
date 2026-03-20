@@ -33,6 +33,12 @@ if [[ ! "$CONDITION_ID" =~ ^[ABCD]$ ]]; then
   exit 1
 fi
 
+# Validate RUN_ID (safe filename characters only)
+if [[ ! "$RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "ERROR: RUN_ID must contain only alphanumeric characters, dots, underscores, and hyphens" >&2
+  exit 1
+fi
+
 # Dispatch condition to model and tool set
 case "$CONDITION_ID" in
   A)
@@ -62,7 +68,7 @@ if [[ "$TOOL_SET" == "mcp" ]]; then
   ALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module"
   MCP_FLAGS="--mcp-config $MCP_CODE_ANALYZE_ONLY --strict-mcp-config"
 else
-  ALLOWED_TOOLS="Bash,Glob,Grep,Read"
+  ALLOWED_TOOLS="Bash,Glob,Grep,Read,Write,ToolSearch"
   EMPTY_MCP_CONFIG=$(mktemp /tmp/bench-v12-empty-mcp.XXXXXX.json)
   echo '{"mcpServers":{}}' > "$EMPTY_MCP_CONFIG"
   MCP_FLAGS="--mcp-config $EMPTY_MCP_CONFIG --strict-mcp-config"
@@ -92,53 +98,6 @@ SYSTEM_PROMPT=$(sed \
   -e "s|RUN_ID_PLACEHOLDER|$RUN_ID|g" \
   "$SYSTEM_PROMPT_FILE")
 TASK_CONTENT=$(cat "$PROMPTS_DIR/task.md")
-
-# Session capture setup
-touch /tmp/.v12-run-marker
-_REPO_SLUG="${REPO_ROOT//\//-}"
-SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_REPO_SLUG}}"
-
-# Claude invocation
-echo "Starting run at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-DISABLE_PROMPT_CACHING=1 claude \
-  -p \
-  --model "$MODEL" \
-  --system-prompt "$SYSTEM_PROMPT" \
-  $MCP_FLAGS \
-  --allowedTools "$ALLOWED_TOOLS" \
-  --dangerously-skip-permissions \
-  "$TASK_CONTENT" \
-  > "$LOG_FILE" \
-  2>&1
-echo "Run completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-# Session JSONL capture and validation
-if [[ -d "$SESSION_DIR" ]]; then
-  LATEST_SESSION=$(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v12-run-marker 2>/dev/null \
-    | xargs ls -t 2>/dev/null | head -1)
-  if [[ -n "$LATEST_SESSION" ]]; then
-    SESSION_COPY="$RUNS_DIR/${RUN_ID}-session.jsonl"
-    cp "$LATEST_SESSION" "$SESSION_COPY"
-    echo "Session JSONL: $SESSION_COPY"
-    # Run tool isolation validation
-    validate_tool_isolation "$SESSION_COPY" "$TOOL_SET"
-  else
-    echo "WARNING: Could not find session JSONL" >&2
-  fi
-fi
-
-# Output validation
-if [[ -f "$OUTPUT_FILE" ]]; then
-  echo "Report file: $OUTPUT_FILE"
-  if /opt/homebrew/bin/python3.14 -c "import json,sys; json.load(open('$OUTPUT_FILE'))" 2>/dev/null; then
-    echo "Output: VALID JSON"
-  else
-    echo "Output: INVALID JSON" >&2
-  fi
-else
-  echo "WARNING: Report file not found at $OUTPUT_FILE" >&2
-  echo "Check $LOG_FILE for agent output" >&2
-fi
 
 # Tool isolation validation function
 validate_tool_isolation() {
@@ -195,3 +154,54 @@ elif expected_tool_set == "native":
     print("ISOLATION PASS: no MCP tools used")
 PYEOF
 }
+
+# Session capture setup
+touch /tmp/.v12-run-marker
+_REPO_SLUG="${REPO_ROOT//\//-}"
+SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_REPO_SLUG}}"
+
+# Claude invocation
+echo "Starting run at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+DISABLE_PROMPT_CACHING=1 claude \
+  -p \
+  --model "$MODEL" \
+  --system-prompt "$SYSTEM_PROMPT" \
+  $MCP_FLAGS \
+  --allowedTools "$ALLOWED_TOOLS" \
+  --dangerously-skip-permissions \
+  "$TASK_CONTENT" \
+  > "$OUTPUT_FILE" \
+  2> "$LOG_FILE"
+echo "Run completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Session JSONL capture and validation
+if [[ -d "$SESSION_DIR" ]]; then
+  mapfile -t _sessions < <(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v12-run-marker 2>/dev/null)
+  if (( ${#_sessions[@]} > 0 )); then
+    LATEST_SESSION=$(ls -t "${_sessions[@]}" 2>/dev/null | head -1)
+  else
+    LATEST_SESSION=""
+  fi
+  if [[ -n "$LATEST_SESSION" ]]; then
+    SESSION_COPY="$RUNS_DIR/${RUN_ID}-session.jsonl"
+    cp "$LATEST_SESSION" "$SESSION_COPY"
+    echo "Session JSONL: $SESSION_COPY"
+    # Run tool isolation validation
+    validate_tool_isolation "$SESSION_COPY" "$TOOL_SET"
+  else
+    echo "WARNING: Could not find session JSONL" >&2
+  fi
+fi
+
+# Output validation
+if [[ -f "$OUTPUT_FILE" ]]; then
+  echo "Report file: $OUTPUT_FILE"
+  if /opt/homebrew/bin/python3.14 -c "import json,sys; json.load(open('$OUTPUT_FILE'))" 2>/dev/null; then
+    echo "Output: VALID JSON"
+  else
+    echo "Output: INVALID JSON" >&2
+  fi
+else
+  echo "WARNING: Report file not found at $OUTPUT_FILE" >&2
+  echo "Check $LOG_FILE for agent output" >&2
+fi
