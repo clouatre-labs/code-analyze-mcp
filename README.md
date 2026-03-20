@@ -39,9 +39,6 @@ v12 measures MCP vs native tool-set impact on a Django auth migration task (4 co
 - MCP Sonnet (A) uses 3x fewer turns, 47% fewer input tokens, and 2x less wall time than native Sonnet (B).
 - MCP Haiku (C) uses 16% fewer input tokens and is 40% faster than native Haiku (D).
 - Output tokens are consistently lower under MCP (4.9k/3.7k vs 7.7k/5.1k), reflecting less exploratory reasoning noise.
-- Structural accuracy is the only differentiating dimension; cross-module tracing and approach quality are uniformly 3.0 across all conditions.
-
-Score = structural_accuracy + cross_module_tracing + approach_quality (max=9). Composite efficiency: eff_cost_per_qp = cost_per_run / (mean_score × reliability). See [docs/benchmarks/v12/analysis.md](docs/benchmarks/v12/analysis.md).
 
 ## Overview
 
