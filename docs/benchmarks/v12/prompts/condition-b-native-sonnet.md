@@ -37,6 +37,6 @@ Output must be valid JSON matching this schema:
     {"field": "external_sso_id", "reason": "...", "migration_strategy": "...", "evidence": "file:line"},
     {"field": "last_sync_at", "reason": "...", "migration_strategy": "...", "evidence": "file:line"}
   ],
-  "tool_calls_total": 1
+  "tool_calls_total": 42
 }
 ```
