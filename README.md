@@ -342,7 +342,7 @@ All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code
 
 ## Benchmarks
 
-v12 measures MCP vs native tool-set impact on a Django auth migration task (4 conditions, 8 scored runs).
+v12 measures MCP vs native tool-set impact on a Django auth migration task (4 conditions, 8 scored runs), run on Claude Code against the Django (Python) source tree.
 
 **Results** (n=2 per condition)
 
