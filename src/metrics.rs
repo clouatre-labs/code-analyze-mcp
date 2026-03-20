@@ -274,7 +274,9 @@ mod tests {
             session_id: Some("1742468880123-42".to_string()),
             seq: Some(5),
         };
+        let serialized = serde_json::to_string(&event).unwrap();
         let json_str = r#"{"ts":1700000000000,"tool":"analyze_file","duration_ms":100,"output_chars":500,"param_path_depth":2,"max_depth":3,"result":"ok","error_type":null,"session_id":"1742468880123-42","seq":5}"#;
+        assert_eq!(serialized, json_str);
         let parsed: MetricEvent = serde_json::from_str(json_str).unwrap();
         assert_eq!(parsed.session_id, Some("1742468880123-42".to_string()));
         assert_eq!(parsed.seq, Some(5));

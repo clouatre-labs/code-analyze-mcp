@@ -566,6 +566,10 @@ impl CodeAnalyzer {
         let _t_start = std::time::Instant::now();
         let _param_path = params.path.clone();
         let _max_depth_val = params.max_depth;
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and progress tracking
         let mut output = match self.handle_overview_mode(&params, ct).await {
@@ -668,10 +672,6 @@ impl CodeAnalyzer {
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
-        let _seq = self
-            .session_call_seq
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_directory",
@@ -709,6 +709,10 @@ impl CodeAnalyzer {
         let _ct = context.ct.clone();
         let _t_start = std::time::Instant::now();
         let _param_path = params.path.clone();
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and caching
         let arc_output = match self.handle_file_details_mode(&params).await {
@@ -829,10 +833,6 @@ impl CodeAnalyzer {
         let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
-        let _seq = self
-            .session_call_seq
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_file",
@@ -871,6 +871,10 @@ impl CodeAnalyzer {
         let _t_start = std::time::Instant::now();
         let _param_path = params.path.clone();
         let _max_depth_val = params.follow_depth;
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and progress tracking
         let mut output = match self.handle_focused_mode(&params, ct).await {
@@ -987,10 +991,6 @@ impl CodeAnalyzer {
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
-        let _seq = self
-            .session_call_seq
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_symbol",
@@ -1027,6 +1027,10 @@ impl CodeAnalyzer {
         let params = params.0;
         let _t_start = std::time::Instant::now();
         let _param_path = params.path.clone();
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
 
         // Issue 340: Guard against directory paths
         if std::fs::metadata(&params.path)
@@ -1034,10 +1038,6 @@ impl CodeAnalyzer {
             .unwrap_or(false)
         {
             let _dur = _t_start.elapsed().as_millis() as u64;
-            let _seq = self
-                .session_call_seq
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let _sid = self.session_id.lock().await.clone();
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
                 tool: "analyze_module",
@@ -1047,7 +1047,7 @@ impl CodeAnalyzer {
                 max_depth: None,
                 result: "error",
                 error_type: Some("invalid_params".to_string()),
-                session_id: _sid,
+                session_id: _sid.clone(),
                 seq: Some(_seq),
             });
             return Ok(err_to_tool_result(ErrorData::new(
@@ -1090,10 +1090,6 @@ impl CodeAnalyzer {
         };
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
-        let _seq = self
-            .session_call_seq
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_module",

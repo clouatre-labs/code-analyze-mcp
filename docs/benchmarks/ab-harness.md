@@ -43,7 +43,7 @@ Measure the following 3 metrics per session (3 control runs + 3 treatment runs =
 | Metric | Source | Direction | Rationale |
 |---|---|---|---|
 | `research_calls_per_session` | Count of events where `tool="analyze_directory" OR tool="analyze_file"` per session | Lower is better | Fewer exploratory calls indicate faster, more focused analysis |
-| `error_rate_per_session` | Count of events where `result="error"` divided by total events per session | Lower is better | Errors indicate tool failures; regression = increased error rate |
+| `error_rate_per_session` | Count of events where `tool="analyze_module"` and `result="error"` divided by total `analyze_module` events per session | Lower is better | Currently only `analyze_module` emits `result="error"` (directory-guard path); proxy for directory-guard failures; regression = increased rate |
 | `first_tool_correct_rate` | Fraction of sessions where `seq=0` event has `tool="analyze_directory"` | Higher is better | Strong analysis starts by understanding directory structure; regression = change to this pattern |
 
 ## Metric Extraction from JSONL

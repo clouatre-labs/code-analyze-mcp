@@ -25,7 +25,7 @@ Each line in the JSONL file is one JSON object:
 | `result` | `string` | `"ok"` on success, `"error"` on early-exit error paths |
 | `error_type` | `string \| null` | On error: `invalid_params`, `parse`, or `unknown`; `null` on success |
 | `session_id` | `string \| null` | Session identifier in format `MILLIS-N` (13-digit Unix milliseconds + AtomicU64 counter); generated on server initialization |
-| `seq` | `u32 \| null` | 0-indexed call sequence within session; incremented atomically before each tool invocation |
+| `seq` | `u32 \| null` | 0-indexed call sequence within session; incremented atomically when emitting each `MetricEvent` at handler return |
 
 ### Example record
 

@@ -86,6 +86,16 @@ The team wants to migrate to `AbstractBaseUser` for finer control over authentic
 
 ## Isolation
 
+Enforce tool restrictions at session start using your client's tool-filtering capability. For Claude Code, pass `--allowedTools` or `--disallowedTools` flags:
+
+```bash
+# MCP conditions (A, C)
+claude --allowedTools "mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module" ...
+
+# Native conditions (B, D)
+claude --disallowedTools "mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module" ...
+```
+
 ### MCP conditions (A, C)
 **Allowed tools:**
 - `analyze_directory`
