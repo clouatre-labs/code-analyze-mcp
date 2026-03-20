@@ -17,15 +17,15 @@ Your task:
 Output must be valid JSON matching this schema:
 ```json
 {
-  "run_id": "<condition>-<pilot|scored>-<N>",
-  "condition": "A|B|C|D",
+  "run_id": "A-scored-1",
+  "condition": "A",
   "auth_module_map": [{"file": "path/relative/to/django", "role": "description"}],
-  "migration_trace": ["step 1 with file:line", "step 2 with file:line", ...],
+  "migration_trace": ["step 1 with file:line", "step 2 with file:line"],
   "unmappable_fields": [
     {"field": "profile_tier", "reason": "...", "migration_strategy": "...", "evidence": "file:line"},
     {"field": "external_sso_id", "reason": "...", "migration_strategy": "...", "evidence": "file:line"},
     {"field": "last_sync_at", "reason": "...", "migration_strategy": "...", "evidence": "file:line"}
   ],
-  "tool_calls_total": <integer>
+  "tool_calls_total": 0
 }
 ```
