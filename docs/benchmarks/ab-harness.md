@@ -34,7 +34,7 @@ Total: 6 runs. Execute in randomized order.
 |---|---|---|
 | `research_calls` | session JSON (tool_calls_detail) | quality_score (Spearman r = -0.78, N=24) |
 | `error_rate` | metrics JSONL (result='error' / total) | tool misuse rate |
-| `first_tool_correct` | session JSON (first tool call = analyze_directory) | approach_quality |
+| `first_tool_correct_rate` | session JSON (first tool call = analyze_directory) | approach_quality |
 | `output_chars_total` | metrics JSONL sum per session | token pressure |
 
 ### Decision rule
@@ -43,6 +43,11 @@ Total: 6 runs. Execute in randomized order.
 - Require: treatment median research_calls <= control median
 - Require: no increase in error_rate
 - If both conditions met: change is safe to merge
+
+### Proxy metric definitions
+
+first_tool_correct_rate = first_tool is "analyze_directory".
+Rate is computed as: (sessions where first_tool == "analyze_directory") / total sessions.
 - If treatment research_calls increase > 2: flag for full benchmark before merge
 
 ### Computing first_tool_correct_rate from session metrics JSONL

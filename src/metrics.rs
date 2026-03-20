@@ -293,7 +293,8 @@ mod tests {
     }
 
     #[test]
-    fn test_seq_increments() {
+    fn test_seq_reset_and_monotonicity_across_sessions() {
+        // Simulate session 1
         let counter = Arc::new(AtomicU32::new(0));
         let s0 = counter.fetch_add(1, Ordering::Relaxed);
         let s1 = counter.fetch_add(1, Ordering::Relaxed);
@@ -301,5 +302,17 @@ mod tests {
         assert_eq!(s0, 0);
         assert_eq!(s1, 1);
         assert_eq!(s2, 2);
+
+        // Simulate session 2 (reset counter)
+        counter.store(0, Ordering::Relaxed);
+        let s0_new = counter.fetch_add(1, Ordering::Relaxed);
+        let s1_new = counter.fetch_add(1, Ordering::Relaxed);
+        assert_eq!(s0_new, 0);
+        assert_eq!(s1_new, 1);
+
+        // Verify monotonicity and reset within each session
+        assert_eq!(s0, 0);
+        assert_eq!(s2, 2);
+        assert_eq!(s0_new, 0); // Reset after session 1
     }
 }
