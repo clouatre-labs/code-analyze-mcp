@@ -100,7 +100,7 @@ SYSTEM_PROMPT=$(sed \
   -e "s|OUTPUT_PATH|$OUTPUT_FILE|g" \
   -e "s|RUN_ID_PLACEHOLDER|$RUN_ID|g" \
   "$SYSTEM_PROMPT_FILE")
-TASK_CONTENT=$(cat "$PROMPTS_DIR/task.md")
+TASK_CONTENT=$(sed -e "s|RUN_ID_PLACEHOLDER|$RUN_ID|g" "$PROMPTS_DIR/task.md")
 
 # Tool isolation validation function
 validate_tool_isolation() {
