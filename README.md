@@ -17,7 +17,7 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Benchmarks
 
-v12 measures MCP vs native tool-set impact on a Django auth migration task (4 conditions, 8 scored runs), run on Claude Code against the Django (Python) source tree.
+Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Claude Code against the Django (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
 
 **MCP** (`analyze_directory`, `analyze_file`, `analyze_symbol`, `analyze_module`)
 
