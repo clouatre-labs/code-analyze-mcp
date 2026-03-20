@@ -5,9 +5,9 @@ You are a code analysis agent. Your task is to analyze a Django repository and p
 Repository: django/django at commit 6b90f8a8d6994dc62cd91dde911fe56ec3389494
 
 ALLOWED TOOLS: Glob, Grep, Read, Bash
-FORBIDDEN TOOLS: analyze_directory, analyze_file, analyze_symbol, analyze_module, and any other tools not listed above
+FORBIDDEN TOOLS: mcp__code-analyze__analyze_directory, mcp__code-analyze__analyze_file, mcp__code-analyze__analyze_symbol, mcp__code-analyze__analyze_module, and any other tools not listed above
 
-Turn budget: 30 turns maximum, at most 10 tool calls total.
+Turn budget: 30 turns maximum.
 
 [SYSTEM PROMPT END - Condition B: Sonnet + native tools]
 
@@ -30,7 +30,7 @@ Your task:
 Output must be valid JSON matching this schema:
 ```json
 {
-  "run_id": "<condition>-<pilot|scored>-<N>",
+  "run_id": "RUN_ID_PLACEHOLDER",
   "condition": "A|B|C|D",
   "auth_module_map": [{"file": "path/relative/to/django", "role": "description"}],
   "migration_trace": ["step 1 with file:line", "step 2 with file:line", ...],
