@@ -18,8 +18,6 @@ Recommended call sequence for efficient analysis:
 
 Use `summary=true` and `max_depth=2` on directory calls to limit output size. Use `cursor` and `page_size` to paginate large results. Do not call `analyze_file` on every file discovered; start with directory overview.
 
-Turn budget: 30 turns maximum.
-
 [SYSTEM PROMPT END - Condition C: Haiku + MCP]
 
 ## Task: Django Auth Migration
