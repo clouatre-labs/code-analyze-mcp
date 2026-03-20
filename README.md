@@ -340,6 +340,19 @@ The server's own instructions expose a 4-step recommended workflow for unknown r
 
 All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code-analyze-mcp/` (fallback: `~/.local/share/code-analyze-mcp/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
 
+## Benchmarks
+
+v12 measures MCP vs native tool-set impact on a Django auth migration task (4 conditions, 8 scored runs).
+
+| Condition | Model | Tool Set | Median Score | n |
+|---|---|---|---|---|
+| A | claude-sonnet-4-6 | MCP | TBD | 2 |
+| B | claude-sonnet-4-6 | native | TBD | 2 |
+| C | claude-haiku-4-5 | MCP | TBD | 2 |
+| D | claude-haiku-4-5 | native | TBD | 2 |
+
+Score = structural_accuracy + cross_module_tracing + approach_quality (max=9). Runs pending. See [docs/benchmarks/v12/methodology.md](docs/benchmarks/v12/methodology.md).
+
 ## Supported Languages
 
 | Language | Extensions | Status |

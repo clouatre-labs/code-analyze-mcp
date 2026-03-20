@@ -60,6 +60,8 @@ use types::{
     AnalyzeSymbolParams,
 };
 
+static GLOBAL_SESSION_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 const SIZE_LIMIT: usize = 50_000;
 
 pub fn summary_cursor_conflict(summary: Option<bool>, cursor: Option<&str>) -> bool {
@@ -147,6 +149,8 @@ pub struct CodeAnalyzer {
     log_level_filter: Arc<Mutex<LevelFilter>>,
     event_rx: Arc<TokioMutex<Option<mpsc::UnboundedReceiver<LogEvent>>>>,
     metrics_tx: crate::metrics::MetricsSender,
+    session_call_seq: Arc<std::sync::atomic::AtomicU32>,
+    session_id: Arc<TokioMutex<Option<String>>>,
 }
 
 #[tool_router]
@@ -168,6 +172,8 @@ impl CodeAnalyzer {
             log_level_filter,
             event_rx: Arc::new(TokioMutex::new(Some(event_rx))),
             metrics_tx,
+            session_call_seq: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            session_id: Arc::new(TokioMutex::new(None)),
         }
     }
 
@@ -662,6 +668,10 @@ impl CodeAnalyzer {
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_directory",
@@ -671,6 +681,8 @@ impl CodeAnalyzer {
             max_depth: _max_depth_val,
             result: "ok",
             error_type: None,
+            session_id: _sid,
+            seq: Some(_seq),
         });
         Ok(result)
     }
@@ -817,6 +829,10 @@ impl CodeAnalyzer {
         let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_file",
@@ -826,6 +842,8 @@ impl CodeAnalyzer {
             max_depth: None,
             result: "ok",
             error_type: None,
+            session_id: _sid,
+            seq: Some(_seq),
         });
         Ok(result)
     }
@@ -969,6 +987,10 @@ impl CodeAnalyzer {
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_symbol",
@@ -978,6 +1000,8 @@ impl CodeAnalyzer {
             max_depth: _max_depth_val,
             result: "ok",
             error_type: None,
+            session_id: _sid,
+            seq: Some(_seq),
         });
         Ok(result)
     }
@@ -1010,6 +1034,10 @@ impl CodeAnalyzer {
             .unwrap_or(false)
         {
             let _dur = _t_start.elapsed().as_millis() as u64;
+            let _seq = self
+                .session_call_seq
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let _sid = self.session_id.lock().await.clone();
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
                 tool: "analyze_module",
@@ -1019,6 +1047,8 @@ impl CodeAnalyzer {
                 max_depth: None,
                 result: "error",
                 error_type: Some("invalid_params".to_string()),
+                session_id: _sid,
+                seq: Some(_seq),
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -1060,6 +1090,10 @@ impl CodeAnalyzer {
         };
         result.structured_content = Some(structured);
         let _dur = _t_start.elapsed().as_millis() as u64;
+        let _seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _sid = self.session_id.lock().await.clone();
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_module",
@@ -1069,6 +1103,8 @@ impl CodeAnalyzer {
             max_depth: None,
             result: "ok",
             error_type: None,
+            session_id: _sid,
+            seq: Some(_seq),
         });
         Ok(result)
     }
@@ -1107,6 +1143,20 @@ impl ServerHandler for CodeAnalyzer {
         let mut peer_lock = self.peer.lock().await;
         *peer_lock = Some(context.peer.clone());
         drop(peer_lock);
+
+        // Generate session_id in MILLIS-N format
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let counter = GLOBAL_SESSION_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let sid = format!("{}-{}", millis, counter);
+        {
+            let mut session_id_lock = self.session_id.lock().await;
+            *session_id_lock = Some(sid);
+        }
+        self.session_call_seq
+            .store(0, std::sync::atomic::Ordering::Relaxed);
 
         // Spawn consumer task to drain log events from channel with batching.
         let peer = self.peer.clone();

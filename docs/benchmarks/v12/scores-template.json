@@ -1,0 +1,122 @@
+{
+  "version": "v12",
+  "rubric": {
+    "dimensions": ["structural_accuracy", "cross_module_tracing", "approach_quality"],
+    "max_per_dimension": 3,
+    "max_total": 9
+  },
+  "runs": [
+    {
+      "run_id": "A-scored-1",
+      "condition": "A",
+      "model": "claude-sonnet-4-6",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    },
+    {
+      "run_id": "A-scored-2",
+      "condition": "A",
+      "model": "claude-sonnet-4-6",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    },
+    {
+      "run_id": "B-scored-1",
+      "condition": "B",
+      "model": "claude-sonnet-4-6",
+      "tool_set": "native",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    },
+    {
+      "run_id": "B-scored-2",
+      "condition": "B",
+      "model": "claude-sonnet-4-6",
+      "tool_set": "native",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    },
+    {
+      "run_id": "C-scored-1",
+      "condition": "C",
+      "model": "claude-haiku-4-5",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    },
+    {
+      "run_id": "C-scored-2",
+      "condition": "C",
+      "model": "claude-haiku-4-5",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    },
+    {
+      "run_id": "D-scored-1",
+      "condition": "D",
+      "model": "claude-haiku-4-5",
+      "tool_set": "native",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    },
+    {
+      "run_id": "D-scored-2",
+      "condition": "D",
+      "model": "claude-haiku-4-5",
+      "tool_set": "native",
+      "scores": {
+        "structural_accuracy": null,
+        "cross_module_tracing": null,
+        "approach_quality": null,
+        "total": null
+      },
+      "notes": "",
+      "tool_calls_total": null
+    }
+  ]
+}
