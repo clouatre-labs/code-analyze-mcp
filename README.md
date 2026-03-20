@@ -344,14 +344,19 @@ All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code
 
 v12 measures MCP vs native tool-set impact on a Django auth migration task (4 conditions, 8 scored runs), run on Claude Code against the Django (Python) source tree.
 
-**Results** (n=2 per condition)
+**MCP** (`analyze_directory`, `analyze_file`, `analyze_symbol`, `analyze_module`)
 
-| Condition | Model | Tool Set | Score | Cost/Run | Eff. $/QP | Median Turns | Median Wall Time |
-|---|---|---|---|---|---|---|---|
-| A | claude-sonnet-4-6 | MCP | 9.0 | $0.509 | $0.0565 | 8.5 | 1.23m |
-| B | claude-sonnet-4-6 | native | 8.5 | $0.945 | $0.1112 | 24.5 | 2.25m |
-| C | claude-haiku-4-5 | MCP | 8.0 | $0.418 | $0.0522 | 13.0 | 0.79m |
-| D | claude-haiku-4-5 | native | 9.0 | $0.529 | $0.0588 | 19.0 | 1.31m |
+| Condition | Model | Score | Cost/Run | Eff. $/QP | Turns | Input Tokens | Output Tokens | Wall Time |
+|---|---|---|---|---|---|---|---|---|
+| A | claude-sonnet-4-6 | 9.0 | $0.509 | $0.0565 | 8.5 | 145k | 4.9k | 1.23m |
+| C | claude-haiku-4-5 | 8.0 | $0.418 | $0.0522 | 13.0 | 399k | 3.7k | 0.79m |
+
+**Native** (Glob, Grep, Read, Bash)
+
+| Condition | Model | Score | Cost/Run | Eff. $/QP | Turns | Input Tokens | Output Tokens | Wall Time |
+|---|---|---|---|---|---|---|---|---|
+| B | claude-sonnet-4-6 | 8.5 | $0.945 | $0.1112 | 24.5 | 276k | 7.7k | 2.25m |
+| D | claude-haiku-4-5 | 9.0 | $0.529 | $0.0588 | 19.0 | 473k | 5.1k | 1.31m |
 
 **Key Findings**
 
