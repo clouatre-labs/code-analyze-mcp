@@ -2,22 +2,22 @@
 
 ## Wave History
 
-### Wave 1: Core Analysis
+### [Complete] Wave 1: Core Analysis
 Initial release. Four tools (`analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol`), six languages (Rust, Go, Java, Python, TypeScript, TSX), tree-sitter AST extraction, rayon parallelism, .gitignore-aware walk via `ignore` crate.
 
-### Wave 2: MCP Protocol (milestone 7)
+### [Complete] Wave 2: MCP Protocol (milestone 7)
 Streamable HTTP transport, summary-first output, `outputSchema` per tool, cursor pagination.
 
-### Wave 3: Analysis Quality (milestone 8)
+### [Complete] Wave 3: Analysis Quality (milestone 8)
 Multi-strategy call graphs, inheritance tracking, cross-client compatibility.
 
-### Wave 4: Advanced Analysis (milestone 9)
+### [Complete] Wave 4: Advanced Analysis (milestone 9)
 Type-aware call resolution, dataflow analysis.
 
-### Wave 5: Progressive Disclosure (milestone 10)
+### [Complete] Wave 5: Progressive Disclosure (milestone 10)
 Summary and pagination for FileDetails and SymbolFocus modes.
 
-### Wave 6: Agent UX & Performance (milestone 11)
+### [Complete] Wave 6: Agent UX & Performance (milestone 11)
 Issues: #340, #341, #342, #354, #355, #356, #357.
 
 Target: close the non-Sonnet model performance gap identified in v10 benchmark.
@@ -103,3 +103,5 @@ No annotation changes until new MCP SEPs land (tracked in #1913, #1984, #1561, #
 - `idempotentHint` correctness audit (#347)
 - `readOnlyHint` client enforcement verification (#349)
 - MCP SEP adoption pending #1913, #1984, #1561, #1560, #1487
+- Streamable HTTP transport (fully specified in MCP 2025-06-18; enables remote deployment)
+- outputSchema per tool definition (enables client-side validation of structured results)

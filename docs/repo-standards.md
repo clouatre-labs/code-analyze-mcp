@@ -14,7 +14,7 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `.github/workflows/ci.yml` | Lint, test, bench, audit; path-filtered; aggregate `CI Result` job |
 | `.github/workflows/build-and-attest.yml` | Reusable multi-platform build with cosign signing and provenance attestation |
 | `.github/workflows/release.yml` | GPG tag verification, SBOM, Homebrew + cargo-binstall + crates.io distribution |
-| `.github/workflows/mcp-scan.yml` | LLM-based MCP security scan (Claude Haiku); release-only |
+| `.github/workflows/mcp-scan.yml` | LLM-based MCP security scan (Claude Haiku); runs on push to main and release tags only |
 | `.commitlintrc.yml` | Enforces Conventional Commits for automated changelog and searchable history |
 | `clippy.toml` | Clippy configuration; lints enforced with `-D warnings` in CI |
 | `deny.toml` | `cargo deny` configuration for advisory and license checks |
@@ -45,3 +45,39 @@ This document maps every repo-level artifact to its purpose and the rationale be
 5. **Security:** Copy `mcp-scan.yml` if the target is an MCP server. Copy `deny.toml` and `SECURITY.md`.
 6. **Cargo profiles:** Copy the `[profile.release]` and `[profile.ci]` blocks verbatim.
 7. **Docs:** Add `ARCHITECTURE.md` for the target repo; link this document and the orchestration guide from README.
+
+## Security Scanning
+
+The project uses the Cisco AI Defense `mcp-scanner` to detect potential security issues.
+
+**What it checks:**
+
+- **YARA signatures**: Detects known malware patterns and suspicious code patterns
+- **LLM behavioral analysis**: Uses Claude Haiku to analyze code for security-sensitive behaviors and logic flaws
+- **Source behavioral analysis**: Identifies suspicious patterns in source code without requiring external APIs
+
+**CI integration:** The scan runs on push to `main` and on release tags (`v*.*.*`). It is advisory and does not block merges.
+
+**Running locally:**
+
+```bash
+# YARA + behavioral (no API key required)
+mcp-scanner --analyzers yara,behavioral --source-path src/ --format summary stdio --stdio-command cargo --stdio-arg run
+
+# LLM analyzer (requires ANTHROPIC_API_KEY)
+export MCP_SCANNER_LLM_API_KEY="$ANTHROPIC_API_KEY"
+export MCP_SCANNER_LLM_MODEL="anthropic/claude-haiku-4-5-20251001"
+mcp-scanner --analyzers llm --llm-timeout 30 --format summary stdio --stdio-command cargo --stdio-arg run
+```
+
+Install via pip:
+
+```bash
+pip install cisco-ai-mcp-scanner==4.3.0
+```
+
+**Analyzers:**
+
+- **YARA**: Signature-based detection. Matches code against known malware patterns. No API key required.
+- **LLM**: Behavioral analysis via Claude. Examines code logic for potential security flaws. Requires `ANTHROPIC_API_KEY`.
+- **Behavioral**: Source code pattern analysis. Detects suspicious control flow and unsafe operations statically. No API key required.
