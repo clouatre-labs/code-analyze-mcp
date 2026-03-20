@@ -147,6 +147,8 @@ pub struct CodeAnalyzer {
     log_level_filter: Arc<Mutex<LevelFilter>>,
     event_rx: Arc<TokioMutex<Option<mpsc::UnboundedReceiver<LogEvent>>>>,
     metrics_tx: crate::metrics::MetricsSender,
+    session_call_seq: Arc<std::sync::atomic::AtomicU32>,
+    session_id: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 #[tool_router]
@@ -168,6 +170,8 @@ impl CodeAnalyzer {
             log_level_filter,
             event_rx: Arc::new(TokioMutex::new(Some(event_rx))),
             metrics_tx,
+            session_call_seq: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            session_id: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -671,6 +675,11 @@ impl CodeAnalyzer {
             max_depth: _max_depth_val,
             result: "ok",
             error_type: None,
+            session_id: self.session_id.lock().ok().and_then(|g| g.clone()),
+            seq: Some(
+                self.session_call_seq
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            ),
         });
         Ok(result)
     }
@@ -826,6 +835,11 @@ impl CodeAnalyzer {
             max_depth: None,
             result: "ok",
             error_type: None,
+            session_id: self.session_id.lock().ok().and_then(|g| g.clone()),
+            seq: Some(
+                self.session_call_seq
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            ),
         });
         Ok(result)
     }
@@ -978,6 +992,11 @@ impl CodeAnalyzer {
             max_depth: _max_depth_val,
             result: "ok",
             error_type: None,
+            session_id: self.session_id.lock().ok().and_then(|g| g.clone()),
+            seq: Some(
+                self.session_call_seq
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            ),
         });
         Ok(result)
     }
@@ -1019,6 +1038,11 @@ impl CodeAnalyzer {
                 max_depth: None,
                 result: "error",
                 error_type: Some("invalid_params".to_string()),
+                session_id: self.session_id.lock().ok().and_then(|g| g.clone()),
+                seq: Some(
+                    self.session_call_seq
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                ),
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -1069,6 +1093,11 @@ impl CodeAnalyzer {
             max_depth: None,
             result: "ok",
             error_type: None,
+            session_id: self.session_id.lock().ok().and_then(|g| g.clone()),
+            seq: Some(
+                self.session_call_seq
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            ),
         });
         Ok(result)
     }
@@ -1107,6 +1136,20 @@ impl ServerHandler for CodeAnalyzer {
         let mut peer_lock = self.peer.lock().await;
         *peer_lock = Some(context.peer.clone());
         drop(peer_lock);
+
+        // Generate session ID and reset seq counter
+        let sid = format!(
+            "s-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
+        self.session_call_seq
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(mut guard) = self.session_id.lock() {
+            *guard = Some(sid);
+        }
 
         // Spawn consumer task to drain log events from channel with batching.
         let peer = self.peer.clone();

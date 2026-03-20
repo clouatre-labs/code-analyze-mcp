@@ -14,6 +14,10 @@ pub struct MetricEvent {
     pub max_depth: Option<u32>,
     pub result: &'static str,
     pub error_type: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub seq: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -214,6 +218,10 @@ pub fn current_date_str() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    };
 
     #[test]
     fn test_metric_event_serialization() {
@@ -226,6 +234,8 @@ mod tests {
             max_depth: Some(2),
             result: "ok",
             error_type: None,
+            session_id: None,
+            seq: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("analyze_directory"));
@@ -244,11 +254,52 @@ mod tests {
             max_depth: Some(3),
             result: "error",
             error_type: Some("invalid_params".to_string()),
+            session_id: None,
+            seq: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""result":"error""#));
         assert!(json.contains(r#""error_type":"invalid_params""#));
         assert!(json.contains(r#""output_chars":0"#));
         assert!(json.contains(r#""max_depth":3"#));
+    }
+
+    #[test]
+    fn test_metric_event_serde_new_fields_present() {
+        let event = MetricEvent {
+            ts: 1000,
+            tool: "analyze_file",
+            duration_ms: 50,
+            output_chars: 200,
+            param_path_depth: 3,
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: Some("s-123456".to_string()),
+            seq: Some(5),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"session_id\":\"s-123456\""));
+        assert!(json.contains("\"seq\":5"));
+    }
+
+    #[test]
+    fn test_metric_event_serde_backward_compat() {
+        // Old 8-field record -- new optional fields default to None/None
+        let old_json = br#"{"ts":1773928982808,"tool":"analyze_directory","duration_ms":227,"output_chars":678,"param_path_depth":1,"max_depth":1,"result":"ok","error_type":null}"#;
+        let event: MetricEvent = serde_json::from_slice(old_json).unwrap();
+        assert_eq!(event.session_id, None);
+        assert_eq!(event.seq, None);
+    }
+
+    #[test]
+    fn test_seq_increments() {
+        let counter = Arc::new(AtomicU32::new(0));
+        let s0 = counter.fetch_add(1, Ordering::Relaxed);
+        let s1 = counter.fetch_add(1, Ordering::Relaxed);
+        let s2 = counter.fetch_add(1, Ordering::Relaxed);
+        assert_eq!(s0, 0);
+        assert_eq!(s1, 1);
+        assert_eq!(s2, 2);
     }
 }

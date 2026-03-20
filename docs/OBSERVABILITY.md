@@ -24,12 +24,18 @@ Each line in the JSONL file is one JSON object:
 | `max_depth` | `u32 \| null` | The `max_depth` param if present; `null` for `analyze_file` and `analyze_module` |
 | `result` | `string` | `"ok"` on success, `"error"` on early-exit error paths |
 | `error_type` | `string \| null` | On error: `invalid_params`, `parse`, or `unknown`; `null` on success |
+| `session_id` | `string \| null` | UUID or timestamp-based ID assigned per MCP connection; `null` for events before first initialize; added in Wave 7 |
+| `seq` | `u32 \| null` | Monotonic call counter per session, starting at 0; `null` for events before first initialize; added in Wave 7 |
 
 ### Example record
 
 ```json
 {"ts":1700000042000,"tool":"analyze_directory","duration_ms":87,"output_chars":1423,"param_path_depth":4,"max_depth":2,"result":"ok","error_type":null}
 ```
+
+## Backward Compatibility
+
+Fields added in Wave 7 (`session_id`, `seq`) use `#[serde(default)]` in the MetricEvent struct. Existing JSONL files from earlier versions (missing these fields) parse successfully, with the new fields defaulting to `None`. This ensures no migration is required when upgrading the server.
 
 ## Daily Rotation and 30-Day Retention
 

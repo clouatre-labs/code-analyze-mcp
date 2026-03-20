@@ -3923,6 +3923,8 @@ async fn test_metrics_writer_produces_jsonl_line() {
         max_depth: None,
         result: "ok",
         error_type: None,
+        session_id: None,
+        seq: None,
     };
     metrics_tx.send(ev).unwrap();
     drop(metrics_tx);
