@@ -116,7 +116,7 @@ MCP_TOOLS = {
     "mcp__code-analyze__analyze_symbol",
     "mcp__code-analyze__analyze_module",
 }
-NATIVE_TOOLS = {"Bash", "Glob", "Grep", "Read"}
+NATIVE_TOOLS = {"Bash", "Glob", "Grep", "Read", "Write", "ToolSearch"}
 
 tools_used = set()
 with open(session_file) as f:
