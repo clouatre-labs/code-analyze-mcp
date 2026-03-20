@@ -79,6 +79,8 @@ fi
 OUTPUT_FILE="$RUNS_DIR/${RUN_ID}-report.json"
 LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
 
+MAX_BUDGET_USD="${BENCH_MAX_BUDGET_USD:-2.00}"
+
 # Print header
 cat <<EOF
 === v12 Benchmark Run ===
@@ -87,6 +89,7 @@ RUN_ID:    $RUN_ID
 MODEL:     $MODEL
 TOOL_SET:  $TOOL_SET
 ALLOWED:   $ALLOWED_TOOLS
+BUDGET:    $MAX_BUDGET_USD USD
 OUTPUT:    $OUTPUT_FILE
 EOF
 
@@ -169,6 +172,7 @@ DISABLE_PROMPT_CACHING=1 claude \
   $MCP_FLAGS \
   --allowedTools "$ALLOWED_TOOLS" \
   --dangerously-skip-permissions \
+  --max-budget-usd "$MAX_BUDGET_USD" \
   "$TASK_CONTENT" \
   > "$OUTPUT_FILE" \
   2> "$LOG_FILE"

@@ -7,8 +7,6 @@ Repository: django/django at commit 6b90f8a8d6994dc62cd91dde911fe56ec3389494
 ALLOWED TOOLS: mcp__code-analyze__analyze_directory, mcp__code-analyze__analyze_file, mcp__code-analyze__analyze_symbol, mcp__code-analyze__analyze_module
 FORBIDDEN TOOLS: Glob, Grep, Read, Bash, and any tools not listed above
 
-Turn budget: 30 turns maximum.
-
 ## MCP Tool Workflow
 
 Recommended call sequence for efficient analysis:
