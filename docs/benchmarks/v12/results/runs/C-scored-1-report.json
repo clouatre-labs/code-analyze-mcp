@@ -1,0 +1,46 @@
+{
+  "run_id": "C-scored-1",
+  "condition": "C",
+  "auth_module_map": [
+    {
+      "file": "django/contrib/auth/base_user.py",
+      "role": "Defines AbstractBaseUser (lines 43-164) with core password/authentication fields: password (CharField, line 44), last_login (DateTimeField, line 45). Also defines BaseUserManager with user creation methods."
+    },
+    {
+      "file": "django/contrib/auth/models.py",
+      "role": "Defines AbstractUser (lines 446-514) extending AbstractBaseUser + PermissionsMixin. Adds username (line 456), first_name (line 468), last_name (line 469), email (line 470), is_staff (line 471), is_active (line 476), date_joined (line 484). Also defines User (line 517) as the concrete model, PermissionsMixin (line 317) for permissions/groups."
+    },
+    {
+      "file": "django/contrib/auth/migrations/0001_initial.py",
+      "role": "Initial migration defining all default User model fields and relationships to Permission/Group tables. Establishes schema baseline for auth system."
+    }
+  ],
+  "migration_trace": [
+    "Step 1: Identify mapping - AbstractBaseUser (base_user.py:43-164) provides: password (line 44), last_login (line 45). AbstractUser (models.py:446-514) adds: username (line 456), first_name (line 468), last_name (line 469), email (line 470), is_staff (line 471), is_active (line 476), date_joined (line 484).",
+    "Step 2: Analyze custom fields - profile_tier (CharField with choices), external_sso_id (CharField unique), last_sync_at (DateTimeField) have NO equivalents in django.contrib.auth base models or PermissionsMixin (models.py:317-443).",
+    "Step 3: Create custom User model inheriting AbstractBaseUser - models.py:317 shows PermissionsMixin pattern for adding fields beyond base auth. Custom model must explicitly add profile_tier, external_sso_id, last_sync_at fields and its own Meta class with app_label.",
+    "Step 4: Create UserManager subclass - UserManager defined at models.py:140 shows create_user/create_superuser pattern. Custom manager must override these methods to accept **extra_fields for the three new fields, using models.py:143-156 (_create_user_object) as integration point.",
+    "Step 5: Data migration phase - Use migrations.RunPython to map existing AbstractUser data (is_staff/is_active/email) to new model while populating unmappable fields with defaults, following pattern in migrations/0001_initial.py:204 CreateModel operations."
+  ],
+  "unmappable_fields": [
+    {
+      "field": "profile_tier",
+      "reason": "CharField with choices=['free','pro','enterprise'] is business-domain-specific subscription/feature tier. Django's AbstractBaseUser (base_user.py:43-164) only provides authentication primitives (password, last_login). AbstractUser (models.py:446-514) adds user identity fields (username, email, first/last_name, is_staff, is_active, date_joined) but no tier/subscription system.",
+      "migration_strategy": "Add as explicit model field on custom User inheriting AbstractBaseUser. Add to UserManager._create_user_object override (models.py:143-156 pattern) to accept profile_tier in **extra_fields. Set default in model field definition (e.g., default='free') or create data migration to backfill.",
+      "evidence": "base_user.py:43 defines AbstractBaseUser as models.Model with only password/last_login; models.py:446 AbstractUser also has no tier field; models.py:317-443 PermissionsMixin (used by AbstractUser) adds only is_active/groups/user_permissions, no domain fields."
+    },
+    {
+      "field": "external_sso_id",
+      "reason": "CharField(unique=True, nullable) for SSO integration is external system glue code. AbstractBaseUser password field (base_user.py:44) is for internal auth only, not SSO. AbstractUser inherits nothing SSO-related. PermissionsMixin (models.py:317-343) covers groups/permissions only.",
+      "migration_strategy": "Add as explicit unique CharField on custom User model. Use db_index=True for query performance on SSO lookups. In UserManager._create_user override, accept external_sso_id in **extra_fields. Create data migration (migrations.RunPython) to populate existing users with NULL or unique dummy values per row if adding to legacy data.",
+      "evidence": "base_user.py:44 CharField for password only; models.py:456 username CharField is unique but for internal Django auth, not external SSO; no SSO pattern exists in AbstractUser or PermissionsMixin; SSO would require custom authentication backend (backends.py:342) separate from this model field."
+    },
+    {
+      "field": "last_sync_at",
+      "reason": "DateTimeField(nullable) tracking last sync timestamp with external system (SSO, directory, etc.) is audit/operational metadata. AbstractBaseUser only provides last_login (base_user.py:45) for auth event tracking, not sync tracking. AbstractUser adds date_joined (models.py:484) for account creation, not sync events.",
+      "migration_strategy": "Add as explicit DateTimeField(null=True, blank=True) on custom User model. Set auto_now=False to avoid overwriting on every save. Create data migration (migrations.RunPython using timezone.now()) to backfill existing users with NULL or initialization timestamp. Optional: add pre_save signal listener or custom save() override to update on SSO sync events.",
+      "evidence": "base_user.py:45 DateTimeField last_login only records authentication events, not sync events; models.py:484 DateTimeField date_joined only records account creation; no sync tracking field exists in AbstractBaseUser or AbstractUser; audit timestamps are custom per use case (not part of Django's built-in auth)."
+    }
+  ],
+  "tool_calls_total": 6
+}

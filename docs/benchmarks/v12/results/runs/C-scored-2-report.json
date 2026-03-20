@@ -1,0 +1,63 @@
+{
+  "run_id": "C-scored-2",
+  "condition": "C",
+  "auth_module_map": [
+    {
+      "file": "django/contrib/auth/base_user.py",
+      "role": "Defines AbstractBaseUser (lines 43-164) with core auth fields: username, password, last_login"
+    },
+    {
+      "file": "django/contrib/auth/models.py",
+      "role": "Defines AbstractUser (lines 446-514) extending AbstractBaseUser + PermissionsMixin with personal/admin fields; UserManager (line 140) handles user creation"
+    },
+    {
+      "file": "django/contrib/auth/migrations/0001_initial.py",
+      "role": "Initial migration schema defining User model structure and field constraints"
+    },
+    {
+      "file": "django/contrib/auth/forms.py",
+      "role": "User creation/change forms (lines 213-302) validate and handle user data; BaseUserCreationForm at line 213"
+    },
+    {
+      "file": "django/contrib/auth/backends.py",
+      "role": "ModelBackend (line 54) authenticates users; configure_user method at line 327 allows backend-specific user setup"
+    },
+    {
+      "file": "django/contrib/auth/checks.py",
+      "role": "check_user_model function (line 27) validates custom user models against auth requirements"
+    }
+  ],
+  "migration_trace": [
+    "1. Define custom User model extending AbstractBaseUser (not AbstractUser) at app/models.py",
+    "2. Add custom fields: profile_tier, external_sso_id, last_sync_at to custom User model",
+    "3. Create UserManager subclass (models.py:140-239) to handle user creation with extra_fields for custom fields",
+    "4. Register custom User model in AUTH_USER_MODEL setting (Django checks.py:27 validates this)",
+    "5. Create initial migration in app/migrations/ with CreateModel for User + 3 custom fields (see migrations/0001_initial.py:13-204 for pattern)",
+    "6. Extend UserCreationForm (forms.py:213-251 BaseUserCreationForm pattern) to include custom fields in admin",
+    "7. Extend UserChangeForm (forms.py:275-302 UserChangeForm pattern) to display custom fields",
+    "8. Update backend.configure_user (backends.py:327) if custom fields need backend-specific initialization",
+    "9. Add custom validation in User.clean() (models.py:497-499 pattern) for profile_tier choices",
+    "10. Run makemigrations and migrate to deploy custom User model alongside auth framework"
+  ],
+  "unmappable_fields": [
+    {
+      "field": "profile_tier",
+      "reason": "CharField with choices=['free','pro','enterprise'] has no equivalent in AbstractBaseUser (line 43-164: only has username, password, last_login) or AbstractUser (line 446-514: adds first_name, last_name, email, is_staff, is_active, date_joined, groups, user_permissions but no tier/subscription field)",
+      "migration_strategy": "Add as custom CharField(max_length=20, choices=TIER_CHOICES) directly to custom User model; extend UserCreationForm/UserChangeForm (forms.py:213-302) to validate and render profile_tier field; add validation logic in User.clean() method (models.py:497 pattern)",
+      "evidence": "models.py:446-514 (AbstractUser fields), models.py:468-484 (all built-in User fields), forms.py:213-251 (form extension pattern)"
+    },
+    {
+      "field": "external_sso_id",
+      "reason": "CharField with unique=True, nullable has no equivalent in AbstractBaseUser or AbstractUser. Django auth manages authentication via username+password or backend-specific methods (backends.py:54-242 ModelBackend), not external SSO identifiers. EmailField (models.py:470) is the closest unique identifier but serves a different purpose.",
+      "migration_strategy": "Add custom CharField(max_length=255, unique=True, null=True, blank=True) to custom User model; handle SSO mapping in custom authentication backend by extending ModelBackend.authenticate() (backends.py:59-72) to check external_sso_id; implement custom RemoteUserBackend.configure_user() (backends.py:327-333) to populate external_sso_id on SSO user creation",
+      "evidence": "backends.py:54-89 (ModelBackend.authenticate pattern), backends.py:327-333 (configure_user hook for SSO integration), models.py:470 (unique email field precedent)"
+    },
+    {
+      "field": "last_sync_at",
+      "reason": "DateTimeField nullable has no equivalent in AbstractBaseUser (only has last_login at line 45) or AbstractUser. Django auth tracks last_login automatically (signals.py, models.py:18-24 update_last_login), but has no 'sync' timestamp. Custom sync tracking is application-specific, not framework-provided.",
+      "migration_strategy": "Add custom DateTimeField(null=True, blank=True) to custom User model; create signal handler connected to custom sync event (not Django's user_logged_in signal at models.py:5) to auto-update last_sync_at on external data sync operations; optional: add sync_now() method to User model to update timestamp on-demand",
+      "evidence": "models.py:18-24 (update_last_login signal handler pattern using signals.py:5), base_user.py:45 (last_login DateTimeField as nearest precedent), models.py:484 (date_joined DateTimeField pattern)"
+    }
+  ],
+  "tool_calls_total": 8
+}

@@ -1,0 +1,134 @@
+{
+  "run_id": "C-pilot-1",
+  "condition": "C",
+  "auth_module_map": [
+    {
+      "file": "django/contrib/auth/base_user.py",
+      "role": "Defines AbstractBaseUser (line 43) with core user authentication fields: password (line 46) and last_login (line 47)"
+    },
+    {
+      "file": "django/contrib/auth/models.py",
+      "role": "Defines AbstractUser (line 446) extending AbstractBaseUser+PermissionsMixin; defines User (line 517) as concrete model; defines PermissionsMixin (line 317) for permission fields"
+    },
+    {
+      "file": "django/contrib/auth/migrations/0001_initial.py",
+      "role": "Initial migration defines User model schema with 12 fields including username, email, first_name, last_name, is_staff, is_active, is_superuser, last_login, date_joined, groups, user_permissions"
+    },
+    {
+      "file": "django/contrib/auth/admin.py",
+      "role": "Admin integration points for User model customization"
+    },
+    {
+      "file": "django/contrib/auth/forms.py",
+      "role": "Built-in forms for User model (UserCreationForm, UserChangeForm) that validate standard fields"
+    }
+  ],
+  "field_mapping": {
+    "builtin_fields_in_abstractbaseuser": [
+      {
+        "field": "password",
+        "type": "CharField",
+        "line": "base_user.py:46",
+        "notes": "Managed by set_password/check_password methods"
+      },
+      {
+        "field": "last_login",
+        "type": "DateTimeField",
+        "line": "base_user.py:47",
+        "notes": "Updated via update_last_login signal (models.py:18-24)"
+      }
+    ],
+    "builtin_fields_in_abstractuser": [
+      {
+        "field": "username",
+        "type": "CharField with UnicodeUsernameValidator",
+        "line": "models.py:456",
+        "notes": "Unique, required identifier for auth"
+      },
+      {
+        "field": "first_name",
+        "type": "CharField",
+        "line": "models.py:468",
+        "notes": "Max 150 chars"
+      },
+      {
+        "field": "last_name",
+        "type": "CharField",
+        "line": "models.py:469",
+        "notes": "Max 150 chars"
+      },
+      {
+        "field": "email",
+        "type": "EmailField",
+        "line": "models.py:470",
+        "notes": "Optional but recommended; normalized via normalize_email"
+      },
+      {
+        "field": "is_staff",
+        "type": "BooleanField",
+        "line": "models.py:471",
+        "notes": "Determines admin access"
+      },
+      {
+        "field": "is_active",
+        "type": "BooleanField",
+        "line": "models.py:476",
+        "notes": "Controls account enablement; used in authentication backends"
+      },
+      {
+        "field": "is_superuser",
+        "type": "BooleanField",
+        "line": "models.py:323",
+        "notes": "Defined in PermissionsMixin; grants all permissions"
+      },
+      {
+        "field": "date_joined",
+        "type": "DateTimeField",
+        "line": "models.py:484",
+        "notes": "Timestamp when user was created"
+      },
+      {
+        "field": "groups",
+        "type": "ManyToManyField",
+        "line": "models.py:331",
+        "notes": "Defined in PermissionsMixin; links to Group model"
+      },
+      {
+        "field": "user_permissions",
+        "type": "ManyToManyField",
+        "line": "models.py:342",
+        "notes": "Defined in PermissionsMixin; direct permission assignment"
+      }
+    ]
+  },
+  "migration_trace": [
+    "Step 1: Create new custom User model extending AbstractBaseUser (not AbstractUser) with profile_tier, external_sso_id, last_sync_at fields",
+    "Step 2: Reference base_user.py:43-56 (AbstractBaseUser class definition) to understand minimal required fields: id (implicit), password (line 46), last_login (line 47), and get_username/is_authenticated methods",
+    "Step 3: Reference models.py:140-210 to extend UserManager for custom user creation logic; UserManager._create_user (line 143-156) handles extra_fields parameter for custom fields",
+    "Step 4: Reference models.py:317-351 (PermissionsMixin) to optionally add permission support; inherit both AbstractBaseUser and PermissionsMixin like AbstractUser does (models.py:446)",
+    "Step 5: Reference models.py:486 to add custom manager instance to model",
+    "Step 6: For admin integration, reference admin.py for custom UserAdmin class or forms.py for custom UserChangeForm that includes new fields",
+    "Step 7: Create data migration to populate profile_tier (set defaults), external_sso_id (nullable), last_sync_at (nullable) on existing records"
+  ],
+  "unmappable_fields": [
+    {
+      "field": "profile_tier",
+      "reason": "CharField with choices is application-specific business logic; no direct equivalent in contrib.auth model hierarchy. AbstractBaseUser defines only password+last_login; AbstractUser adds username/email/name fields but no tier/subscription concept.",
+      "migration_strategy": "Add as custom CharField with choices on the custom User model. Define choices as class constant or in model Meta. Reference models.py:456-484 (AbstractUser field patterns) for implementation style. Populate via data migration setting default value (e.g., 'free') for existing users.",
+      "evidence": "models.py:446-514 (AbstractUser fields inventory); base_user.py:43-56 (AbstractBaseUser lacks business-logic fields); forms.py for custom form integration"
+    },
+    {
+      "field": "external_sso_id",
+      "reason": "Single Sign-On integration is not part of Django's built-in auth model; unique nullable CharField required for OAuth/SAML provider identifiers. contrib.auth provides username as auth key but not SSO ID mapping.",
+      "migration_strategy": "Add as custom CharField with unique=True, null=True, blank=True. Create database migration with AddField operation. Implement custom authentication backend (reference backends.py:342) that checks external_sso_id when SSO login occurs. Override UserManager._create_user_object (models.py:143-156) to accept external_sso_id in extra_fields.",
+      "evidence": "models.py:140-210 (UserManager pattern); backends.py:342 (custom authentication backend integration points); No SSO fields in AbstractBaseUser (base_user.py:43-56) or AbstractUser (models.py:446-514)"
+    },
+    {
+      "field": "last_sync_at",
+      "reason": "Timestamp for external system synchronization is not part of contrib.auth's core user lifecycle tracking. AbstractBaseUser only provides last_login (base_user.py:47); AbstractUser adds date_joined (models.py:484) but not sync/external-event tracking.",
+      "migration_strategy": "Add as custom DateTimeField with null=True, blank=True, auto_now_on_add=False. Populate with data migration setting default (e.g., timezone.now() or NULL). Create signal handler to update last_sync_at when custom sync logic completes (reference models.py:18-24 for signal pattern with update_last_login). Alternatively add update methods to custom User model (similar to base_user.py:61-65 save() pattern).",
+      "evidence": "base_user.py:47 (last_login defined as DateTimeField in AbstractBaseUser); models.py:18-24 (update_last_login signal pattern); models.py:484 (date_joined field); no external sync fields in built-in models"
+    }
+  ],
+  "tool_calls_total": 5
+}

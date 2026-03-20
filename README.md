@@ -344,14 +344,22 @@ All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code
 
 v12 measures MCP vs native tool-set impact on a Django auth migration task (4 conditions, 8 scored runs).
 
-| Condition | Model | Tool Set | Median Score | n |
-|---|---|---|---|---|
-| A | claude-sonnet-4-6 | MCP | TBD | 2 |
-| B | claude-sonnet-4-6 | native | TBD | 2 |
-| C | claude-haiku-4-5 | MCP | TBD | 2 |
-| D | claude-haiku-4-5 | native | TBD | 2 |
+**Results** (n=2 per condition)
 
-Score = structural_accuracy + cross_module_tracing + approach_quality (max=9). Runs pending. See [docs/benchmarks/v12/methodology.md](docs/benchmarks/v12/methodology.md).
+| Condition | Model | Tool Set | Score | Cost/Run | Eff. $/QP | Median Turns | Median Wall Time |
+|---|---|---|---|---|---|---|---|
+| A | claude-sonnet-4-6 | MCP | 9.0 | $0.509 | $0.0565 | 8.5 | 1.23m |
+| B | claude-sonnet-4-6 | native | 8.5 | $0.945 | $0.1112 | 24.5 | 2.25m |
+| C | claude-haiku-4-5 | MCP | 8.0 | $0.418 | $0.0522 | 13.0 | 0.79m |
+| D | claude-haiku-4-5 | native | 9.0 | $0.529 | $0.0588 | 19.0 | 1.31m |
+
+**Key Findings**
+
+- MCP conditions (A+C) are 37-53% cheaper per quality point than native conditions (B+D).
+- MCP Sonnet (A) uses 3x fewer turns and 2x less wall time than native Sonnet (B).
+- Structural accuracy is the only differentiating dimension; cross-module tracing and approach quality are uniformly 3.0 across all conditions.
+
+Score = structural_accuracy + cross_module_tracing + approach_quality (max=9). Composite efficiency: eff_cost_per_qp = cost_per_run / (mean_score × reliability). See [docs/benchmarks/v12/analysis.md](docs/benchmarks/v12/analysis.md).
 
 ## Supported Languages
 

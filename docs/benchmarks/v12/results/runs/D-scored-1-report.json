@@ -1,0 +1,51 @@
+{
+  "run_id": "D-scored-1",
+  "condition": "D",
+  "auth_module_map": [
+    {
+      "file": "django/contrib/auth/models.py",
+      "role": "Core auth models: AbstractBaseUser, AbstractUser, User, UserManager; password/last_login infrastructure"
+    },
+    {
+      "file": "django/contrib/auth/backends.py",
+      "role": "ModelBackend authentication handler; authenticate() method signature determines field support"
+    },
+    {
+      "file": "django/contrib/auth/managers.py",
+      "role": "UserManager with create_user/create_superuser; USERNAME_FIELD/REQUIRED_FIELDS config"
+    },
+    {
+      "file": "django/contrib/auth/apps.py",
+      "role": "Auth app configuration; ready() hook for signal handling and custom user model setup"
+    }
+  ],
+  "migration_trace": [
+    "1. Analyze AbstractBaseUser (django/contrib/auth/models.py:~80-150): provides password hashing, last_login DateTimeField, is_active BooleanField",
+    "2. Analyze AbstractUser (django/contrib/auth/models.py:~150-220): extends AbstractBaseUser with username/email/first_name/last_name/is_staff/is_superuser/date_joined",
+    "3. Identify field mappings: username\u2192username_field, email\u2192email_field, password\u2192password_field, last_login\u2192last_login (built-in only); profile_tier/external_sso_id/last_sync_at are unmappable",
+    "4. Review UserManager (django/contrib/auth/managers.py): create_user() creates instance with USERNAME_FIELD; create_superuser() sets is_staff/is_superuser",
+    "5. Review ModelBackend (django/contrib/auth/backends.py:authenticate method): accepts only username+password; does not support external_sso_id or custom tier checks",
+    "6. Strategy: Create custom User model extending AbstractBaseUser; define all three unmappable fields; create custom UserManager overriding create_user/create_superuser; implement custom backend for SSO auth"
+  ],
+  "unmappable_fields": [
+    {
+      "field": "profile_tier",
+      "reason": "No equivalent subscription/tier field in AbstractBaseUser or AbstractUser; tier management is application-specific business logic outside auth framework scope",
+      "migration_strategy": "Add CharField(max_length=20, choices=[(\"free\",\"Free\"),(\"pro\",\"Pro\"),(\"enterprise\",\"Enterprise\")], default=\"free\") as direct field on custom User model; manage tier changes through custom signals or middleware, not auth pipeline",
+      "evidence": "django/contrib/auth/models.py:~150-220 where AbstractUser fields are defined (username, email, first_name, last_name, is_staff, is_active, is_superuser, date_joined, groups, user_permissions) - no tier equivalent exists"
+    },
+    {
+      "field": "external_sso_id",
+      "reason": "SSO provider integration is external to Django contrib.auth; no built-in field for mapping to external identity systems; ModelBackend.authenticate() only accepts username/password",
+      "migration_strategy": "Add CharField(max_length=255, unique=True, null=True, blank=True) to custom User model; create custom authentication backend (subclass of ModelBackend in django/contrib/auth/backends.py) that overrides authenticate() to accept and validate external_sso_id instead of/alongside password",
+      "evidence": "django/contrib/auth/backends.py:ModelBackend.authenticate(request, username=None, password=None) method signature - only username/password parameters; no external_sso_id support; custom backends can override this method completely"
+    },
+    {
+      "field": "last_sync_at",
+      "reason": "Application-specific sync tracking timestamp; differs from last_login which only updates on successful password authentication; no Django built-in for general-purpose sync tracking",
+      "migration_strategy": "Add DateTimeField(null=True, blank=True) to custom User model; update via custom signals (post_save handlers) or middleware when sync occurs, not through standard auth flow; do not conflate with last_login field from AbstractBaseUser",
+      "evidence": "django/contrib/auth/models.py:~100-110 where AbstractBaseUser.last_login is defined as DateTimeField(null=True) - only updated by auth backend on successful authentication; has no application-level sync semantics"
+    }
+  ],
+  "tool_calls_total": 2
+}
