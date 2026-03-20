@@ -1,6 +1,3 @@
-Perfect. Now I have enough information to construct the migration plan. Let me create the JSON output with all the required information:
-
-```json
 {
   "run_id": "C-pilot-1",
   "condition": "C",
@@ -135,4 +132,3 @@ Perfect. Now I have enough information to construct the migration plan. Let me c
   ],
   "tool_calls_total": 5
 }
-```

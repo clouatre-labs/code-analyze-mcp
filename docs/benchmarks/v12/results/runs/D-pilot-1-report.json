@@ -1,6 +1,3 @@
-Perfect. Here's the migration plan in valid JSON format:
-
-```json
 {
   "run_id": "D-pilot-1",
   "condition": "D",
@@ -64,25 +61,3 @@ Perfect. Here's the migration plan in valid JSON format:
   ],
   "tool_calls_total": 16
 }
-```
-
-## Summary
-
-**Key Findings:**
-
-1. **AbstractBaseUser** (base_user.py:43-165) provides the bare minimum: `password` and `last_login` fields only.
-
-2. **AbstractUser** (models.py:446-515) extends both AbstractBaseUser and PermissionsMixin, adding: `username`, `first_name`, `last_name`, `email`, `is_staff`, `is_active`, and `date_joined`.
-
-3. **All three custom fields are unmappable** because:
-   - **profile_tier**: No subscription/tier system in Django auth
-   - **external_sso_id**: No external identity integration in stock Django
-   - **last_sync_at**: No sync metadata tracking (only last_login for sessions)
-
-4. **Migration Integration Points:**
-   - Model validation via `checks.check_user_model()` (checks.py:27-120)
-   - User retrieval via `get_user_model()` (\_\_init\_\_.py:256-270)
-   - Signal connections in `AuthConfig.ready()` (apps.py:18-32)
-   - Manager pattern from `BaseUserManager` (base_user.py:21-40)
-
-Each unmappable field requires its own migration with explicit strategy for handling existing data and integration with custom authentication backends.

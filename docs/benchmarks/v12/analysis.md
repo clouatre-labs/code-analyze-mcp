@@ -66,9 +66,9 @@ Median tool_calls_total per condition:
 
 Native Sonnet (B) used the most tool calls (median 12), while MCP Sonnet (A) used the fewest (median 3). Haiku conditions (C and D) fell in the middle range.
 
-### Tokens and Wall Time (Condition D Only)
+### Tokens and Wall Time
 
-Telemetry was captured for condition D runs. Conditions A, B, and C used an earlier runner version that did not output telemetry.
+Telemetry was captured for all scored runs. The table below shows condition D as a representative example; telemetry for conditions A, B, and C is available in the per-run telemetry sidecars and `scores-template.json`.
 
 | Run ID | Wall Time (ms) | Input Tokens | Output Tokens | Turns | Cost (USD) | Score / Dollar |
 |--------|----------------|--------------|---------------|-------|-----------|----------------|

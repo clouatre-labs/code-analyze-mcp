@@ -1,6 +1,3 @@
-I now have all the data needed. Here is the output:
-
-```json
 {
   "run_id": "B-pilot-1",
   "condition": "B",
@@ -55,4 +52,3 @@ I now have all the data needed. Here is the output:
   ],
   "tool_calls_total": 5
 }
-```

@@ -42,44 +42,45 @@ fi
 # Dispatch condition to model and tool set
 case "$CONDITION_ID" in
   A)
-    MODEL="sonnet"
+    MODEL="claude-sonnet-4-6"
     TOOL_SET="mcp"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a-mcp-sonnet.md"
     ;;
   B)
-    MODEL="sonnet"
+    MODEL="claude-sonnet-4-6"
     TOOL_SET="native"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-b-native-sonnet.md"
     ;;
   C)
-    MODEL="haiku"
+    MODEL="claude-haiku-4-5"
     TOOL_SET="mcp"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-c-mcp-haiku.md"
     ;;
   D)
-    MODEL="haiku"
+    MODEL="claude-haiku-4-5"
     TOOL_SET="native"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-d-native-haiku.md"
     ;;
 esac
 
+# Output files
+OUTPUT_FILE="$RUNS_DIR/${RUN_ID}-report.json"
+TELEMETRY_FILE="$RUNS_DIR/${RUN_ID}-telemetry.json"
+JSONL_FILE="/tmp/bench-v12-${RUN_ID}.json"
+LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
+
 # Tool isolation flags
 if [[ "$TOOL_SET" == "mcp" ]]; then
   ALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module"
   MCP_FLAGS="--mcp-config $MCP_CODE_ANALYZE_ONLY --strict-mcp-config"
+  trap 'rm -f "$JSONL_FILE"' EXIT
 else
   ALLOWED_TOOLS="Bash,Glob,Grep,Read,Write,ToolSearch"
   EMPTY_MCP_CONFIG=$(mktemp /tmp/bench-v12-empty-mcp.XXXXXX.json)
   echo '{"mcpServers":{}}' > "$EMPTY_MCP_CONFIG"
   MCP_FLAGS="--mcp-config $EMPTY_MCP_CONFIG --strict-mcp-config"
-  trap 'rm -f "$EMPTY_MCP_CONFIG" "$JSONL_FILE"' EXIT
+  trap 'rm -f "$EMPTY_MCP_CONFIG" "${JSONL_FILE:-}"' EXIT
 fi
-
-# Output files
-OUTPUT_FILE="$RUNS_DIR/${RUN_ID}-report.json"
-TELEMETRY_FILE="$RUNS_DIR/${RUN_ID}-telemetry.json"
-JSONL_FILE="/tmp/bench-v12-${RUN_ID}.jsonl"
-LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
 
 MAX_BUDGET_USD="${BENCH_MAX_BUDGET_USD:-}"
 
@@ -115,7 +116,7 @@ validate_tool_isolation() {
   local session_file="$1"
   local expected_tool_set="$2"  # "mcp" or "native"
 
-  /opt/homebrew/bin/python3.14 - "$session_file" "$expected_tool_set" << 'PYEOF'
+  python3 - "$session_file" "$expected_tool_set" << 'PYEOF'
 import json, sys
 
 session_file = sys.argv[1]
@@ -194,7 +195,7 @@ DISABLE_PROMPT_CACHING=1 claude \
 echo "Run completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Extract structured output and telemetry from JSON array output
-/opt/homebrew/bin/python3.14 - "$JSONL_FILE" "$OUTPUT_FILE" "$TELEMETRY_FILE" << 'PYEOF'
+python3 - "$JSONL_FILE" "$OUTPUT_FILE" "$TELEMETRY_FILE" << 'PYEOF'
 import json
 import sys
 
@@ -297,7 +298,7 @@ fi
 # Output validation
 if [[ -f "$OUTPUT_FILE" ]]; then
   echo "Report file: $OUTPUT_FILE"
-  if /opt/homebrew/bin/python3.14 -c "import json,sys; json.load(open('$OUTPUT_FILE'))" 2>/dev/null; then
+  if python3 -c "import json,sys; json.load(open('$OUTPUT_FILE'))" 2>/dev/null; then
     echo "Output: VALID JSON"
   else
     echo "Output: INVALID JSON" >&2
@@ -310,7 +311,7 @@ fi
 # Telemetry validation
 if [[ -f "$TELEMETRY_FILE" ]]; then
   echo "Telemetry file: $TELEMETRY_FILE"
-  if /opt/homebrew/bin/python3.14 -c "import json,sys; json.load(open('$TELEMETRY_FILE'))" 2>/dev/null; then
+  if python3 -c "import json,sys; json.load(open('$TELEMETRY_FILE'))" 2>/dev/null; then
     echo "Telemetry: VALID JSON"
   else
     echo "Telemetry: INVALID JSON" >&2

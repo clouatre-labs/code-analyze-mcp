@@ -1,4 +1,3 @@
-```json
 {
   "run_id": "A-pilot-1",
   "condition": "A",
@@ -55,6 +54,3 @@
   ],
   "tool_calls_total": 5
 }
-```
-
-**Tool calls used:** 5 — `analyze_directory` (auth/), `analyze_file` (base_user.py), `analyze_file` (models.py), `analyze_module` (checks.py), `analyze_module` (0001_initial.py).
