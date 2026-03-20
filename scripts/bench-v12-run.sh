@@ -42,22 +42,22 @@ fi
 # Dispatch condition to model and tool set
 case "$CONDITION_ID" in
   A)
-    MODEL="claude-sonnet-4-6"
+    MODEL="sonnet"
     TOOL_SET="mcp"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a-mcp-sonnet.md"
     ;;
   B)
-    MODEL="claude-sonnet-4-6"
+    MODEL="sonnet"
     TOOL_SET="native"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-b-native-sonnet.md"
     ;;
   C)
-    MODEL="claude-haiku-4-5"
+    MODEL="haiku"
     TOOL_SET="mcp"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-c-mcp-haiku.md"
     ;;
   D)
-    MODEL="claude-haiku-4-5"
+    MODEL="haiku"
     TOOL_SET="native"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-d-native-haiku.md"
     ;;
@@ -72,14 +72,19 @@ else
   EMPTY_MCP_CONFIG=$(mktemp /tmp/bench-v12-empty-mcp.XXXXXX.json)
   echo '{"mcpServers":{}}' > "$EMPTY_MCP_CONFIG"
   MCP_FLAGS="--mcp-config $EMPTY_MCP_CONFIG --strict-mcp-config"
-  trap 'rm -f "$EMPTY_MCP_CONFIG"' EXIT
+  trap 'rm -f "$EMPTY_MCP_CONFIG" "$JSONL_FILE"' EXIT
 fi
 
 # Output files
 OUTPUT_FILE="$RUNS_DIR/${RUN_ID}-report.json"
+TELEMETRY_FILE="$RUNS_DIR/${RUN_ID}-telemetry.json"
+JSONL_FILE="/tmp/bench-v12-${RUN_ID}.jsonl"
 LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
 
 MAX_BUDGET_USD="${BENCH_MAX_BUDGET_USD:-}"
+
+# Define output schema for structured JSON
+OUTPUT_SCHEMA='{"type":"object","properties":{"run_id":{"type":"string"},"condition":{"type":"string"},"auth_module_map":{"type":"array","items":{"type":"object"}},"migration_trace":{"type":"array","items":{"type":"string"}},"unmappable_fields":{"type":"array","items":{"type":"object","properties":{"field":{"type":"string"},"reason":{"type":"string"},"migration_strategy":{"type":"string"},"evidence":{"type":"string"}},"required":["field","reason","migration_strategy","evidence"]}},"tool_calls_total":{"type":"integer"}},"required":["run_id","condition","auth_module_map","migration_trace","unmappable_fields","tool_calls_total"]}'
 
 # Print header
 cat <<EOF
@@ -180,11 +185,95 @@ DISABLE_PROMPT_CACHING=1 claude \
   $MCP_FLAGS \
   --allowedTools "$ALLOWED_TOOLS" \
   --dangerously-skip-permissions \
-  "${BUDGET_FLAG[@]}" \
+  --output-format json \
+  --json-schema "$OUTPUT_SCHEMA" \
+  ${BUDGET_FLAG:+"${BUDGET_FLAG[@]}"} \
   "$TASK_CONTENT" \
-  > "$OUTPUT_FILE" \
+  > "$JSONL_FILE" \
   2> "$LOG_FILE"
 echo "Run completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Extract structured output and telemetry from JSON array output
+/opt/homebrew/bin/python3.14 - "$JSONL_FILE" "$OUTPUT_FILE" "$TELEMETRY_FILE" << 'PYEOF'
+import json
+import sys
+
+jsonl_file = sys.argv[1]
+output_file = sys.argv[2]
+telemetry_file = sys.argv[3]
+
+result_found = False
+structured_output = None
+telemetry_data = {}
+
+try:
+    with open(jsonl_file) as f:
+        content = f.read().strip()
+        if not content:
+            print("ERROR: JSONL file is empty", file=sys.stderr)
+            sys.exit(1)
+        
+        # claude --output-format json outputs a JSON array; parse it
+        try:
+            messages = json.loads(content)
+            if not isinstance(messages, list):
+                messages = [messages]
+        except json.JSONDecodeError:
+            print("ERROR: Could not parse JSONL file as JSON", file=sys.stderr)
+            sys.exit(1)
+        
+        # Find the result message
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get("type") == "result":
+                result_found = True
+                structured_output = msg.get("structured_output")
+                
+                # Extract telemetry fields from result envelope
+                if "duration_ms" in msg:
+                    telemetry_data["wall_time_ms"] = msg["duration_ms"]
+                if "duration_api_ms" in msg:
+                    telemetry_data["api_time_ms"] = msg["duration_api_ms"]
+                if "num_turns" in msg:
+                    telemetry_data["num_turns"] = msg["num_turns"]
+                if "total_cost_usd" in msg:
+                    telemetry_data["cost_usd"] = msg["total_cost_usd"]
+                
+                # Extract token counts from usage object
+                usage = msg.get("usage", {})
+                if isinstance(usage, dict):
+                    if "input_tokens" in usage:
+                        telemetry_data["input_tokens"] = usage["input_tokens"]
+                    if "output_tokens" in usage:
+                        telemetry_data["output_tokens"] = usage["output_tokens"]
+                    if "cache_read_input_tokens" in usage:
+                        telemetry_data["cache_read_tokens"] = usage["cache_read_input_tokens"]
+                    if "cache_creation_input_tokens" in usage:
+                        telemetry_data["cache_creation_tokens"] = usage["cache_creation_input_tokens"]
+                
+                break
+
+    if not result_found:
+        print("ERROR: No result message found in JSON output", file=sys.stderr)
+        sys.exit(1)
+    
+    if structured_output is None:
+        print("ERROR: structured_output is null or missing in result message", file=sys.stderr)
+        sys.exit(1)
+    
+    # Write structured output to report file
+    with open(output_file, 'w') as f:
+        json.dump(structured_output, f, indent=2)
+    
+    # Write telemetry to sidecar file
+    with open(telemetry_file, 'w') as f:
+        json.dump(telemetry_data, f, indent=2)
+
+except Exception as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    import traceback
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
+PYEOF
 
 # Session JSONL capture and validation
 if [[ -d "$SESSION_DIR" ]]; then
@@ -216,4 +305,16 @@ if [[ -f "$OUTPUT_FILE" ]]; then
 else
   echo "WARNING: Report file not found at $OUTPUT_FILE" >&2
   echo "Check $LOG_FILE for agent output" >&2
+fi
+
+# Telemetry validation
+if [[ -f "$TELEMETRY_FILE" ]]; then
+  echo "Telemetry file: $TELEMETRY_FILE"
+  if /opt/homebrew/bin/python3.14 -c "import json,sys; json.load(open('$TELEMETRY_FILE'))" 2>/dev/null; then
+    echo "Telemetry: VALID JSON"
+  else
+    echo "Telemetry: INVALID JSON" >&2
+  fi
+else
+  echo "WARNING: Telemetry file not found at $TELEMETRY_FILE" >&2
 fi
