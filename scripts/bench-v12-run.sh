@@ -79,7 +79,7 @@ fi
 OUTPUT_FILE="$RUNS_DIR/${RUN_ID}-report.json"
 LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
 
-MAX_BUDGET_USD="${BENCH_MAX_BUDGET_USD:-2.00}"
+MAX_BUDGET_USD="${BENCH_MAX_BUDGET_USD:-}"
 
 # Print header
 cat <<EOF
@@ -89,7 +89,7 @@ RUN_ID:    $RUN_ID
 MODEL:     $MODEL
 TOOL_SET:  $TOOL_SET
 ALLOWED:   $ALLOWED_TOOLS
-BUDGET:    $MAX_BUDGET_USD USD
+BUDGET:    ${BENCH_MAX_BUDGET_USD:-unlimited} USD
 OUTPUT:    $OUTPUT_FILE
 EOF
 
@@ -100,7 +100,10 @@ SYSTEM_PROMPT=$(sed \
   -e "s|OUTPUT_PATH|$OUTPUT_FILE|g" \
   -e "s|RUN_ID_PLACEHOLDER|$RUN_ID|g" \
   "$SYSTEM_PROMPT_FILE")
-TASK_CONTENT=$(sed -e "s|RUN_ID_PLACEHOLDER|$RUN_ID|g" "$PROMPTS_DIR/task.md")
+TASK_CONTENT=$(sed \
+  -e "s|RUN_ID_PLACEHOLDER|$RUN_ID|g" \
+  -e "s|CONDITION_PLACEHOLDER|$CONDITION_ID|g" \
+  "$PROMPTS_DIR/task.md")
 
 # Tool isolation validation function
 validate_tool_isolation() {
@@ -165,6 +168,11 @@ SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_REPO_SLUG}}"
 
 # Claude invocation
 echo "Starting run at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+BUDGET_FLAG=()
+if [[ -n "${BENCH_MAX_BUDGET_USD:-}" ]]; then
+  BUDGET_FLAG=(--max-budget-usd "$BENCH_MAX_BUDGET_USD")
+fi
+
 DISABLE_PROMPT_CACHING=1 claude \
   -p \
   --model "$MODEL" \
@@ -172,7 +180,7 @@ DISABLE_PROMPT_CACHING=1 claude \
   $MCP_FLAGS \
   --allowedTools "$ALLOWED_TOOLS" \
   --dangerously-skip-permissions \
-  --max-budget-usd "$MAX_BUDGET_USD" \
+  "${BUDGET_FLAG[@]}" \
   "$TASK_CONTENT" \
   > "$OUTPUT_FILE" \
   2> "$LOG_FILE"
