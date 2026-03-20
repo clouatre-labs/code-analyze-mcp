@@ -14,18 +14,18 @@ Your task:
 2. Map which contrib.auth fields correspond to the custom app's existing fields and which fields (profile_tier, external_sso_id, last_sync_at) have NO direct equivalent.
 3. Produce a migration plan that addresses all 3 unmappable fields, citing the specific django/contrib/auth/ files and line numbers where the integration points are.
 
-Output must be valid JSON matching this schema:
+Output must be valid JSON. Example structure:
 ```json
 {
-  "run_id": "<condition>-<pilot|scored>-<N>",
-  "condition": "A|B|C|D",
+  "run_id": "RUN_ID_PLACEHOLDER",
+  "condition": "CONDITION_PLACEHOLDER",
   "auth_module_map": [{"file": "path/relative/to/django", "role": "description"}],
-  "migration_trace": ["step 1 with file:line", "step 2 with file:line", ...],
+  "migration_trace": ["step 1 with file:line", "step 2 with file:line"],
   "unmappable_fields": [
     {"field": "profile_tier", "reason": "...", "migration_strategy": "...", "evidence": "file:line"},
     {"field": "external_sso_id", "reason": "...", "migration_strategy": "...", "evidence": "file:line"},
     {"field": "last_sync_at", "reason": "...", "migration_strategy": "...", "evidence": "file:line"}
   ],
-  "tool_calls_total": <integer>
+  "tool_calls_total": 0
 }
 ```
