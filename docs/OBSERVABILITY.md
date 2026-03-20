@@ -24,12 +24,18 @@ Each line in the JSONL file is one JSON object:
 | `max_depth` | `u32 \| null` | The `max_depth` param if present; `null` for `analyze_file` and `analyze_module` |
 | `result` | `string` | `"ok"` on success, `"error"` on early-exit error paths |
 | `error_type` | `string \| null` | On error: `invalid_params`, `parse`, or `unknown`; `null` on success |
+| `session_id` | `string \| null` | Session identifier in format `MILLIS-N` (13-digit Unix milliseconds + AtomicU64 counter); generated on server initialization |
+| `seq` | `u32 \| null` | 0-indexed call sequence within session; incremented atomically when emitting each `MetricEvent` at handler return |
 
 ### Example record
 
 ```json
-{"ts":1700000042000,"tool":"analyze_directory","duration_ms":87,"output_chars":1423,"param_path_depth":4,"max_depth":2,"result":"ok","error_type":null}
+{"ts":1700000042000,"tool":"analyze_directory","duration_ms":87,"output_chars":1423,"param_path_depth":4,"max_depth":2,"result":"ok","error_type":null,"session_id":"1742468880123-0","seq":0}
 ```
+
+### Backward compatibility
+
+The `session_id` and `seq` fields are optional (both marked with `#[serde(default)]` in the Rust struct). JSONL files written by older versions without these fields will parse successfully; missing fields default to `None`.
 
 ## Daily Rotation and 30-Day Retention
 

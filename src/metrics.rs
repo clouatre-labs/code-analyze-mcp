@@ -14,6 +14,10 @@ pub struct MetricEvent {
     pub max_depth: Option<u32>,
     pub result: &'static str,
     pub error_type: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub seq: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -226,6 +230,8 @@ mod tests {
             max_depth: Some(2),
             result: "ok",
             error_type: None,
+            session_id: None,
+            seq: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("analyze_directory"));
@@ -244,11 +250,65 @@ mod tests {
             max_depth: Some(3),
             result: "error",
             error_type: Some("invalid_params".to_string()),
+            session_id: None,
+            seq: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""result":"error""#));
         assert!(json.contains(r#""error_type":"invalid_params""#));
         assert!(json.contains(r#""output_chars":0"#));
         assert!(json.contains(r#""max_depth":3"#));
+    }
+
+    #[test]
+    fn test_metric_event_new_fields_round_trip() {
+        let event = MetricEvent {
+            ts: 1_700_000_000_000,
+            tool: "analyze_file",
+            duration_ms: 100,
+            output_chars: 500,
+            param_path_depth: 2,
+            max_depth: Some(3),
+            result: "ok",
+            error_type: None,
+            session_id: Some("1742468880123-42".to_string()),
+            seq: Some(5),
+        };
+        let serialized = serde_json::to_string(&event).unwrap();
+        let json_str = r#"{"ts":1700000000000,"tool":"analyze_file","duration_ms":100,"output_chars":500,"param_path_depth":2,"max_depth":3,"result":"ok","error_type":null,"session_id":"1742468880123-42","seq":5}"#;
+        assert_eq!(serialized, json_str);
+        let parsed: MetricEvent = serde_json::from_str(json_str).unwrap();
+        assert_eq!(parsed.session_id, Some("1742468880123-42".to_string()));
+        assert_eq!(parsed.seq, Some(5));
+    }
+
+    #[test]
+    fn test_metric_event_backward_compat_parse() {
+        let old_jsonl = r#"{"ts":1700000000000,"tool":"analyze_directory","duration_ms":42,"output_chars":100,"param_path_depth":3,"max_depth":2,"result":"ok","error_type":null}"#;
+        let parsed: MetricEvent = serde_json::from_str(old_jsonl).unwrap();
+        assert_eq!(parsed.tool, "analyze_directory");
+        assert_eq!(parsed.session_id, None);
+        assert_eq!(parsed.seq, None);
+    }
+
+    #[test]
+    fn test_session_id_format() {
+        let event = MetricEvent {
+            ts: 1_700_000_000_000,
+            tool: "analyze_symbol",
+            duration_ms: 20,
+            output_chars: 50,
+            param_path_depth: 1,
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: Some("1742468880123-0".to_string()),
+            seq: Some(0),
+        };
+        let sid = event.session_id.unwrap();
+        assert!(sid.contains('-'), "session_id should contain a dash");
+        let parts: Vec<&str> = sid.split('-').collect();
+        assert_eq!(parts.len(), 2, "session_id should have exactly 2 parts");
+        assert!(parts[0].len() == 13, "millis part should be 13 digits");
     }
 }
