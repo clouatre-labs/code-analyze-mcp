@@ -38,6 +38,9 @@ mod tests {
         assert_eq!(language_from_extension("java"), Some("java"));
         assert_eq!(language_from_extension("ts"), Some("typescript"));
         assert_eq!(language_from_extension("tsx"), Some("tsx"));
+        assert_eq!(language_from_extension("f90"), Some("fortran"));
+        assert_eq!(language_from_extension("for"), Some("fortran"));
+        assert_eq!(language_from_extension("ftn"), Some("fortran"));
     }
 
     #[test]
@@ -45,5 +48,8 @@ mod tests {
         assert_eq!(language_from_extension("unknown"), None);
         assert_eq!(language_from_extension(""), None);
         assert_eq!(language_from_extension("RS"), Some("rust"));
+        // Uppercase Fortran extensions resolved via eq_ignore_ascii_case
+        assert_eq!(language_from_extension("F90"), Some("fortran"));
+        assert_eq!(language_from_extension("FOR"), Some("fortran"));
     }
 }

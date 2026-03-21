@@ -4019,7 +4019,8 @@ END MODULE math_utils
     assert_eq!(
         output.semantic.classes.len(),
         0,
-        "module names not extracted due to grammar field gap (known limitation)"
+        "Fortran modules are not yet captured as classes (module_statement has no name \
+         field in tree-sitter-fortran 0.5.1; module support will be added in a future PR)"
     );
 }
 
