@@ -80,14 +80,7 @@ The `-S` flag GPG-signs the commit (required by branch protection).
 
 ## Branch Protection
 
-The `main` branch is protected by GitHub rulesets with the following rules:
-
-- **Required Status Checks**: All CI checks must pass before merging
-- **Signed Commits**: All commits must be signed (GPG or S/MIME)
-- **No Force Push**: History cannot be rewritten on main
-- **No Deletion**: The main branch cannot be deleted
-
-Ensure your commits are GPG-signed and all CI checks pass before opening a pull request.
+See [docs/repo-standards.md](docs/repo-standards.md) for ruleset configuration, required status checks, signed-commit enforcement, and branch protection rationale.
 
 ## License
 

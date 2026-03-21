@@ -14,6 +14,8 @@
 - **Compatible with any MCP orchestrator**: Claude Code, Kiro, Fast-Agent, MCP-Agent, and others
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
 
+For the reasoning behind these goals, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md).
+
 ## Module Map
 
 | Module | File | Responsibility |
