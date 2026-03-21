@@ -137,7 +137,15 @@ fn build_compiled_queries(
 
 /// Initialize the query cache with compiled queries for all supported languages.
 fn init_query_cache() -> HashMap<&'static str, CompiledQueries> {
-    let supported_languages = ["rust", "python", "typescript", "tsx", "go", "java"];
+    let supported_languages = [
+        "rust",
+        "python",
+        "typescript",
+        "tsx",
+        "go",
+        "java",
+        "fortran",
+    ];
     let mut cache = HashMap::new();
 
     for lang_name in &supported_languages {

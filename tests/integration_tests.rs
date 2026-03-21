@@ -3973,3 +3973,87 @@ fn test_analyze_directory_verbose_no_summary() {
         "verbose=true output must contain FILES section header"
     );
 }
+
+#[test]
+fn test_fortran_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("math.f90");
+    fs::write(
+        &file_path,
+        r#"
+MODULE math_utils
+  IMPLICIT NONE
+CONTAINS
+  SUBROUTINE add_numbers(a, b, result)
+    REAL, INTENT(IN) :: a, b
+    REAL, INTENT(OUT) :: result
+    result = a + b
+  END SUBROUTINE add_numbers
+
+  FUNCTION multiply(a, b) RESULT(res)
+    REAL, INTENT(IN) :: a, b
+    REAL :: res
+    res = a * b
+  END FUNCTION multiply
+END MODULE math_utils
+"#,
+    )
+    .unwrap();
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let func_names: Vec<&str> = output
+        .semantic
+        .functions
+        .iter()
+        .map(|f| f.name.as_str())
+        .collect();
+    assert!(
+        func_names.contains(&"add_numbers"),
+        "expected add_numbers in functions, got: {:?}",
+        func_names
+    );
+    assert!(
+        func_names.contains(&"multiply"),
+        "expected multiply in functions, got: {:?}",
+        func_names
+    );
+    assert_eq!(
+        output.semantic.classes.len(),
+        0,
+        "Fortran modules are not yet captured as classes (module_statement has no name \
+         field in tree-sitter-fortran 0.5.1; module support will be added in a future PR)"
+    );
+}
+
+#[test]
+fn test_fortran_edge_case_fixed_form() {
+    // Fixed-form layout with columns 1-5 blank, statement starting col 7.
+    // Uses ! comment style: tree-sitter-fortran does not support C-in-col-1
+    // comments (produces ERROR nodes and misparsing), but does support !
+    // comments in both free-form and fixed-form files.
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("legacy.for");
+    fs::write(
+        &file_path,
+        "! Fixed-form FORTRAN 77 subroutine\n      SUBROUTINE COMPUTE(X, Y)\n      REAL X, Y\n      Y = X * 2.0\n      RETURN\n      END SUBROUTINE COMPUTE\n",
+    )
+    .unwrap();
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let func_names: Vec<&str> = output
+        .semantic
+        .functions
+        .iter()
+        .map(|f| f.name.as_str())
+        .collect();
+    assert_eq!(
+        output.semantic.functions.len(),
+        1,
+        "expected exactly 1 function, got: {:?}",
+        func_names
+    );
+    assert!(
+        func_names.contains(&"COMPUTE"),
+        "expected COMPUTE in functions, got: {:?}",
+        func_names
+    );
+    assert_eq!(output.semantic.classes.len(), 0);
+}
