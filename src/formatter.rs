@@ -5,6 +5,7 @@
 
 use crate::graph::CallChain;
 use crate::graph::CallGraph;
+use crate::graph::ImportGraph;
 use crate::pagination::PaginationMode;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
@@ -27,6 +28,34 @@ pub(crate) const EXCLUDED_DIRS: &[&str] = &[
 ];
 
 const MULTILINE_THRESHOLD: usize = 10;
+
+/// Check if a function falls within a class's line range (method detection).
+fn is_method_of_class(func: &FunctionInfo, class: &ClassInfo) -> bool {
+    func.line >= class.line && func.end_line <= class.end_line
+}
+
+/// Collect methods for each class, preferring ClassInfo.methods when populated (Rust case),
+/// falling back to line-range intersection for languages that do not populate ClassInfo.methods.
+fn collect_class_methods<'a>(
+    classes: &'a [ClassInfo],
+    functions: &'a [FunctionInfo],
+) -> HashMap<String, Vec<&'a FunctionInfo>> {
+    let mut methods_by_class: HashMap<String, Vec<&'a FunctionInfo>> = HashMap::new();
+    for class in classes {
+        if !class.methods.is_empty() {
+            // Rust: parser already populated methods via extract_impl_methods
+            methods_by_class.insert(class.name.clone(), class.methods.iter().collect());
+        } else {
+            // Python/Java/TS/Go: infer methods by line-range containment
+            let methods: Vec<&FunctionInfo> = functions
+                .iter()
+                .filter(|f| is_method_of_class(f, class))
+                .collect();
+            methods_by_class.insert(class.name.clone(), methods);
+        }
+    }
+    methods_by_class
+}
 
 /// Format a list of function signatures wrapped at 100 characters with bullet annotation.
 fn format_function_list_wrapped<'a>(
@@ -315,14 +344,28 @@ pub fn format_file_details(
         ));
     }
 
-    // C: section with classes
-    output.push_str(&format_classes_section(&analysis.classes));
+    // C: section with classes and methods
+    output.push_str(&format_classes_section(
+        &analysis.classes,
+        &analysis.functions,
+    ));
 
-    // F: section with functions, parameters, return types and call frequency
-    if !analysis.functions.is_empty() {
+    // F: section with top-level functions only (exclude methods)
+    let top_level_functions: Vec<&FunctionInfo> = analysis
+        .functions
+        .iter()
+        .filter(|func| {
+            !analysis
+                .classes
+                .iter()
+                .any(|class| is_method_of_class(func, class))
+        })
+        .collect();
+
+    if !top_level_functions.is_empty() {
         output.push_str("F:\n");
         output.push_str(&format_function_list_wrapped(
-            analysis.functions.iter(),
+            top_level_functions.iter().copied(),
             &analysis.call_frequency,
         ));
     }
@@ -1109,6 +1152,7 @@ pub fn format_structure_paginated(
 /// When `verbose=true`: shows `C:`, `I:`, and `F:` with wrapped rendering on the first page (offset == 0).
 /// Header shows position context: `FILE: path (NL, start-end/totalF, CC, II)`.
 #[instrument(skip_all)]
+#[allow(clippy::too_many_arguments)]
 pub fn format_file_details_paginated(
     functions_page: &[FunctionInfo],
     total_functions: usize,
@@ -1136,7 +1180,10 @@ pub fn format_file_details_paginated(
 
     // Classes section on first page for both verbose and compact modes
     if offset == 0 && !semantic.classes.is_empty() {
-        output.push_str(&format_classes_section(&semantic.classes));
+        output.push_str(&format_classes_section(
+            &semantic.classes,
+            &semantic.functions,
+        ));
     }
 
     // Imports section only on first page in verbose mode
@@ -1144,14 +1191,26 @@ pub fn format_file_details_paginated(
         output.push_str(&format_imports_section(&semantic.imports));
     }
 
-    // F: section with paginated function slice
-    if !functions_page.is_empty() {
+    // F: section with paginated function slice (exclude methods)
+    let top_level_functions: Vec<&FunctionInfo> = functions_page
+        .iter()
+        .filter(|func| {
+            !semantic
+                .classes
+                .iter()
+                .any(|class| is_method_of_class(func, class))
+        })
+        .collect();
+
+    if !top_level_functions.is_empty() {
         output.push_str("F:\n");
         output.push_str(&format_function_list_wrapped(
-            functions_page.iter(),
+            top_level_functions.iter().copied(),
             &semantic.call_frequency,
         ));
     }
+
+    // RELATED: section only on first page - caller appends format_related_section if needed
 
     output
 }
@@ -1575,8 +1634,8 @@ mod tests {
         }];
         let classes: Vec<ClassInfo> = vec![ClassInfo {
             name: "MyStruct".to_string(),
-            line: 5,
-            end_line: 50,
+            line: 100,
+            end_line: 150,
             methods: vec![],
             fields: vec![],
             inherits: vec![],
@@ -1798,25 +1857,289 @@ mod tests {
             "compact mode must not emit C: header when classes are empty"
         );
     }
+
+    #[test]
+    fn test_format_classes_with_methods() {
+        use crate::types::{ClassInfo, FunctionInfo};
+
+        let functions = vec![
+            FunctionInfo {
+                name: "method_a".to_string(),
+                line: 5,
+                end_line: 8,
+                parameters: vec![],
+                return_type: None,
+            },
+            FunctionInfo {
+                name: "method_b".to_string(),
+                line: 10,
+                end_line: 12,
+                parameters: vec![],
+                return_type: None,
+            },
+            FunctionInfo {
+                name: "top_level_func".to_string(),
+                line: 50,
+                end_line: 55,
+                parameters: vec![],
+                return_type: None,
+            },
+        ];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 1,
+            end_line: 30,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let output = format_classes_section(&classes, &functions);
+
+        assert!(
+            output.contains("MyClass:1-30"),
+            "class header should show start-end range"
+        );
+        assert!(output.contains("method_a:5"), "method_a should be listed");
+        assert!(output.contains("method_b:10"), "method_b should be listed");
+        assert!(
+            !output.contains("top_level_func"),
+            "top_level_func outside class range should not be listed"
+        );
+    }
+
+    #[test]
+    fn test_format_classes_method_cap() {
+        use crate::types::{ClassInfo, FunctionInfo};
+
+        let mut functions = Vec::new();
+        for i in 0..15 {
+            functions.push(FunctionInfo {
+                name: format!("method_{}", i),
+                line: 2 + i,
+                end_line: 3 + i,
+                parameters: vec![],
+                return_type: None,
+            });
+        }
+
+        let classes = vec![ClassInfo {
+            name: "LargeClass".to_string(),
+            line: 1,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let output = format_classes_section(&classes, &functions);
+
+        assert!(output.contains("method_0"), "first method should be listed");
+        assert!(output.contains("method_9"), "10th method should be listed");
+        assert!(
+            !output.contains("method_10"),
+            "11th method should not be listed (cap at 10)"
+        );
+        assert!(
+            output.contains("... (5 more)"),
+            "truncation message should show remaining count"
+        );
+    }
+
+    #[test]
+    fn test_format_classes_no_methods() {
+        use crate::types::{ClassInfo, FunctionInfo};
+
+        let functions = vec![FunctionInfo {
+            name: "top_level".to_string(),
+            line: 100,
+            end_line: 105,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "EmptyClass".to_string(),
+            line: 1,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let output = format_classes_section(&classes, &functions);
+
+        assert!(
+            output.contains("EmptyClass:1-50"),
+            "empty class header should appear"
+        );
+        assert!(
+            !output.contains("top_level"),
+            "top-level functions outside class should not appear"
+        );
+    }
+
+    #[test]
+    fn test_f_section_excludes_methods() {
+        use crate::types::{ClassInfo, FunctionInfo, SemanticAnalysis};
+        use std::collections::HashMap;
+
+        let functions = vec![
+            FunctionInfo {
+                name: "method_a".to_string(),
+                line: 5,
+                end_line: 10,
+                parameters: vec![],
+                return_type: None,
+            },
+            FunctionInfo {
+                name: "top_level".to_string(),
+                line: 50,
+                end_line: 55,
+                parameters: vec![],
+                return_type: None,
+            },
+        ];
+
+        let semantic = SemanticAnalysis {
+            functions,
+            classes: vec![ClassInfo {
+                name: "TestClass".to_string(),
+                line: 1,
+                end_line: 30,
+                methods: vec![],
+                fields: vec![],
+                inherits: vec![],
+            }],
+            imports: vec![],
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+        };
+
+        let output = format_file_details("test.rs", &semantic, 100, false, None);
+
+        assert!(output.contains("C:"), "classes section should exist");
+        assert!(
+            output.contains("method_a:5"),
+            "method should be in C: section"
+        );
+        assert!(output.contains("F:"), "F: section should exist");
+        assert!(
+            output.contains("top_level"),
+            "top-level function should be in F: section"
+        );
+
+        // Verify method_a is not in F: section (check sequence: C: before method_a, F: after it)
+        let f_pos = output.find("F:").unwrap();
+        let method_pos = output.find("method_a").unwrap();
+        assert!(
+            method_pos < f_pos,
+            "method_a should appear before F: section"
+        );
+    }
+
+    #[test]
+    fn test_related_section_with_data() {
+        use crate::graph::ImportGraph;
+        use std::collections::HashMap;
+        use std::path::PathBuf;
+
+        // Verify RELATED: is omitted when import_graph is None
+        let none_output = format_related_section(Path::new("test.rs"), None);
+        assert!(
+            !none_output.contains("RELATED:"),
+            "RELATED: section should not appear when import_graph is None"
+        );
+
+        let path = PathBuf::from("src/main.rs");
+        let mut incoming = HashMap::new();
+        incoming.insert(
+            path.clone(),
+            vec![PathBuf::from("src/lib.rs"), PathBuf::from("src/utils.rs")],
+        );
+
+        let mut outgoing = HashMap::new();
+        outgoing.insert(path.clone(), vec![PathBuf::from("src/config.rs")]);
+
+        let graph = ImportGraph { incoming, outgoing };
+
+        let output = format_related_section(Path::new("src/main.rs"), Some(&graph));
+
+        assert!(
+            output.contains("RELATED:"),
+            "RELATED: section should appear"
+        );
+        assert!(output.contains("<-"), "incoming arrow should appear");
+        assert!(output.contains("->"), "outgoing arrow should appear");
+        assert!(output.contains("lib.rs"), "incoming file should be listed");
+        assert!(
+            output.contains("config.rs"),
+            "outgoing file should be listed"
+        );
+    }
+
+    #[test]
+    fn test_related_section_cap() {
+        use crate::graph::ImportGraph;
+        use std::collections::HashMap;
+        use std::path::PathBuf;
+
+        let path = PathBuf::from("src/core.rs");
+        let mut incoming = HashMap::new();
+        incoming.insert(
+            path.clone(),
+            vec![
+                PathBuf::from("src/a.rs"),
+                PathBuf::from("src/b.rs"),
+                PathBuf::from("src/c.rs"),
+                PathBuf::from("src/d.rs"),
+                PathBuf::from("src/e.rs"),
+                PathBuf::from("src/f.rs"), // 6th - should be capped
+            ],
+        );
+
+        let graph = ImportGraph {
+            incoming,
+            outgoing: HashMap::new(),
+        };
+
+        let output = format_related_section(Path::new("src/core.rs"), Some(&graph));
+
+        assert!(output.contains("a.rs"), "first file should be listed");
+        assert!(output.contains("e.rs"), "5th file should be listed");
+        assert!(
+            !output.contains("f.rs"),
+            "6th file should not be listed (capped at 5)"
+        );
+    }
 }
 
-fn format_classes_section(classes: &[ClassInfo]) -> String {
+fn format_classes_section(classes: &[ClassInfo], functions: &[FunctionInfo]) -> String {
     let mut output = String::new();
     if classes.is_empty() {
         return output;
     }
     output.push_str("C:\n");
-    if classes.len() <= MULTILINE_THRESHOLD {
+
+    let methods_by_class = collect_class_methods(classes, functions);
+    let has_methods = methods_by_class.values().any(|m| !m.is_empty());
+
+    if classes.len() <= MULTILINE_THRESHOLD && !has_methods {
         let class_strs: Vec<String> = classes
             .iter()
             .map(|class| {
                 if class.inherits.is_empty() {
-                    format!("{}:{}", class.name, class.line)
+                    format!("{}:{}-{}", class.name, class.line, class.end_line)
                 } else {
                     format!(
-                        "{}:{} ({})",
+                        "{}:{}-{} ({})",
                         class.name,
                         class.line,
+                        class.end_line,
                         class.inherits.join(", ")
                     )
                 }
@@ -1828,17 +2151,82 @@ fn format_classes_section(classes: &[ClassInfo]) -> String {
     } else {
         for class in classes {
             if class.inherits.is_empty() {
-                output.push_str(&format!("  {}:{}\n", class.name, class.line));
+                output.push_str(&format!(
+                    "  {}:{}-{}\n",
+                    class.name, class.line, class.end_line
+                ));
             } else {
                 output.push_str(&format!(
-                    "  {}:{} ({})\n",
+                    "  {}:{}-{} ({})\n",
                     class.name,
                     class.line,
+                    class.end_line,
                     class.inherits.join(", ")
                 ));
             }
+
+            // Append methods for each class
+            if let Some(methods) = methods_by_class.get(&class.name)
+                && !methods.is_empty()
+            {
+                for (i, method) in methods.iter().take(10).enumerate() {
+                    output.push_str(&format!("    {}:{}\n", method.name, method.line));
+                    if i + 1 == 10 && methods.len() > 10 {
+                        output.push_str(&format!("    ... ({} more)\n", methods.len() - 10));
+                        break;
+                    }
+                }
+            }
         }
     }
+    output
+}
+
+/// Format related files section (incoming/outgoing imports).
+/// Returns empty string when import_graph is None.
+pub fn format_related_section(path: &Path, import_graph: Option<&ImportGraph>) -> String {
+    let Some(graph) = import_graph else {
+        return String::new();
+    };
+
+    let mut output = String::new();
+
+    // Incoming files
+    if let Some(inbound) = graph.incoming.get(path)
+        && !inbound.is_empty()
+    {
+        output.push_str("RELATED:\n");
+        output.push_str("  <- ");
+        let file_names: Vec<String> = inbound
+            .iter()
+            .take(5)
+            .filter_map(|p| p.file_name())
+            .filter_map(|n| n.to_str())
+            .map(|s| s.to_string())
+            .collect();
+        output.push_str(&file_names.join(", "));
+        output.push('\n');
+    }
+
+    // Outgoing files
+    if let Some(outbound) = graph.outgoing.get(path)
+        && !outbound.is_empty()
+    {
+        if output.is_empty() {
+            output.push_str("RELATED:\n");
+        }
+        output.push_str("  -> ");
+        let file_names: Vec<String> = outbound
+            .iter()
+            .take(5)
+            .filter_map(|p| p.file_name())
+            .filter_map(|n| n.to_str())
+            .map(|s| s.to_string())
+            .collect();
+        output.push_str(&file_names.join(", "));
+        output.push('\n');
+    }
+
     output
 }
 

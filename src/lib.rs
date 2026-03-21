@@ -775,22 +775,33 @@ impl CodeAnalyzer {
             0
         };
 
-        // Paginate functions
-        let paginated = match paginate_slice(
-            &arc_output.semantic.functions,
-            offset,
-            page_size,
-            PaginationMode::Default,
-        ) {
-            Ok(v) => v,
-            Err(e) => {
-                return Ok(err_to_tool_result(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    e.to_string(),
-                    error_meta("transient", true, "retry the request"),
-                )));
-            }
-        };
+        // Filter to top-level functions only (exclude methods) before pagination
+        let top_level_fns: Vec<crate::types::FunctionInfo> = arc_output
+            .semantic
+            .functions
+            .iter()
+            .filter(|func| {
+                !arc_output
+                    .semantic
+                    .classes
+                    .iter()
+                    .any(|class| func.line >= class.line && func.end_line <= class.end_line)
+            })
+            .cloned()
+            .collect();
+
+        // Paginate top-level functions only
+        let paginated =
+            match paginate_slice(&top_level_fns, offset, page_size, PaginationMode::Default) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Ok(err_to_tool_result(ErrorData::new(
+                        rmcp::model::ErrorCode::INTERNAL_ERROR,
+                        e.to_string(),
+                        error_meta("transient", true, "retry the request"),
+                    )));
+                }
+            };
 
         // Regenerate formatted output using the paginated formatter (handles verbose and pagination correctly)
         let verbose = params.output_control.verbose.unwrap_or(false);
@@ -804,6 +815,13 @@ impl CodeAnalyzer {
                 offset,
                 verbose,
             );
+            // Append RELATED: section at handler layer (first page only)
+            if offset == 0 {
+                formatted.push_str(&crate::formatter::format_related_section(
+                    std::path::Path::new(&params.path),
+                    None,
+                ));
+            }
         }
 
         // Capture next_cursor from pagination result (unless using summary mode)

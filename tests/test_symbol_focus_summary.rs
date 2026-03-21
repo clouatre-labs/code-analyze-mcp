@@ -1,10 +1,7 @@
 use code_analyze_mcp::analyze::analyze_focused;
 use code_analyze_mcp::formatter::format_focused_summary;
 use code_analyze_mcp::graph::CallGraph;
-use code_analyze_mcp::types::SemanticAnalysis;
-use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
 use tempfile::TempDir;
 
 #[test]
