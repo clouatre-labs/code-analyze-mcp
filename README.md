@@ -42,7 +42,7 @@ Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Cla
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, and TSX, and integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others).
+code-analyze-mcp is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, TSX, and Fortran, and integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others).
 
 ## Installation
 
@@ -374,6 +374,7 @@ All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code
 | TypeScript | `.ts`, `.tsx` | Implemented |
 | Go | `.go` | Implemented |
 | Java | `.java` | Implemented |
+| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | Implemented |
 
 ## Documentation
 
