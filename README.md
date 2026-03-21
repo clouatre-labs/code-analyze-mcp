@@ -15,6 +15,9 @@ Standalone MCP server for code structure analysis using tree-sitter.
 > [!NOTE]
 > Native agent tools (regex search, path matching, file reading) handle targeted lookups well. `code-analyze-mcp` handles the mechanical, non-AI work: mapping directory structure, extracting symbols, and tracing call graphs. Offloading this to a dedicated tool reduces token usage and speeds up coding with better accuracy.
 
+> [!TIP]
+> Fortran support makes this tool well-suited for HPC and scientific codebases. Use `analyze_symbol` to trace subroutine call graphs and `analyze_file` to map module boundaries before starting a migration.
+
 ## Benchmarks
 
 Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Claude Code against the Django (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
