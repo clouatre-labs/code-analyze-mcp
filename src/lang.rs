@@ -3,10 +3,18 @@
 //! Maps file extensions to supported language identifiers.
 
 const EXTENSION_MAP: &[(&str, &str)] = &[
-    ("rs", "rust"),
-    ("py", "python"),
+    ("f", "fortran"),
+    ("f03", "fortran"),
+    ("f08", "fortran"),
+    ("f77", "fortran"),
+    ("f90", "fortran"),
+    ("f95", "fortran"),
+    ("for", "fortran"),
+    ("ftn", "fortran"),
     ("go", "go"),
     ("java", "java"),
+    ("py", "python"),
+    ("rs", "rust"),
     ("ts", "typescript"),
     ("tsx", "tsx"),
 ];
