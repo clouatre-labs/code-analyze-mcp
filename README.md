@@ -19,26 +19,11 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Claude Code against the Django (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
 
-**MCP** (`analyze_directory`, `analyze_file`, `analyze_symbol`, `analyze_module`)
-
-| Condition | Model | Score | Cost/Run | Eff. $/QP | Turns | Input Tokens | Output Tokens | Wall Time |
-|---|---|---|---|---|---|---|---|---|
-| A | claude-sonnet-4-6 | 9.0 | $0.509 | $0.0565 | 8.5 | 145k | 4.9k | 1.23m |
-| C | claude-haiku-4-5 | 8.0 | $0.418 | $0.0522 | 13.0 | 399k | 3.7k | 0.79m |
-
-**Native** (Glob, Grep, Read, Bash)
-
-| Condition | Model | Score | Cost/Run | Eff. $/QP | Turns | Input Tokens | Output Tokens | Wall Time |
-|---|---|---|---|---|---|---|---|---|
-| B | claude-sonnet-4-6 | 8.5 | $0.945 | $0.1112 | 24.5 | 276k | 7.7k | 2.25m |
-| D | claude-haiku-4-5 | 9.0 | $0.529 | $0.0588 | 19.0 | 473k | 5.1k | 1.31m |
-
-**Key Findings**
-
-- MCP conditions (A+C) are 37-53% cheaper per quality point than native conditions (B+D).
-- MCP Sonnet (A) uses 3x fewer turns, 47% fewer input tokens, and 2x less wall time than native Sonnet (B).
-- MCP Haiku (C) uses 16% fewer input tokens and is 40% faster than native Haiku (D).
-- Output tokens are consistently lower under MCP (4.9k/3.7k vs 7.7k/5.1k), reflecting less exploratory reasoning noise.
+| Mode | Sonnet 4.6 | Haiku 4.5 |
+|---|---|---|
+| MCP | 150k tokens / 1.2m | 403k tokens / 0.8m |
+| Native | 284k tokens / 2.3m | 478k tokens / 1.3m |
+| **Savings** | **47% fewer tokens, 2x faster** | **16% fewer tokens, 40% faster** |
 
 ## Overview
 
