@@ -23,10 +23,10 @@ Issues: #340, #341, #342, #354, #355, #356, #357.
 Target: close the non-Sonnet model performance gap identified in v10 benchmark.
 
 Key changes:
-- #340: `analyze_module` directory guard — actionable error steering agents to `analyze_directory`
+- #340: `analyze_module` directory guard; actionable error steering agents to `analyze_directory`
 - #341: Actionable SUGGESTION footer naming largest source directory with absolute path
 - #342: Server instructions updated with 4-step recommended workflow
-- #354: Async metrics collection via `src/metrics.rs` — zero hot-path overhead
+- #354: Async metrics collection via `src/metrics.rs`; zero hot-path overhead
 - #357: ROADMAP.md and OBSERVABILITY.md documentation
 
 ---
@@ -59,8 +59,8 @@ Current posture: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=t
 
 ## Wave 7+ Direction (Tentative)
 
-- Fix A from #341: true total file annotation in directory count line (deferred from Wave 6 — requires full subtree walk)
-- Session ID field in `MetricEvent` schema (enables grouping without timestamp heuristic — see #355)
+- Fix A from #341: true total file annotation in directory count line (deferred from Wave 6; requires full subtree walk)
+- Session ID field in `MetricEvent` schema (enables grouping without timestamp heuristic; see #355)
 - `idempotentHint` correctness audit (#347)
 - `readOnlyHint` client enforcement verification (#349)
 - MCP SEP adoption pending #1913, #1984, #1561, #1560, #1487
