@@ -1299,8 +1299,6 @@ async fn test_batch_draining_with_multiple_events() {
 #[tokio::test]
 async fn test_channel_closed_exits_consumer() {
     use code_analyze_mcp::logging::LogEvent;
-    use rmcp::model::LoggingLevel;
-    use serde_json::json;
     use tokio::sync::mpsc;
 
     // Arrange: Create channel and drop sender
@@ -2765,7 +2763,7 @@ pub fn world() {}
     )
     .unwrap();
 
-    let file_path = root.join("src/lib.rs");
+    let _file_path = root.join("src/lib.rs");
 
     // Act: Analyze with summary=true
     // Since we don't have direct call_tool access in tests, verify the underlying function
@@ -3274,8 +3272,8 @@ fn test_format_file_details_paginated_unit() {
         functions: all_functions,
         classes: vec![ClassInfo {
             name: "MyClass".to_string(),
-            line: 1,
-            end_line: 50,
+            line: 100,
+            end_line: 150,
             methods: vec![],
             fields: vec![],
             inherits: vec![],
@@ -3383,7 +3381,6 @@ fn test_format_focused_paginated_unit() {
 #[test]
 fn test_call_tool_result_cache_hint_metadata() {
     use rmcp::model::{CallToolResult, Content, Meta};
-    use serde_json::json;
 
     // Construct Meta with cache_hint
     let mut meta = serde_json::Map::new();
@@ -3397,16 +3394,17 @@ fn test_call_tool_result_cache_hint_metadata() {
         CallToolResult::success(vec![Content::text("test output")]).with_meta(Some(Meta(meta)));
 
     // Serialize to JSON
-    let json = serde_json::to_value(&result).expect("should serialize");
+    let json_val = serde_json::to_value(&result).expect("should serialize");
 
     // Assert _meta.cache_hint == "no-cache"
     assert_eq!(
-        json.get("_meta")
+        json_val
+            .get("_meta")
             .and_then(|m| m.get("cache_hint"))
             .and_then(|v| v.as_str()),
         Some("no-cache"),
         "Expected _meta.cache_hint to be 'no-cache' in serialized JSON: {}",
-        json
+        json_val
     );
 }
 
