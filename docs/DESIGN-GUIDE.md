@@ -77,7 +77,7 @@ Returns a tree with LOC, function count, and class count."
 
 **Principle:** When a tool is called incorrectly, the error response must include the correct alternative and an absolute path suggestion. A generic error causes the agent to retry the same tool or abandon the task.
 
-*Example: When `analyze_file` receives a directory path, the error names `analyze_directory` as the correct tool and includes the absolute path of the directory. This was introduced in Wave 6 (#340) and credited with closing the non-Sonnet performance gap.*
+*Example: When `analyze_module` receives a directory path, a well-designed server returns an actionable error that names `analyze_directory` as the correct tool and includes the absolute path of the directory. This pattern was introduced in Wave 6 (#340) and credited with closing the non-Sonnet performance gap.*
 
 ### Sequential Server Instructions
 
@@ -176,7 +176,7 @@ Each wave defines a condition matrix crossing model and tool set. A representati
 
 ### Statistical Method
 
-Mann-Whitney U with Bonferroni correction; 15 pairwise tests at alpha = 0.05/15 = 0.0033. Effect sizes reported as rank-biserial r, not p-values, because sample sizes are small (N=2–5 per condition). A statistically significant result with a small effect size is not evidence of a meaningful improvement.
+Mann-Whitney U with Bonferroni correction; 15 pairwise tests at alpha = 0.05/15 = 0.0033. Both p-values and rank-biserial r effect sizes are reported, but interpretation emphasizes effect sizes because sample sizes are small (N=2–5 per condition). A statistically significant result with a small effect size is not evidence of a meaningful improvement.
 
 ### Small-Model-First as a Regression Constraint
 
@@ -228,7 +228,7 @@ Ordered checklist for building a new MCP server applying the principles in this 
 2. **Write prescriptive descriptions.** Include when to use, when not to use, and what the tool returns. Name the alternative tool in each description.
 3. **Choose transport.** STDIO for local/same-host servers. Streamable HTTP for remote or distributed deployment.
 4. **Define output schema.** Summary mode, full mode, and pagination are first-class output concerns. Design them before implementation.
-5. **Apply no-cache meta.** Return `no_cache_meta` on every tool response to prevent stale results in client caches.
+5. **Apply no-cache metadata.** Mark every tool response as non-cacheable to prevent stale results in client caches.
 6. **Design for small models first.** Write descriptions and error messages as if only Haiku or Mistral Small will read them. Test with small models before testing with Sonnet.
 7. **Add cursor pagination.** Any output that can exceed a token budget should support `cursor` + `page_size` for resumable chunked output.
 8. **Add summary mode.** Any output that agents use for orientation should have a compact `summary=true` mode.
