@@ -12,6 +12,7 @@ A senior engineer reading this document should be able to design a production ag
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - module map and data flow for this MCP server implementation
 - [MCP Specification 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) - canonical protocol reference
+- [DESIGN-GUIDE.md](DESIGN-GUIDE.md) - Design decisions, rationale, and replication guide for building high-performance MCP servers
 
 ---
 
