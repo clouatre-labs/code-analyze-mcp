@@ -6,7 +6,7 @@
 Initial release. Four tools (`analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol`), seven languages (Rust, Go, Java, Python, TypeScript, TSX, Fortran), tree-sitter AST extraction, rayon parallelism, .gitignore-aware walk via `ignore` crate.
 
 ### [Complete] Wave 2: MCP Protocol (milestone 7)
-Streamable HTTP transport, summary-first output, `outputSchema` per tool, cursor pagination.
+Summary-first output, `outputSchema` per tool, cursor pagination.
 
 ### [Complete] Wave 3: Analysis Quality (milestone 8)
 Multi-strategy call graphs, inheritance tracking, cross-client compatibility.
@@ -23,46 +23,88 @@ Issues: #340, #341, #342, #354, #355, #356, #357.
 Target: close the non-Sonnet model performance gap identified in v10 benchmark.
 
 Key changes:
-- #340: `analyze_module` directory guard; actionable error steering agents to `analyze_directory`
+- #340: `analyze_module` directory guard — actionable error steering agents to `analyze_directory`
 - #341: Actionable SUGGESTION footer naming largest source directory with absolute path
 - #342: Server instructions updated with 4-step recommended workflow
-- #354: Async metrics collection via `src/metrics.rs`; zero hot-path overhead
+- #354: Async metrics collection via `src/metrics.rs` — zero hot-path overhead
+- #356: Idempotency audit and cross-client compatibility verification
 - #357: ROADMAP.md and OBSERVABILITY.md documentation
 
 ---
 
 ## Benchmark-Driven Development
 
-**Scoring rubric:** 4 dimensions scored 0-3 each: `structural_accuracy`, `cross_module_tracing`, `approach_quality`, `tool_efficiency`. `quality_score = sum` (max 12).
+Each Wave closes with a benchmark run validating the Wave's hypotheses.
 
-For the full methodology, condition matrix, statistical method, and blind scoring protocol, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md#6-benchmark-driven-development).
+**Benchmark location:** `docs/benchmarks/vN/` (v3–v10, v12 present)
+
+**Scoring rubric (v12+):** 3 dimensions scored 0–3 each:
+- `structural_accuracy`
+- `cross_module_tracing`
+- `approach_quality`
+
+`quality_score = sum` (max 9)
+
+Earlier benchmarks (v3–v10) used a 4-dimension rubric including `tool_efficiency` (max 12). The `tool_efficiency` dimension was dropped in v12; see each benchmark's `methodology.md` for the rubric in effect at the time.
+
+**Evaluation protocol:** Blind scoring — scorer does not see condition labels during evaluation.
+
+**Statistical method:** Mann-Whitney U with Bonferroni correction; 15 pairwise tests at alpha = 0.05/15 = 0.0033.
 
 ---
 
 ## Small-Model-First Constraint
 
-All output changes must be validated against Haiku, Mistral-small-2603, and MiniMax-M2.5 before Sonnet. See [DESIGN-GUIDE.md](DESIGN-GUIDE.md#3-designing-for-small-models) for the full constraint and rationale.
+All output changes, error messages, server instructions, and tool descriptions must be evaluated against Haiku, Mistral-small-2603, and MiniMax-M2.5 **before** Sonnet.
+
+These models follow tool descriptions literally; they do not apply contextual reasoning to infer optimal paths. A change that improves Sonnet but regresses Haiku is a regression.
 
 ---
 
 ## Shared Exclusion List
 
-`EXCLUDED_DIRS` in `src/formatter.rs` is the single authoritative constant; do not duplicate it. See [DESIGN-GUIDE.md](DESIGN-GUIDE.md#8-anti-patterns) for the duplication anti-pattern and corrective guidance.
+The following directories are non-source and excluded from SUGGESTION footer logic (`src/formatter.rs`) and server instruction guidance (`src/lib.rs`):
+
+```
+node_modules, vendor, .git, __pycache__, target, dist, build, .venv
+```
+
+This list is a single constant in the codebase:
+
+```rust
+// src/formatter.rs
+pub(crate) const EXCLUDED_DIRS: &[&str] = &[
+    "node_modules", "vendor", ".git", "__pycache__",
+    "target", "dist", "build", ".venv",
+];
+```
+
+Do not duplicate this constant across modules. Both `#341` and `#342` reference `EXCLUDED_DIRS` from `src/formatter.rs`.
 
 ---
 
 ## Annotation Posture Policy
 
-Current posture: `readOnlyHint=true`, `destructiveHint=false`, `idempotentHint=true`, `openWorldHint=false`. No changes until new MCP SEPs land (#1913, #1984, #1561, #1560, #1487). See [DESIGN-GUIDE.md](DESIGN-GUIDE.md#7-mcp-tool-annotations) for rationale and the full annotation table.
+Current settings are stable and reflect ground truth:
+
+| Annotation | Value | Rationale |
+|---|---|---|
+| `readOnlyHint` | `true` | All tools are read-only filesystem operations |
+| `destructiveHint` | `false` | No writes, no side effects |
+| `idempotentHint` | `true` | Same input produces same output (verified by #347) |
+| `openWorldHint` | `false` | Results are bounded by the input path |
+
+No annotation changes until new MCP SEPs land (tracked in #1913, #1984, #1561, #1560, #1487). Validated against external MCP Blog 2 reference (2026-03-16).
 
 ---
 
 ## Wave 7+ Direction (Tentative)
 
-- Fix A from #341: true total file annotation in directory count line (deferred from Wave 6; requires full subtree walk)
-- Session ID field in `MetricEvent` schema (enables grouping without timestamp heuristic; see #355)
-- `idempotentHint` correctness audit (#347)
-- `readOnlyHint` client enforcement verification (#349)
-- MCP SEP adoption pending #1913, #1984, #1561, #1560, #1487
-- Streamable HTTP transport (fully specified in MCP 2025-06-18; enables remote deployment)
-- outputSchema per tool definition (enables client-side validation of structured results)
+Unimplemented and pertinent:
+
+- Fix A from #341: true total file annotation in directory count line (deferred from Wave 6 -- requires full subtree walk; benchmark-backed)
+- MCP SEP adoption: #1487 (`trustedHint`), #1560 (`secretHint`), #1561 (`unsafeOutputHint`), #1913 (trust/sensitivity annotations), #1984 (governance annotations) -- all open upstream; no action until specs stabilize
+
+Not pertinent for current deployment:
+
+- Streamable HTTP or remote transport: not currently implemented; the deployment uses stdio transport for co-located agent use. Revisit only if remote or multi-agent deployment becomes a goal.
