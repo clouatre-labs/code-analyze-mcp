@@ -228,14 +228,33 @@ impl CodeAnalyzer {
         let max_depth = params.max_depth;
         let ct_clone = ct.clone();
 
-        // Collect entries once for analysis
-        let entries = walk_directory(path, max_depth).map_err(|e| {
+        // Single unbounded walk; filter in-memory to respect max_depth for analysis.
+        let all_entries = walk_directory(path, None).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 format!("Failed to walk directory: {}", e),
                 error_meta("resource", false, "check path permissions and availability"),
             )
         })?;
+
+        // Compute subtree counts from the full entry set before filtering.
+        let subtree_counts = if max_depth.is_some_and(|d| d > 0) {
+            Some(traversal::subtree_counts_from_entries(path, &all_entries))
+        } else {
+            None
+        };
+
+        // Filter to depth-bounded subset for analysis.
+        let entries: Vec<traversal::WalkEntry> = if let Some(depth) = max_depth
+            && depth > 0
+        {
+            all_entries
+                .into_iter()
+                .filter(|e| e.depth <= depth as usize)
+                .collect()
+        } else {
+            all_entries
+        };
 
         // Get total file count for progress reporting
         let total_files = entries.iter().filter(|e| !e.is_dir).count();
@@ -295,7 +314,10 @@ impl CodeAnalyzer {
         }
 
         match handle.await {
-            Ok(Ok(output)) => Ok(output),
+            Ok(Ok(mut output)) => {
+                output.subtree_counts = subtree_counts;
+                Ok(output)
+            }
             Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 "Analysis cancelled".to_string(),
@@ -614,17 +636,12 @@ impl CodeAnalyzer {
         };
 
         if use_summary {
-            let subtree_counts = if params.max_depth.is_some_and(|d| d > 0) {
-                traversal::count_files_by_dir(std::path::Path::new(&params.path)).ok()
-            } else {
-                None
-            };
             output.formatted = format_summary(
                 &output.entries,
                 &output.files,
                 params.max_depth,
                 Some(Path::new(&params.path)),
-                subtree_counts.as_ref(),
+                output.subtree_counts.as_ref(),
             );
         }
 
