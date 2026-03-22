@@ -1274,27 +1274,13 @@ pub fn format_file_details_paginated(
     output
 }
 
-/// Parameters for `format_focused_paginated`.
-pub struct FocusedPaginatedParams<'a> {
-    pub paginated_chains: &'a [InternalCallChain],
-    pub total: usize,
-    pub mode: PaginationMode,
-    pub symbol: &'a str,
-    pub prod_chains: &'a [InternalCallChain],
-    pub test_chains: &'a [InternalCallChain],
-    pub outgoing_chains: &'a [InternalCallChain],
-    pub def_count: usize,
-    pub offset: usize,
-    pub base_path: Option<&'a Path>,
-}
-
 /// Format a paginated subset of callers or callees for SymbolFocus mode.
 /// Mode is determined by the `mode` parameter:
 /// - `PaginationMode::Callers`: paginate production callers; show test callers summary and callees summary.
 /// - `PaginationMode::Callees`: paginate callees; show callers summary and test callers summary.
 #[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
-pub fn format_focused_paginated(
+pub(crate) fn format_focused_paginated(
     paginated_chains: &[InternalCallChain],
     total: usize,
     mode: PaginationMode,
@@ -2098,6 +2084,54 @@ mod tests {
         assert!(
             method_pos < f_pos,
             "method_a should appear before F: section"
+        );
+    }
+
+    #[test]
+    fn test_format_focused_paginated_unit() {
+        use crate::graph::InternalCallChain;
+        use crate::pagination::PaginationMode;
+        use std::path::PathBuf;
+
+        // Arrange: create mock caller chains
+        let make_chain = |name: &str| -> InternalCallChain {
+            InternalCallChain {
+                chain: vec![
+                    (name.to_string(), PathBuf::from("src/lib.rs"), 10),
+                    ("target".to_string(), PathBuf::from("src/lib.rs"), 5),
+                ],
+            }
+        };
+
+        let prod_chains: Vec<InternalCallChain> = (0..8)
+            .map(|i| make_chain(&format!("caller_{}", i)))
+            .collect();
+        let page = &prod_chains[0..3];
+
+        // Act
+        let formatted = format_focused_paginated(
+            page,
+            8,
+            PaginationMode::Callers,
+            "target",
+            &prod_chains,
+            &[],
+            &[],
+            1,
+            0,
+            None,
+            true,
+        );
+
+        // Assert: header present
+        assert!(
+            formatted.contains("CALLERS (1-3 of 8):"),
+            "header should show 1-3 of 8, got: {}",
+            formatted
+        );
+        assert!(
+            formatted.contains("FOCUS: target"),
+            "should have FOCUS header"
         );
     }
 }

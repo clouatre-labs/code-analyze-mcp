@@ -112,7 +112,7 @@ fn strip_scope_prefix(name: &str) -> &str {
 }
 
 #[derive(Debug, Clone)]
-pub struct InternalCallChain {
+pub(crate) struct InternalCallChain {
     pub chain: Vec<(String, PathBuf, usize)>,
 }
 
@@ -509,7 +509,7 @@ impl CallGraph {
     }
 
     #[instrument(skip(self))]
-    pub fn find_incoming_chains(
+    pub(crate) fn find_incoming_chains(
         &self,
         symbol: &str,
         follow_depth: u32,
@@ -518,7 +518,7 @@ impl CallGraph {
     }
 
     #[instrument(skip(self))]
-    pub fn find_outgoing_chains(
+    pub(crate) fn find_outgoing_chains(
         &self,
         symbol: &str,
         follow_depth: u32,
