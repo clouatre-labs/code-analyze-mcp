@@ -127,7 +127,8 @@ fn subtree_count_overhead_500(c: &mut Criterion) {
     use std::fs;
     use tempfile::TempDir;
 
-    // Create fixture: root/ with 4 levels and 500 files (5 * 5 * 4 * 5)
+    // Create fixture: 3 directory levels deep; files sit at depth 4 (root=0, sub=1, subsub=2, subsubsub=3, file=4).
+    // Total: 5 * 5 * 4 * 5 = 500 files.
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     for i in 0..5usize {
@@ -162,6 +163,7 @@ fn subtree_count_overhead_500(c: &mut Criterion) {
     group.bench_function("with_single_walk_and_count", |b| {
         b.iter(|| {
             // Single unbounded walk; compute counts in-memory.
+            // Both this and baseline_walk_only do an unbounded walk; the only difference is the counting step.
             let all_entries = code_analyze_mcp::traversal::walk_directory(
                 std::hint::black_box(root),
                 std::hint::black_box(None),
