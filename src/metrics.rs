@@ -1,9 +1,17 @@
+//! Metrics collection and daily-rotating JSONL emission.
+//!
+//! Provides a channel-based pipeline: callers emit [`MetricEvent`] values via [`MetricsSender`],
+//! and [`MetricsWriter`] drains the channel and appends events to a daily-rotated JSONL file
+//! under the XDG data directory (`~/.local/share/code-analyze-mcp/metrics-YYYY-MM-DD.jsonl`).
+//! Files older than 30 days are deleted on startup.
+
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 
+/// A single metric event emitted by a tool invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricEvent {
     pub ts: u64,
@@ -20,6 +28,7 @@ pub struct MetricEvent {
     pub seq: Option<u32>,
 }
 
+/// Sender half of the metrics channel; cloned and passed to tools for event emission.
 #[derive(Clone)]
 pub struct MetricsSender(pub tokio::sync::mpsc::UnboundedSender<MetricEvent>);
 
@@ -29,6 +38,7 @@ impl MetricsSender {
     }
 }
 
+/// Receiver half of the metrics channel; drains events and writes them to daily-rotated JSONL files.
 pub struct MetricsWriter {
     rx: tokio::sync::mpsc::UnboundedReceiver<MetricEvent>,
     base_dir: PathBuf,
@@ -101,6 +111,7 @@ impl MetricsWriter {
     }
 }
 
+/// Returns the current UNIX timestamp in milliseconds.
 pub fn unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -108,10 +119,12 @@ pub fn unix_ms() -> u64 {
         .as_millis() as u64
 }
 
+/// Counts the number of path segments in a file path.
 pub fn path_component_count(path: &str) -> usize {
     Path::new(path).components().count()
 }
 
+/// Maps an MCP error code to a short string representation for metrics.
 pub fn error_code_to_type(code: rmcp::model::ErrorCode) -> &'static str {
     match code {
         rmcp::model::ErrorCode::PARSE_ERROR => "parse",
@@ -200,6 +213,7 @@ fn date_to_days_since_epoch(y: u32, m: u32, d: u32) -> u32 {
             .saturating_sub(719_468) // subtract the epoch offset to get days since 1970-01-01
 }
 
+/// Returns the current UTC date as a string in YYYY-MM-DD format.
 pub fn current_date_str() -> String {
     let days = (unix_ms() / 86_400_000) as u32;
     let z = days + 719_468;

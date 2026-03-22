@@ -2,6 +2,7 @@
 //!
 //! Identifies test files based on directory and filename patterns.
 //! Supports Rust, Python, Go, Java, TypeScript, and JavaScript.
+//! Note: Fortran has no test-file naming conventions and is not covered by these heuristics.
 
 use std::path::Path;
 

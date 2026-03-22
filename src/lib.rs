@@ -1,17 +1,18 @@
 //! Rust MCP server for code structure analysis using tree-sitter.
 //!
-//! This crate provides three analysis modes for multiple programming languages:
+//! This crate exposes four MCP tools for multiple programming languages:
 //!
-//! - **Overview**: Directory tree with file counts and structure
-//! - **FileDetails**: Semantic extraction (functions, classes, assignments, references)
-//! - **SymbolFocus**: Call graphs and dataflow (planned)
+//! - **analyze_directory**: Directory tree with file counts and structure
+//! - **analyze_file**: Semantic extraction (functions, classes, assignments, references)
+//! - **analyze_symbol**: Call graph analysis (callers and callees)
+//! - **analyze_module**: Lightweight function and import index
 //!
 //! Key types:
 //! - [`analyze::analyze_directory`]: Analyze entire directory tree
 //! - [`analyze::analyze_file`]: Analyze single file
 //! - [`parser::ElementExtractor`]: Parse language-specific elements
 //!
-//! Languages supported: Rust, Go, Java, Python, TypeScript.
+//! Languages supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran.
 
 pub mod analyze;
 pub mod cache;
@@ -75,6 +76,8 @@ static GLOBAL_SESSION_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic:
 
 const SIZE_LIMIT: usize = 50_000;
 
+/// Returns `true` when `summary=true` and a `cursor` are both provided, which is an invalid
+/// combination since summary mode and pagination are mutually exclusive.
 pub fn summary_cursor_conflict(summary: Option<bool>, cursor: Option<&str>) -> bool {
     summary == Some(true) && cursor.is_some()
 }
@@ -152,6 +155,10 @@ fn paginate_focus_chains(
     Ok((paginated.items, next))
 }
 
+/// MCP server handler that wires the four analysis tools to the rmcp transport.
+///
+/// Holds shared state: tool router, analysis cache, peer connection, log-level filter,
+/// log event channel, metrics sender, and per-session sequence tracking.
 #[derive(Clone)]
 pub struct CodeAnalyzer {
     tool_router: ToolRouter<Self>,
@@ -724,7 +731,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_file",
-        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Generated code with deeply nested ASTs may exceed 50K chars; use summary=true to get counts only. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
+        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Generated code with deeply nested ASTs may exceed 50K chars; use summary=true to get counts only. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
@@ -1061,7 +1068,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self))]
     #[tool(
         name = "analyze_module",
-        description = "Index functions and imports in a single source file with minimal token cost. Returns name, line_count, language, function names with line numbers, and import list only -- no signatures, no types, no call graphs, no references. ~75% smaller output than analyze_file. Use analyze_file when you need function signatures, types, or class details; use analyze_module when you only need a function/import index to orient in a file or survey many files in sequence. Use analyze_directory for multi-file overviews; use analyze_symbol to trace call graphs for a specific function. Supported languages: Rust, Go, Java, Python, TypeScript, TSX; unsupported extensions return an error. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs. Pagination, summary, force, and verbose parameters are not supported by this tool.",
+        description = "Index functions and imports in a single source file with minimal token cost. Returns name, line_count, language, function names with line numbers, and import list only -- no signatures, no types, no call graphs, no references. ~75% smaller output than analyze_file. Use analyze_file when you need function signatures, types, or class details; use analyze_module when you only need a function/import index to orient in a file or survey many files in sequence. Use analyze_directory for multi-file overviews; use analyze_symbol to trace call graphs for a specific function. Supported languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran; unsupported extensions return an error. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs. Pagination, summary, force, and verbose parameters are not supported by this tool.",
         output_schema = schema_for_type::<types::ModuleInfo>(),
         annotations(
             title = "Analyze Module",
