@@ -101,17 +101,20 @@ fn subtree_count_overhead(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("with_count_files_by_dir", |b| {
+    group.bench_function("with_single_walk_and_count", |b| {
         b.iter(|| {
-            let entries = code_analyze_mcp::traversal::walk_directory(
+            // Single unbounded walk; compute counts in-memory; filter for bounded subset.
+            let all_entries = code_analyze_mcp::traversal::walk_directory(
                 std::hint::black_box(root),
-                std::hint::black_box(Some(2)),
+                std::hint::black_box(None),
             )
             .unwrap();
-            let counts =
-                code_analyze_mcp::traversal::count_files_by_dir(std::hint::black_box(root))
-                    .unwrap();
-            std::hint::black_box((entries, counts))
+            let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(
+                std::hint::black_box(root),
+                &all_entries,
+            );
+            let bounded: Vec<_> = all_entries.into_iter().filter(|e| e.depth <= 2).collect();
+            std::hint::black_box((bounded, counts))
         })
     });
 

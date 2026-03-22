@@ -4100,9 +4100,10 @@ fn test_format_summary_with_max_depth_annotation() {
     std::fs::write(root.join("subdir/nested/a.rs"), "fn a() {}").unwrap();
     std::fs::write(root.join("subdir/nested/b.rs"), "fn b() {}").unwrap();
 
-    // Act: walk with max_depth=1 (only sees subdir/, not the nested files)
+    // Act: unbounded walk for counts, bounded walk for analysis (mirrors new single-walk approach)
+    let all_entries = code_analyze_mcp::traversal::walk_directory(root, None).unwrap();
+    let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(root, &all_entries);
     let output = analyze_directory(root, Some(1)).unwrap();
-    let counts = code_analyze_mcp::traversal::count_files_by_dir(root).unwrap();
     let summary = code_analyze_mcp::formatter::format_summary(
         &output.entries,
         &output.files,
@@ -4128,9 +4129,10 @@ fn test_format_summary_suggestion_uses_true_count() {
         std::fs::write(root.join(format!("big/deep/more/f{}.rs", i)), "fn f() {}").unwrap();
     }
 
-    // Act
+    // Act: unbounded walk for counts, bounded walk for analysis (mirrors new single-walk approach)
+    let all_entries = code_analyze_mcp::traversal::walk_directory(root, None).unwrap();
+    let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(root, &all_entries);
     let output = analyze_directory(root, Some(1)).unwrap();
-    let counts = code_analyze_mcp::traversal::count_files_by_dir(root).unwrap();
     let summary = code_analyze_mcp::formatter::format_summary(
         &output.entries,
         &output.files,
