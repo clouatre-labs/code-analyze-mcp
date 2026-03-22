@@ -12,7 +12,7 @@ use crate::traversal::WalkEntry;
 use crate::types::{ClassInfo, FileInfo, FunctionInfo, ImportInfo, ModuleInfo, SemanticAnalysis};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -762,7 +762,7 @@ pub fn format_summary(
     analysis_results: &[FileInfo],
     max_depth: Option<u32>,
     _base_path: Option<&Path>,
-    subtree_counts: Option<&std::collections::HashMap<std::path::PathBuf, usize>>,
+    subtree_counts: Option<&[(PathBuf, usize)]>,
 ) -> String {
     let mut output = String::new();
 
@@ -862,7 +862,11 @@ pub fn format_summary(
                 // Track largest non-excluded directory for SUGGESTION
                 let entry_name_str = name.to_string();
                 let effective_count = if let Some(counts) = subtree_counts {
-                    counts.get(&entry.path).copied().unwrap_or(dir_file_count)
+                    counts
+                        .binary_search_by_key(&&entry.path, |(p, _)| p)
+                        .ok()
+                        .map(|i| counts[i].1)
+                        .unwrap_or(dir_file_count)
                 } else {
                     dir_file_count
                 };
@@ -964,7 +968,11 @@ pub fn format_summary(
                 };
 
                 let files_label = if let Some(counts) = subtree_counts {
-                    let true_count = counts.get(&entry.path).copied().unwrap_or(dir_file_count);
+                    let true_count = counts
+                        .binary_search_by_key(&&entry.path, |(p, _)| p)
+                        .ok()
+                        .map(|i| counts[i].1)
+                        .unwrap_or(dir_file_count);
                     if true_count != dir_file_count {
                         let depth_val = max_depth.unwrap_or(0);
                         format!(
@@ -996,7 +1004,11 @@ pub fn format_summary(
                 // No analyzed files at this depth, but subtree_counts may have a true count
                 let entry_name_str = name.to_string();
                 if let Some(counts) = subtree_counts {
-                    let true_count = counts.get(&entry.path).copied().unwrap_or(0);
+                    let true_count = counts
+                        .binary_search_by_key(&&entry.path, |(p, _)| p)
+                        .ok()
+                        .map(|i| counts[i].1)
+                        .unwrap_or(0);
                     if true_count > 0 {
                         // Track for SUGGESTION
                         if !crate::EXCLUDED_DIRS.contains(&entry_name_str.as_str())

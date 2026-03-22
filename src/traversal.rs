@@ -4,7 +4,6 @@
 //! Uses the `ignore` crate for cross-platform, efficient file system traversal.
 
 use ignore::WalkBuilder;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use thiserror::Error;
@@ -90,11 +89,22 @@ pub fn walk_directory(
     Ok(entries)
 }
 
+/// Returns the depth-1 component under `root` for a given `path`,
+/// or `root` itself if `path` == `root`.
+fn depth1_prefix(root: &Path, path: &Path) -> PathBuf {
+    let rel = path.strip_prefix(root).unwrap_or(path);
+    match rel.components().next() {
+        Some(c) => root.join(c),
+        None => root.to_path_buf(),
+    }
+}
+
 /// Compute files-per-depth-1-subdirectory counts from an already-collected entry list.
-/// Returns a map from each depth-1 child path to its total descendant file count.
+/// Returns a Vec of (depth-1 path, file count) sorted by path.
 /// Only counts file entries (not directories); skips entries containing EXCLUDED_DIRS components.
-pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> HashMap<PathBuf, usize> {
-    let mut counts: HashMap<PathBuf, usize> = HashMap::new();
+/// Output Vec is sorted by construction (entries are pre-sorted by path).
+pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> Vec<(PathBuf, usize)> {
+    let mut counts: Vec<(PathBuf, usize)> = Vec::new();
     for entry in entries {
         if entry.is_dir {
             continue;
@@ -110,9 +120,12 @@ pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> HashMa
             Ok(r) => r,
             Err(_) => continue,
         };
-        if let Some(first) = rel.components().next() {
-            let depth1 = root.join(first);
-            *counts.entry(depth1).or_insert(0) += 1;
+        if rel.components().next().is_some() {
+            let key = depth1_prefix(root, &entry.path);
+            match counts.last_mut() {
+                Some(last) if last.0 == key => last.1 += 1,
+                _ => counts.push((key, 1)),
+            }
         }
     }
     counts
