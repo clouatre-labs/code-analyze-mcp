@@ -1329,8 +1329,13 @@ fn test_summary_auto_detect_large_directory() {
     let output = analyze_directory(root, None).unwrap();
 
     // Generate summary
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));
@@ -1364,8 +1369,13 @@ fn test_summary_explicit_on_small_directory() {
     let output = analyze_directory(root, None).unwrap();
 
     // Generate summary
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));
@@ -1395,8 +1405,13 @@ fn test_summary_top_hint_shown() {
     fs::write(root.join("src/util.rs"), "pub fn helper() {}").unwrap();
 
     let output = analyze_directory(root, None).unwrap();
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
 
     assert!(summary.contains("top:"), "summary should contain top hint");
     assert!(
@@ -1414,8 +1429,13 @@ fn test_summary_top_hint_omitted_for_single_file() {
     fs::write(root.join("src/main.rs"), "fn main() {} fn helper() {}").unwrap();
 
     let output = analyze_directory(root, None).unwrap();
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
 
     assert!(
         !summary.contains("top:"),
@@ -1436,8 +1456,13 @@ fn test_format_summary_sibling_dir_prefix() {
     fs::write(src_extra.join("lib.rs"), "fn bar() {}").unwrap();
 
     let output = analyze_directory(root, None).unwrap();
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
 
     // src/ should show exactly 1 file, not 2
     let src_line = summary
@@ -3582,8 +3607,13 @@ fn test_summary_true_produces_summary_output_no_next_cursor() {
         std::fs::write(src.join(format!("file{i:03}.rs")), "fn f() {}").unwrap();
     }
     let output = analyze_directory(root, None).unwrap();
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
     assert!(
         summary.contains("SUMMARY:"),
         "expected SUMMARY: in output but got:\n{summary}"
@@ -3603,8 +3633,13 @@ fn test_summary_sub_annotation_present_for_nested_dirs() {
     std::fs::write(root.join("core/handlers/base.rs"), "fn f() {}").unwrap();
     std::fs::write(root.join("core/management/cmd.rs"), "fn f() {}").unwrap();
     let output = analyze_directory(root, None).unwrap();
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
     let core_line = summary
         .lines()
         .find(|l| l.contains("core/"))
@@ -4054,4 +4089,109 @@ fn test_fortran_edge_case_fixed_form() {
         func_names
     );
     assert_eq!(output.semantic.classes.len(), 0);
+}
+
+#[test]
+fn test_format_summary_with_max_depth_annotation() {
+    // Arrange: nested fixture with files below depth 1
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join("subdir/nested")).unwrap();
+    std::fs::write(root.join("subdir/nested/a.rs"), "fn a() {}").unwrap();
+    std::fs::write(root.join("subdir/nested/b.rs"), "fn b() {}").unwrap();
+
+    // Act: walk with max_depth=1 (only sees subdir/, not the nested files)
+    let output = analyze_directory(root, Some(1)).unwrap();
+    let counts = code_analyze_mcp::traversal::count_files_by_dir(root).unwrap();
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        Some(1),
+        Some(root),
+        Some(&counts),
+    );
+
+    // Assert: annotated format appears because depth-1 walk sees 0 analyzed files but true count is 2
+    assert!(
+        summary.contains("files total; showing"),
+        "expected annotated count in summary but got:\n{summary}"
+    );
+}
+
+#[test]
+fn test_format_summary_suggestion_uses_true_count() {
+    // Arrange
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join("big/deep/more")).unwrap();
+    for i in 0..5usize {
+        std::fs::write(root.join(format!("big/deep/more/f{}.rs", i)), "fn f() {}").unwrap();
+    }
+
+    // Act
+    let output = analyze_directory(root, Some(1)).unwrap();
+    let counts = code_analyze_mcp::traversal::count_files_by_dir(root).unwrap();
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        Some(1),
+        Some(root),
+        Some(&counts),
+    );
+
+    // Assert: SUGGESTION footer references true count (5), not depth-limited count (0)
+    assert!(
+        summary.contains("5 files total"),
+        "expected SUGGESTION to reference true count (5) but got:\n{summary}"
+    );
+}
+
+#[test]
+fn test_format_summary_max_depth_none_unchanged() {
+    // Arrange
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "fn f() {}").unwrap();
+
+    // Act: pass subtree_counts=None
+    let output = analyze_directory(root, None).unwrap();
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        Some(root),
+        None,
+    );
+
+    // Assert: no annotated format
+    assert!(
+        !summary.contains("files total; showing"),
+        "expected no annotated count when subtree_counts=None but got:\n{summary}"
+    );
+}
+
+#[test]
+fn test_format_summary_max_depth_zero_unchanged() {
+    // Arrange
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/lib.rs"), "fn f() {}").unwrap();
+
+    // Act: max_depth=Some(0) with subtree_counts=None (zero is the unlimited sentinel)
+    let output = analyze_directory(root, Some(0)).unwrap();
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        Some(0),
+        Some(root),
+        None,
+    );
+
+    // Assert: no annotated format
+    assert!(
+        !summary.contains("files total; showing"),
+        "expected no annotated count when max_depth=Some(0) and subtree_counts=None but got:\n{summary}"
+    );
 }

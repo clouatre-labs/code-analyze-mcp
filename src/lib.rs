@@ -29,6 +29,17 @@ pub mod test_detection;
 pub mod traversal;
 pub mod types;
 
+pub(crate) const EXCLUDED_DIRS: &[&str] = &[
+    "node_modules",
+    "vendor",
+    ".git",
+    "__pycache__",
+    "target",
+    "dist",
+    "build",
+    ".venv",
+];
+
 use cache::AnalysisCache;
 use formatter::{
     format_file_details_paginated, format_file_details_summary, format_focused_paginated,
@@ -603,11 +614,17 @@ impl CodeAnalyzer {
         };
 
         if use_summary {
+            let subtree_counts = if params.max_depth.is_some_and(|d| d > 0) {
+                traversal::count_files_by_dir(std::path::Path::new(&params.path)).ok()
+            } else {
+                None
+            };
             output.formatted = format_summary(
                 &output.entries,
                 &output.files,
                 params.max_depth,
                 Some(Path::new(&params.path)),
+                subtree_counts.as_ref(),
             );
         }
 
@@ -1127,7 +1144,7 @@ impl CodeAnalyzer {
 #[tool_handler]
 impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
-        let excluded = crate::formatter::EXCLUDED_DIRS.join(", ");
+        let excluded = crate::EXCLUDED_DIRS.join(", ");
         let instructions = format!(
             "Recommended workflow for unknown repositories:\n\
             1. Start with analyze_directory(path=<repo_root>, max_depth=2, summary=true) to identify the source package directory \

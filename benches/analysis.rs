@@ -70,10 +70,61 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
+fn subtree_count_overhead(c: &mut Criterion) {
+    use std::fs;
+    use tempfile::TempDir;
+
+    // Create fixture: root/ with 3 levels and 120 files (5 * 4 * 6)
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    for i in 0..5usize {
+        for j in 0..4usize {
+            let subsub = root.join(format!("sub{}", i)).join(format!("subsub{}", j));
+            fs::create_dir_all(&subsub).unwrap();
+            for k in 0..6usize {
+                fs::write(subsub.join(format!("file{}.rs", k)), b"fn main() {}").unwrap();
+            }
+        }
+    }
+
+    let mut group = c.benchmark_group("subtree_count_overhead");
+    group.sample_size(10);
+
+    group.bench_function("baseline_walk_only", |b| {
+        b.iter(|| {
+            let entries = code_analyze_mcp::traversal::walk_directory(
+                std::hint::black_box(root),
+                std::hint::black_box(Some(2)),
+            )
+            .unwrap();
+            std::hint::black_box(entries)
+        })
+    });
+
+    group.bench_function("with_count_files_by_dir", |b| {
+        b.iter(|| {
+            let entries = code_analyze_mcp::traversal::walk_directory(
+                std::hint::black_box(root),
+                std::hint::black_box(Some(2)),
+            )
+            .unwrap();
+            let counts =
+                code_analyze_mcp::traversal::count_files_by_dir(std::hint::black_box(root))
+                    .unwrap();
+            std::hint::black_box((entries, counts))
+        })
+    });
+
+    group.finish();
+    // Keep dir alive until benchmarks are done
+    drop(dir);
+}
+
 criterion_group!(
     benches,
     overview_benchmark,
     file_details_benchmark,
-    symbol_focus_benchmark
+    symbol_focus_benchmark,
+    subtree_count_overhead
 );
 criterion_main!(benches);

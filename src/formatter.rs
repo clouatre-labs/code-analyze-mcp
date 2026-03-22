@@ -16,17 +16,6 @@ use std::path::Path;
 use thiserror::Error;
 use tracing::instrument;
 
-pub(crate) const EXCLUDED_DIRS: &[&str] = &[
-    "node_modules",
-    "vendor",
-    ".git",
-    "__pycache__",
-    "target",
-    "dist",
-    "build",
-    ".venv",
-];
-
 const MULTILINE_THRESHOLD: usize = 10;
 
 /// Check if a function falls within a class's line range (method detection).
@@ -773,6 +762,7 @@ pub fn format_summary(
     analysis_results: &[FileInfo],
     max_depth: Option<u32>,
     _base_path: Option<&Path>,
+    subtree_counts: Option<&std::collections::HashMap<std::path::PathBuf, usize>>,
 ) -> String {
     let mut output = String::new();
 
@@ -871,10 +861,15 @@ pub fn format_summary(
 
                 // Track largest non-excluded directory for SUGGESTION
                 let entry_name_str = name.to_string();
-                if !EXCLUDED_DIRS.contains(&entry_name_str.as_str())
-                    && files_in_dir.len() > largest_dir_count
+                let effective_count = if let Some(counts) = subtree_counts {
+                    counts.get(&entry.path).copied().unwrap_or(dir_file_count)
+                } else {
+                    dir_file_count
+                };
+                if !crate::EXCLUDED_DIRS.contains(&entry_name_str.as_str())
+                    && effective_count > largest_dir_count
                 {
-                    largest_dir_count = files_in_dir.len();
+                    largest_dir_count = effective_count;
                     largest_dir_name = Some(entry_name_str);
                     largest_dir_path = Some(
                         entry
@@ -968,12 +963,67 @@ pub fn format_summary(
                     format!("  sub: {}", subdirs_capped.join(", "))
                 };
 
+                let files_label = if let Some(counts) = subtree_counts {
+                    let true_count = counts.get(&entry.path).copied().unwrap_or(dir_file_count);
+                    if true_count != dir_file_count {
+                        let depth_val = max_depth.unwrap_or(0);
+                        format!(
+                            "{} files total; showing {} at depth={}, {}L, {}F, {}C",
+                            true_count,
+                            dir_file_count,
+                            depth_val,
+                            dir_loc,
+                            dir_functions,
+                            dir_classes
+                        )
+                    } else {
+                        format!(
+                            "{} files, {}L, {}F, {}C",
+                            dir_file_count, dir_loc, dir_functions, dir_classes
+                        )
+                    }
+                } else {
+                    format!(
+                        "{} files, {}L, {}F, {}C",
+                        dir_file_count, dir_loc, dir_functions, dir_classes
+                    )
+                };
                 output.push_str(&format!(
-                    "  {}/ [{} files, {}L, {}F, {}C]{}{}\n",
-                    name, dir_file_count, dir_loc, dir_functions, dir_classes, hint, subdir_suffix
+                    "  {}/ [{}]{}{}\n",
+                    name, files_label, hint, subdir_suffix
                 ));
             } else {
-                output.push_str(&format!("  {}/\n", name));
+                // No analyzed files at this depth, but subtree_counts may have a true count
+                let entry_name_str = name.to_string();
+                if let Some(counts) = subtree_counts {
+                    let true_count = counts.get(&entry.path).copied().unwrap_or(0);
+                    if true_count > 0 {
+                        // Track for SUGGESTION
+                        if !crate::EXCLUDED_DIRS.contains(&entry_name_str.as_str())
+                            && true_count > largest_dir_count
+                        {
+                            largest_dir_count = true_count;
+                            largest_dir_name = Some(entry_name_str);
+                            largest_dir_path = Some(
+                                entry
+                                    .path
+                                    .canonicalize()
+                                    .unwrap_or_else(|_| entry.path.clone())
+                                    .display()
+                                    .to_string(),
+                            );
+                        }
+                        let depth_val = max_depth.unwrap_or(0);
+                        output.push_str(&format!(
+                            "  {}/ [{} files total; showing 0 at depth={}, 0L, 0F, 0C]\n",
+                            name, true_count, depth_val
+                        ));
+                    } else {
+                        output.push_str(&format!("  {}/\n", name));
+                    }
+                } else {
+                    output.push_str(&format!("  {}/\n", name));
+                }
             }
         } else {
             // For files, show individual stats
