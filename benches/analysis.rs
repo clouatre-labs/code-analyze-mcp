@@ -182,12 +182,71 @@ fn subtree_count_overhead_500(c: &mut Criterion) {
     drop(dir);
 }
 
+fn subtree_count_overhead_1000(c: &mut Criterion) {
+    use std::fs;
+    use tempfile::TempDir;
+
+    // Create fixture: 5 * 5 * 5 * 8 = 1000 files.
+    // Directory structure: root/sub{0-4}/subsub{0-4}/subsubsub{0-4}/file{0-7}.rs
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    for i in 0..5usize {
+        for j in 0..5usize {
+            for k in 0..5usize {
+                let subdir = root
+                    .join(format!("sub{}", i))
+                    .join(format!("subsub{}", j))
+                    .join(format!("subsubsub{}", k));
+                fs::create_dir_all(&subdir).unwrap();
+                for m in 0..8usize {
+                    fs::write(subdir.join(format!("file{}.rs", m)), b"fn main() {}").unwrap();
+                }
+            }
+        }
+    }
+
+    let mut group = c.benchmark_group("subtree_count_overhead_1000");
+    group.sample_size(10);
+
+    group.bench_function("baseline_walk_only_1000", |b| {
+        b.iter(|| {
+            let entries = code_analyze_mcp::traversal::walk_directory(
+                std::hint::black_box(root),
+                std::hint::black_box(None),
+            )
+            .unwrap();
+            std::hint::black_box(entries)
+        })
+    });
+
+    group.bench_function("with_single_walk_and_count_1000", |b| {
+        b.iter(|| {
+            // Single unbounded walk; compute counts in-memory.
+            let all_entries = code_analyze_mcp::traversal::walk_directory(
+                std::hint::black_box(root),
+                std::hint::black_box(None),
+            )
+            .unwrap();
+            let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(
+                std::hint::black_box(root),
+                &all_entries,
+            );
+            std::hint::black_box((all_entries, counts))
+        })
+    });
+
+    group.finish();
+    // Keep dir alive until benchmarks are done
+    drop(dir);
+}
+
 criterion_group!(
     benches,
     overview_benchmark,
     file_details_benchmark,
     symbol_focus_benchmark,
     subtree_count_overhead,
-    subtree_count_overhead_500
+    subtree_count_overhead_500,
+    subtree_count_overhead_1000
 );
 criterion_main!(benches);

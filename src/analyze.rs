@@ -15,7 +15,6 @@ use crate::types::{AnalysisMode, FileInfo, ImportInfo, SemanticAnalysis, SymbolM
 use rayon::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -52,7 +51,7 @@ pub struct AnalysisOutput {
     /// Subtree file counts computed from an unbounded walk; used by format_summary; not serialized.
     #[serde(skip)]
     #[schemars(skip)]
-    pub subtree_counts: Option<HashMap<std::path::PathBuf, usize>>,
+    pub subtree_counts: Option<Vec<(std::path::PathBuf, usize)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(
         description = "Opaque cursor token for the next page of results (absent when no more results)"

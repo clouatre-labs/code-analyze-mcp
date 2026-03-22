@@ -641,7 +641,7 @@ impl CodeAnalyzer {
                 &output.files,
                 params.max_depth,
                 Some(Path::new(&params.path)),
-                output.subtree_counts.as_ref(),
+                output.subtree_counts.as_deref(),
             );
         }
 

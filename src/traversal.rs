@@ -4,8 +4,8 @@
 //! Uses the `ignore` crate for cross-platform, efficient file system traversal.
 
 use ignore::WalkBuilder;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use thiserror::Error;
 use tracing::instrument;
@@ -24,10 +24,13 @@ pub struct WalkEntry {
 pub enum TraversalError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("internal concurrency error: {0}")]
+    Internal(String),
 }
 
 /// Walk a directory with support for .gitignore and .ignore.
 /// max_depth=0 maps to unlimited recursion (None), positive values limit depth.
+/// The returned entries are sorted lexicographically by path.
 #[instrument(skip_all, fields(path = %root.display(), max_depth))]
 pub fn walk_directory(
     root: &Path,
@@ -44,10 +47,12 @@ pub fn walk_directory(
         builder.max_depth(Some(depth as usize));
     }
 
-    let mut entries = Vec::new();
+    let entries = Arc::new(Mutex::new(Vec::new()));
+    let entries_clone = Arc::clone(&entries);
 
-    for result in builder.build() {
-        match result {
+    builder.build_parallel().run(move || {
+        let entries = Arc::clone(&entries_clone);
+        Box::new(move |result| match result {
             Ok(entry) => {
                 let path = entry.path().to_path_buf();
                 let depth = entry.depth();
@@ -60,20 +65,29 @@ pub fn walk_directory(
                     None
                 };
 
-                entries.push(WalkEntry {
+                let walk_entry = WalkEntry {
                     path,
                     depth,
                     is_dir,
                     is_symlink,
                     symlink_target,
-                });
+                };
+                entries.lock().unwrap().push(walk_entry);
+                ignore::WalkState::Continue
             }
             Err(e) => {
                 tracing::warn!(error = %e, "skipping unreadable entry");
-                continue;
+                ignore::WalkState::Continue
             }
-        }
-    }
+        })
+    });
+
+    let mut entries = Arc::try_unwrap(entries)
+        .map_err(|_| {
+            TraversalError::Internal("arc unwrap failed: strong references still live".to_string())
+        })?
+        .into_inner()
+        .map_err(|_| TraversalError::Internal("mutex poisoned".to_string()))?;
 
     let dir_count = entries.iter().filter(|e| e.is_dir).count();
     let file_count = entries.iter().filter(|e| !e.is_dir).count();
@@ -86,15 +100,17 @@ pub fn walk_directory(
         "walk complete"
     );
 
+    // Restore sort contract: walk_parallel does not guarantee order.
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(entries)
 }
 
 /// Compute files-per-depth-1-subdirectory counts from an already-collected entry list.
-/// Returns a map from each depth-1 child path to its total descendant file count.
+/// Returns a Vec of (depth-1 path, file count) sorted by path.
 /// Only counts file entries (not directories); skips entries containing EXCLUDED_DIRS components.
-pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> HashMap<PathBuf, usize> {
-    let mut counts: HashMap<PathBuf, usize> = HashMap::new();
+/// Output Vec is sorted by construction (entries are pre-sorted by path).
+pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> Vec<(PathBuf, usize)> {
+    let mut counts: Vec<(PathBuf, usize)> = Vec::new();
     for entry in entries {
         if entry.is_dir {
             continue;
@@ -111,8 +127,11 @@ pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> HashMa
             Err(_) => continue,
         };
         if let Some(first) = rel.components().next() {
-            let depth1 = root.join(first);
-            *counts.entry(depth1).or_insert(0) += 1;
+            let key = root.join(first);
+            match counts.last_mut() {
+                Some(last) if last.0 == key => last.1 += 1,
+                _ => counts.push((key, 1)),
+            }
         }
     }
     counts
