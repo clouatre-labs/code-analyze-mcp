@@ -6,7 +6,7 @@
 use crate::formatter::{
     format_file_details, format_focused, format_focused_summary, format_structure,
 };
-use crate::graph::{CallChain, CallGraph, resolve_symbol};
+use crate::graph::{CallGraph, InternalCallChain, resolve_symbol};
 use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
@@ -267,15 +267,15 @@ pub struct FocusedAnalysisOutput {
     /// Not serialized; used for pagination in lib.rs.
     #[serde(skip)]
     #[schemars(skip)]
-    pub prod_chains: Vec<CallChain>,
+    pub(crate) prod_chains: Vec<InternalCallChain>,
     /// Test caller chains. Not serialized; used for pagination summary in lib.rs.
     #[serde(skip)]
     #[schemars(skip)]
-    pub test_chains: Vec<CallChain>,
+    pub(crate) test_chains: Vec<InternalCallChain>,
     /// Outgoing (callee) chains. Not serialized; used for pagination in lib.rs.
     #[serde(skip)]
     #[schemars(skip)]
-    pub outgoing_chains: Vec<CallChain>,
+    pub(crate) outgoing_chains: Vec<InternalCallChain>,
     /// Number of definitions for the symbol. Not serialized; used for pagination headers.
     #[serde(skip)]
     #[schemars(skip)]
@@ -738,5 +738,177 @@ fn extract_string_list_from_list_node(
                 result.push(unquoted);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::formatter::format_focused_paginated;
+    use crate::pagination::{PaginationMode, decode_cursor, paginate_slice};
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_symbol_focus_callers_pagination_first_page() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a file with many callers of `target`
+        let mut code = String::from("fn target() {}\n");
+        for i in 0..15 {
+            code.push_str(&format!("fn caller_{:02}() {{ target(); }}\n", i));
+        }
+        fs::write(temp_dir.path().join("lib.rs"), &code).unwrap();
+
+        // Act
+        let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+
+        // Paginate prod callers with page_size=5
+        let paginated = paginate_slice(&output.prod_chains, 0, 5, PaginationMode::Callers)
+            .expect("paginate failed");
+        assert!(
+            paginated.total >= 5,
+            "should have enough callers to paginate"
+        );
+        assert!(
+            paginated.next_cursor.is_some(),
+            "should have next_cursor for page 1"
+        );
+
+        // Verify cursor encodes callers mode
+        assert_eq!(paginated.items.len(), 5);
+    }
+
+    #[test]
+    fn test_symbol_focus_callers_pagination_second_page() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let mut code = String::from("fn target() {}\n");
+        for i in 0..12 {
+            code.push_str(&format!("fn caller_{:02}() {{ target(); }}\n", i));
+        }
+        fs::write(temp_dir.path().join("lib.rs"), &code).unwrap();
+
+        let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+        let total_prod = output.prod_chains.len();
+
+        if total_prod > 5 {
+            // Get page 1 cursor
+            let p1 = paginate_slice(&output.prod_chains, 0, 5, PaginationMode::Callers)
+                .expect("paginate failed");
+            assert!(p1.next_cursor.is_some());
+
+            let cursor_str = p1.next_cursor.unwrap();
+            let cursor_data = decode_cursor(&cursor_str).expect("decode failed");
+
+            // Get page 2
+            let p2 = paginate_slice(
+                &output.prod_chains,
+                cursor_data.offset,
+                5,
+                PaginationMode::Callers,
+            )
+            .expect("paginate failed");
+
+            // Format paginated output
+            let formatted = format_focused_paginated(
+                &p2.items,
+                total_prod,
+                PaginationMode::Callers,
+                "target",
+                &output.prod_chains,
+                &output.test_chains,
+                &output.outgoing_chains,
+                output.def_count,
+                cursor_data.offset,
+                Some(temp_dir.path()),
+                true,
+            );
+
+            // Assert: header shows correct range for page 2
+            let expected_start = cursor_data.offset + 1;
+            assert!(
+                formatted.contains(&format!("CALLERS ({}", expected_start)),
+                "header should show page 2 range, got: {}",
+                formatted
+            );
+        }
+    }
+
+    #[test]
+    fn test_symbol_focus_callees_pagination() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // target calls many functions
+        let mut code = String::from("fn target() {\n");
+        for i in 0..10 {
+            code.push_str(&format!("    callee_{:02}();\n", i));
+        }
+        code.push_str("}\n");
+        for i in 0..10 {
+            code.push_str(&format!("fn callee_{:02}() {{}}\n", i));
+        }
+        fs::write(temp_dir.path().join("lib.rs"), &code).unwrap();
+
+        let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+        let total_callees = output.outgoing_chains.len();
+
+        if total_callees > 3 {
+            let paginated = paginate_slice(&output.outgoing_chains, 0, 3, PaginationMode::Callees)
+                .expect("paginate failed");
+
+            let formatted = format_focused_paginated(
+                &paginated.items,
+                total_callees,
+                PaginationMode::Callees,
+                "target",
+                &output.prod_chains,
+                &output.test_chains,
+                &output.outgoing_chains,
+                output.def_count,
+                0,
+                Some(temp_dir.path()),
+                true,
+            );
+
+            assert!(
+                formatted.contains(&format!(
+                    "CALLEES (1-{} of {})",
+                    paginated.items.len(),
+                    total_callees
+                )),
+                "header should show callees range, got: {}",
+                formatted
+            );
+        }
+    }
+
+    #[test]
+    fn test_symbol_focus_empty_prod_callers() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // target is only called from test functions
+        let code = r#"
+fn target() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_something() { target(); }
+}
+"#;
+        fs::write(temp_dir.path().join("lib.rs"), code).unwrap();
+
+        let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+
+        // prod_chains may be empty; pagination should handle it gracefully
+        let paginated = paginate_slice(&output.prod_chains, 0, 100, PaginationMode::Callers)
+            .expect("paginate failed");
+        assert_eq!(paginated.items.len(), output.prod_chains.len());
+        assert!(
+            paginated.next_cursor.is_none(),
+            "no next_cursor for empty or single-page prod_chains"
+        );
     }
 }

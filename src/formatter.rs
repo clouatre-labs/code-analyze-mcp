@@ -3,9 +3,8 @@
 //! Formats semantic analysis, call graphs, and directory structures into human-readable text.
 //! Handles multiline wrapping, pagination, and summary generation.
 
-use crate::graph::CallChain;
 use crate::graph::CallGraph;
-use crate::graph::ImportGraph;
+use crate::graph::InternalCallChain;
 use crate::pagination::PaginationMode;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
@@ -1272,23 +1271,7 @@ pub fn format_file_details_paginated(
         ));
     }
 
-    // RELATED: section only on first page - caller appends format_related_section if needed
-
     output
-}
-
-/// Parameters for `format_focused_paginated`.
-pub struct FocusedPaginatedParams<'a> {
-    pub paginated_chains: &'a [CallChain],
-    pub total: usize,
-    pub mode: PaginationMode,
-    pub symbol: &'a str,
-    pub prod_chains: &'a [CallChain],
-    pub test_chains: &'a [CallChain],
-    pub outgoing_chains: &'a [CallChain],
-    pub def_count: usize,
-    pub offset: usize,
-    pub base_path: Option<&'a Path>,
 }
 
 /// Format a paginated subset of callers or callees for SymbolFocus mode.
@@ -1297,14 +1280,14 @@ pub struct FocusedPaginatedParams<'a> {
 /// - `PaginationMode::Callees`: paginate callees; show callers summary and test callers summary.
 #[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
-pub fn format_focused_paginated(
-    paginated_chains: &[CallChain],
+pub(crate) fn format_focused_paginated(
+    paginated_chains: &[InternalCallChain],
     total: usize,
     mode: PaginationMode,
     symbol: &str,
-    prod_chains: &[CallChain],
-    test_chains: &[CallChain],
-    outgoing_chains: &[CallChain],
+    prod_chains: &[InternalCallChain],
+    test_chains: &[InternalCallChain],
+    outgoing_chains: &[InternalCallChain],
     def_count: usize,
     offset: usize,
     base_path: Option<&Path>,
@@ -2105,77 +2088,50 @@ mod tests {
     }
 
     #[test]
-    fn test_related_section_with_data() {
-        use crate::graph::ImportGraph;
-        use std::collections::HashMap;
+    fn test_format_focused_paginated_unit() {
+        use crate::graph::InternalCallChain;
+        use crate::pagination::PaginationMode;
         use std::path::PathBuf;
 
-        // Verify RELATED: is omitted when import_graph is None
-        let none_output = format_related_section(Path::new("test.rs"), None);
-        assert!(
-            !none_output.contains("RELATED:"),
-            "RELATED: section should not appear when import_graph is None"
-        );
-
-        let path = PathBuf::from("src/main.rs");
-        let mut incoming = HashMap::new();
-        incoming.insert(
-            path.clone(),
-            vec![PathBuf::from("src/lib.rs"), PathBuf::from("src/utils.rs")],
-        );
-
-        let mut outgoing = HashMap::new();
-        outgoing.insert(path.clone(), vec![PathBuf::from("src/config.rs")]);
-
-        let graph = ImportGraph { incoming, outgoing };
-
-        let output = format_related_section(Path::new("src/main.rs"), Some(&graph));
-
-        assert!(
-            output.contains("RELATED:"),
-            "RELATED: section should appear"
-        );
-        assert!(output.contains("<-"), "incoming arrow should appear");
-        assert!(output.contains("->"), "outgoing arrow should appear");
-        assert!(output.contains("lib.rs"), "incoming file should be listed");
-        assert!(
-            output.contains("config.rs"),
-            "outgoing file should be listed"
-        );
-    }
-
-    #[test]
-    fn test_related_section_cap() {
-        use crate::graph::ImportGraph;
-        use std::collections::HashMap;
-        use std::path::PathBuf;
-
-        let path = PathBuf::from("src/core.rs");
-        let mut incoming = HashMap::new();
-        incoming.insert(
-            path.clone(),
-            vec![
-                PathBuf::from("src/a.rs"),
-                PathBuf::from("src/b.rs"),
-                PathBuf::from("src/c.rs"),
-                PathBuf::from("src/d.rs"),
-                PathBuf::from("src/e.rs"),
-                PathBuf::from("src/f.rs"), // 6th - should be capped
-            ],
-        );
-
-        let graph = ImportGraph {
-            incoming,
-            outgoing: HashMap::new(),
+        // Arrange: create mock caller chains
+        let make_chain = |name: &str| -> InternalCallChain {
+            InternalCallChain {
+                chain: vec![
+                    (name.to_string(), PathBuf::from("src/lib.rs"), 10),
+                    ("target".to_string(), PathBuf::from("src/lib.rs"), 5),
+                ],
+            }
         };
 
-        let output = format_related_section(Path::new("src/core.rs"), Some(&graph));
+        let prod_chains: Vec<InternalCallChain> = (0..8)
+            .map(|i| make_chain(&format!("caller_{}", i)))
+            .collect();
+        let page = &prod_chains[0..3];
 
-        assert!(output.contains("a.rs"), "first file should be listed");
-        assert!(output.contains("e.rs"), "5th file should be listed");
+        // Act
+        let formatted = format_focused_paginated(
+            page,
+            8,
+            PaginationMode::Callers,
+            "target",
+            &prod_chains,
+            &[],
+            &[],
+            1,
+            0,
+            None,
+            true,
+        );
+
+        // Assert: header present
         assert!(
-            !output.contains("f.rs"),
-            "6th file should not be listed (capped at 5)"
+            formatted.contains("CALLERS (1-3 of 8):"),
+            "header should show 1-3 of 8, got: {}",
+            formatted
+        );
+        assert!(
+            formatted.contains("FOCUS: target"),
+            "should have FOCUS header"
         );
     }
 }
@@ -2246,52 +2202,6 @@ fn format_classes_section(classes: &[ClassInfo], functions: &[FunctionInfo]) -> 
 
 /// Format related files section (incoming/outgoing imports).
 /// Returns empty string when import_graph is None.
-pub fn format_related_section(path: &Path, import_graph: Option<&ImportGraph>) -> String {
-    let Some(graph) = import_graph else {
-        return String::new();
-    };
-
-    let mut output = String::new();
-
-    // Incoming files
-    if let Some(inbound) = graph.incoming.get(path)
-        && !inbound.is_empty()
-    {
-        output.push_str("RELATED:\n");
-        output.push_str("  <- ");
-        let file_names: Vec<String> = inbound
-            .iter()
-            .take(5)
-            .filter_map(|p| p.file_name())
-            .filter_map(|n| n.to_str())
-            .map(|s| s.to_string())
-            .collect();
-        output.push_str(&file_names.join(", "));
-        output.push('\n');
-    }
-
-    // Outgoing files
-    if let Some(outbound) = graph.outgoing.get(path)
-        && !outbound.is_empty()
-    {
-        if output.is_empty() {
-            output.push_str("RELATED:\n");
-        }
-        output.push_str("  -> ");
-        let file_names: Vec<String> = outbound
-            .iter()
-            .take(5)
-            .filter_map(|p| p.file_name())
-            .filter_map(|n| n.to_str())
-            .map(|s| s.to_string())
-            .collect();
-        output.push_str(&file_names.join(", "));
-        output.push('\n');
-    }
-
-    output
-}
-
 fn format_imports_section(imports: &[ImportInfo]) -> String {
     let mut output = String::new();
     if imports.is_empty() {

@@ -110,11 +110,11 @@ fn no_cache_meta() -> Meta {
 /// Helper function for paginating focus chains (callers or callees).
 /// Returns (items, re-encoded_cursor_option).
 fn paginate_focus_chains(
-    chains: &[graph::CallChain],
+    chains: &[graph::InternalCallChain],
     mode: PaginationMode,
     offset: usize,
     page_size: usize,
-) -> Result<(Vec<graph::CallChain>, Option<String>), ErrorData> {
+) -> Result<(Vec<graph::InternalCallChain>, Option<String>), ErrorData> {
     let paginated = paginate_slice(chains, offset, page_size, mode).map_err(|e| {
         ErrorData::new(
             rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -856,13 +856,6 @@ impl CodeAnalyzer {
                 offset,
                 verbose,
             );
-            // Append RELATED: section at handler layer (first page only)
-            if offset == 0 {
-                formatted.push_str(&crate::formatter::format_related_section(
-                    std::path::Path::new(&params.path),
-                    None,
-                ));
-            }
         }
 
         // Capture next_cursor from pagination result (unless using summary mode)
