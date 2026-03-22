@@ -12,15 +12,22 @@ pub const DEFAULT_PAGE_SIZE: usize = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+/// Selects which call-chain direction a pagination cursor tracks.
 pub enum PaginationMode {
+    /// Standard file/directory listing or call-graph default traversal.
     Default,
+    /// Paginating through the callers chain of a symbol.
     Callers,
+    /// Paginating through the callees chain of a symbol.
     Callees,
 }
 
+/// Serializable state embedded in a pagination cursor.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CursorData {
+    /// Which chain direction this cursor belongs to.
     pub mode: PaginationMode,
+    /// Zero-based index of the next item to return.
     pub offset: usize,
 }
 
@@ -71,6 +78,14 @@ pub struct PaginationResult<T> {
     pub total: usize,
 }
 
+/// Paginate a slice, returning a page of items and an optional next-page cursor.
+///
+/// Returns [`PaginationResult`] with the page items, total count, and a base64-encoded
+/// cursor for the next page (or `None` if this is the last page).
+///
+/// # Errors
+///
+/// Returns [`PaginationError`] if cursor encoding fails.
 pub fn paginate_slice<T: Clone>(
     items: &[T],
     offset: usize,
