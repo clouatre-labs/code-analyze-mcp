@@ -24,10 +24,13 @@ pub struct WalkEntry {
 pub enum TraversalError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("internal concurrency error: {0}")]
+    Internal(String),
 }
 
 /// Walk a directory with support for .gitignore and .ignore.
 /// max_depth=0 maps to unlimited recursion (None), positive values limit depth.
+/// The returned entries are sorted lexicographically by path.
 #[instrument(skip_all, fields(path = %root.display(), max_depth))]
 pub fn walk_directory(
     root: &Path,
@@ -80,9 +83,11 @@ pub fn walk_directory(
     });
 
     let mut entries = Arc::try_unwrap(entries)
-        .map_err(|_| TraversalError::Io(std::io::Error::other("arc unwrap failed")))?
+        .map_err(|_| {
+            TraversalError::Internal("arc unwrap failed: strong references still live".to_string())
+        })?
         .into_inner()
-        .map_err(|_| TraversalError::Io(std::io::Error::other("mutex poisoned")))?;
+        .map_err(|_| TraversalError::Internal("mutex poisoned".to_string()))?;
 
     let dir_count = entries.iter().filter(|e| e.is_dir).count();
     let file_count = entries.iter().filter(|e| !e.is_dir).count();
@@ -98,16 +103,6 @@ pub fn walk_directory(
     // Restore sort contract: walk_parallel does not guarantee order.
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(entries)
-}
-
-/// Returns the depth-1 component under `root` for a given `path`,
-/// or `root` itself if `path` == `root`.
-fn depth1_prefix(root: &Path, path: &Path) -> PathBuf {
-    let rel = path.strip_prefix(root).unwrap_or(path);
-    match rel.components().next() {
-        Some(c) => root.join(c),
-        None => root.to_path_buf(),
-    }
 }
 
 /// Compute files-per-depth-1-subdirectory counts from an already-collected entry list.
@@ -131,8 +126,8 @@ pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> Vec<(P
             Ok(r) => r,
             Err(_) => continue,
         };
-        if rel.components().next().is_some() {
-            let key = depth1_prefix(root, &entry.path);
+        if let Some(first) = rel.components().next() {
+            let key = root.join(first);
             match counts.last_mut() {
                 Some(last) if last.0 == key => last.1 += 1,
                 _ => counts.push((key, 1)),
