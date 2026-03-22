@@ -47,7 +47,7 @@ fn test_summary_mode_produces_smaller_output() {
 
     let output = analyze::analyze_directory(Path::new("."), None).unwrap();
     let full_len = output.formatted.len();
-    let summarized = format_summary(&output.entries, &output.files, None, None);
+    let summarized = format_summary(&output.entries, &output.files, None, None, None);
     let summary_len = summarized.len();
 
     assert!(

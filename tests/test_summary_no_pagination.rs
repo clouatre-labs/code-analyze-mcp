@@ -21,8 +21,13 @@ fn test_format_summary_includes_subdirs() {
 
     // Act: Analyze directory to get the entries and files
     let output = analyze_directory(root, None).unwrap();
-    let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+    let summary = code_analyze_mcp::formatter::format_summary(
+        &output.entries,
+        &output.files,
+        None,
+        None,
+        None,
+    );
 
     // Assert: Find the core/ line in the summary and verify it contains sub: and subdirectory names
     let core_line = summary

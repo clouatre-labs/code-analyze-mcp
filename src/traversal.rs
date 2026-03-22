@@ -4,6 +4,7 @@
 //! Uses the `ignore` crate for cross-platform, efficient file system traversal.
 
 use ignore::WalkBuilder;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use thiserror::Error;
@@ -87,4 +88,49 @@ pub fn walk_directory(
 
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(entries)
+}
+
+/// Counts files per depth-1 subdirectory of `root` using an unbounded walk.
+/// Uses identical WalkBuilder filters as `walk_directory` (hidden + standard_filters).
+/// Returns a map from each depth-1 child path to its total descendant file count.
+/// Does not allocate WalkEntry structs; only counts.
+pub fn count_files_by_dir(root: &Path) -> Result<HashMap<PathBuf, usize>, TraversalError> {
+    let mut counts: HashMap<PathBuf, usize> = HashMap::new();
+    let walker = WalkBuilder::new(root)
+        .hidden(true)
+        .standard_filters(true)
+        .build();
+    for result in walker {
+        let entry = match result {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!("count_files_by_dir walk error: {}", e);
+                continue;
+            }
+        };
+        // Skip directories; only count files
+        let ft = entry.file_type();
+        if ft.map(|f| f.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let path = entry.path();
+        // Skip entries whose path components contain EXCLUDED_DIRS
+        if path.components().any(|c| {
+            let s = c.as_os_str().to_string_lossy();
+            crate::EXCLUDED_DIRS.contains(&s.as_ref())
+        }) {
+            continue;
+        }
+        // Find the depth-1 ancestor of this file relative to root
+        let rel = match path.strip_prefix(root) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        // First component of the relative path is the depth-1 child dir
+        if let Some(first) = rel.components().next() {
+            let depth1 = root.join(first);
+            *counts.entry(depth1).or_insert(0) += 1;
+        }
+    }
+    Ok(counts)
 }
