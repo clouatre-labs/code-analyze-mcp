@@ -14,56 +14,6 @@ type FunctionTypeInfo = (PathBuf, usize, Vec<String>, Option<String>);
 
 const MAX_CANDIDATES_IN_ERROR: usize = 20;
 
-/// Maps files to their incoming and outgoing import relationships.
-/// Incoming: files that import this file.
-/// Outgoing: files that this file imports.
-#[derive(Debug, Clone)]
-pub struct ImportGraph {
-    /// File -> list of files importing this file
-    pub incoming: HashMap<PathBuf, Vec<PathBuf>>,
-    /// File -> list of files this file imports
-    pub outgoing: HashMap<PathBuf, Vec<PathBuf>>,
-}
-
-impl ImportGraph {
-    /// Build an ImportGraph from semantic analysis results.
-    /// Caps each direction at 5 entries per file to limit output size.
-    pub fn build_from_results(results: &[(PathBuf, SemanticAnalysis)]) -> Self {
-        let mut incoming: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
-        let mut outgoing: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
-
-        for (path, analysis) in results {
-            let mut out_files = Vec::new();
-            for import in &analysis.imports {
-                // Store raw module path; proper module-to-file resolution deferred to follow-up
-                let module_path = PathBuf::from(&import.module);
-                out_files.push(module_path);
-            }
-            out_files.truncate(5);
-            if !out_files.is_empty() {
-                outgoing.insert(path.clone(), out_files);
-            }
-        }
-
-        // Build incoming map by reversing outgoing relationships
-        for (from_file, to_files) in &outgoing {
-            for to_file in to_files {
-                incoming
-                    .entry(to_file.clone())
-                    .or_default()
-                    .push(from_file.clone());
-            }
-        }
-
-        // Cap incoming at 5 per file
-        for inbound in incoming.values_mut() {
-            inbound.truncate(5);
-        }
-
-        ImportGraph { incoming, outgoing }
-    }
-}
-
 fn format_candidates(candidates: &[String]) -> String {
     if candidates.len() <= MAX_CANDIDATES_IN_ERROR {
         candidates.join(", ")
@@ -162,7 +112,7 @@ fn strip_scope_prefix(name: &str) -> &str {
 }
 
 #[derive(Debug, Clone)]
-pub struct CallChain {
+pub struct InternalCallChain {
     pub chain: Vec<(String, PathBuf, usize)>,
 }
 
@@ -491,7 +441,7 @@ impl CallGraph {
         symbol: &str,
         follow_depth: u32,
         is_incoming: bool,
-    ) -> Result<Vec<CallChain>, GraphError> {
+    ) -> Result<Vec<InternalCallChain>, GraphError> {
         let graph_map = if is_incoming {
             &self.callers
         } else {
@@ -545,7 +495,7 @@ impl CallGraph {
                     } else {
                         chain.push((neighbor.clone(), path.clone(), *line));
                     }
-                    chains.push(CallChain { chain });
+                    chains.push(InternalCallChain { chain });
 
                     if !visited.contains(neighbor) && depth < follow_depth {
                         visited.insert(neighbor.clone());
@@ -563,7 +513,7 @@ impl CallGraph {
         &self,
         symbol: &str,
         follow_depth: u32,
-    ) -> Result<Vec<CallChain>, GraphError> {
+    ) -> Result<Vec<InternalCallChain>, GraphError> {
         self.find_chains_bfs(symbol, follow_depth, true)
     }
 
@@ -572,7 +522,7 @@ impl CallGraph {
         &self,
         symbol: &str,
         follow_depth: u32,
-    ) -> Result<Vec<CallChain>, GraphError> {
+    ) -> Result<Vec<InternalCallChain>, GraphError> {
         self.find_chains_bfs(symbol, follow_depth, false)
     }
 }

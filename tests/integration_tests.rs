@@ -3357,13 +3357,13 @@ fn test_format_file_details_paginated_unit() {
 #[test]
 fn test_format_focused_paginated_unit() {
     use code_analyze_mcp::formatter::format_focused_paginated;
-    use code_analyze_mcp::graph::CallChain;
+    use code_analyze_mcp::graph::InternalCallChain;
     use code_analyze_mcp::pagination::PaginationMode;
     use std::path::PathBuf;
 
     // Arrange: create mock caller chains
-    let make_chain = |name: &str| -> CallChain {
-        CallChain {
+    let make_chain = |name: &str| -> InternalCallChain {
+        InternalCallChain {
             chain: vec![
                 (name.to_string(), PathBuf::from("src/lib.rs"), 10),
                 ("target".to_string(), PathBuf::from("src/lib.rs"), 5),
@@ -3371,7 +3371,7 @@ fn test_format_focused_paginated_unit() {
         }
     };
 
-    let prod_chains: Vec<CallChain> = (0..8)
+    let prod_chains: Vec<InternalCallChain> = (0..8)
         .map(|i| make_chain(&format!("caller_{}", i)))
         .collect();
     let page = &prod_chains[0..3];

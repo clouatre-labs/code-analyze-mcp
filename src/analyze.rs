@@ -6,7 +6,7 @@
 use crate::formatter::{
     format_file_details, format_focused, format_focused_summary, format_structure,
 };
-use crate::graph::{CallChain, CallGraph, resolve_symbol};
+use crate::graph::{CallGraph, InternalCallChain, resolve_symbol};
 use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
@@ -267,15 +267,15 @@ pub struct FocusedAnalysisOutput {
     /// Not serialized; used for pagination in lib.rs.
     #[serde(skip)]
     #[schemars(skip)]
-    pub prod_chains: Vec<CallChain>,
+    pub prod_chains: Vec<InternalCallChain>,
     /// Test caller chains. Not serialized; used for pagination summary in lib.rs.
     #[serde(skip)]
     #[schemars(skip)]
-    pub test_chains: Vec<CallChain>,
+    pub test_chains: Vec<InternalCallChain>,
     /// Outgoing (callee) chains. Not serialized; used for pagination in lib.rs.
     #[serde(skip)]
     #[schemars(skip)]
-    pub outgoing_chains: Vec<CallChain>,
+    pub outgoing_chains: Vec<InternalCallChain>,
     /// Number of definitions for the symbol. Not serialized; used for pagination headers.
     #[serde(skip)]
     #[schemars(skip)]
