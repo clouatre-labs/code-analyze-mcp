@@ -28,8 +28,8 @@ pub struct MetricEvent {
     pub seq: Option<u32>,
 }
 
-#[derive(Clone)]
 /// Sender half of the metrics channel; cloned and passed to tools for event emission.
+#[derive(Clone)]
 pub struct MetricsSender(pub tokio::sync::mpsc::UnboundedSender<MetricEvent>);
 
 impl MetricsSender {

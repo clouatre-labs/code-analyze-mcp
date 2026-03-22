@@ -10,9 +10,9 @@ use thiserror::Error;
 
 pub const DEFAULT_PAGE_SIZE: usize = 100;
 
+/// Selects which call-chain direction a pagination cursor tracks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-/// Selects which call-chain direction a pagination cursor tracks.
 pub enum PaginationMode {
     /// Standard file/directory listing or call-graph default traversal.
     Default,
