@@ -411,7 +411,7 @@ impl CallGraph {
                     .push(CallEdge {
                         path: path.clone(),
                         line: call.line,
-                        caller_name: resolved_callee.clone(),
+                        neighbor_name: resolved_callee.clone(),
                         is_impl_trait: false,
                     });
                 graph
@@ -421,7 +421,7 @@ impl CallGraph {
                     .push(CallEdge {
                         path: path.clone(),
                         line: call.line,
-                        caller_name: call.caller.clone(),
+                        neighbor_name: call.caller.clone(),
                         is_impl_trait: false,
                     });
             }
@@ -433,26 +433,31 @@ impl CallGraph {
                     .push(CallEdge {
                         path: path.clone(),
                         line: reference.line,
-                        caller_name: "<reference>".to_string(),
+                        neighbor_name: "<reference>".to_string(),
                         is_impl_trait: false,
                     });
             }
         }
 
-        // Tag caller edges that originate from an impl Trait for Type block.
-        for edges in graph.callers.values_mut() {
-            for edge in edges.iter_mut() {
-                let matches = impl_traits
-                    .iter()
-                    .any(|it| it.path == edge.path && it.impl_type == edge.caller_name);
-                if matches {
-                    edge.is_impl_trait = true;
-                }
-            }
+        // Add explicit caller edges for each impl Trait for Type block.
+        // These represent the implementing type as a caller of the trait, enabling
+        // impl_only filtering to surface trait implementors rather than call sites.
+        for it in impl_traits {
+            graph
+                .callers
+                .entry(it.trait_name.clone())
+                .or_default()
+                .push(CallEdge {
+                    path: it.path.clone(),
+                    line: it.line,
+                    neighbor_name: it.impl_type.clone(),
+                    is_impl_trait: true,
+                });
         }
 
-        // If impl_only=true, retain only impl-trait caller edges.
-        // Callees are never filtered.
+        // If impl_only=true, retain only impl-trait caller edges across all nodes.
+        // Callees are never filtered. This ensures traversal and formatting are
+        // consistently restricted to impl-trait edges regardless of follow_depth.
         if impl_only {
             for edges in graph.callers.values_mut() {
                 edges.retain(|e| e.is_impl_trait);
@@ -508,7 +513,7 @@ impl CallGraph {
                 for edge in neighbors {
                     let path = &edge.path;
                     let line = edge.line;
-                    let neighbor = &edge.caller_name;
+                    let neighbor = &edge.neighbor_name;
                     let mut chain = vec![(current.clone(), path.clone(), line)];
                     let mut chain_node = neighbor.clone();
                     let mut chain_depth = depth;
@@ -532,7 +537,7 @@ impl CallGraph {
                                         next_edge.line,
                                     ));
                                 }
-                                chain_node = next_edge.caller_name.clone();
+                                chain_node = next_edge.neighbor_name.clone();
                                 chain_depth += 1;
                             } else {
                                 break;
@@ -671,8 +676,8 @@ mod tests {
                 .expect("Failed to build graph");
         assert!(graph.definitions.contains_key("main"));
         assert!(graph.definitions.contains_key("foo"));
-        assert_eq!(graph.callees["main"][0].caller_name, "foo");
-        assert_eq!(graph.callers["foo"][0].caller_name, "main");
+        assert_eq!(graph.callees["main"][0].neighbor_name, "foo");
+        assert_eq!(graph.callers["foo"][0].neighbor_name, "main");
     }
 
     #[test]
@@ -737,7 +742,7 @@ mod tests {
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].caller_name, "helper");
+        assert_eq!(main_callees[0].neighbor_name, "helper");
 
         // Check that the call is from a.rs (same file as main)
         assert_eq!(main_callees[0].path, PathBuf::from("a.rs"));
@@ -769,7 +774,7 @@ mod tests {
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].caller_name, "process");
+        assert_eq!(main_callees[0].neighbor_name, "process");
 
         // Check that process has a caller from main at line 12
         assert!(graph.callers.contains_key("process"));
@@ -777,7 +782,7 @@ mod tests {
         assert!(
             process_callers
                 .iter()
-                .any(|e| e.line == 12 && e.caller_name == "main")
+                .any(|e| e.line == 12 && e.neighbor_name == "main")
         );
     }
 
@@ -799,17 +804,17 @@ mod tests {
                 .expect("Failed to build graph");
 
         // Check that all three callers have "method" as their callee
-        assert_eq!(graph.callees["caller1"][0].caller_name, "method");
-        assert_eq!(graph.callees["caller2"][0].caller_name, "method");
-        assert_eq!(graph.callees["caller3"][0].caller_name, "method");
+        assert_eq!(graph.callees["caller1"][0].neighbor_name, "method");
+        assert_eq!(graph.callees["caller2"][0].neighbor_name, "method");
+        assert_eq!(graph.callees["caller3"][0].neighbor_name, "method");
 
         // Check that method has three callers
         assert!(graph.callers.contains_key("method"));
         let method_callers = &graph.callers["method"];
         assert_eq!(method_callers.len(), 3);
-        assert!(method_callers.iter().any(|e| e.caller_name == "caller1"));
-        assert!(method_callers.iter().any(|e| e.caller_name == "caller2"));
-        assert!(method_callers.iter().any(|e| e.caller_name == "caller3"));
+        assert!(method_callers.iter().any(|e| e.neighbor_name == "caller1"));
+        assert!(method_callers.iter().any(|e| e.neighbor_name == "caller2"));
+        assert!(method_callers.iter().any(|e| e.neighbor_name == "caller3"));
     }
 
     #[test]
@@ -833,7 +838,7 @@ mod tests {
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].caller_name, "helper");
+        assert_eq!(main_callees[0].neighbor_name, "helper");
 
         // Check that helper has a caller from a.rs
         assert!(graph.callers.contains_key("helper"));
@@ -841,7 +846,7 @@ mod tests {
         assert!(
             helper_callers
                 .iter()
-                .any(|e| e.path == PathBuf::from("a.rs") && e.caller_name == "main")
+                .any(|e| e.path == PathBuf::from("a.rs") && e.neighbor_name == "main")
         );
     }
 
@@ -873,7 +878,7 @@ mod tests {
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].caller_name, "process");
+        assert_eq!(main_callees[0].neighbor_name, "process");
 
         // Check that process has a caller from main at line 11
         assert!(graph.callers.contains_key("process"));
@@ -881,7 +886,7 @@ mod tests {
         assert!(
             process_callers
                 .iter()
-                .any(|e| e.line == 11 && e.caller_name == "main")
+                .any(|e| e.line == 11 && e.neighbor_name == "main")
         );
     }
 
@@ -903,7 +908,7 @@ mod tests {
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].caller_name, "process");
+        assert_eq!(main_callees[0].neighbor_name, "process");
 
         // Check that process has a caller from main
         assert!(graph.callers.contains_key("process"));
@@ -911,17 +916,17 @@ mod tests {
         assert!(
             process_callers
                 .iter()
-                .any(|e| e.line == 12 && e.caller_name == "main")
+                .any(|e| e.line == 12 && e.neighbor_name == "main")
         );
     }
 
     #[test]
     fn test_impl_only_filters_to_impl_sites() {
-        // Arrange: two callers of "write", one from an impl trait site and one plain function.
+        // Arrange: WriterImpl implements Write; plain_fn calls write directly.
         use crate::types::ImplTraitInfo;
         let analysis = make_analysis(
-            vec![("write", 1), ("WriterImpl", 10), ("plain_fn", 20)],
-            vec![("WriterImpl", "write", 12), ("plain_fn", "write", 22)],
+            vec![("write", 1), ("plain_fn", 20)],
+            vec![("plain_fn", "write", 22)],
         );
         let impl_traits = vec![ImplTraitInfo {
             trait_name: "Write".to_string(),
@@ -938,11 +943,24 @@ mod tests {
         )
         .expect("Failed to build graph");
 
-        // Assert: only impl-trait caller retained
-        let callers = graph.callers.get("write").expect("write must have callers");
-        assert_eq!(callers.len(), 1, "only WriterImpl should be retained");
-        assert_eq!(callers[0].caller_name, "WriterImpl");
-        assert!(callers[0].is_impl_trait);
+        // Assert: trait "Write" has WriterImpl as an explicit impl-trait caller edge.
+        let callers = graph
+            .callers
+            .get("Write")
+            .expect("Write must have impl caller");
+        assert_eq!(callers.len(), 1, "only impl-trait caller retained");
+        assert_eq!(callers[0].neighbor_name, "WriterImpl");
+        assert!(
+            callers[0].is_impl_trait,
+            "edge must be tagged is_impl_trait"
+        );
+
+        // Assert: regular call-site callers of "write" are filtered out by impl_only.
+        let write_callers = graph.callers.get("write").map(|v| v.len()).unwrap_or(0);
+        assert_eq!(
+            write_callers, 0,
+            "regular callers filtered when impl_only=true"
+        );
     }
 
     #[test]
@@ -968,13 +986,21 @@ mod tests {
         )
         .expect("Failed to build graph");
 
-        // Assert: both callers present
+        // Assert: both call-site callers preserved
         let callers = graph.callers.get("write").expect("write must have callers");
         assert_eq!(
             callers.len(),
             2,
-            "both callers should be present when impl_only=false"
+            "both call-site callers should be present when impl_only=false"
         );
+
+        // Assert: impl-trait edge is always present regardless of impl_only
+        let write_impl_callers = graph
+            .callers
+            .get("Write")
+            .expect("Write must have impl caller");
+        assert_eq!(write_impl_callers.len(), 1);
+        assert!(write_impl_callers[0].is_impl_trait);
     }
 
     #[test]
@@ -1009,7 +1035,7 @@ mod tests {
             1,
             "callees must not be filtered by impl_only"
         );
-        assert_eq!(callees[0].caller_name, "write");
+        assert_eq!(callees[0].neighbor_name, "write");
     }
 
     // ---- resolve_symbol tests ----

@@ -64,13 +64,13 @@ fn test_symbol_focus_summary_format() {
             code_analyze_mcp::types::CallEdge {
                 path: root.join("caller1.rs"),
                 line: 20,
-                caller_name: "caller_a".to_string(),
+                neighbor_name: "caller_a".to_string(),
                 is_impl_trait: false,
             },
             code_analyze_mcp::types::CallEdge {
                 path: root.join("caller2.rs"),
                 line: 30,
-                caller_name: "caller_b".to_string(),
+                neighbor_name: "caller_b".to_string(),
                 is_impl_trait: false,
             },
         ],
@@ -83,13 +83,13 @@ fn test_symbol_focus_summary_format() {
             code_analyze_mcp::types::CallEdge {
                 path: root.join("lib.rs"),
                 line: 40,
-                caller_name: "std::println".to_string(),
+                neighbor_name: "std::println".to_string(),
                 is_impl_trait: false,
             },
             code_analyze_mcp::types::CallEdge {
                 path: root.join("lib.rs"),
                 line: 50,
-                caller_name: "helper".to_string(),
+                neighbor_name: "helper".to_string(),
                 is_impl_trait: false,
             },
         ],

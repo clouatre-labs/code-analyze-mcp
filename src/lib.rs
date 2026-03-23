@@ -46,7 +46,6 @@ use formatter::{
     format_file_details_paginated, format_file_details_summary, format_focused_paginated,
     format_module_info, format_structure_paginated, format_summary,
 };
-use lang::language_from_extension;
 use logging::LogEvent;
 use pagination::{
     CursorData, DEFAULT_PAGE_SIZE, PaginationMode, decode_cursor, encode_cursor, paginate_slice,
@@ -405,39 +404,25 @@ impl CodeAnalyzer {
         let ct_clone = ct.clone();
         let impl_only = params.impl_only;
 
-        // Validate impl_only: only valid for Rust source directories.
+        // Validate impl_only: only valid for directories that contain Rust source files.
         if impl_only == Some(true) {
-            // Detect dominant language by scanning extensions in the directory.
-            let dominant_lang = walk_directory(path, max_depth)
+            let has_rust = walk_directory(path, max_depth)
                 .ok()
-                .and_then(|entries| {
-                    let mut counts: std::collections::HashMap<&'static str, usize> =
-                        std::collections::HashMap::new();
-                    for entry in &entries {
-                        if entry.is_dir {
-                            continue;
-                        }
-                        if let Some(ext) = entry.path.extension().and_then(|e| e.to_str())
-                            && let Some(lang) = language_from_extension(ext)
-                        {
-                            *counts.entry(lang).or_insert(0) += 1;
-                        }
-                    }
-                    counts.into_iter().max_by_key(|(_, c)| *c).map(|(l, _)| l)
+                .map(|entries| {
+                    entries.iter().any(|e| {
+                        !e.is_dir && e.path.extension().and_then(|x| x.to_str()) == Some("rs")
+                    })
                 })
-                .unwrap_or("unknown");
+                .unwrap_or(false);
 
-            if dominant_lang != "rust" {
+            if !has_rust {
                 return Err(ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
-                    format!(
-                        "impl_only=true requires Rust source files. Detected language: {}. Use analyze_symbol without impl_only for cross-language analysis.",
-                        dominant_lang
-                    ),
+                    "impl_only=true requires Rust source files. No .rs files found in the given path. Use analyze_symbol without impl_only for cross-language analysis.".to_string(),
                     error_meta(
                         "validation",
                         false,
-                        "remove impl_only or point to a Rust directory",
+                        "remove impl_only or point to a directory containing .rs files",
                     ),
                 ));
             }

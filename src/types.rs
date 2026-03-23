@@ -7,12 +7,13 @@ use std::path::PathBuf;
 #[allow(unused_imports)]
 use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
 
-/// A single caller edge in the call graph with impl-trait metadata.
+/// A single edge in the call graph with impl-trait metadata.
+/// `neighbor_name` holds the caller name in `callers` maps and the callee name in `callees` maps.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallEdge {
     pub path: PathBuf,
     pub line: usize,
-    pub caller_name: String,
+    pub neighbor_name: String,
     pub is_impl_trait: bool,
 }
 

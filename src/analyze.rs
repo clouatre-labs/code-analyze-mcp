@@ -440,15 +440,17 @@ pub fn analyze_focused_with_progress(
         .map(|edges| {
             edges
                 .iter()
-                .map(|e| &e.caller_name)
+                .map(|e| &e.neighbor_name)
                 .collect::<std::collections::HashSet<_>>()
                 .len()
         })
         .unwrap_or(0);
 
     // Apply impl_only filter now if requested, then count filtered callers.
+    // Filter all caller adjacency lists so traversal and formatting are consistently
+    // restricted to impl-trait edges regardless of follow_depth.
     let impl_trait_caller_count = if impl_only.unwrap_or(false) {
-        if let Some(edges) = graph.callers.get_mut(&resolved_focus) {
+        for edges in graph.callers.values_mut() {
             edges.retain(|e| e.is_impl_trait);
         }
         graph
@@ -457,7 +459,7 @@ pub fn analyze_focused_with_progress(
             .map(|edges| {
                 edges
                     .iter()
-                    .map(|e| &e.caller_name)
+                    .map(|e| &e.neighbor_name)
                     .collect::<std::collections::HashSet<_>>()
                     .len()
             })
