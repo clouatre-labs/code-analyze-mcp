@@ -1,0 +1,113 @@
+{
+  "run_id": "A-scored-2",
+  "condition": "A",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 807,
+      "category": "live-path",
+      "notes": "Production standard (grep-style) output. impl Sink block opens ~line 807; matched() at 810, context() at 851, context_break() at 877, binary_data() at 885, begin() at 903, finish() at 915."
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "category": "live-path",
+      "notes": "Production JSON (--json) output. impl Sink block opens ~line 684; matched() at 687, context() at 729, binary_data() at 758, begin() at 775, finish() at 792."
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "category": "live-path",
+      "notes": "Production summary (count/files-with-matches/quiet) output. impl Sink block opens ~line 646; matched() at 649, binary_data() at 691, begin() at 708, finish() at 726."
+    },
+    {
+      "type": "UTF8",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 545,
+      "category": "convenience/test-only",
+      "notes": "Closure-backed Sink receiving matches as &str. Struct at line 540, impl Sink ~line 545. Only implements matched()."
+    },
+    {
+      "type": "Lossy",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 593,
+      "category": "convenience/test-only",
+      "notes": "Closure-backed Sink with lossy UTF-8 conversion. Struct at line 588, impl Sink ~line 593. Only implements matched()."
+    },
+    {
+      "type": "Bytes",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 643,
+      "category": "convenience/test-only",
+      "notes": "Closure-backed Sink exposing raw bytes. Struct at line 638, impl Sink ~line 643. Only implements matched()."
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244,
+      "notes": "Entry point. Dispatches to search_preprocessor (296), search_decompress (330), or search_path (340) depending on config flags."
+    },
+    {
+      "name": "SearchWorker::search_path",
+      "file": "crates/core/search.rs",
+      "approx_line": 340,
+      "notes": "Opens the file at the given path, then delegates to SearchWorker::search_reader."
+    },
+    {
+      "name": "SearchWorker::search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 360,
+      "notes": "Thin method wrapper: calls the free function search_reader<M,W,R> with self.matcher, self.searcher, and self.printer."
+    },
+    {
+      "name": "search_reader (free fn)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414,
+      "notes": "Dispatch point. Matches on the Printer<W> enum variant (Standard | Summary | JSON), calls printer.sink_with_path(matcher, path) for each to obtain the concrete Sink (StandardSink, SummarySink, or JSONSink), then calls grep::searcher::Searcher::search_reader(matcher, rdr, sink)."
+    },
+    {
+      "name": "grep::searcher::Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": null,
+      "notes": "Core search loop: calls Sink::begin, then Sink::matched/context/context_break/binary_data per result, then Sink::finish."
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-end (new file)",
+      "change": "Create new file. Define CsvBuilder (config + builder), Csv<W> (printer wrapping CounterWriter<W>), and CsvSink<'p, 's, M, W>. Implement Sink for CsvSink: matched() formats each SinkMatch as a CSV row (path, line_number, column, match_text); optionally implement finish() for stats. Follows the standard.rs/json.rs pattern."
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "1-104",
+      "change": "Add `mod csv;` declaration. Re-export Csv, CsvBuilder, CsvSink in the existing pub use block (alongside Standard, JSON, Summary types at lines 63-104)."
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Add Csv(grep::printer::Csv<W>) variant to the Printer<W> enum."
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "378-410",
+      "change": "Add match arm for Printer::Csv in the free-function search_path: call printer.sink_with_path(matcher, path) to obtain CsvSink, pass to searcher.search_path(matcher, path, sink)."
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "414-447",
+      "change": "Add match arm for Printer::Csv in the free-function search_reader: call printer.sink_with_path(matcher, path) to obtain CsvSink, pass to searcher.search_reader(matcher, rdr, sink)."
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "1-483",
+      "change": "Add a --csv (or --output-format=csv) flag. In the printer-construction block where Standard/JSON/Summary are selected, add a branch constructing Csv::new(wtr) and wrapping it as Printer::Csv(printer) before passing to SearchWorkerBuilder::build."
+    }
+  ],
+  "tool_calls_total": 7
+}

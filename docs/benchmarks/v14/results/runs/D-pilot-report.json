@@ -1,0 +1,184 @@
+{
+  "run_id": "D-pilot",
+  "condition": "D",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 807,
+      "category": "live-path",
+      "description": "Implements Sink for the standard (grep-like) printer with full feature support"
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "category": "live-path",
+      "description": "Implements Sink for JSON Lines format printer"
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "category": "live-path",
+      "description": "Implements Sink for summary (aggregate) printer"
+    },
+    {
+      "type": "KitchenSink",
+      "file": "crates/searcher/src/testutil.rs",
+      "impl_line": 128,
+      "category": "test-only",
+      "description": "Test utility Sink that captures all match/context/binary information"
+    },
+    {
+      "type": "UTF8<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 544,
+      "category": "convenience",
+      "description": "Generic wrapper Sink for closures accepting UTF-8 matches"
+    },
+    {
+      "type": "Lossy<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 592,
+      "category": "convenience",
+      "description": "Generic wrapper Sink for lossy UTF-8 conversion (replacements substituted for invalid bytes)"
+    },
+    {
+      "type": "Bytes<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 642,
+      "category": "convenience",
+      "description": "Generic wrapper Sink for closures accepting raw byte matches"
+    },
+    {
+      "type": "&'a mut S where S: Sink",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 225,
+      "category": "blanket",
+      "description": "Blanket impl allowing mutable references to Sink implementors to also implement Sink"
+    },
+    {
+      "type": "Box<S> where S: Sink + ?Sized",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 278,
+      "category": "blanket",
+      "description": "Blanket impl allowing boxed Sink implementors to also implement Sink"
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244,
+      "description": "Entry point: decides which search path to take (stdin, preprocessor, decompression, or direct file)"
+    },
+    {
+      "name": "SearchWorker::search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 360,
+      "description": "Called by search_preprocessor, search_decompress, search_path; delegates to search_reader function"
+    },
+    {
+      "name": "search_reader (free function)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414,
+      "description": "High-level dispatcher: matches on Printer enum to instantiate concrete Sink type"
+    },
+    {
+      "name": "Printer::Standard match arm",
+      "file": "crates/core/search.rs",
+      "approx_line": 422,
+      "description": "Creates StandardSink via printer.sink_with_path() for Standard printer variant"
+    },
+    {
+      "name": "Printer::Summary match arm",
+      "file": "crates/core/search.rs",
+      "approx_line": 430,
+      "description": "Creates SummarySink via printer.sink_with_path() for Summary printer variant"
+    },
+    {
+      "name": "Printer::JSON match arm",
+      "file": "crates/core/search.rs",
+      "approx_line": 438,
+      "description": "Creates JSONSink via printer.sink_with_path() for JSON printer variant"
+    },
+    {
+      "name": "Standard::sink_with_path",
+      "file": "crates/printer/src/standard.rs",
+      "approx_line": 555,
+      "description": "Instantiates StandardSink with optional file path for the standard printer"
+    },
+    {
+      "name": "JSON::sink_with_path",
+      "file": "crates/printer/src/json.rs",
+      "approx_line": 489,
+      "description": "Instantiates JSONSink with optional file path for the JSON printer"
+    },
+    {
+      "name": "Summary::sink_with_path",
+      "file": "crates/printer/src/summary.rs",
+      "approx_line": 422,
+      "description": "Instantiates SummarySink with optional file path for the summary printer"
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 707,
+      "description": "Core searcher: accepts generic Sink and drives the search, calling Sink methods for matches/context"
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Add new variant to Printer enum (e.g., Printer::CSV(grep::printer::CSV<W>))"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "216-224",
+      "change": "Add new match arm in Printer::get_mut() for the new printer variant"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "421-446",
+      "change": "Add new match arm in search_reader() function to handle CSV printer variant and instantiate CSVSink"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "63-76",
+      "change": "Export new CSV printer types (CSV, CSVBuilder, CSVSink) in pub use statements; ensure feature gates if needed"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-end",
+      "change": "NEW FILE: Create printer implementation with CSV struct, CSVBuilder, and CSVSink impl Sink block"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "TBD",
+      "change": "Implement CSVSink::sink() and CSVSink::sink_with_path() factory methods (similar to standard/json/summary)"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "TBD",
+      "change": "Implement Sink trait for CSVSink<'p, 's, M, W> with matched(), context(), finish() methods"
+    },
+    {
+      "file": "crates/printer/Cargo.toml",
+      "line_range": "dependencies",
+      "change": "Add CSV serialization crate (e.g., csv = \"1.x\") if not already present"
+    },
+    {
+      "file": "crates/core/Cargo.toml",
+      "line_range": "dependencies",
+      "change": "Ensure grep-printer dependency is up-to-date (may be automatic if using workspace)"
+    },
+    {
+      "file": "crates/core/main.rs or similar",
+      "line_range": "TBD",
+      "change": "Add CLI argument parsing for --format=csv to select CSV printer when constructing Printer enum"
+    }
+  ],
+  "tool_calls_total": 45
+}

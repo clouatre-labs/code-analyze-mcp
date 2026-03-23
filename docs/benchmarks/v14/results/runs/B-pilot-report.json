@@ -1,0 +1,124 @@
+{
+  "run_id": "B-pilot",
+  "condition": "B",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 807,
+      "category": "live"
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "category": "live"
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "category": "live"
+    },
+    {
+      "type": "&'a mut S (blanket)",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 225,
+      "category": "convenience"
+    },
+    {
+      "type": "Box<S> (blanket)",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 278,
+      "category": "convenience"
+    },
+    {
+      "type": "UTF8<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 544,
+      "category": "convenience/adapter"
+    },
+    {
+      "type": "Lossy<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 592,
+      "category": "convenience/adapter"
+    },
+    {
+      "type": "Bytes<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 642,
+      "category": "convenience/adapter"
+    },
+    {
+      "type": "KitchenSink",
+      "file": "crates/searcher/src/testutil.rs",
+      "impl_line": 128,
+      "category": "test-only"
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244,
+      "notes": "Entry point; dispatches to search_reader, search_preprocessor, search_decompress, or search_path depending on haystack type"
+    },
+    {
+      "name": "SearchWorker::search_reader (method)",
+      "file": "crates/core/search.rs",
+      "approx_line": 360,
+      "notes": "Matches on PatternMatcher variant (RustRegex/PCRE2), delegates to free fn search_reader"
+    },
+    {
+      "name": "search_reader (free fn)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414,
+      "notes": "Dispatch point: matches on Printer enum variant, calls p.sink_with_path() to instantiate StandardSink, SummarySink, or JSONSink, then calls Searcher::search_reader"
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 707,
+      "notes": "Public API on grep::searcher::Searcher; generic over M: Matcher, R: io::Read, S: Sink"
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "new file",
+      "change": "Create CSV<W> printer struct, CSVSink<'p,'s,M,W>, and impl Sink for CSVSink with matched_*, begin, finish methods writing RFC 4180 rows"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "mod declarations and pub use",
+      "change": "Add `mod csv;` and re-export CSV, CSVSink, CSVBuilder"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Add CSV(grep::printer::CSV<W>) variant to the Printer<W> enum"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "384-409",
+      "change": "Add match arm for Printer::CSV in free fn search_path, instantiating CSVSink via p.sink_with_path()"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "414-450",
+      "change": "Add match arm for Printer::CSV in free fn search_reader, instantiating CSVSink via p.sink_with_path()"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "SearchWorkerBuilder::build",
+      "change": "Add CSV case in SearchWorkerBuilder when configured output format is CSV, constructing grep::printer::CSV<W>"
+    },
+    {
+      "file": "crates/core/flags/mod.rs",
+      "line_range": "output format flag definition",
+      "change": "Extend --format flag to accept `csv` as a valid value and map it to Printer::CSV at construction time"
+    }
+  ],
+  "tool_calls_total": 10
+}

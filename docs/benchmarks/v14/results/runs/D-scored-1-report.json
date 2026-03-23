@@ -1,0 +1,138 @@
+{
+  "run_id": "D-scored-1",
+  "condition": "D",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 807,
+      "category": "live-path"
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "category": "live-path"
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "category": "live-path"
+    },
+    {
+      "type": "KitchenSink",
+      "file": "crates/searcher/src/testutil.rs",
+      "impl_line": 128,
+      "category": "test-only"
+    },
+    {
+      "type": "UTF8",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 544,
+      "category": "convenience"
+    },
+    {
+      "type": "Lossy",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 592,
+      "category": "convenience"
+    },
+    {
+      "type": "Bytes",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 642,
+      "category": "convenience"
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244
+    },
+    {
+      "name": "SearchWorker::search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 360
+    },
+    {
+      "name": "search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 414
+    },
+    {
+      "name": "search_path",
+      "file": "crates/core/search.rs",
+      "approx_line": 378
+    },
+    {
+      "name": "Searcher::search_path",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 623
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 707
+    },
+    {
+      "name": "Searcher::search_slice",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 749
+    },
+    {
+      "name": "ReadByLine::run / SliceByLine::run / MultiLine::run",
+      "file": "crates/searcher/src/searcher/glue.rs",
+      "approx_line": 17
+    },
+    {
+      "name": "Core::search_line",
+      "file": "crates/searcher/src/searcher/core.rs",
+      "approx_line": 38
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "NEW FILE",
+      "change": "Create new CSV printer with CSVSink struct and impl Sink for CSVSink"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Add CSV variant to Printer enum: CSV(grep::printer::CSV<W>)"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "218-225",
+      "change": "Add CSV match arm in Printer::get_mut() method"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "384-410",
+      "change": "Add CSV match arm in search_path() function"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "421-447",
+      "change": "Add CSV match arm in search_reader() function"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "95-105",
+      "change": "Add module declaration and re-exports for CSV printer"
+    },
+    {
+      "file": "crates/core/flags/defs.rs",
+      "line_range": "OUTPUT_FORMAT",
+      "change": "Add CSV to output format enum/flags"
+    },
+    {
+      "file": "crates/core/flags/parse.rs",
+      "line_range": "PRINTER_CONSTRUCTION",
+      "change": "Add CSV printer construction in output format match"
+    }
+  ],
+  "tool_calls_total": 15
+}

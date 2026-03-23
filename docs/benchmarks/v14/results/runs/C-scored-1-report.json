@@ -1,0 +1,156 @@
+{
+  "run_id": "C-scored-1",
+  "condition": "C",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 810,
+      "live_path": true,
+      "note": "Implements Sink for Standard<W> where W: WriteColor. Output format handler for line-oriented match display with color and context support. Dispatched via Printer<Standard<W>> in search.rs."
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 687,
+      "live_path": true,
+      "note": "Implements Sink for JSON<W> where W: Write. Output format handler for structured JSON output with match metadata. Dispatched via Printer<JSON<W>> in search.rs."
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 649,
+      "live_path": true,
+      "note": "Implements Sink for Summary<W> where W: WriteColor. Output format handler for count/summary statistics. Dispatched via Printer<Summary<W>> in search.rs."
+    },
+    {
+      "type": "UTF8",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 550,
+      "live_path": false,
+      "note": "Test-only implementation of Sink that validates UTF-8 encoding of matches. Used internally for searcher testing."
+    },
+    {
+      "type": "Lossy",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 598,
+      "live_path": false,
+      "note": "Test-only implementation of Sink that applies lossy UTF-8 conversion. Used internally for searcher testing."
+    },
+    {
+      "type": "Bytes",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 648,
+      "live_path": false,
+      "note": "Test-only implementation of Sink that passes through raw bytes. Used internally for searcher testing."
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "main",
+      "file": "crates/core/main.rs",
+      "approx_line": 43
+    },
+    {
+      "name": "run",
+      "file": "crates/core/main.rs",
+      "approx_line": 77
+    },
+    {
+      "name": "search",
+      "file": "crates/core/main.rs",
+      "approx_line": 107,
+      "note": "Selects SearchMode based on args.mode, creates matcher/searcher/printer and invokes SearchWorker."
+    },
+    {
+      "name": "search_worker",
+      "file": "crates/core/main.rs",
+      "approx_line": 119,
+      "note": "Called internally; constructs SearchWorker with printer argument."
+    },
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244,
+      "note": "Main dispatcher that selects based on path type (stdin, preprocessor, decompress, regular file)."
+    },
+    {
+      "name": "SearchWorker::search_path",
+      "file": "crates/core/search.rs",
+      "approx_line": 340,
+      "note": "Routes to search_reader with Printer::sink_with_path(matcher, path)."
+    },
+    {
+      "name": "SearchWorker::search_reader (instance method)",
+      "file": "crates/core/search.rs",
+      "approx_line": 360,
+      "note": "Routes to free function search_reader(matcher, searcher, printer, path, rdr)."
+    },
+    {
+      "name": "search_reader (free function)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414,
+      "note": "Final dispatch point. Calls Printer::sink_with_path() to obtain concrete Sink impl, then passes to Searcher::search_reader()."
+    },
+    {
+      "name": "Printer::sink_with_path",
+      "file": "crates/printer/src/standard.rs (or json.rs/summary.rs)",
+      "approx_line": 555,
+      "note": "Generic method on printer types. Returns SinkType<'s> that implements Sink trait (e.g., StandardSink for Standard<W>)."
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": null,
+      "note": "Final consumer: invokes Sink trait methods (matched, context, finish) on the concrete printer sink."
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "1-104",
+      "change": "Add pub re-export of new CSVSink and CSVBuilder types from csv.rs module"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-end",
+      "change": "NEW FILE: Implement CSV printer module with CSVBuilder struct and CSV<W> generic type"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-end",
+      "change": "NEW FILE: Implement Sink trait for CSV<W> with matched(), context(), binary_data(), begin(), finish() methods"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-end",
+      "change": "NEW FILE: Define CSVSink<'p, 's, M, W> newtype wrapping internal sink state machine"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "196-214",
+      "change": "Add CSV variant to PatternMatcher enum and update match arm in Printer type construction"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Update Printer type alias to include CSV option (e.g., Printer<W> = enum Standard | JSON | Summary | CSV)"
+    },
+    {
+      "file": "crates/core/flags/defs.rs",
+      "line_range": "n/a",
+      "change": "Add --output-format csv flag variant to defs.rs (large generated file; exact range depends on flag ordering)"
+    },
+    {
+      "file": "crates/core/flags/hiargs.rs",
+      "line_range": "n/a",
+      "change": "Update HiArgs struct to parse csv variant from output_format flag"
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "119-122",
+      "change": "Update printer() call to handle OutputFormat::CSV and instantiate CSV printer with CSVBuilder"
+    }
+  ],
+  "tool_calls_total": 14
+}
