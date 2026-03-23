@@ -61,7 +61,7 @@ fi
 OPENFAST_REPO="${OPENFAST_REPO:-/tmp/openfast-benchmark}"
 OPENFAST_COMMIT="2895884d2be01862173c88d70f86b358d2f1a50a"
 
-if [[ -d "$OPENFAST_REPO" ]] && [[ -n "$(ls -A "$OPENFAST_REPO" 2>/dev/null)" ]]; then
+if [[ -d "$OPENFAST_REPO" ]] && { find "$OPENFAST_REPO" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; }; then
   # Non-empty directory: verify it is a git repo pointing at OpenFAST
   if ! git -C "$OPENFAST_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "ERROR: OPENFAST_REPO ('$OPENFAST_REPO') exists but is not a git repository." >&2
