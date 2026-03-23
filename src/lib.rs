@@ -1236,7 +1236,7 @@ impl ServerHandler for CodeAnalyzer {
             "Recommended workflow for unknown repositories:\n\
             1. Start with analyze_directory(path=<repo_root>, max_depth=2, summary=true) to identify the source package directory \
             (typically the largest directory by file count; exclude {excluded}).\n\
-            2. Re-run analyze_directory(path=<source_package>, max_depth=2, summary=true) for a module map with per-package class and function counts. Include test directories (e.g., tests/, testutil/, files matching *_test.go, test_*.py, *_spec.rs) in the module map; test files are valid analysis targets and must not be skipped.\n\
+            2. Re-run analyze_directory(path=<source_package>, max_depth=2, summary=true) for a module map with per-package class and function counts. Include test directories (e.g., tests/, testutil/, files matching *_test.go, test_*.py, test_*.rs, *_test.rs, *.spec.ts, *.spec.js) in the module map; test files are valid analysis targets and must not be skipped.\n\
             3. For key files identified in step 2, prefer analyze_module to get a lightweight function/import index (~75% smaller output) when you only need function names and imports; call analyze_file when you need signatures, types, or class structure.\n\
             4. Use analyze_symbol to trace call graphs for specific functions found in step 3.\n\
             Prefer summary=true on large directories (1000+ files). Set max_depth=2 for the first call; increase only if packages are too large to differentiate. \
