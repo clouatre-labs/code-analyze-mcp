@@ -1,0 +1,116 @@
+{
+  "run_id": "C-ripgrep-sink-audit-v1",
+  "condition": "C",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 810
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 649
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 687
+    },
+    {
+      "type": "UTF8",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 550
+    },
+    {
+      "type": "Lossy",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 598
+    },
+    {
+      "type": "Bytes",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 648
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244
+    },
+    {
+      "name": "search_path",
+      "file": "crates/core/search.rs",
+      "approx_line": 340
+    },
+    {
+      "name": "search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 360
+    },
+    {
+      "name": "search_reader (generic)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414
+    },
+    {
+      "name": "Printer::sink_with_path",
+      "file": "crates/core/search.rs",
+      "approx_line": 386
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "external",
+      "approx_line": 0
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-end",
+      "change": "NEW FILE: Create CSV printer module with CSVSink struct and Sink impl"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "63-104",
+      "change": "Add module declaration and re-exports for CSVBuilder, CSVSink, CSV"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Add CSV variant to Printer enum"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "378-410",
+      "change": "Add match arm in search_path for Printer::CSV"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "414-447",
+      "change": "Add match arm in search_reader for Printer::CSV"
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "1-30",
+      "change": "Import CSV printer types"
+    },
+    {
+      "file": "crates/core/flags/mod.rs",
+      "line_range": "varies",
+      "change": "Add CSV output format flag to CLI parser"
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "107-151",
+      "change": "Add conditional to construct CSV printer in search()"
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "160-229",
+      "change": "Add conditional to construct CSV printer in search_parallel()"
+    }
+  ],
+  "tool_calls_total": 10
+}

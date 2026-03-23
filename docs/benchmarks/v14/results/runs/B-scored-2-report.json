@@ -1,0 +1,124 @@
+{
+  "run_id": "B-scored-2",
+  "condition": "B",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 807,
+      "category": "live"
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "category": "live"
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "category": "live"
+    },
+    {
+      "type": "&mut S (blanket for mutable references)",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 225,
+      "category": "convenience"
+    },
+    {
+      "type": "Box<S> (blanket for boxed Sink)",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 278,
+      "category": "convenience"
+    },
+    {
+      "type": "sinks::UTF8<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 544,
+      "category": "convenience"
+    },
+    {
+      "type": "sinks::Lossy<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 592,
+      "category": "convenience"
+    },
+    {
+      "type": "sinks::Bytes<F>",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 642,
+      "category": "convenience"
+    },
+    {
+      "type": "KitchenSink",
+      "file": "crates/searcher/src/testutil.rs",
+      "impl_line": 128,
+      "category": "test-only"
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244,
+      "note": "Entry point; routes to search_reader, search_preprocessor, search_decompress, or search_path based on haystack type"
+    },
+    {
+      "name": "SearchWorker::search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 360,
+      "note": "Method wrapper; delegates to free function search_reader with matcher unpacked from PatternMatcher enum"
+    },
+    {
+      "name": "search_reader (free fn)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414,
+      "note": "Dispatch point: matches Printer enum, calls p.sink_with_path() to instantiate StandardSink/SummarySink/JSONSink, then calls Searcher::search_reader"
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 707,
+      "note": "Core searcher; performs byte-level search and drives Sink callbacks (begin, matched, context, finish)"
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-end (new file)",
+      "change": "Define CSV<W>, CSVBuilder, CSVSink<'p,'s,M,W>; implement Sink for CSVSink writing matched lines as RFC-4180 CSV rows; implement has_match() and stats() accessors; implement CSV::sink_with_path() returning CSVSink"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "63-76",
+      "change": "Add 'mod csv;' and re-export CSV, CSVBuilder, CSVSink in the pub use block alongside existing Standard/Summary/JSON exports"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Add CSV(grep::printer::CSV<W>) variant to the Printer<W> enum"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "219-224",
+      "change": "Add Printer::CSV(ref mut p) => p.get_mut() arm to the get_mut() match in impl<W: WriteColor> Printer<W>"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "384-409",
+      "change": "Add CSV arm to search_path() free fn match block: instantiate CSVSink via p.sink_with_path(), call searcher.search_path(), return SearchResult"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "421-446",
+      "change": "Add CSV arm to search_reader() free fn match block: instantiate CSVSink via p.sink_with_path(), call searcher.search_reader(), return SearchResult"
+    },
+    {
+      "file": "crates/core/args.rs",
+      "line_range": "varies",
+      "change": "Accept 'csv' as a valid --output-format value; in printer-construction code match on 'csv' and build Printer::CSV(...) variant"
+    }
+  ],
+  "tool_calls_total": 7
+}

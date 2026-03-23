@@ -1,0 +1,196 @@
+{
+  "run_id": "D-ripgrep-audit-001",
+  "condition": "D",
+  "sink_impls": [
+    {
+      "type": "&'a mut S",
+      "category": "generic_wrapper",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 225,
+      "description": "Generic implementation allowing any Sink to be borrowed mutably"
+    },
+    {
+      "type": "Box<S>",
+      "category": "generic_wrapper",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 278,
+      "description": "Generic implementation for boxed Sink types"
+    },
+    {
+      "type": "UTF8<F>",
+      "category": "convenience",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 544,
+      "description": "Convenience sink providing line numbers and UTF-8 string matches via closure"
+    },
+    {
+      "type": "Lossy<F>",
+      "category": "convenience",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 592,
+      "description": "Convenience sink providing line numbers and lossily-converted UTF-8 matches via closure"
+    },
+    {
+      "type": "Bytes<F>",
+      "category": "convenience",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 642,
+      "description": "Convenience sink providing line numbers and raw byte matches via closure"
+    },
+    {
+      "type": "KitchenSink",
+      "category": "test_only",
+      "file": "crates/searcher/src/testutil.rs",
+      "impl_line": 128,
+      "description": "Test-only sink that formats all available information for assertion validation"
+    },
+    {
+      "type": "StandardSink<'p, 's, M, W>",
+      "category": "live_path",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 807,
+      "description": "Standard grep-like output printer supporting colors, replacements, and statistics"
+    },
+    {
+      "type": "JSONSink<'p, 's, M, W>",
+      "category": "live_path",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "description": "JSON Lines output printer for machine-readable results"
+    },
+    {
+      "type": "SummarySink<'p, 's, M, W>",
+      "category": "live_path",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "description": "Summary printer for aggregate results (total matches, file paths)"
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244,
+      "description": "Entry point for search execution, branches based on file type/preprocessing needs"
+    },
+    {
+      "name": "SearchWorker::search_path",
+      "file": "crates/core/search.rs",
+      "approx_line": 340,
+      "description": "Searches a file path directly (enables memory mapping optimizations)"
+    },
+    {
+      "name": "SearchWorker::search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 360,
+      "description": "Generic search implementation dispatching to search_path or search_reader fns"
+    },
+    {
+      "name": "search_path<M, W>",
+      "file": "crates/core/search.rs",
+      "approx_line": 378,
+      "description": "Dispatch function: matches on Printer enum to get appropriate Sink"
+    },
+    {
+      "name": "search_reader<M, R, W>",
+      "file": "crates/core/search.rs",
+      "approx_line": 414,
+      "description": "Dispatch function: matches on Printer enum to get appropriate Sink"
+    },
+    {
+      "name": "Printer enum",
+      "file": "crates/core/search.rs",
+      "approx_line": 206,
+      "description": "Enum defining three printer variants; each exposes .sink_with_path() method"
+    },
+    {
+      "name": "Standard::sink_with_path",
+      "file": "crates/printer/src/standard.rs",
+      "approx_line": 440,
+      "description": "Instantiates StandardSink with matcher and path, returns as &mut dyn Sink"
+    },
+    {
+      "name": "JSON::sink_with_path",
+      "file": "crates/printer/src/json.rs",
+      "approx_line": 485,
+      "description": "Instantiates JSONSink with matcher and path, returns as &mut dyn Sink"
+    },
+    {
+      "name": "Summary::sink_with_path",
+      "file": "crates/printer/src/summary.rs",
+      "approx_line": 418,
+      "description": "Instantiates SummarySink with matcher and path, returns as &mut dyn Sink"
+    },
+    {
+      "name": "Searcher::search_path",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 623,
+      "description": "Public searcher API accepting generic Sink; dispatches to internal strategies"
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 707,
+      "description": "Public searcher API accepting generic Sink; dispatches to multiline or line-by-line"
+    },
+    {
+      "name": "ReadByLine::run | MultiLine::run",
+      "file": "crates/searcher/src/searcher/glue.rs",
+      "approx_line": 50,
+      "description": "Internal search strategies that call sink.matched(), .context(), .finish()"
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/myformat.rs",
+      "line_range": "1-end",
+      "change": "CREATE: New printer file with MyPrinter struct, Builder, and MyFormatSink type"
+    },
+    {
+      "file": "crates/printer/src/myformat.rs",
+      "line_range": "impl-end",
+      "change": "IMPLEMENT: impl Sink for MyFormatSink<'p, 's, M, W> with matched(), context(), finish()"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "96-99",
+      "change": "ADD: mod myformat; behind feature gate if conditional"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "63-73",
+      "change": "EXPORT: Add pub use crate::myformat::{MyPrinter, MyFormatSink, MyPrinterBuilder};"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "205-214",
+      "change": "ADD: New variant Printer::MyFormat(grep::printer::MyPrinter<W>) to enum"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "219-223",
+      "change": "UPDATE: Add Printer::MyFormat match arm in Printer::get_mut()"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "378-410",
+      "change": "UPDATE: Add Printer::MyFormat match arm in search_path() function"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "414-447",
+      "change": "UPDATE: Add Printer::MyFormat match arm in search_reader() function"
+    },
+    {
+      "file": "crates/core/flags/lowargs.rs",
+      "line_range": "TBD",
+      "change": "UPDATE: Add CLI flag parser for new format selection (e.g., --myformat)"
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "TBD",
+      "change": "UPDATE: Add instantiation of Printer::MyFormat(...) in builder based on flags"
+    }
+  ],
+  "tool_calls_total": 12
+}
