@@ -72,6 +72,13 @@ pub struct AnalyzeFileParams {
     #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
     pub ast_recursion_limit: Option<usize>,
 
+    /// Limit output to specific sections. Valid values: "functions", "classes", "imports".
+    /// The FILE header (path, line count, section counts) is always emitted regardless.
+    /// Omitting this field returns all sections (current behavior).
+    /// Ignored when summary=true (summary takes precedence).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fields: Option<Vec<String>>,
+
     #[serde(flatten)]
     pub pagination: PaginationParams,
 

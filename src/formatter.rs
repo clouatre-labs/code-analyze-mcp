@@ -1222,6 +1222,7 @@ pub fn format_file_details_paginated(
     line_count: usize,
     offset: usize,
     verbose: bool,
+    fields: Option<&[String]>,
 ) -> String {
     let mut output = String::new();
 
@@ -1239,8 +1240,14 @@ pub fn format_file_details_paginated(
         semantic.imports.len(),
     ));
 
+    // Compute field visibility flags. Empty slice behaves same as None (show all).
+    let show_all = fields.is_none_or(|f| f.is_empty());
+    let show_classes = show_all || fields.is_some_and(|f| f.iter().any(|s| s == "classes"));
+    let show_imports = show_all || fields.is_some_and(|f| f.iter().any(|s| s == "imports"));
+    let show_functions = show_all || fields.is_some_and(|f| f.iter().any(|s| s == "functions"));
+
     // Classes section on first page for both verbose and compact modes
-    if offset == 0 && !semantic.classes.is_empty() {
+    if show_classes && offset == 0 && !semantic.classes.is_empty() {
         output.push_str(&format_classes_section(
             &semantic.classes,
             &semantic.functions,
@@ -1248,7 +1255,7 @@ pub fn format_file_details_paginated(
     }
 
     // Imports section only on first page in verbose mode
-    if offset == 0 && verbose {
+    if show_imports && offset == 0 && verbose {
         output.push_str(&format_imports_section(&semantic.imports));
     }
 
@@ -1263,7 +1270,7 @@ pub fn format_file_details_paginated(
         })
         .collect();
 
-    if !top_level_functions.is_empty() {
+    if show_functions && !top_level_functions.is_empty() {
         output.push_str("F:\n");
         output.push_str(&format_function_list_wrapped(
             top_level_functions.iter().copied(),
@@ -1699,6 +1706,7 @@ mod tests {
             100,
             0,
             true,
+            None,
         );
         let compact_out = format_file_details_paginated(
             &semantic.functions,
@@ -1708,6 +1716,7 @@ mod tests {
             100,
             0,
             false,
+            None,
         );
 
         // Verbose includes C:, I:, F: section headers
@@ -1780,6 +1789,7 @@ mod tests {
             1000,
             0,
             true,
+            None,
         );
         let compact_out = format_file_details_paginated(
             &semantic.functions,
@@ -1789,6 +1799,7 @@ mod tests {
             1000,
             0,
             false,
+            None,
         );
 
         assert!(
@@ -1891,6 +1902,7 @@ mod tests {
             100,
             0,
             false,
+            None,
         );
 
         // Should not have stray C: header when classes are empty
@@ -2130,6 +2142,435 @@ mod tests {
         assert!(
             formatted.contains("FOCUS: target"),
             "should have FOCUS header"
+        );
+    }
+
+    #[test]
+    fn test_fields_none_regression() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let functions = vec![FunctionInfo {
+            name: "hello".to_string(),
+            line: 10,
+            end_line: 15,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 20,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let imports = vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec!["io".to_string()],
+            line: 1,
+        }];
+
+        let semantic = SemanticAnalysis {
+            functions: functions.clone(),
+            classes: classes.clone(),
+            imports: imports.clone(),
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+            impl_traits: vec![],
+        };
+
+        let output = format_file_details_paginated(
+            &functions,
+            functions.len(),
+            &semantic,
+            "test.rs",
+            100,
+            0,
+            true,
+            None,
+        );
+
+        assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(output.contains("C:"), "Classes section missing");
+        assert!(output.contains("I:"), "Imports section missing");
+        assert!(output.contains("F:"), "Functions section missing");
+    }
+
+    #[test]
+    fn test_fields_functions_only() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let functions = vec![FunctionInfo {
+            name: "hello".to_string(),
+            line: 10,
+            end_line: 15,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 20,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let imports = vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec!["io".to_string()],
+            line: 1,
+        }];
+
+        let semantic = SemanticAnalysis {
+            functions: functions.clone(),
+            classes: classes.clone(),
+            imports: imports.clone(),
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+            impl_traits: vec![],
+        };
+
+        let fields = Some(vec!["functions".to_string()]);
+        let output = format_file_details_paginated(
+            &functions,
+            functions.len(),
+            &semantic,
+            "test.rs",
+            100,
+            0,
+            true,
+            fields.as_deref(),
+        );
+
+        assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(!output.contains("C:"), "Classes section should not appear");
+        assert!(!output.contains("I:"), "Imports section should not appear");
+        assert!(output.contains("F:"), "Functions section missing");
+    }
+
+    #[test]
+    fn test_fields_classes_only() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let functions = vec![FunctionInfo {
+            name: "hello".to_string(),
+            line: 10,
+            end_line: 15,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 20,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let imports = vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec!["io".to_string()],
+            line: 1,
+        }];
+
+        let semantic = SemanticAnalysis {
+            functions: functions.clone(),
+            classes: classes.clone(),
+            imports: imports.clone(),
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+            impl_traits: vec![],
+        };
+
+        let fields = Some(vec!["classes".to_string()]);
+        let output = format_file_details_paginated(
+            &functions,
+            functions.len(),
+            &semantic,
+            "test.rs",
+            100,
+            0,
+            true,
+            fields.as_deref(),
+        );
+
+        assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(output.contains("C:"), "Classes section missing");
+        assert!(!output.contains("I:"), "Imports section should not appear");
+        assert!(
+            !output.contains("F:"),
+            "Functions section should not appear"
+        );
+    }
+
+    #[test]
+    fn test_fields_imports_verbose() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let functions = vec![FunctionInfo {
+            name: "hello".to_string(),
+            line: 10,
+            end_line: 15,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 20,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let imports = vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec!["io".to_string()],
+            line: 1,
+        }];
+
+        let semantic = SemanticAnalysis {
+            functions: functions.clone(),
+            classes: classes.clone(),
+            imports: imports.clone(),
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+            impl_traits: vec![],
+        };
+
+        let fields = Some(vec!["imports".to_string()]);
+        let output = format_file_details_paginated(
+            &functions,
+            functions.len(),
+            &semantic,
+            "test.rs",
+            100,
+            0,
+            true,
+            fields.as_deref(),
+        );
+
+        assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(!output.contains("C:"), "Classes section should not appear");
+        assert!(output.contains("I:"), "Imports section missing");
+        assert!(
+            !output.contains("F:"),
+            "Functions section should not appear"
+        );
+    }
+
+    #[test]
+    fn test_fields_imports_no_verbose() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let functions = vec![FunctionInfo {
+            name: "hello".to_string(),
+            line: 10,
+            end_line: 15,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 20,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let imports = vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec!["io".to_string()],
+            line: 1,
+        }];
+
+        let semantic = SemanticAnalysis {
+            functions: functions.clone(),
+            classes: classes.clone(),
+            imports: imports.clone(),
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+            impl_traits: vec![],
+        };
+
+        let fields = Some(vec!["imports".to_string()]);
+        let output = format_file_details_paginated(
+            &functions,
+            functions.len(),
+            &semantic,
+            "test.rs",
+            100,
+            0,
+            false,
+            fields.as_deref(),
+        );
+
+        assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(!output.contains("C:"), "Classes section should not appear");
+        assert!(
+            !output.contains("I:"),
+            "Imports section should not appear (verbose=false)"
+        );
+        assert!(
+            !output.contains("F:"),
+            "Functions section should not appear"
+        );
+    }
+
+    #[test]
+    fn test_fields_empty_array() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let functions = vec![FunctionInfo {
+            name: "hello".to_string(),
+            line: 10,
+            end_line: 15,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 20,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let imports = vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec!["io".to_string()],
+            line: 1,
+        }];
+
+        let semantic = SemanticAnalysis {
+            functions: functions.clone(),
+            classes: classes.clone(),
+            imports: imports.clone(),
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+            impl_traits: vec![],
+        };
+
+        let fields = Some(vec![]);
+        let output = format_file_details_paginated(
+            &functions,
+            functions.len(),
+            &semantic,
+            "test.rs",
+            100,
+            0,
+            true,
+            fields.as_deref(),
+        );
+
+        assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(
+            output.contains("C:"),
+            "Classes section missing (empty fields = show all)"
+        );
+        assert!(
+            output.contains("I:"),
+            "Imports section missing (empty fields = show all)"
+        );
+        assert!(
+            output.contains("F:"),
+            "Functions section missing (empty fields = show all)"
+        );
+    }
+
+    #[test]
+    fn test_fields_pagination_no_functions() {
+        use crate::types::SemanticAnalysis;
+        use std::collections::HashMap;
+
+        let functions = vec![FunctionInfo {
+            name: "hello".to_string(),
+            line: 10,
+            end_line: 15,
+            parameters: vec![],
+            return_type: None,
+        }];
+
+        let classes = vec![ClassInfo {
+            name: "MyClass".to_string(),
+            line: 20,
+            end_line: 50,
+            methods: vec![],
+            fields: vec![],
+            inherits: vec![],
+        }];
+
+        let imports = vec![ImportInfo {
+            module: "std".to_string(),
+            items: vec!["io".to_string()],
+            line: 1,
+        }];
+
+        let semantic = SemanticAnalysis {
+            functions: functions.clone(),
+            classes: classes.clone(),
+            imports: imports.clone(),
+            references: vec![],
+            call_frequency: HashMap::new(),
+            calls: vec![],
+            assignments: vec![],
+            field_accesses: vec![],
+            impl_traits: vec![],
+        };
+
+        let fields = Some(vec!["classes".to_string(), "imports".to_string()]);
+        let output = format_file_details_paginated(
+            &[],
+            functions.len(),
+            &semantic,
+            "test.rs",
+            100,
+            0,
+            true,
+            fields.as_deref(),
+        );
+
+        assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(output.contains("C:"), "Classes section missing");
+        assert!(output.contains("I:"), "Imports section missing");
+        assert!(
+            !output.contains("F:"),
+            "Functions section should not appear (empty page)"
         );
     }
 }
