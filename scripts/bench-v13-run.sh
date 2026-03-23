@@ -61,11 +61,21 @@ fi
 OPENFAST_REPO="${OPENFAST_REPO:-/tmp/openfast-benchmark}"
 OPENFAST_COMMIT="2895884d2be01862173c88d70f86b358d2f1a50a"
 
-if [[ -e "$OPENFAST_REPO" ]]; then
-  # Path exists -- verify it is a git repo pointing at OpenFAST
+if [[ -d "$OPENFAST_REPO" ]] && { find "$OPENFAST_REPO" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; }; then
+  # Non-empty directory: verify it is a git repo pointing at OpenFAST
   if ! git -C "$OPENFAST_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "ERROR: OPENFAST_REPO ('$OPENFAST_REPO') exists but is not a git repository." >&2
     echo "       Remove the directory or set OPENFAST_REPO to an empty/absent path." >&2
+    exit 1
+  fi
+  # Check remote URL contains 'openfast'
+  REMOTE_URL=$(git -C "$OPENFAST_REPO" remote get-url origin 2>/dev/null || echo "")
+  REMOTE_URL_LOWER=$(echo "$REMOTE_URL" | tr '[:upper:]' '[:lower:]')
+  if [[ -z "$REMOTE_URL" ]]; then
+    echo "WARNING: OPENFAST_REPO has no origin remote. Proceeding with local-only repo." >&2
+  elif [[ "$REMOTE_URL_LOWER" != *openfast* ]]; then
+    echo "ERROR: OPENFAST_REPO remote URL ('$REMOTE_URL') does not contain 'openfast'." >&2
+    echo "       This does not appear to be the OpenFAST repository." >&2
     exit 1
   fi
 elif [[ ! -d "$OPENFAST_REPO/modules/aerodyn" ]]; then
@@ -144,10 +154,8 @@ NATIVE_TOOLS="Bash,Glob,Grep,Read,Write,ToolSearch"
 
 if [[ "$TOOL_SET" == "mcp" ]]; then
   ALLOWED_TOOLS="$MCP_TOOLS"
-  EMPTY_MCP=$(mktemp /tmp/bench-v13-empty-mcp.XXXXXX.json)
-  echo '{"mcpServers":{}}' > "$EMPTY_MCP"
   MCP_FLAGS="--mcp-config $MCP_CONFIG --strict-mcp-config"
-  trap 'rm -f "$SCRATCH_FILE" "$EMPTY_MCP"' EXIT
+  trap 'rm -f "$SCRATCH_FILE"' EXIT
 else
   ALLOWED_TOOLS="$NATIVE_TOOLS"
   EMPTY_MCP=$(mktemp /tmp/bench-v13-empty-mcp.XXXXXX.json)
@@ -283,7 +291,9 @@ if structured is None:
 with open(out_path, "w") as f:
     json.dump(structured, f, indent=2)
 
-usage = result.get("usage", {})
+usage = result.get("usage") or {}
+if not isinstance(usage, dict):
+    usage = {}
 telemetry = {
     "wall_time_ms":          result.get("duration_ms"),
     "api_time_ms":           result.get("duration_api_ms"),

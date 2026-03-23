@@ -111,7 +111,7 @@ with module-prefixed names (e.g., `AD_CalcOutput`).
 **Output schema (JSON):**
 ```json
 {
-  "run_id": "<condition>-<pilot|scored>-<N>",
+  "run_id": "<condition>-pilot | <condition>-scored-<N>",
   "condition": "A|B|C|D",
   "aerodyn_entry_points": [
     {"subroutine": "AD_CalcOutput", "file": "path/relative/to/openfast/root", "line": 0}
@@ -140,7 +140,7 @@ analysis task itself.
 **Orchestrator:** goose (calls `bench-v13-run.sh` for each run in sequence; reads telemetry and
 report JSON after each run completes)
 **Tool isolation:**
-- MCP conditions (A, C): `--mcp-config docs/benchmarks/v13/mcp-code-analyze-only.json --strict-mcp-config --allowedTools "mcp__code-analyze__*"`
+- MCP conditions (A, C): `--mcp-config docs/benchmarks/v13/mcp-code-analyze-only.json --strict-mcp-config --allowedTools "mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module"`
 - Native conditions (B, D): `--mcp-config <empty> --strict-mcp-config --allowedTools "Bash,Glob,Grep,Read,Write,ToolSearch"`
 
 `--strict-mcp-config` prevents Claude Code from loading any MCP servers not listed in the config
@@ -210,7 +210,7 @@ entry points.
   identifies the `_Types.f90` companion file pattern; notes that `AeroDyn_Types.f90` is
   auto-generated and contains type definitions
 
-**Calibration (commit 2895884, verified by pilots A-pilot-1 and A-pilot-2):**
+**Calibration (commit 2895884, verified by pilots A-pilot and A-pilot-2):**
 - `AD_CalcOutput`: `modules/aerodyn/src/AeroDyn.f90` line 2148
 - `AD_UpdateStates`: `modules/aerodyn/src/AeroDyn.f90` line 1830
 - Companion type file: `modules/aerodyn/src/AeroDyn_Types.f90` (registry-generated)
@@ -235,7 +235,7 @@ Score on correctness of the call chain regardless of method used to discover it.
   `Transfer_Line2_to_Point`) with correct file paths; identifies 3+ NWTC types with file evidence;
   traces at least one depth-2 path (AD_CalcOutput -> RotCalcOutput -> NWTC routine)
 
-**Calibration (commit 2895884, verified by pilots A-pilot-1 and A-pilot-2):**
+**Calibration (commit 2895884, verified by pilots A-pilot and A-pilot-2):**
 - `AD_CalcOutput` calls `RotCalcOutput` (internal, `AeroDyn.f90` ~line 2200)
 - `RotCalcOutput` calls `BEMT_CalcOutput` (`modules/aerodyn/src/BEMT.f90`)
 - NWTC library routines reached: `SetErrStat` (`NWTC_Base.f90`), `WrScr` (`NWTC_IO.f90`),
@@ -265,7 +265,7 @@ Quality of the proposed change map for injecting `BladeLoadCorrFactor` through t
   - Provides line ranges for at least 3 of the 4 files; explains the FAST type-passing convention
     (parameters flow through the `p` parameter struct, not as naked subroutine arguments)
 
-**Calibration notes (commit 2895884, verified by pilots A-pilot-1 and A-pilot-2):**
+**Calibration notes (commit 2895884, verified by pilots A-pilot and A-pilot-2):**
 - The FAST modular framework passes parameters via the `p` (parameter) struct, not as naked subroutine
   arguments; a correct integration map notes this convention
 - `AeroDyn_Types.f90` is auto-generated from a Registry file (`AeroDyn_Registry.txt`); a high-scoring
