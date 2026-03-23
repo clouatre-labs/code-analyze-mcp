@@ -961,7 +961,10 @@ impl CodeAnalyzer {
             PaginationMode::Callers
         };
 
-        let mut paginated_next_cursor = match cursor_mode {
+        let use_summary = params.output_control.summary == Some(true);
+        let verbose = params.output_control.verbose.unwrap_or(false);
+
+        let mut callee_cursor = match cursor_mode {
             PaginationMode::Callers => {
                 let (paginated_items, paginated_next) = match paginate_focus_chains(
                     &output.prod_chains,
@@ -973,8 +976,6 @@ impl CodeAnalyzer {
                     Err(e) => return Ok(err_to_tool_result(e)),
                 };
 
-                let verbose = params.output_control.verbose.unwrap_or(false);
-                let use_summary = params.output_control.summary == Some(true);
                 if !use_summary
                     && (paginated_next.is_some()
                         || offset > 0
@@ -1011,7 +1012,6 @@ impl CodeAnalyzer {
                     Err(e) => return Ok(err_to_tool_result(e)),
                 };
 
-                let verbose = params.output_control.verbose.unwrap_or(false);
                 if paginated_next.is_some() || offset > 0 || !verbose {
                     let base_path = Path::new(&params.path);
                     output.formatted = format_focused_paginated(
@@ -1037,26 +1037,28 @@ impl CodeAnalyzer {
             }
         };
 
-        // Post-match override: if callers exhausted and callees exist, emit Callees cursor.
-        // Suppressed in summary mode (summary and pagination are mutually exclusive).
-        if paginated_next_cursor.is_none()
+        // When callers are exhausted and callees exist, bootstrap callee pagination
+        // by emitting a {mode:callees, offset:0} cursor. This makes PaginationMode::Callees
+        // reachable; without it the branch was dead code. Suppressed in summary mode
+        // because summary and pagination are mutually exclusive.
+        if callee_cursor.is_none()
             && cursor_mode == PaginationMode::Callers
             && !output.outgoing_chains.is_empty()
-            && params.output_control.summary != Some(true)
+            && !use_summary
             && let Ok(cursor) = encode_cursor(&CursorData {
                 mode: PaginationMode::Callees,
                 offset: 0,
             })
         {
-            paginated_next_cursor = Some(cursor);
+            callee_cursor = Some(cursor);
         }
 
         // Update next_cursor in output
-        output.next_cursor = paginated_next_cursor.clone();
+        output.next_cursor = callee_cursor.clone();
 
         // Build final text output with pagination cursor if present
         let mut final_text = output.formatted.clone();
-        if let Some(cursor) = paginated_next_cursor {
+        if let Some(cursor) = callee_cursor {
             final_text.push('\n');
             final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
         }
