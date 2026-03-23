@@ -1,0 +1,13 @@
+{
+  "version": "v14",
+  "rubric": {
+    "dimensions": [
+      "sink_identification",
+      "call_chain_tracing",
+      "change_impact_map"
+    ],
+    "max_per_dimension": 3,
+    "max_total": 9
+  },
+  "runs": []
+}

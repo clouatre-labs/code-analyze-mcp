@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "code-analyze": {
+      "type": "stdio",
+      "command": "code-analyze-mcp",
+      "args": []
+    }
+  }
+}
