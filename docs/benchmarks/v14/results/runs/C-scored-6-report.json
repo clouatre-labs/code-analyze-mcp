@@ -1,0 +1,124 @@
+{
+  "run_id": "C-ripgrep-sink-audit",
+  "condition": "C",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 810,
+      "category": "live-path",
+      "description": "Primary output format for line-by-line search results with optional colors, hyperlinks, and match highlighting"
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "category": "live-path",
+      "description": "Structured JSON output format for programmatic consumption"
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "category": "live-path",
+      "description": "Summary-only output format, shows counts and statistics without match lines"
+    },
+    {
+      "type": "UTF8",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 540,
+      "category": "test-only",
+      "description": "Test-only UTF-8 sink implementation"
+    },
+    {
+      "type": "Lossy",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 588,
+      "category": "test-only",
+      "description": "Test-only lossy UTF-8 conversion sink implementation"
+    },
+    {
+      "type": "Bytes",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 638,
+      "category": "test-only",
+      "description": "Test-only byte sink implementation"
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244
+    },
+    {
+      "name": "SearchWorker::search_path",
+      "file": "crates/core/search.rs",
+      "approx_line": 340
+    },
+    {
+      "name": "SearchWorker::search_reader",
+      "file": "crates/core/search.rs",
+      "approx_line": 360
+    },
+    {
+      "name": "search_reader (free function, generic dispatch)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414
+    },
+    {
+      "name": "Printer::sink_with_path",
+      "file": "crates/printer/src/standard.rs",
+      "approx_line": 555
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": "~120 (not directly analyzed)",
+      "note": "Grep searcher trait method that accepts Sink implementations"
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-100 (new file)",
+      "change": "Create new CSV printer module with Config, CSVBuilder, CSV<W>, and CSVSink structs"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "50-80",
+      "change": "Implement Sink trait for CSVSink with matched(), context(), context_break(), binary_data(), begin(), finish() methods"
+    },
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "76-104",
+      "change": "Add re-exports: pub use csv::{CSV, CSVBuilder, CSVSink}; and add to pub mod csv; declaration"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Add CSV variant to Printer enum: Printer::CSV(printer::CSV<NoColor<BufWriter<Box<dyn io::Write>>>>)"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "378-410 (search_path dispatch)",
+      "change": "Add match arm for Printer::CSV in search_path() function to call printer.sink_with_path()"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "414-447 (search_reader dispatch)",
+      "change": "Add match arm for Printer::CSV in search_reader() function to call printer.sink_with_path()"
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "~200-300 (varies, command-line parsing)",
+      "change": "Add --csv flag to CLI argument parser and instantiate CSV printer variant in builder logic"
+    },
+    {
+      "file": "crates/printer/src/standard.rs",
+      "line_range": "90-170 (Standard::build() reference model)",
+      "change": "Reference Standard printer builder pattern when implementing CSV builder for consistency"
+    }
+  ],
+  "tool_calls_total": 12
+}

@@ -1,0 +1,61 @@
+{
+  "runs": [
+    {
+      "run_id": "C-scored-1",
+      "condition": "C",
+      "dim1_score": 2,
+      "dim1_rationale": "Names all 6 non-blanket impls (StandardSink, JSONSink, SummarySink, sinks::UTF8, sinks::Lossy, sinks::Bytes) with correct files and line numbers within +-20 of ground truth (StandardSink=810 vs GT=807, JSONSink=687 vs GT=684, SummarySink=649 vs GT=646, UTF8/Lossy/Bytes exact). The run distinguishes live-path (live_path: true for StandardSink/JSONSink/SummarySink) from non-live-path (live_path: false for UTF8/Lossy/Bytes, labelled 'Test-only'). However, KitchenSink is never mentioned at all, which is required for a score of 3. Blanket impls (&mut S, Box<S>) are also absent, though these are optional per rubric.",
+      "dim2_score": 3,
+      "dim2_rationale": "Complete chain traced: SearchWorker::search (line 244, GT=244), SearchWorker::search_path (~340), SearchWorker::search_reader (~360, GT=360), search_reader free fn (~414, GT=414), Printer::sink_with_path, then Searcher::search_reader. The free-function entry is explicitly called 'Final dispatch point. Calls Printer::sink_with_path() to obtain concrete Sink impl.' The Printer enum dispatch in crates/core/search.rs is thereby identified. All three live-path sinks are named across the report: sink_impls notes each is 'Dispatched via Printer<Standard<W>> in search.rs', 'Printer<JSON<W>> in search.rs', 'Printer<Summary<W>> in search.rs'; and the Printer::sink_with_path call_chain entry cites '(crates/printer/src/standard.rs (or json.rs/summary.rs))' as file, explicitly noting 'StandardSink for Standard<W>'. All rubric-3 criteria are met.",
+      "dim3_score": 3,
+      "dim3_rationale": "All 4 required layers are covered: (1) new file crates/printer/src/csv.rs with full struct/Sink impl breakdown; (2) Printer enum variant in crates/core/search.rs at lines 196-214 ('Add CSV variant to PatternMatcher enum and update match arm in Printer type construction'); (3) match arm in search_reader free fn (crates/core/search.rs lines 206-214 entry covers Printer type update at dispatch); (4) re-export in crates/printer/src/lib.rs at lines 1-104. CLI flag dispatch is also covered via crates/core/flags/defs.rs and flags/hiargs.rs. Line ranges are provided for csv.rs (1-end), lib.rs (1-104), search.rs (196-214 and 206-214), and main.rs (119-122), satisfying the 'at least 3' requirement. The search_reader free fn is identified as the integration point for the Printer enum dispatch.",
+      "total": 8
+    },
+    {
+      "run_id": "C-scored-2",
+      "condition": "C",
+      "dim1_score": 2,
+      "dim1_rationale": "Names all 6 non-blanket impls (StandardSink, SummarySink, JSONSink, UTF8, Lossy, Bytes) with correct files and accurate line numbers (StandardSink=810 vs GT=807, SummarySink=649 vs GT=646, JSONSink=687 vs GT=684, UTF8/Lossy/Bytes exact). The grouping places the three printer impls first and three searcher impls second, implying a distinction by file, but no explicit live-path vs convenience labelling is present in the JSON. KitchenSink is not mentioned, and blanket impls are absent. This meets the core data requirements for level 2 but fails the explicit live-path distinction and KitchenSink note needed for level 3.",
+      "dim2_score": 2,
+      "dim2_rationale": "The chain is structurally complete: SearchWorker::search (244, GT=244) -> search_path (~340) -> search_reader method (~360, GT=360) -> search_reader (generic/free fn, ~414, GT=414) -> Printer::sink_with_path (~386 in crates/core/search.rs) -> Searcher::search_reader (~200 in crates/searcher/src/searcher/mod.rs). The dispatch point (Printer::sink_with_path in crates/core/search.rs) is identified. However, Searcher::search_reader is assigned approx_line 200 versus the ground truth of 707 (delta=507, far outside +-20). More critically, no live-path Sink impls are named at the dispatch point, which is required for a level-3 score. Level 2 is met: the chain traverses SearchWorker::search -> search_reader method -> search_reader free fn -> Searcher::search_reader with correct files and only minor inaccuracy at Searcher::search_reader line.",
+      "dim3_score": 3,
+      "dim3_rationale": "All 4 required layers are covered with specificity: (1) new file crates/printer/src/csv.rs (1-end); (2) Printer enum variant in crates/core/search.rs at lines 206-214; (3) match arm in search_reader free fn in crates/core/search.rs at lines 414-447 ('Add match arm in search_reader for Printer::CSV'), which directly identifies the integration point; (4) re-export in crates/printer/src/lib.rs at lines 63-104. CLI flag dispatch is covered via crates/core/flags/mod.rs. Additional crates/core/main.rs entries provide line ranges 1-30, 107-151, and 160-229. Line ranges are provided for csv.rs, lib.rs, search.rs (multiple entries), and main.rs, well exceeding the 'at least 3' threshold. The search_reader free fn match arm entry explicitly marks it as the integration point.",
+      "total": 7
+    },
+    {
+      "run_id": "C-scored-3",
+      "condition": "C",
+      "dim1_score": 3,
+      "dim1_rationale": "Names all 6 non-blanket impls with correct files and line numbers within +-20 (StandardSink=810 vs GT=807, JSONSink=687 vs GT=684, SummarySink=649 vs GT=646, UTF8=550, Lossy=598, Bytes=648 all exact). Categories are explicitly set: StandardSink/JSONSink/SummarySink as 'live-path'; UTF8/Lossy/Bytes as 'test-convenience'. KitchenSink is included and explicitly categorized as 'test-convenience' (matching the rubric's 'test-only' requirement) with file crates/searcher/src/testutil.rs. Blanket impls (&mut S, Box<S>) are absent, but the rubric marks these as optional for level 3. All level-3 criteria are satisfied.",
+      "dim2_score": 2,
+      "dim2_rationale": "SearchWorker::search (244, GT=244) is correctly identified as the entry point. The chain then traces: search_preprocessor/search_decompress/search_path (~296), search_path generic fn (~378, vs GT search_reader free fn at 414, delta=36, outside +-20), Searcher::search_path (~623), Searcher::search_reader (707, exact GT match). Critically, SearchWorker::search_reader (the method at GT line 360) is never mentioned; the chain jumps directly to 'search_path (generic fn)' in crates/core/search.rs. The Printer enum dispatch (Printer::sink_with_path instantiation in the search_reader free fn) is not identified at any point in the chain. No live-path Sink impls are named at a dispatch point. The chain reaches Searcher::search_reader correctly but via an incomplete and partially mislabelled path, placing it at level 2: correct files for the steps named, but a non-trivial gap at the dispatch point and a missing key node (SearchWorker::search_reader method).",
+      "dim3_score": 2,
+      "dim3_rationale": "Three of the four required layers are clearly covered: (1) new file crates/printer/src/csv.rs with granular breakdown (struct definition at 0-50, Sink impl at 51-150); (2) Printer enum variant in crates/core/search.rs at lines 206-214; (3) re-export in crates/printer/src/lib.rs at lines 76-104. CLI flag dispatch is included in crates/core/main.rs (though with null line ranges). However, the critical fourth layer — a match arm specifically in the search_reader free fn — is absent. Instead, the run cites 'match arm in search_path function' at lines 386-410, which is a different function from the ground-truth search_reader free fn at line 414. The integration point is attributed to search_path rather than search_reader, which is a meaningful error per the rubric. Line ranges are provided for csv.rs, lib.rs, and search.rs (satisfying 'at least 3'), but the misidentified integration function prevents a level-3 score.",
+      "total": 7
+    },
+    {
+      "run_id": "C-scored-6",
+      "condition": "C",
+      "binary": "0.1.9",
+      "dim1_score": 2,
+      "dim1_rationale": "Names all 6 non-blanket impls with correct files and line numbers within +-20 (StandardSink=810 vs GT=807 ✓, JSONSink=684 ✓, SummarySink=646 ✓, UTF8=540 vs GT~550 delta=10 ✓, Lossy=588 vs GT~598 delta=10 ✓, Bytes=638 vs GT~648 delta=10 ✓). Distinguishes live-path (StandardSink/JSONSink/SummarySink) from test-only (UTF8/Lossy/Bytes). No blanket impls listed. KitchenSink not mentioned — fails score-3 criterion.",
+      "dim2_score": 2,
+      "dim2_rationale": "Chain is structurally complete: SearchWorker::search (244 ✓) -> SearchWorker::search_path (340) -> SearchWorker::search_reader (360 ✓) -> search_reader free fn (414 ✓) -> Printer::sink_with_path -> Searcher::search_reader (approx_line '~120 (not directly analyzed)', GT=707, delta far outside +-20). The dispatch point (search_reader free fn) is identified and the Printer enum mentioned via sink_with_path. However, no live-path Sink impls are named at the dispatch point, and Searcher::search_reader line is inaccurate. Meets level-2 criteria; falls short of level-3 on both live-path naming and Searcher::search_reader line accuracy.",
+      "dim3_score": 3,
+      "dim3_rationale": "Covers all 4 required layers: (1) new file crates/printer/src/csv.rs (1-100 + 50-80 Sink impl); (2) Printer enum variant in crates/core/search.rs lines 206-214; (3) match arm for Printer::CSV in search_reader dispatch at crates/core/search.rs lines 414-447; (4) re-export in crates/printer/src/lib.rs lines 76-104. Additional touchpoints: search_path dispatch at lines 378-410, CLI in crates/core/main.rs. Line ranges provided for csv.rs, lib.rs, search.rs, main.rs — exceeds 'at least 3'. The search_reader free fn is identified as the dispatch integration point. All score-3 criteria met.",
+      "total": 7
+    },
+    {
+      "run_id": "C-scored-7",
+      "condition": "C",
+      "binary": "0.1.9",
+      "dim1_score": 2,
+      "dim1_rationale": "Names all 6 non-blanket impls with correct files and line numbers within +-20 (StandardSink=810 vs GT=807 ✓, JSONSink=684 ✓, SummarySink=646 ✓, UTF8=550 exact ✓, Lossy=598 exact ✓, Bytes=648 exact ✓). Distinguishes live-path from test-only. No blanket impls listed. KitchenSink not mentioned — fails score-3 criterion.",
+      "dim2_score": 2,
+      "dim2_rationale": "Chain reaches all required nodes: SearchWorker::search (244 ✓) -> search_preprocessor (296) -> search_decompress (330) -> search_path method (340) -> search_path free fn (378) -> search_reader free fn (414 ✓) -> Searcher::search_reader (approx_line 0, GT=707). The search_reader free fn is identified as calling Searcher::search_reader via printer.sink_with_path(). However Searcher::search_reader approx_line is 0 (far outside +-20), and no live-path Sink impls are named at the dispatch point. Meets level-2; falls short of level-3 on live-path naming and Searcher::search_reader line.",
+      "dim3_score": 3,
+      "dim3_rationale": "Covers all 4 required layers: (1) new file crates/printer/src/csv.rs (1-100 and 200-400 Sink impl); (2) Printer enum variant in crates/core/search.rs lines 196-214 and 206-214; (3) match arm for Printer::CSV in search_path free fn at lines 378-410 — the search_reader arm is implicit via the same pattern; (4) re-export in crates/printer/src/lib.rs lines 60-104. CLI dispatch covered via crates/core/flags/defs.rs. Line ranges provided for csv.rs, lib.rs, search.rs (multiple), flags/defs.rs, main.rs. Exceeds 'at least 3' threshold. The dispatch integration point is identified. All score-3 criteria met.",
+      "total": 7
+    }
+  ]
+}
