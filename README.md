@@ -21,9 +21,9 @@ Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Cla
 
 | Mode | Sonnet 4.6 | Haiku 4.5 |
 |---|---|---|
-| MCP | 150k tokens / 1.2m | 403k tokens / 0.8m |
-| Native | 284k tokens / 2.3m | 478k tokens / 1.3m |
-| **Savings** | **47% fewer tokens, 2x faster** | **16% fewer tokens, 40% faster** |
+| MCP | 145k tokens, $0.51 | 399k tokens, $0.42 |
+| Native | 276k tokens, $0.94 | 473k tokens, $0.53 |
+| **Savings** | **47% fewer tokens, 46% less cost** | **16% fewer tokens, 21% less cost** |
 
 Benchmarked on an OpenFAST AeroDyn integration audit task (4 conditions, 2 scored runs) on Claude Code against the [OpenFAST](https://github.com/OpenFAST/openfast) Fortran source tree. [Full methodology](docs/benchmarks/v13/methodology.md).
 
@@ -31,7 +31,7 @@ Benchmarked on an OpenFAST AeroDyn integration audit task (4 conditions, 2 score
 |---|---|---|
 | MCP | 472k tokens, $1.65 | 687k tokens, $0.72 |
 | Native | 877k tokens, $2.85 | 2162k tokens, $2.21 |
-| **Savings** | **46% fewer tokens, 42% less cost** | **68% fewer tokens, 68% less cost, 3.8x faster** |
+| **Savings** | **46% fewer tokens, 42% less cost** | **68% fewer tokens, 68% less cost** |
 
 ## Overview
 
