@@ -3981,9 +3981,10 @@ fn test_analyze_symbol_python_callees() {
     .unwrap();
     let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
     let output = result.formatted;
+    // CALLEES section format: "  outer -> outer\n    -> inner"
     assert!(
-        output.contains("inner"),
-        "expected callees to contain 'inner', got:\n{output}"
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
     );
 }
 
@@ -3999,8 +4000,8 @@ fn test_analyze_symbol_go_callees() {
     let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
     let output = result.formatted;
     assert!(
-        output.contains("inner"),
-        "expected callees to contain 'inner', got:\n{output}"
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
     );
 }
 
@@ -4016,8 +4017,8 @@ fn test_analyze_symbol_typescript_callees() {
     let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
     let output = result.formatted;
     assert!(
-        output.contains("inner"),
-        "expected callees to contain 'inner', got:\n{output}"
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
     );
 }
 
@@ -4033,8 +4034,8 @@ fn test_analyze_symbol_fortran_callees() {
     let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
     let output = result.formatted;
     assert!(
-        output.contains("inner"),
-        "expected callees to contain 'inner', got:\n{output}"
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
     );
 }
 
@@ -4050,7 +4051,24 @@ fn test_analyze_symbol_rust_method_item_callees() {
     let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
     let output = result.formatted;
     assert!(
-        output.contains("inner"),
-        "expected callees to contain 'inner', got:\n{output}"
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
+    );
+}
+
+#[test]
+fn test_analyze_symbol_java_callees() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("Foo.java");
+    fs::write(
+        &src,
+        "class Foo {\n    void inner() {}\n\n    void outer() {\n        inner();\n    }\n}\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    let output = result.formatted;
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
     );
 }

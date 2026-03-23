@@ -639,15 +639,21 @@ impl SemanticExtractor {
                 | "method_declaration"
                 | "method_definition" => parent.child_by_field_name("name"),
                 // Fortran subroutine: name is inside subroutine_statement child
-                "subroutine" => parent
-                    .children(&mut parent.walk())
-                    .find(|c| c.kind() == "subroutine_statement")
-                    .and_then(|s| s.child_by_field_name("name")),
+                "subroutine" => {
+                    let mut cursor = parent.walk();
+                    parent
+                        .children(&mut cursor)
+                        .find(|c| c.kind() == "subroutine_statement")
+                        .and_then(|s| s.child_by_field_name("name"))
+                }
                 // Fortran function: name is inside function_statement child
-                "function" => parent
-                    .children(&mut parent.walk())
-                    .find(|c| c.kind() == "function_statement")
-                    .and_then(|s| s.child_by_field_name("name")),
+                "function" => {
+                    let mut cursor = parent.walk();
+                    parent
+                        .children(&mut cursor)
+                        .find(|c| c.kind() == "function_statement")
+                        .and_then(|s| s.child_by_field_name("name"))
+                }
                 _ => {
                     node = parent;
                     continue;
