@@ -9,11 +9,12 @@
 
 use crate::languages::get_language_info;
 use crate::types::{
-    AssignmentInfo, CallInfo, ClassInfo, FieldAccessInfo, FunctionInfo, ImportInfo, ReferenceInfo,
-    ReferenceType, SemanticAnalysis,
+    AssignmentInfo, CallInfo, ClassInfo, FieldAccessInfo, FunctionInfo, ImplTraitInfo, ImportInfo,
+    ReferenceInfo, ReferenceType, SemanticAnalysis,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::LazyLock;
 use thiserror::Error;
 use tracing::instrument;
@@ -549,6 +550,7 @@ impl SemanticExtractor {
             calls,
             assignments,
             field_accesses,
+            impl_traits: vec![],
         })
     }
 
@@ -943,6 +945,71 @@ impl SemanticExtractor {
             }
         }
     }
+}
+
+/// Extract `impl Trait for Type` blocks from Rust source.
+///
+/// Runs independently of `extract_references` to avoid shared deduplication state.
+/// Returns an empty vec for non-Rust source (no error; caller decides).
+pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
+    use crate::languages::rust::IMPL_TRAIT_QUERY;
+
+    let lang_info = match get_language_info("rust") {
+        Some(info) => info,
+        None => return vec![],
+    };
+
+    let query = match Query::new(&lang_info.language, IMPL_TRAIT_QUERY) {
+        Ok(q) => q,
+        Err(_) => return vec![],
+    };
+
+    let tree = match PARSER.with(|p| {
+        let mut parser = p.borrow_mut();
+        let _ = parser.set_language(&lang_info.language);
+        parser.parse(source, None)
+    }) {
+        Some(t) => t,
+        None => return vec![],
+    };
+
+    let root = tree.root_node();
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(&query, root, source.as_bytes());
+    let mut results = Vec::new();
+
+    while let Some(mat) = matches.next() {
+        let mut trait_name = String::new();
+        let mut impl_type = String::new();
+        let mut line = 0usize;
+
+        for capture in mat.captures {
+            let capture_name = query.capture_names()[capture.index as usize];
+            let node = capture.node;
+            let text = source[node.start_byte()..node.end_byte()].to_string();
+            match capture_name {
+                "trait_name" => {
+                    trait_name = text;
+                    line = node.start_position().row + 1;
+                }
+                "impl_type" => {
+                    impl_type = text;
+                }
+                _ => {}
+            }
+        }
+
+        if !trait_name.is_empty() && !impl_type.is_empty() {
+            results.push(ImplTraitInfo {
+                trait_name,
+                impl_type,
+                path: path.to_path_buf(),
+                line,
+            });
+        }
+    }
+
+    results
 }
 
 #[cfg(test)]

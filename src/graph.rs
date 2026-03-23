@@ -3,7 +3,7 @@
 //! Builds caller and callee relationships from semantic analysis results.
 //! Implements type-aware function matching to disambiguate overloads and name collisions.
 
-use crate::types::{SemanticAnalysis, SymbolMatchMode};
+use crate::types::{CallEdge, ImplTraitInfo, SemanticAnalysis, SymbolMatchMode};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -119,10 +119,10 @@ pub(crate) struct InternalCallChain {
 /// Call graph storing callers, callees, and function definitions.
 #[derive(Debug, Clone)]
 pub struct CallGraph {
-    /// Callers map: function_name -> vec of (file_path, line_number, caller_name).
-    pub callers: HashMap<String, Vec<(PathBuf, usize, String)>>,
-    /// Callees map: function_name -> vec of (file_path, line_number, callee_name).
-    pub callees: HashMap<String, Vec<(PathBuf, usize, String)>>,
+    /// Callers map: function_name -> vec of CallEdge (one per call site).
+    pub callers: HashMap<String, Vec<CallEdge>>,
+    /// Callees map: function_name -> vec of CallEdge (one per call site).
+    pub callees: HashMap<String, Vec<CallEdge>>,
     /// Definitions map: function_name -> vec of (file_path, line_number).
     pub definitions: HashMap<String, Vec<(PathBuf, usize)>>,
     /// Internal: maps function name to type info for type-aware disambiguation.
@@ -354,6 +354,8 @@ impl CallGraph {
     #[instrument(skip_all)]
     pub fn build_from_results(
         results: Vec<(PathBuf, SemanticAnalysis)>,
+        impl_traits: &[ImplTraitInfo],
+        impl_only: bool,
     ) -> Result<Self, GraphError> {
         let mut graph = CallGraph::new();
 
@@ -402,23 +404,63 @@ impl CallGraph {
                     &graph.function_types,
                 );
 
-                graph.callees.entry(call.caller.clone()).or_default().push((
-                    path.clone(),
-                    call.line,
-                    resolved_callee.clone(),
-                ));
-                graph.callers.entry(resolved_callee).or_default().push((
-                    path.clone(),
-                    call.line,
-                    call.caller.clone(),
-                ));
+                graph
+                    .callees
+                    .entry(call.caller.clone())
+                    .or_default()
+                    .push(CallEdge {
+                        path: path.clone(),
+                        line: call.line,
+                        neighbor_name: resolved_callee.clone(),
+                        is_impl_trait: false,
+                    });
+                graph
+                    .callers
+                    .entry(resolved_callee)
+                    .or_default()
+                    .push(CallEdge {
+                        path: path.clone(),
+                        line: call.line,
+                        neighbor_name: call.caller.clone(),
+                        is_impl_trait: false,
+                    });
             }
             for reference in &analysis.references {
                 graph
                     .callers
                     .entry(reference.symbol.clone())
                     .or_default()
-                    .push((path.clone(), reference.line, "<reference>".to_string()));
+                    .push(CallEdge {
+                        path: path.clone(),
+                        line: reference.line,
+                        neighbor_name: "<reference>".to_string(),
+                        is_impl_trait: false,
+                    });
+            }
+        }
+
+        // Add explicit caller edges for each impl Trait for Type block.
+        // These represent the implementing type as a caller of the trait, enabling
+        // impl_only filtering to surface trait implementors rather than call sites.
+        for it in impl_traits {
+            graph
+                .callers
+                .entry(it.trait_name.clone())
+                .or_default()
+                .push(CallEdge {
+                    path: it.path.clone(),
+                    line: it.line,
+                    neighbor_name: it.impl_type.clone(),
+                    is_impl_trait: true,
+                });
+        }
+
+        // If impl_only=true, retain only impl-trait caller edges across all nodes.
+        // Callees are never filtered. This ensures traversal and formatting are
+        // consistently restricted to impl-trait edges regardless of follow_depth.
+        if impl_only {
+            for edges in graph.callers.values_mut() {
+                edges.retain(|e| e.is_impl_trait);
             }
         }
 
@@ -430,6 +472,7 @@ impl CallGraph {
             definitions = graph.definitions.len(),
             edges = total_edges,
             files = file_count,
+            impl_only,
             "graph built"
         );
 
@@ -467,20 +510,34 @@ impl CallGraph {
             }
 
             if let Some(neighbors) = graph_map.get(&current) {
-                for (path, line, neighbor) in neighbors {
-                    let mut chain = vec![(current.clone(), path.clone(), *line)];
+                for edge in neighbors {
+                    let path = &edge.path;
+                    let line = edge.line;
+                    let neighbor = &edge.neighbor_name;
+                    let mut chain = vec![(current.clone(), path.clone(), line)];
                     let mut chain_node = neighbor.clone();
                     let mut chain_depth = depth;
 
                     while chain_depth < follow_depth {
                         if let Some(next_neighbors) = graph_map.get(&chain_node) {
-                            if let Some((p, l, n)) = next_neighbors.first() {
+                            if let Some(next_edge) = next_neighbors.first() {
                                 if is_incoming {
-                                    chain.insert(0, (chain_node.clone(), p.clone(), *l));
+                                    chain.insert(
+                                        0,
+                                        (
+                                            chain_node.clone(),
+                                            next_edge.path.clone(),
+                                            next_edge.line,
+                                        ),
+                                    );
                                 } else {
-                                    chain.push((chain_node.clone(), p.clone(), *l));
+                                    chain.push((
+                                        chain_node.clone(),
+                                        next_edge.path.clone(),
+                                        next_edge.line,
+                                    ));
                                 }
-                                chain_node = n.clone();
+                                chain_node = next_edge.neighbor_name.clone();
                                 chain_depth += 1;
                             } else {
                                 break;
@@ -491,9 +548,9 @@ impl CallGraph {
                     }
 
                     if is_incoming {
-                        chain.insert(0, (neighbor.clone(), path.clone(), *line));
+                        chain.insert(0, (neighbor.clone(), path.clone(), line));
                     } else {
-                        chain.push((neighbor.clone(), path.clone(), *line));
+                        chain.push((neighbor.clone(), path.clone(), line));
                     }
                     chains.push(InternalCallChain { chain });
 
@@ -569,6 +626,7 @@ mod tests {
                 .collect(),
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         }
     }
 
@@ -603,6 +661,7 @@ mod tests {
                 .collect(),
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         }
     }
 
@@ -612,19 +671,21 @@ mod tests {
             vec![("main", 1), ("foo", 10), ("bar", 20)],
             vec![("main", "foo", 2), ("foo", "bar", 15)],
         );
-        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
-            .expect("Failed to build graph");
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
         assert!(graph.definitions.contains_key("main"));
         assert!(graph.definitions.contains_key("foo"));
-        assert_eq!(graph.callees["main"][0].2, "foo");
-        assert_eq!(graph.callers["foo"][0].2, "main");
+        assert_eq!(graph.callees["main"][0].neighbor_name, "foo");
+        assert_eq!(graph.callers["foo"][0].neighbor_name, "main");
     }
 
     #[test]
     fn test_find_incoming_chains_depth_zero() {
         let analysis = make_analysis(vec![("main", 1), ("foo", 10)], vec![("main", "foo", 2)]);
-        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
-            .expect("Failed to build graph");
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
         assert!(
             !graph
                 .find_incoming_chains("foo", 0)
@@ -636,8 +697,9 @@ mod tests {
     #[test]
     fn test_find_outgoing_chains_depth_zero() {
         let analysis = make_analysis(vec![("main", 1), ("foo", 10)], vec![("main", "foo", 2)]);
-        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
-            .expect("Failed to build graph");
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
         assert!(
             !graph
                 .find_outgoing_chains("main", 0)
@@ -666,20 +728,24 @@ mod tests {
         );
         let analysis_b = make_analysis(vec![("helper", 20)], vec![]);
 
-        let graph = CallGraph::build_from_results(vec![
-            (PathBuf::from("a.rs"), analysis_a),
-            (PathBuf::from("b.rs"), analysis_b),
-        ])
+        let graph = CallGraph::build_from_results(
+            vec![
+                (PathBuf::from("a.rs"), analysis_a),
+                (PathBuf::from("b.rs"), analysis_b),
+            ],
+            &[],
+            false,
+        )
         .expect("Failed to build graph");
 
         // Check that main calls helper
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].2, "helper");
+        assert_eq!(main_callees[0].neighbor_name, "helper");
 
         // Check that the call is from a.rs (same file as main)
-        assert_eq!(main_callees[0].0, PathBuf::from("a.rs"));
+        assert_eq!(main_callees[0].path, PathBuf::from("a.rs"));
 
         // Check that helper has a caller from a.rs
         assert!(graph.callers.contains_key("helper"));
@@ -687,7 +753,7 @@ mod tests {
         assert!(
             helper_callers
                 .iter()
-                .any(|(path, _, _)| path == &PathBuf::from("a.rs"))
+                .any(|e| e.path == PathBuf::from("a.rs"))
         );
     }
 
@@ -700,14 +766,15 @@ mod tests {
             vec![("main", "process", 12)],
         );
 
-        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
-            .expect("Failed to build graph");
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
 
         // Check that main calls process
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].2, "process");
+        assert_eq!(main_callees[0].neighbor_name, "process");
 
         // Check that process has a caller from main at line 12
         assert!(graph.callers.contains_key("process"));
@@ -715,7 +782,7 @@ mod tests {
         assert!(
             process_callers
                 .iter()
-                .any(|(_, line, caller)| *line == 12 && caller == "main")
+                .any(|e| e.line == 12 && e.neighbor_name == "main")
         );
     }
 
@@ -732,33 +799,22 @@ mod tests {
             ],
         );
 
-        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
-            .expect("Failed to build graph");
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
 
         // Check that all three callers have "method" as their callee
-        assert_eq!(graph.callees["caller1"][0].2, "method");
-        assert_eq!(graph.callees["caller2"][0].2, "method");
-        assert_eq!(graph.callees["caller3"][0].2, "method");
+        assert_eq!(graph.callees["caller1"][0].neighbor_name, "method");
+        assert_eq!(graph.callees["caller2"][0].neighbor_name, "method");
+        assert_eq!(graph.callees["caller3"][0].neighbor_name, "method");
 
         // Check that method has three callers
         assert!(graph.callers.contains_key("method"));
         let method_callers = &graph.callers["method"];
         assert_eq!(method_callers.len(), 3);
-        assert!(
-            method_callers
-                .iter()
-                .any(|(_, _, caller)| caller == "caller1")
-        );
-        assert!(
-            method_callers
-                .iter()
-                .any(|(_, _, caller)| caller == "caller2")
-        );
-        assert!(
-            method_callers
-                .iter()
-                .any(|(_, _, caller)| caller == "caller3")
-        );
+        assert!(method_callers.iter().any(|e| e.neighbor_name == "caller1"));
+        assert!(method_callers.iter().any(|e| e.neighbor_name == "caller2"));
+        assert!(method_callers.iter().any(|e| e.neighbor_name == "caller3"));
     }
 
     #[test]
@@ -768,17 +824,21 @@ mod tests {
         let analysis_a = make_analysis(vec![("main", 1)], vec![("main", "helper", 5)]);
         let analysis_b = make_analysis(vec![("helper", 10)], vec![]);
 
-        let graph = CallGraph::build_from_results(vec![
-            (PathBuf::from("a.rs"), analysis_a),
-            (PathBuf::from("b.rs"), analysis_b),
-        ])
+        let graph = CallGraph::build_from_results(
+            vec![
+                (PathBuf::from("a.rs"), analysis_a),
+                (PathBuf::from("b.rs"), analysis_b),
+            ],
+            &[],
+            false,
+        )
         .expect("Failed to build graph");
 
         // Check that main calls helper
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].2, "helper");
+        assert_eq!(main_callees[0].neighbor_name, "helper");
 
         // Check that helper has a caller from a.rs
         assert!(graph.callers.contains_key("helper"));
@@ -786,7 +846,7 @@ mod tests {
         assert!(
             helper_callers
                 .iter()
-                .any(|(path, _, caller)| { path == &PathBuf::from("a.rs") && caller == "main" })
+                .any(|e| e.path == PathBuf::from("a.rs") && e.neighbor_name == "main")
         );
     }
 
@@ -810,14 +870,15 @@ mod tests {
             vec![("main", "process", 11, Some(2))],
         );
 
-        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
-            .expect("Failed to build graph");
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
 
         // Check that main calls process
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].2, "process");
+        assert_eq!(main_callees[0].neighbor_name, "process");
 
         // Check that process has a caller from main at line 11
         assert!(graph.callers.contains_key("process"));
@@ -825,7 +886,7 @@ mod tests {
         assert!(
             process_callers
                 .iter()
-                .any(|(_, line, caller)| *line == 11 && caller == "main")
+                .any(|e| e.line == 11 && e.neighbor_name == "main")
         );
     }
 
@@ -839,14 +900,15 @@ mod tests {
             vec![("main", "process", 12)],
         );
 
-        let graph = CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)])
-            .expect("Failed to build graph");
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
 
         // Check that main calls process
         assert!(graph.callees.contains_key("main"));
         let main_callees = &graph.callees["main"];
         assert_eq!(main_callees.len(), 1);
-        assert_eq!(main_callees[0].2, "process");
+        assert_eq!(main_callees[0].neighbor_name, "process");
 
         // Check that process has a caller from main
         assert!(graph.callers.contains_key("process"));
@@ -854,8 +916,126 @@ mod tests {
         assert!(
             process_callers
                 .iter()
-                .any(|(_, line, caller)| *line == 12 && caller == "main")
+                .any(|e| e.line == 12 && e.neighbor_name == "main")
         );
+    }
+
+    #[test]
+    fn test_impl_only_filters_to_impl_sites() {
+        // Arrange: WriterImpl implements Write; plain_fn calls write directly.
+        use crate::types::ImplTraitInfo;
+        let analysis = make_analysis(
+            vec![("write", 1), ("plain_fn", 20)],
+            vec![("plain_fn", "write", 22)],
+        );
+        let impl_traits = vec![ImplTraitInfo {
+            trait_name: "Write".to_string(),
+            impl_type: "WriterImpl".to_string(),
+            path: PathBuf::from("test.rs"),
+            line: 10,
+        }];
+
+        // Act: build with impl_only=true
+        let graph = CallGraph::build_from_results(
+            vec![(PathBuf::from("test.rs"), analysis)],
+            &impl_traits,
+            true,
+        )
+        .expect("Failed to build graph");
+
+        // Assert: trait "Write" has WriterImpl as an explicit impl-trait caller edge.
+        let callers = graph
+            .callers
+            .get("Write")
+            .expect("Write must have impl caller");
+        assert_eq!(callers.len(), 1, "only impl-trait caller retained");
+        assert_eq!(callers[0].neighbor_name, "WriterImpl");
+        assert!(
+            callers[0].is_impl_trait,
+            "edge must be tagged is_impl_trait"
+        );
+
+        // Assert: regular call-site callers of "write" are filtered out by impl_only.
+        let write_callers = graph.callers.get("write").map(|v| v.len()).unwrap_or(0);
+        assert_eq!(
+            write_callers, 0,
+            "regular callers filtered when impl_only=true"
+        );
+    }
+
+    #[test]
+    fn test_impl_only_false_is_backward_compatible() {
+        // Arrange: same setup, impl_only=false -- all callers returned.
+        use crate::types::ImplTraitInfo;
+        let analysis = make_analysis(
+            vec![("write", 1), ("WriterImpl", 10), ("plain_fn", 20)],
+            vec![("WriterImpl", "write", 12), ("plain_fn", "write", 22)],
+        );
+        let impl_traits = vec![ImplTraitInfo {
+            trait_name: "Write".to_string(),
+            impl_type: "WriterImpl".to_string(),
+            path: PathBuf::from("test.rs"),
+            line: 10,
+        }];
+
+        // Act: build with impl_only=false
+        let graph = CallGraph::build_from_results(
+            vec![(PathBuf::from("test.rs"), analysis)],
+            &impl_traits,
+            false,
+        )
+        .expect("Failed to build graph");
+
+        // Assert: both call-site callers preserved
+        let callers = graph.callers.get("write").expect("write must have callers");
+        assert_eq!(
+            callers.len(),
+            2,
+            "both call-site callers should be present when impl_only=false"
+        );
+
+        // Assert: impl-trait edge is always present regardless of impl_only
+        let write_impl_callers = graph
+            .callers
+            .get("Write")
+            .expect("Write must have impl caller");
+        assert_eq!(write_impl_callers.len(), 1);
+        assert!(write_impl_callers[0].is_impl_trait);
+    }
+
+    #[test]
+    fn test_impl_only_callees_unaffected() {
+        // Arrange: WriterImpl calls write; impl_only=true should not remove callees.
+        use crate::types::ImplTraitInfo;
+        let analysis = make_analysis(
+            vec![("write", 1), ("WriterImpl", 10)],
+            vec![("WriterImpl", "write", 12)],
+        );
+        let impl_traits = vec![ImplTraitInfo {
+            trait_name: "Write".to_string(),
+            impl_type: "WriterImpl".to_string(),
+            path: PathBuf::from("test.rs"),
+            line: 10,
+        }];
+
+        let graph = CallGraph::build_from_results(
+            vec![(PathBuf::from("test.rs"), analysis)],
+            &impl_traits,
+            true,
+        )
+        .expect("Failed to build graph");
+
+        // Assert: callees of WriterImpl are NOT filtered
+        let callees = graph
+            .callees
+            .get("WriterImpl")
+            .expect("WriterImpl must have callees");
+        assert_eq!(
+            callees.len(),
+            1,
+            "callees must not be filtered by impl_only"
+        );
+        assert_eq!(callees[0].neighbor_name, "write");
     }
 
     // ---- resolve_symbol tests ----

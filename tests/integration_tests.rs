@@ -2820,6 +2820,7 @@ pub fn world() {}
         calls: vec![],
         assignments: vec![],
         field_accesses: vec![],
+        impl_traits: vec![],
     };
 
     let summary = format_file_details_summary(&semantic, "src/lib.rs", 5);
@@ -2861,6 +2862,7 @@ fn test_file_details_force_bypasses_summary() {
         calls: vec![],
         assignments: vec![],
         field_accesses: vec![],
+        impl_traits: vec![],
     };
 
     let summary = format_file_details_summary(&semantic, "src/lib.rs", 5000);
@@ -2906,6 +2908,7 @@ fn test_format_file_details_summary_many_classes() {
         calls: vec![],
         assignments: vec![],
         field_accesses: vec![],
+        impl_traits: vec![],
     };
 
     // Act
@@ -2952,6 +2955,7 @@ fn test_file_details_pagination_first_page() {
         calls: vec![],
         assignments: vec![],
         field_accesses: vec![],
+        impl_traits: vec![],
     };
 
     // Act: paginate first page
@@ -3016,6 +3020,7 @@ fn test_file_details_pagination_last_page() {
         calls: vec![],
         assignments: vec![],
         field_accesses: vec![],
+        impl_traits: vec![],
     };
 
     // Act: paginate last page (offset=10, page_size=20 -> items 10..25)
@@ -3134,6 +3139,7 @@ fn test_format_file_details_paginated_unit() {
         calls: vec![],
         assignments: vec![],
         field_accesses: vec![],
+        impl_traits: vec![],
     };
 
     // Act: format page 2 (offset=10)

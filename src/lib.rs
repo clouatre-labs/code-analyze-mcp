@@ -402,6 +402,31 @@ impl CodeAnalyzer {
         let match_mode = params.match_mode.clone().unwrap_or_default();
         let ast_recursion_limit = params.ast_recursion_limit;
         let ct_clone = ct.clone();
+        let impl_only = params.impl_only;
+
+        // Validate impl_only: only valid for directories that contain Rust source files.
+        if impl_only == Some(true) {
+            let has_rust = walk_directory(path, max_depth)
+                .ok()
+                .map(|entries| {
+                    entries.iter().any(|e| {
+                        !e.is_dir && e.path.extension().and_then(|x| x.to_str()) == Some("rs")
+                    })
+                })
+                .unwrap_or(false);
+
+            if !has_rust {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "impl_only=true requires Rust source files. No .rs files found in the given path. Use analyze_symbol without impl_only for cross-language analysis.".to_string(),
+                    error_meta(
+                        "validation",
+                        false,
+                        "remove impl_only or point to a directory containing .rs files",
+                    ),
+                ));
+            }
+        }
 
         // Compute use_summary before spawning: explicit params only
         let use_summary_for_task = params.output_control.force != Some(true)
@@ -425,6 +450,7 @@ impl CodeAnalyzer {
                 counter_clone,
                 ct_clone,
                 use_summary_for_task,
+                impl_only,
             )
         });
 
@@ -522,6 +548,7 @@ impl CodeAnalyzer {
             let ast_recursion_limit2 = params.ast_recursion_limit;
             let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
             let ct2 = ct.clone();
+            let impl_only2 = impl_only;
             let summary_result = tokio::task::spawn_blocking(move || {
                 analyze::analyze_focused_with_progress(
                     &path_owned2,
@@ -533,6 +560,7 @@ impl CodeAnalyzer {
                     counter2,
                     ct2,
                     true, // use_summary=true
+                    impl_only2,
                 )
             })
             .await;
@@ -578,6 +606,21 @@ impl CodeAnalyzer {
                     "use force=true, summary=true, or narrow scope",
                 ),
             ));
+        }
+
+        // Emit FILTER header and non-trait note when impl_only=true.
+        if impl_only == Some(true) {
+            let filter_line = format!(
+                "FILTER: impl_only=true ({} of {} callers shown)\n",
+                output.impl_trait_caller_count, output.unfiltered_caller_count
+            );
+            output.formatted = format!("{}{}", filter_line, output.formatted);
+
+            if output.impl_trait_caller_count == 0 {
+                output.formatted.push_str(
+                    "\nNOTE: No impl-trait callers found. The symbol may be a plain function or struct, not a trait method. Remove impl_only to see all callers.\n"
+                );
+            }
         }
 
         Ok(output)
@@ -903,7 +946,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. Default symbol lookup is case-sensitive exact-match (match_mode=exact); myFunc and myfunc are different symbols. If exact match fails, retry with match_mode=insensitive for a case-insensitive search. To list candidates matching a prefix, use match_mode=prefix. To find symbols containing a substring, use match_mode=contains. When prefix or contains matches multiple symbols, an error is returned listing all candidates so you can refine to a single match. A symbol unknown to the graph (not defined and not referenced) returns an error; a symbol that is defined but has no callers or callees returns empty chains without error. follow_depth warning: each increment can multiply output size exponentially; use follow_depth=1 for production use; follow_depth=2+ only for targeted deep dives. Use cursor/page_size to paginate call chains when results exceed page_size. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep",
+        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. Default symbol lookup is case-sensitive exact-match (match_mode=exact); myFunc and myfunc are different symbols. If exact match fails, retry with match_mode=insensitive for a case-insensitive search. To list candidates matching a prefix, use match_mode=prefix. To find symbols containing a substring, use match_mode=contains. When prefix or contains matches multiple symbols, an error is returned listing all candidates so you can refine to a single match. A symbol unknown to the graph (not defined and not referenced) returns an error; a symbol that is defined but has no callers or callees returns empty chains without error. follow_depth warning: each increment can multiply output size exponentially; use follow_depth=1 for production use; follow_depth=2+ only for targeted deep dives. Use cursor/page_size to paginate call chains when results exceed page_size. impl_only=true: restrict callers to only those from 'impl Trait for Type' blocks (Rust only); returns INVALID_PARAMS for non-Rust directories; emits a FILTER header showing how many callers were retained. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",

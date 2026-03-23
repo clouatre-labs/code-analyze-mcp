@@ -2,9 +2,29 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::path::PathBuf;
 
 #[allow(unused_imports)]
 use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
+
+/// A single edge in the call graph with impl-trait metadata.
+/// `neighbor_name` holds the caller name in `callers` maps and the callee name in `callees` maps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallEdge {
+    pub path: PathBuf,
+    pub line: usize,
+    pub neighbor_name: String,
+    pub is_impl_trait: bool,
+}
+
+/// Information about an `impl Trait for Type` block found in Rust source.
+#[derive(Debug, Clone)]
+pub struct ImplTraitInfo {
+    pub trait_name: String,
+    pub impl_type: String,
+    pub path: PathBuf,
+    pub line: usize,
+}
 
 /// Pagination parameters shared across all tools.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -108,6 +128,11 @@ pub struct AnalyzeSymbolParams {
 
     #[serde(flatten)]
     pub output_control: OutputControlParams,
+
+    /// When true, filter callers to only those originating from an `impl Trait for Type` block.
+    /// Only valid for Rust source directories; returns an error for other languages.
+    #[serde(default)]
+    pub impl_only: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -337,6 +362,10 @@ pub struct SemanticAnalysis {
     #[serde(skip)]
     #[schemars(skip)]
     pub field_accesses: Vec<FieldAccessInfo>,
+    /// `impl Trait for Type` blocks found in this file (Rust only).
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub impl_traits: Vec<ImplTraitInfo>,
 }
 
 /// Minimal function info for analyze_module: name and line only.
