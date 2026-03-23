@@ -227,7 +227,7 @@ impl CodeAnalyzer {
         &self,
         params: &AnalyzeDirectoryParams,
         ct: tokio_util::sync::CancellationToken,
-    ) -> Result<analyze::AnalysisOutput, ErrorData> {
+    ) -> Result<std::sync::Arc<analyze::AnalysisOutput>, ErrorData> {
         let path = Path::new(&params.path);
         let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let counter_clone = counter.clone();
@@ -243,6 +243,15 @@ impl CodeAnalyzer {
                 error_meta("resource", false, "check path permissions and availability"),
             )
         })?;
+
+        // Build cache key from all_entries (before depth filtering)
+        let cache_key =
+            cache::DirectoryCacheKey::from_entries(&all_entries, max_depth, AnalysisMode::Overview);
+
+        // Check cache
+        if let Some(cached) = self.cache.get_directory(&cache_key) {
+            return Ok(cached);
+        }
 
         // Compute subtree counts from the full entry set before filtering.
         let subtree_counts = if max_depth.is_some_and(|d| d > 0) {
@@ -323,7 +332,9 @@ impl CodeAnalyzer {
         match handle.await {
             Ok(Ok(mut output)) => {
                 output.subtree_counts = subtree_counts;
-                Ok(output)
+                let arc_output = std::sync::Arc::new(output);
+                self.cache.put_directory(cache_key, arc_output.clone());
+                Ok(arc_output)
             }
             Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -655,9 +666,23 @@ impl CodeAnalyzer {
         let _sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and progress tracking
-        let mut output = match self.handle_overview_mode(&params, ct).await {
+        let arc_output = match self.handle_overview_mode(&params, ct).await {
             Ok(v) => v,
             Err(e) => return Ok(err_to_tool_result(e)),
+        };
+        // Extract the value from Arc for modification. Since we just created it in handle_overview_mode,
+        // it should be the only reference, so try_unwrap should succeed.
+        let mut output = match std::sync::Arc::try_unwrap(arc_output) {
+            Ok(output) => output,
+            Err(_arc) => {
+                // Fallback: if there are other references (shouldn't happen), we can't modify.
+                // This is a safety net - in normal operation, try_unwrap should succeed.
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    "Internal error: unexpected Arc reference count".to_string(),
+                    error_meta("transient", true, "retry the request"),
+                )));
+            }
         };
 
         // summary=true (explicit) and cursor are mutually exclusive.
