@@ -1,68 +1,68 @@
 {
-  "run_id": "D-ripgrep-sink-audit",
+  "run_id": "D-pilot",
   "condition": "D",
   "sink_impls": [
     {
       "type": "StandardSink",
       "file": "crates/printer/src/standard.rs",
       "impl_line": 807,
-      "classification": "live-path",
+      "category": "live-path",
       "description": "Implements Sink for the standard (grep-like) printer with full feature support"
     },
     {
       "type": "JSONSink",
       "file": "crates/printer/src/json.rs",
       "impl_line": 684,
-      "classification": "live-path",
+      "category": "live-path",
       "description": "Implements Sink for JSON Lines format printer"
     },
     {
       "type": "SummarySink",
       "file": "crates/printer/src/summary.rs",
       "impl_line": 646,
-      "classification": "live-path",
+      "category": "live-path",
       "description": "Implements Sink for summary (aggregate) printer"
     },
     {
       "type": "KitchenSink",
       "file": "crates/searcher/src/testutil.rs",
       "impl_line": 128,
-      "classification": "test-only",
+      "category": "test-only",
       "description": "Test utility Sink that captures all match/context/binary information"
     },
     {
       "type": "UTF8<F>",
       "file": "crates/searcher/src/sink.rs",
       "impl_line": 544,
-      "classification": "convenience",
+      "category": "convenience",
       "description": "Generic wrapper Sink for closures accepting UTF-8 matches"
     },
     {
       "type": "Lossy<F>",
       "file": "crates/searcher/src/sink.rs",
       "impl_line": 592,
-      "classification": "convenience",
+      "category": "convenience",
       "description": "Generic wrapper Sink for lossy UTF-8 conversion (replacements substituted for invalid bytes)"
     },
     {
       "type": "Bytes<F>",
       "file": "crates/searcher/src/sink.rs",
       "impl_line": 642,
-      "classification": "convenience",
+      "category": "convenience",
       "description": "Generic wrapper Sink for closures accepting raw byte matches"
     },
     {
       "type": "&'a mut S where S: Sink",
       "file": "crates/searcher/src/sink.rs",
       "impl_line": 225,
-      "classification": "blanket",
+      "category": "blanket",
       "description": "Blanket impl allowing mutable references to Sink implementors to also implement Sink"
     },
     {
       "type": "Box<S> where S: Sink + ?Sized",
       "file": "crates/searcher/src/sink.rs",
       "impl_line": 278,
-      "classification": "blanket",
+      "category": "blanket",
       "description": "Blanket impl allowing boxed Sink implementors to also implement Sink"
     }
   ],
