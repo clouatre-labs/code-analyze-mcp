@@ -25,6 +25,14 @@ Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Cla
 | Native | 284k tokens / 2.3m | 478k tokens / 1.3m |
 | **Savings** | **47% fewer tokens, 2x faster** | **16% fewer tokens, 40% faster** |
 
+Benchmarked on an OpenFAST AeroDyn integration audit task (4 conditions, 2 scored runs) on Claude Code against the [OpenFAST](https://github.com/OpenFAST/openfast) Fortran source tree. [Full methodology](docs/benchmarks/v13/methodology.md).
+
+| Mode | Sonnet 4.6 | Haiku 4.5 |
+|---|---|---|
+| MCP | 9/9 score, 472k tokens, $1.65 | 7/9 score, 687k tokens, $0.72 |
+| Native | 8.5/9 score, 877k tokens, $2.85 | 7/9 score, 2162k tokens, $2.21 |
+| **Savings** | **+0.5 score, 46% fewer tokens, 42% less cost** | **equal score, 68% fewer tokens, 68% less cost, 3.8x faster** |
+
 ## Overview
 
 code-analyze-mcp is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, TSX, and Fortran, and integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others).
