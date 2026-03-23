@@ -961,7 +961,7 @@ impl CodeAnalyzer {
             PaginationMode::Callers
         };
 
-        let paginated_next_cursor = match cursor_mode {
+        let mut paginated_next_cursor = match cursor_mode {
             PaginationMode::Callers => {
                 let (paginated_items, paginated_next) = match paginate_focus_chains(
                     &output.prod_chains,
@@ -974,7 +974,11 @@ impl CodeAnalyzer {
                 };
 
                 let verbose = params.output_control.verbose.unwrap_or(false);
-                if paginated_next.is_some() || offset > 0 || !verbose {
+                if paginated_next.is_some()
+                    || offset > 0
+                    || !verbose
+                    || !output.outgoing_chains.is_empty()
+                {
                     let base_path = Path::new(&params.path);
                     output.formatted = format_focused_paginated(
                         &paginated_items,
@@ -1030,6 +1034,23 @@ impl CodeAnalyzer {
                 unreachable!("SymbolFocus should only use Callers or Callees modes")
             }
         };
+
+        // Post-match override: if callers exhausted and callees exist, emit Callees cursor
+        if paginated_next_cursor.is_none()
+            && cursor_mode == PaginationMode::Callers
+            && !output.outgoing_chains.is_empty()
+        {
+            paginated_next_cursor = Some(
+                encode_cursor(&CursorData {
+                    mode: PaginationMode::Callees,
+                    offset: 0,
+                })
+                .unwrap_or_default(),
+            );
+        }
+
+        // Update next_cursor in output
+        output.next_cursor = paginated_next_cursor.clone();
 
         // Build final text output with pagination cursor if present
         let mut final_text = output.formatted.clone();

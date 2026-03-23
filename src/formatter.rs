@@ -1302,11 +1302,7 @@ pub(crate) fn format_focused_paginated(
         .collect::<std::collections::HashSet<_>>()
         .len();
 
-    let callees_count = outgoing_chains
-        .iter()
-        .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
-        .collect::<std::collections::HashSet<_>>()
-        .len();
+    let callees_count = outgoing_chains.len();
 
     let mut output = String::new();
 
