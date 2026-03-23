@@ -15,9 +15,17 @@
 #   bash scripts/bench-v13-run.sh D D-pilot
 #
 # Environment variables:
-#   BENCH_MAX_BUDGET_USD  -- cap spend per run (optional, e.g. "2.00")
-#   OPENFAST_REPO         -- local path to openfast clone
-#                           (default: /tmp/openfast-benchmark)
+#   BENCH_MAX_BUDGET_USD           -- cap spend per run (optional, e.g. "2.00")
+#   OPENFAST_REPO                  -- local path to openfast clone
+#                                     (default: /tmp/openfast-benchmark)
+#   ANTHROPIC_DEFAULT_SONNET_MODEL -- model ID for conditions A/B
+#                                     (default: claude-sonnet-4-6)
+#                                     Set to a provider-qualified ID when using
+#                                     Amazon Bedrock or GCP Vertex AI, e.g.
+#                                     global.anthropic.claude-sonnet-4-6
+#   ANTHROPIC_DEFAULT_HAIKU_MODEL  -- model ID for conditions C/D
+#                                     (default: claude-haiku-4-5)
+#                                     e.g. global.anthropic.claude-haiku-4-5-20251001-v1:0
 
 set -euo pipefail
 

@@ -21,8 +21,8 @@
         "integration_map_quality": 3,
         "total": 8
       },
-      "notes": "D2=2: RotCalcOutput traced, 4 NWTC routines with files, BEMT_CalcOutput absent from callees but noted in imap change text. D3=3: FAST_Subs+Registry+Types+AeroDyn.f90 with 7 line ranges, notes registry regen pattern.",
-      "tool_calls_total": 15,
+      "notes": "D2=2: RotCalcOutput traced, 4 NWTC routines with files, BEMT_CalcOutput absent from callees but noted in imap change text. D3=3: FAST_Subs+Registry+Types+AeroDyn.f90 with 7 line ranges, notes registry regen pattern. tool_calls_total corrected to 59 (matches report artifact; earlier entry of 15 was erroneous).",
+      "tool_calls_total": 59,
       "telemetry": {
         "wall_time_ms": 219290,
         "api_time_ms": 215853,
