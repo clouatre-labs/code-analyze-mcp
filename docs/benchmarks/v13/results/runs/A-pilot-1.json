@@ -1,0 +1,43 @@
+{
+  "run_id": "A-pilot-1",
+  "condition": "A",
+  "tool_calls_total": 59,
+  "aerodyn_entry_points": [
+    {"subroutine": "AD_CalcOutput", "file": "modules/aerodyn/src/AeroDyn.f90", "line": 2148},
+    {"subroutine": "AD_UpdateStates", "file": "modules/aerodyn/src/AeroDyn.f90", "line": 1830}
+  ],
+  "nwtc_callees": [
+    {"routine": "SetErrStat", "file": "modules/nwtc-library/src/NWTC_Base.f90", "call_depth": 1},
+    {"routine": "WrScr", "file": "modules/nwtc-library/src/NWTC_IO.f90", "call_depth": 1},
+    {"routine": "MeshCreate", "file": "modules/nwtc-library/src/ModMesh.f90", "call_depth": 2},
+    {"routine": "MeshCopy", "file": "modules/nwtc-library/src/ModMesh.f90", "call_depth": 2},
+    {"routine": "MeshCommit", "file": "modules/nwtc-library/src/ModMesh.f90", "call_depth": 2},
+    {"routine": "MeshMapCreate", "file": "modules/nwtc-library/src/ModMesh_Mapping.f90", "call_depth": 2},
+    {"routine": "Transfer_Line2_to_Point", "file": "modules/nwtc-library/src/ModMesh_Mapping.f90", "call_depth": 2},
+    {"routine": "Transfer_Point_to_Point", "file": "modules/nwtc-library/src/ModMesh_Mapping.f90", "call_depth": 2},
+    {"routine": "Lump_Line2_to_Point", "file": "modules/nwtc-library/src/ModMesh_Mapping.f90", "call_depth": 2},
+    {"routine": "AFI_ComputeAirfoilCoefs", "file": "modules/aerodyn/src/AirfoilInfo.f90", "call_depth": 2}
+  ],
+  "nwtc_types_used": [
+    {"type_name": "ProgDesc", "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90", "approx_line": 40},
+    {"type_name": "FileInfoType", "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90", "approx_line": 130},
+    {"type_name": "OutParmType", "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90", "approx_line": 100},
+    {"type_name": "ModVarType", "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90", "approx_line": 175},
+    {"type_name": "ModVarsType", "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90", "approx_line": 200},
+    {"type_name": "ModJacType", "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90", "approx_line": 215},
+    {"type_name": "MeshType", "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90", "approx_line": 50},
+    {"type_name": "MeshMapType", "declared_in": "modules/nwtc-library/src/ModMesh_Mapping.f90", "approx_line": 80}
+  ],
+  "integration_map": [
+    {"file": "modules/openfast-library/src/FAST_Subs.f90", "line_range": "2676-3440", "change": "Add reading of BladeLoadCorrFactor from primary FAST input file inside FAST_ReadPrimaryFile"},
+    {"file": "modules/openfast-library/src/FAST_Types.f90", "line_range": "1-9595", "change": "Add BladeLoadCorrFactor to FAST_ParameterType; file is registry-generated, edit AeroDyn_Registry.txt instead if scoping to AD"},
+    {"file": "modules/openfast-library/src/FAST_Subs.f90", "line_range": "107-1563", "change": "Inside FAST_InitializeAll, forward BladeLoadCorrFactor from p_FAST into InitInData_AD before calling AD_Init"},
+    {"file": "modules/aerodyn/src/AeroDyn_Registry.txt", "line_range": "1-531", "change": "Declare BladeLoadCorrFactor as ReKi scalar in RotParameterType; regenerate AeroDyn_Types.f90 via OpenFAST registry"},
+    {"file": "modules/aerodyn/src/AeroDyn_Types.f90", "line_range": "1-7389", "change": "Registry-generated; BladeLoadCorrFactor appears in RotParameterType after regeneration; do not edit by hand"},
+    {"file": "modules/aerodyn/src/AeroDyn.f90", "line_range": "1447-1584", "change": "Inside SetParameters, assign p%BladeLoadCorrFactor from InputFileData; default to 1.0"},
+    {"file": "modules/aerodyn/src/AeroDyn.f90", "line_range": "2228-2338", "change": "Inside RotCalcOutput, pass BladeLoadCorrFactor through to SetOutputsFromBEMT or apply to blade load mesh fields after BEMT_CalcOutput"},
+    {"file": "modules/aerodyn/src/AeroDyn.f90", "line_range": "4068-4148", "change": "Inside SetOutputsFromBEMT, multiply y%BladeLoad(k)%Force and Moment arrays by BladeLoadCorrFactor"},
+    {"file": "modules/aerodyn/src/BEMT.f90", "line_range": "1271-1416", "change": "Optional: if correction applies at blade-element level, add BladeLoadCorrFactor to BEMT_ParameterType and scale Cx/Cy inside BEMT_CalcOutput"}
+  ],
+  "pilot_notes": "Key tool limitation: analyze_symbol consistently returns CALLEES: none for Fortran subroutines, even for well-defined routines like AD_CalcOutput and BEMT_CalcOutput. Depth-2 callee tracing via the tool alone is not possible; NWTC callee list was reconstructed by cross-referencing module imports (AeroDyn.f90 imports NWTC_Library, BEMT, AirfoilInfo) and running analyze_symbol from the callee side. Tools excel at: (1) directory orientation, (2) locate-by-name with exact line numbers, (3) caller graphs. TYPE declarations are not indexed by analyze_file/analyze_symbol; approx_line estimates for NWTC types are inferred from sibling Copy routine line numbers in registry-generated files. Rubric calibration: AD_CalcOutput:2148 and AD_UpdateStates:1830 are ground-truth checkable; SetOutputsFromBEMT and SetParameters are highest-value integration_map items; MeshMapCreate and Transfer_Line2_to_Point are minimum correct NWTC callee set. Task is tractable but required 59 tool calls; callee graph limitation will affect Haiku more than Sonnet."
+}
