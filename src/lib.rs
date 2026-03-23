@@ -227,7 +227,7 @@ impl CodeAnalyzer {
         &self,
         params: &AnalyzeDirectoryParams,
         ct: tokio_util::sync::CancellationToken,
-    ) -> Result<analyze::AnalysisOutput, ErrorData> {
+    ) -> Result<std::sync::Arc<analyze::AnalysisOutput>, ErrorData> {
         let path = Path::new(&params.path);
         let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let counter_clone = counter.clone();
@@ -243,6 +243,21 @@ impl CodeAnalyzer {
                 error_meta("resource", false, "check path permissions and availability"),
             )
         })?;
+
+        // Canonicalize max_depth: Some(0) is semantically identical to None (unlimited).
+        let canonical_max_depth = max_depth.and_then(|d| if d == 0 { None } else { Some(d) });
+
+        // Build cache key from all_entries (before depth filtering)
+        let cache_key = cache::DirectoryCacheKey::from_entries(
+            &all_entries,
+            canonical_max_depth,
+            AnalysisMode::Overview,
+        );
+
+        // Check cache
+        if let Some(cached) = self.cache.get_directory(&cache_key) {
+            return Ok(cached);
+        }
 
         // Compute subtree counts from the full entry set before filtering.
         let subtree_counts = if max_depth.is_some_and(|d| d > 0) {
@@ -323,7 +338,9 @@ impl CodeAnalyzer {
         match handle.await {
             Ok(Ok(mut output)) => {
                 output.subtree_counts = subtree_counts;
-                Ok(output)
+                let arc_output = std::sync::Arc::new(output);
+                self.cache.put_directory(cache_key, arc_output.clone());
+                Ok(arc_output)
             }
             Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -655,9 +672,15 @@ impl CodeAnalyzer {
         let _sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and progress tracking
-        let mut output = match self.handle_overview_mode(&params, ct).await {
+        let arc_output = match self.handle_overview_mode(&params, ct).await {
             Ok(v) => v,
             Err(e) => return Ok(err_to_tool_result(e)),
+        };
+        // Extract the value from Arc for modification. On a cache hit the Arc is shared,
+        // so try_unwrap may fail; fall back to cloning the underlying value in that case.
+        let mut output = match std::sync::Arc::try_unwrap(arc_output) {
+            Ok(owned) => owned,
+            Err(arc) => (*arc).clone(),
         };
 
         // summary=true (explicit) and cursor are mutually exclusive.

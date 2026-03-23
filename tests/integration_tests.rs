@@ -795,6 +795,84 @@ fn test_cache_mutex_poison_recovery() {
     );
 }
 
+// Directory cache tests
+#[test]
+fn test_directory_cache_hit_on_identical_call() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create test files
+    fs::write(root.join("file1.rs"), "fn hello() {}").unwrap();
+    fs::write(root.join("file2.rs"), "fn world() {}").unwrap();
+
+    let cache = AnalysisCache::new(100);
+
+    // First analysis
+    let entries1 = walk_directory(root, None).unwrap();
+    let key1 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+        &entries1,
+        None,
+        AnalysisMode::Overview,
+    );
+    let output1 = analyze_directory(root, None).unwrap();
+    let arc_output1 = Arc::new(output1);
+    cache.put_directory(key1.clone(), arc_output1.clone());
+
+    // Second call with identical parameters should hit cache
+    let entries2 = walk_directory(root, None).unwrap();
+    let key2 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+        &entries2,
+        None,
+        AnalysisMode::Overview,
+    );
+    let cached = cache.get_directory(&key2);
+    assert!(
+        cached.is_some(),
+        "Cache should have a hit on identical call"
+    );
+    assert_eq!(cached.unwrap().files.len(), arc_output1.files.len());
+}
+
+#[test]
+fn test_directory_cache_miss_on_mtime_change() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create test files
+    let file1 = root.join("file1.rs");
+    fs::write(&file1, "fn hello() {}").unwrap();
+
+    let cache = AnalysisCache::new(100);
+
+    // First analysis
+    let entries1 = walk_directory(root, None).unwrap();
+    let key1 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+        &entries1,
+        None,
+        AnalysisMode::Overview,
+    );
+    let output1 = analyze_directory(root, None).unwrap();
+    let arc_output1 = Arc::new(output1);
+    cache.put_directory(key1, arc_output1);
+
+    // Modify file to change mtime; sleep long enough to exceed common mtime granularity (1s on many FSes)
+    std::thread::sleep(Duration::from_secs(2));
+    fs::write(&file1, "fn hello() { println!(\"modified\"); }").unwrap();
+
+    // Second call should miss cache due to mtime change
+    let entries2 = walk_directory(root, None).unwrap();
+    let key2 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+        &entries2,
+        None,
+        AnalysisMode::Overview,
+    );
+    let cached = cache.get_directory(&key2);
+    assert!(
+        cached.is_none(),
+        "Cache should miss when file mtime changes"
+    );
+}
+
 // Output limiting tests
 #[test]
 fn test_output_limiting_large_output() {
