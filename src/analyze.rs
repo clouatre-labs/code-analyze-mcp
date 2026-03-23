@@ -40,7 +40,7 @@ pub enum AnalyzeError {
 }
 
 /// Result of directory analysis containing both formatted output and file data.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct AnalysisOutput {
     #[schemars(description = "Formatted text representation of the analysis")]
     pub formatted: String,

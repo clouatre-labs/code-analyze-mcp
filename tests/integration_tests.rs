@@ -855,8 +855,8 @@ fn test_directory_cache_miss_on_mtime_change() {
     let arc_output1 = Arc::new(output1);
     cache.put_directory(key1, arc_output1);
 
-    // Modify file to change mtime
-    std::thread::sleep(Duration::from_millis(10));
+    // Modify file to change mtime; sleep long enough to exceed common mtime granularity (1s on many FSes)
+    std::thread::sleep(Duration::from_secs(2));
     fs::write(&file1, "fn hello() { println!(\"modified\"); }").unwrap();
 
     // Second call should miss cache due to mtime change

@@ -244,9 +244,15 @@ impl CodeAnalyzer {
             )
         })?;
 
+        // Canonicalize max_depth: Some(0) is semantically identical to None (unlimited).
+        let canonical_max_depth = max_depth.and_then(|d| if d == 0 { None } else { Some(d) });
+
         // Build cache key from all_entries (before depth filtering)
-        let cache_key =
-            cache::DirectoryCacheKey::from_entries(&all_entries, max_depth, AnalysisMode::Overview);
+        let cache_key = cache::DirectoryCacheKey::from_entries(
+            &all_entries,
+            canonical_max_depth,
+            AnalysisMode::Overview,
+        );
 
         // Check cache
         if let Some(cached) = self.cache.get_directory(&cache_key) {
@@ -670,19 +676,11 @@ impl CodeAnalyzer {
             Ok(v) => v,
             Err(e) => return Ok(err_to_tool_result(e)),
         };
-        // Extract the value from Arc for modification. Since we just created it in handle_overview_mode,
-        // it should be the only reference, so try_unwrap should succeed.
+        // Extract the value from Arc for modification. On a cache hit the Arc is shared,
+        // so try_unwrap may fail; fall back to cloning the underlying value in that case.
         let mut output = match std::sync::Arc::try_unwrap(arc_output) {
-            Ok(output) => output,
-            Err(_arc) => {
-                // Fallback: if there are other references (shouldn't happen), we can't modify.
-                // This is a safety net - in normal operation, try_unwrap should succeed.
-                return Ok(err_to_tool_result(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    "Internal error: unexpected Arc reference count".to_string(),
-                    error_meta("transient", true, "retry the request"),
-                )));
-            }
+            Ok(owned) => owned,
+            Err(arc) => (*arc).clone(),
         };
 
         // summary=true (explicit) and cursor are mutually exclusive.
