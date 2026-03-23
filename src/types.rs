@@ -63,6 +63,18 @@ pub struct AnalyzeDirectoryParams {
     pub output_control: OutputControlParams,
 }
 
+/// Output section selector for analyze_file fields projection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalyzeFileField {
+    /// Include function definitions with signatures, types, and line ranges.
+    Functions,
+    /// Include class and method definitions with inheritance and fields.
+    Classes,
+    /// Include import statements.
+    Imports,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeFileParams {
     /// File path to analyze
@@ -71,6 +83,13 @@ pub struct AnalyzeFileParams {
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code. Minimum value is 1; passing 0 is treated as unlimited (same as unset).
     #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
     pub ast_recursion_limit: Option<usize>,
+
+    /// Limit output to specific sections. Valid values: "functions", "classes", "imports".
+    /// The FILE header (path, line count, section counts) is always emitted regardless.
+    /// Omitting this field returns all sections (current behavior).
+    /// Ignored when summary=true (summary takes precedence).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fields: Option<Vec<AnalyzeFileField>>,
 
     #[serde(flatten)]
     pub pagination: PaginationParams,

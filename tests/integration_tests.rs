@@ -2973,6 +2973,7 @@ fn test_file_details_pagination_first_page() {
         500,
         0,
         true,
+        None,
     );
 
     // Assert: header shows position, F: section present
@@ -3040,6 +3041,7 @@ fn test_file_details_pagination_last_page() {
         500,
         10,
         true,
+        None,
     );
 
     // Assert: header shows correct range
@@ -3151,6 +3153,7 @@ fn test_format_file_details_paginated_unit() {
         750,
         10,
         true,
+        None,
     );
 
     // Assert: header shows correct range

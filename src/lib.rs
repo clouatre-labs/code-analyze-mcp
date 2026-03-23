@@ -774,7 +774,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_file",
-        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Generated code with deeply nested ASTs may exceed 50K chars; use summary=true to get counts only. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py",
+        description = "Use analyze_module first if you only need function names and imports (~75% smaller output); only call analyze_file when you need signatures, types, class details, or fields. Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Generated code with deeply nested ASTs may exceed 50K chars; use summary=true to get counts only. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py. The fields parameter limits output to specific sections. Valid values: \"functions\", \"classes\", \"imports\". The FILE header (path, line count, section counts) is always emitted. Omit fields to return all sections. When summary=true, fields is ignored. When fields explicitly lists \"imports\", the imports section is rendered regardless of the verbose flag; in all other cases imports require verbose=true.",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
@@ -890,6 +890,7 @@ impl CodeAnalyzer {
         // Regenerate formatted output using the paginated formatter (handles verbose and pagination correctly)
         let verbose = params.output_control.verbose.unwrap_or(false);
         if !use_summary {
+            // fields: serde rejects unknown enum variants at deserialization; no runtime validation required
             formatted = format_file_details_paginated(
                 &paginated.items,
                 paginated.total,
@@ -898,6 +899,7 @@ impl CodeAnalyzer {
                 line_count,
                 offset,
                 verbose,
+                params.fields.as_deref(),
             );
         }
 
@@ -1235,9 +1237,9 @@ impl ServerHandler for CodeAnalyzer {
             1. Start with analyze_directory(path=<repo_root>, max_depth=2, summary=true) to identify the source package directory \
             (typically the largest directory by file count; exclude {excluded}).\n\
             2. Re-run analyze_directory(path=<source_package>, max_depth=2, summary=true) for a module map with per-package class and function counts.\n\
-            3. Use analyze_file on key files identified in step 2 (prefer files with high class counts for framework entry points).\n\
+            3. Use analyze_module on key files identified in step 2 to get a lightweight index (function names, imports) before deciding which files need analyze_file.\n\
             4. Use analyze_symbol to trace call graphs for specific functions found in step 3.\n\
-            Use analyze_module for a minimal schema (name, line count, functions, imports) when token budget is critical. \
+            Prefer analyze_module over analyze_file for initial file triage; call analyze_file only when signatures, types, or class structure are required. \
             Prefer summary=true on large directories (1000+ files). Set max_depth=2 for the first call; increase only if packages are too large to differentiate. \
             Paginate with cursor/page_size. For subagents: DISABLE_PROMPT_CACHING=1."
         );
