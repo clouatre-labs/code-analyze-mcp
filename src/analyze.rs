@@ -8,10 +8,12 @@ use crate::formatter::{
 };
 use crate::graph::{CallGraph, InternalCallChain, resolve_symbol};
 use crate::lang::language_from_extension;
-use crate::parser::{ElementExtractor, SemanticExtractor};
+use crate::parser::{ElementExtractor, SemanticExtractor, extract_impl_traits};
 use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
-use crate::types::{AnalysisMode, FileInfo, ImportInfo, SemanticAnalysis, SymbolMatchMode};
+use crate::types::{
+    AnalysisMode, FileInfo, ImplTraitInfo, ImportInfo, SemanticAnalysis, SymbolMatchMode,
+};
 use rayon::prelude::*;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -280,6 +282,14 @@ pub struct FocusedAnalysisOutput {
     #[serde(skip)]
     #[schemars(skip)]
     pub def_count: usize,
+    /// Total unique callers before impl_only filter. Not serialized; used for FILTER header.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub unfiltered_caller_count: usize,
+    /// Unique callers after impl_only filter. Not serialized; used for FILTER header.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub impl_trait_caller_count: usize,
 }
 
 /// Analyze a symbol's call graph across a directory with progress tracking.
@@ -295,6 +305,7 @@ pub fn analyze_focused_with_progress(
     progress: Arc<AtomicUsize>,
     ct: CancellationToken,
     use_summary: bool,
+    impl_only: Option<bool>,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     #[allow(clippy::too_many_arguments)]
     // Check if already cancelled
@@ -314,6 +325,8 @@ pub fn analyze_focused_with_progress(
             test_chains: vec![],
             outgoing_chains: vec![],
             def_count: 0,
+            unfiltered_caller_count: 0,
+            impl_trait_caller_count: 0,
         });
     }
 
@@ -357,6 +370,10 @@ pub fn analyze_focused_with_progress(
                     for r in &mut semantic.references {
                         r.location = entry.path.display().to_string();
                     }
+                    // Extract impl-trait blocks independently (Rust only; empty for other langs)
+                    if language == "rust" {
+                        semantic.impl_traits = extract_impl_traits(&source, &entry.path);
+                    }
                     progress.fetch_add(1, Ordering::Relaxed);
                     Some((entry.path.clone(), semantic))
                 }
@@ -373,8 +390,19 @@ pub fn analyze_focused_with_progress(
         return Err(AnalyzeError::Cancelled);
     }
 
-    // Build call graph
-    let graph = CallGraph::build_from_results(analysis_results)?;
+    // Collect all impl-trait info from analysis results
+    let all_impl_traits: Vec<ImplTraitInfo> = analysis_results
+        .iter()
+        .flat_map(|(_, sem)| sem.impl_traits.iter().cloned())
+        .collect();
+
+    // Build call graph. Always build without impl_only filter first so we can
+    // record the unfiltered caller count before discarding those edges.
+    let mut graph = CallGraph::build_from_results(
+        analysis_results,
+        &all_impl_traits,
+        false, // filter applied below after counting
+    )?;
 
     // Resolve symbol name using the requested match mode.
     // Exact mode: check the graph directly without building a sorted set (O(1) lookups).
@@ -403,6 +431,39 @@ pub fn analyze_focused_with_progress(
             .into_iter()
             .collect();
         resolve_symbol(all_known.iter(), focus, &match_mode)?
+    };
+
+    // Count unique callers for the focus symbol before applying impl_only filter.
+    let unfiltered_caller_count = graph
+        .callers
+        .get(&resolved_focus)
+        .map(|edges| {
+            edges
+                .iter()
+                .map(|e| &e.caller_name)
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+        })
+        .unwrap_or(0);
+
+    // Apply impl_only filter now if requested, then count filtered callers.
+    let impl_trait_caller_count = if impl_only.unwrap_or(false) {
+        if let Some(edges) = graph.callers.get_mut(&resolved_focus) {
+            edges.retain(|e| e.is_impl_trait);
+        }
+        graph
+            .callers
+            .get(&resolved_focus)
+            .map(|edges| {
+                edges
+                    .iter()
+                    .map(|e| &e.caller_name)
+                    .collect::<std::collections::HashSet<_>>()
+                    .len()
+            })
+            .unwrap_or(0)
+    } else {
+        unfiltered_caller_count
     };
 
     // Compute chain data for pagination (always, regardless of summary mode)
@@ -435,6 +496,8 @@ pub fn analyze_focused_with_progress(
         test_chains,
         outgoing_chains,
         def_count,
+        unfiltered_caller_count,
+        impl_trait_caller_count,
     })
 }
 
@@ -462,6 +525,7 @@ pub fn analyze_focused(
         counter,
         ct,
         false,
+        None,
     )
 }
 

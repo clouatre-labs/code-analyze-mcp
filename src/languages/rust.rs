@@ -27,6 +27,16 @@ pub const IMPORT_QUERY: &str = r#"
 (use_declaration argument: (_) @import_path) @import
 "#;
 
+/// Tree-sitter query for extracting `impl Trait for Type` blocks.
+/// Captures the trait name and the concrete implementor type.
+// Note: matches only simple trait names (type_identifier). Scoped traits
+// (e.g. `impl io::Sink for T`) are not matched; scoped coverage is out of scope for v1.
+pub const IMPL_TRAIT_QUERY: &str = r#"
+(impl_item
+  trait: (type_identifier) @trait_name
+  type: (type_identifier) @impl_type)
+"#;
+
 /// Tree-sitter query for extracting impl blocks and methods.
 pub const IMPL_QUERY: &str = r#"
 (impl_item

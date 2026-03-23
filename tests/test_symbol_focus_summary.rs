@@ -61,8 +61,18 @@ fn test_symbol_focus_summary_format() {
     graph.callers.insert(
         "my_func".to_string(),
         vec![
-            (root.join("caller1.rs"), 20, "caller_a".to_string()),
-            (root.join("caller2.rs"), 30, "caller_b".to_string()),
+            code_analyze_mcp::types::CallEdge {
+                path: root.join("caller1.rs"),
+                line: 20,
+                caller_name: "caller_a".to_string(),
+                is_impl_trait: false,
+            },
+            code_analyze_mcp::types::CallEdge {
+                path: root.join("caller2.rs"),
+                line: 30,
+                caller_name: "caller_b".to_string(),
+                is_impl_trait: false,
+            },
         ],
     );
 
@@ -70,8 +80,18 @@ fn test_symbol_focus_summary_format() {
     graph.callees.insert(
         "my_func".to_string(),
         vec![
-            (root.join("lib.rs"), 40, "std::println".to_string()),
-            (root.join("lib.rs"), 50, "helper".to_string()),
+            code_analyze_mcp::types::CallEdge {
+                path: root.join("lib.rs"),
+                line: 40,
+                caller_name: "std::println".to_string(),
+                is_impl_trait: false,
+            },
+            code_analyze_mcp::types::CallEdge {
+                path: root.join("lib.rs"),
+                line: 50,
+                caller_name: "helper".to_string(),
+                is_impl_trait: false,
+            },
         ],
     );
 
@@ -218,6 +238,7 @@ pub fn another_caller() {
         counter,
         ct,
         true, // use_summary=true
+        None, // impl_only
     )
     .unwrap();
 
@@ -284,6 +305,7 @@ pub fn another_caller() {
         counter,
         ct,
         false, // use_summary=false
+        None,  // impl_only
     )
     .unwrap();
 

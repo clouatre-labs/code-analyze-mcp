@@ -1528,6 +1528,7 @@ mod tests {
             calls: vec![],
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         };
 
         let result = format_file_details_summary(&semantic, "src/main.rs", 100);
@@ -1576,6 +1577,7 @@ mod tests {
             calls: vec![],
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         };
 
         let result = format_file_details_summary(&semantic, "src/lib.rs", 250);
@@ -1686,6 +1688,7 @@ mod tests {
             calls: vec![],
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         };
 
         let verbose_out = format_file_details_paginated(
@@ -1766,6 +1769,7 @@ mod tests {
             calls: vec![],
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         };
 
         let verbose_out = format_file_details_paginated(
@@ -1876,6 +1880,7 @@ mod tests {
             calls: vec![],
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         };
 
         let compact_out = format_file_details_paginated(
@@ -2055,6 +2060,7 @@ mod tests {
             calls: vec![],
             assignments: vec![],
             field_accesses: vec![],
+            impl_traits: vec![],
         };
 
         let output = format_file_details("test.rs", &semantic, 100, false, None);
