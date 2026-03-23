@@ -31,9 +31,9 @@ excluded from the canonical analysis.
 
 | Run | Dim1 | Dim2 | Dim3 | Total |
 |-----|------|------|------|-------|
-| A-scored-6 | 3 | 3 | 3 | 9 |
+| A-scored-6 | 2 | 3 | 3 | 8 |
 | A-scored-7 | 2 | 3 | 3 | 8 |
-| **Mean** | **2.5** | **3.0** | **3.0** | **8.5** |
+| **Mean** | **2.0** | **3.0** | **3.0** | **8.0** |
 
 ### Condition B: Sonnet + native
 
@@ -71,9 +71,9 @@ excluded from the canonical analysis.
 ## Findings
 
 **Quality:**
-- Sonnet (A vs B): A mean 8.5 vs B mean 9.0. Native Sonnet edges MCP Sonnet by 0.5 points, driven
-  by Dim1 (KitchenSink identification): B found KitchenSink in both runs; A found it in one of two.
-  Dim2 and Dim3 are tied at ceiling (3.0).
+- Sonnet (A vs B): A mean 8.0 vs B mean 9.0. Native Sonnet edges MCP Sonnet by 1.0 point, driven
+  by Dim1 (KitchenSink identification): B found KitchenSink in both runs; A found it in neither
+  canonical run. Dim2 and Dim3 are tied at ceiling (3.0).
 - Haiku (C vs D): C mean 7.0 vs D mean 8.5. Native Haiku outperforms MCP Haiku by 1.5 points.
   MCP Haiku consistently scores 2 on Dim2 (call chain tracing), failing to name live-path Sink impls
   at the dispatch point. D achieved Dim2=3 in both runs.

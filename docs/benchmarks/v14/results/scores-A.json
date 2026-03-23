@@ -37,13 +37,13 @@
       "run_id": "A-scored-6",
       "condition": "A",
       "binary": "0.1.9",
-      "dim1_score": 3,
-      "dim1_rationale": "Names all 6 non-blanket impls with correct files and line numbers within ±20: StandardSink=807 (GT 807 ✓), JSONSink=684 (GT 684 ✓), SummarySink=646 (GT 646 ✓), UTF8=540 (GT ~550, delta=10 ✓), Lossy=588 (GT ~598, delta=10 ✓), Bytes=638 (GT ~648, delta=10 ✓). Both blanket impls listed: &mut S at line 225 (GT ~224 ✓), Box<S> at line 278 (GT ~282 ✓). Does not explicitly mention KitchenSink — just below score-3 threshold on that criterion. However blanket impls are present and the live-path vs convenience categorisation is explicit and correct. KitchenSink omission is the only gap; all other score-3 criteria are met. Scoring conservatively as 2 due to missing KitchenSink.",
+      "dim1_score": 2,
+      "dim1_rationale": "Names all 6 non-blanket impls with correct files and line numbers within ±20: StandardSink=807 (GT 807 ✓), JSONSink=684 (GT 684 ✓), SummarySink=646 (GT 646 ✓), UTF8=540 (GT ~550, delta=10 ✓), Lossy=588 (GT ~598, delta=10 ✓), Bytes=638 (GT ~648, delta=10 ✓). Both blanket impls listed: &mut S at line 225 (GT ~224 ✓), Box<S> at line 278 (GT ~282 ✓). Does not explicitly mention KitchenSink — fails score-3 criterion.",
       "dim2_score": 3,
       "dim2_rationale": "Complete chain traced with correct files: SearchWorker::search (244 ✓) -> SearchWorker::search_path (340) -> SearchWorker::search_reader (360 ✓) -> search_reader free fn (414 ✓, explicitly labelled 'DISPATCH POINT: matches on Printer enum variants (Standard | Summary | JSON), calls printer.sink_with_path() to obtain the concrete Sink, then calls searcher.search_reader') -> Searcher::search_reader (file correct). Explicitly identifies the Printer enum dispatch as the instantiation point. All 3 live-path impls are named in the sink_impls list with live-path category. Satisfies all score-3 criteria.",
       "dim3_score": 3,
       "dim3_rationale": "Covers all 4 required layers: (1) new file crates/printer/src/csv.rs (1-END), (2) Printer enum variant in crates/core/search.rs lines 206-214, (3) match arm for Printer::Csv in search_reader free fn at lines 414-447 explicitly labelled 'primary dispatch point', (4) re-export in crates/printer/src/lib.rs lines 1-104. Additional touchpoints: get_mut() arm at lines 218-224, search_path arm at lines 378-410, CLI in crates/core/main.rs lines 1-483. Line ranges provided for all touchpoints. All score-3 criteria met.",
-      "total": 9
+      "total": 8
     },
     {
       "run_id": "A-scored-7",
