@@ -4073,60 +4073,61 @@ fn test_analyze_symbol_java_callees() {
     );
 }
 
-#[test]
-fn test_analyze_symbol_callers_to_callees_cursor_transition() {
+#[tokio::test]
+async fn test_analyze_symbol_callers_to_callees_cursor_transition() {
+    use code_analyze_mcp::pagination::{CursorData, PaginationMode, decode_cursor, encode_cursor};
+
+    // Verify the cursor encoding/decoding round-trips correctly for the
+    // Callees transition cursor that the handler emits.
+    let cursor_str = encode_cursor(&CursorData {
+        mode: PaginationMode::Callees,
+        offset: 0,
+    })
+    .expect("encode must succeed");
+    let decoded = decode_cursor(&cursor_str).expect("cursor must decode");
+    assert_eq!(decoded.mode, PaginationMode::Callees);
+    assert_eq!(decoded.offset, 0);
+
+    // Verify analyze_focused produces both callers and callees sections in
+    // the formatted output, confirming the handler's post-match override will
+    // have the right inputs at runtime.
     let dir = TempDir::new().unwrap();
-    let src = dir.path().join("lib.rs");
     fs::write(
-        &src,
+        dir.path().join("lib.rs"),
         "fn inner() {}\n\nfn outer() {\n    inner();\n}\n\nfn caller() {\n    outer();\n}\n",
     )
     .unwrap();
     let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
-    let output = result.formatted;
-
     assert!(
-        output.contains("CALLERS:"),
-        "expected CALLERS section in output:\n{output}"
+        result.formatted.contains("CALLERS:"),
+        "expected CALLERS section:\n{}",
+        result.formatted
     );
     assert!(
-        output.contains("CALLEES:"),
-        "expected CALLEES section in output:\n{output}"
-    );
-
-    // The cursor transition logic is now in the handler (lib.rs), not in analyze_focused.
-    // This test verifies that the structure supports the transition by checking that
-    // both CALLERS and CALLEES sections are present with actual content (not just "(none)"),
-    // which indicates the conditions for cursor emission are met.
-    assert!(
-        output.contains("caller") || output.contains("outer"),
-        "expected callers to be listed in output:\n{output}"
-    );
-    assert!(
-        output.contains("inner"),
-        "expected callees to be listed in output:\n{output}"
+        result.formatted.contains("CALLEES:") && !result.formatted.contains("CALLEES:\n  (none)"),
+        "expected non-empty CALLEES section:\n{}",
+        result.formatted
     );
 }
 
 #[test]
 fn test_analyze_symbol_no_callees_no_transition_cursor() {
     let dir = TempDir::new().unwrap();
-    let src = dir.path().join("lib.rs");
-    fs::write(&src, "fn isolated() {\n    let x = 42;\n}\n").unwrap();
+    fs::write(
+        dir.path().join("lib.rs"),
+        "fn isolated() {\n    let x = 42;\n}\n",
+    )
+    .unwrap();
     let result = analyze_focused(dir.path(), "isolated", 1, None, None).unwrap();
-    let output = result.formatted;
 
     assert!(
-        output.contains("CALLERS:"),
-        "expected CALLERS section in output:\n{output}"
+        result.next_cursor.is_none(),
+        "expected no next_cursor when no callees exist; got: {:?}",
+        result.next_cursor
     );
-
-    // The cursor transition logic is now in the handler (lib.rs), not in analyze_focused.
-    // This test verifies that when there are no callees, no cursor would be emitted.
-    // We verify this by checking that the CALLEES section shows "(none)", which indicates
-    // there are no outgoing chains and thus no cursor would be emitted.
     assert!(
-        output.contains("CALLEES:") && output.contains("(none)"),
-        "expected CALLEES section with (none) when there are no callees:\n{output}"
+        result.formatted.contains("CALLEES:\n  (none)"),
+        "expected CALLEES section with (none):\n{}",
+        result.formatted
     );
 }

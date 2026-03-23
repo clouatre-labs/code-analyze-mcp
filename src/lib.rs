@@ -974,10 +974,12 @@ impl CodeAnalyzer {
                 };
 
                 let verbose = params.output_control.verbose.unwrap_or(false);
-                if paginated_next.is_some()
-                    || offset > 0
-                    || !verbose
-                    || !output.outgoing_chains.is_empty()
+                let use_summary = params.output_control.summary == Some(true);
+                if !use_summary
+                    && (paginated_next.is_some()
+                        || offset > 0
+                        || !verbose
+                        || !output.outgoing_chains.is_empty())
                 {
                     let base_path = Path::new(&params.path);
                     output.formatted = format_focused_paginated(
@@ -1035,18 +1037,18 @@ impl CodeAnalyzer {
             }
         };
 
-        // Post-match override: if callers exhausted and callees exist, emit Callees cursor
+        // Post-match override: if callers exhausted and callees exist, emit Callees cursor.
+        // Suppressed in summary mode (summary and pagination are mutually exclusive).
         if paginated_next_cursor.is_none()
             && cursor_mode == PaginationMode::Callers
             && !output.outgoing_chains.is_empty()
+            && params.output_control.summary != Some(true)
+            && let Ok(cursor) = encode_cursor(&CursorData {
+                mode: PaginationMode::Callees,
+                offset: 0,
+            })
         {
-            paginated_next_cursor = Some(
-                encode_cursor(&CursorData {
-                    mode: PaginationMode::Callees,
-                    offset: 0,
-                })
-                .unwrap_or_default(),
-            );
+            paginated_next_cursor = Some(cursor);
         }
 
         // Update next_cursor in output
