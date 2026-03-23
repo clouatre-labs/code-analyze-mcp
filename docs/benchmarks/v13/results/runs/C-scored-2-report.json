@@ -1,0 +1,113 @@
+{
+  "run_id": "C-openfast-audit-001",
+  "condition": "C",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    },
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "MeshCreate",
+      "file": "modules/nwtc-library/src/ModMesh.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "MeshCommit",
+      "file": "modules/nwtc-library/src/ModMesh.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "MeshPositionNode",
+      "file": "modules/nwtc-library/src/ModMesh.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Library_IncSubs.f90",
+      "call_depth": 2
+    },
+    {
+      "routine": "InterpStpReal8",
+      "file": "modules/nwtc-library/src/NWTC_Num.f90",
+      "call_depth": 2
+    },
+    {
+      "routine": "ReadCAry",
+      "file": "modules/nwtc-library/src/NWTC_IO.f90",
+      "call_depth": 2
+    },
+    {
+      "routine": "WrScr",
+      "file": "modules/nwtc-library/src/NWTC_IO.f90",
+      "call_depth": 2
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "MeshType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 86
+    },
+    {
+      "type_name": "ElemRecType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 86
+    },
+    {
+      "type_name": "FileInfoType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 100
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/openfast-library/src/FAST_Subs.f90",
+      "line_range": "4748-4850",
+      "change": "FAST_Solution0_T calls AD_CalcOutput via module glue interface; inject BladeLoadCorrFactor parameter here"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Subs.f90",
+      "line_range": "5173-5210",
+      "change": "FAST_UpdateStates_T calls AD_UpdateStates via module glue interface; propagate BladeLoadCorrFactor to state update"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2148-2220",
+      "change": "AD_CalcOutput orchestrator; add BladeLoadCorrFactor parameter to input state and pass to RotCalcOutput"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2340",
+      "change": "RotCalcOutput physics loop; scale blade loads by BladeLoadCorrFactor before mesh output assembly"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "1830-1930",
+      "change": "AD_UpdateStates state time-stepping; update BladeLoadCorrFactor in persistent state array if time-varying"
+    },
+    {
+      "file": "modules/aerodyn/src/BEMT.f90",
+      "line_range": "1271-1415",
+      "change": "BEMT_CalcOutput blade-element calculation; apply BladeLoadCorrFactor to element normal and tangential forces"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "1-100",
+      "change": "AeroDyn parameter types; add BladeLoadCorrFactor as scalar or nodal array in AeroDyn_InitInputType and AeroDyn_ContStateType"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_IO.f90",
+      "line_range": "1-100",
+      "change": "AeroDyn input file parsing; read BladeLoadCorrFactor from input file or registry, validate range [0, 2]"
+    }
+  ],
+  "tool_calls_total": 16
+}

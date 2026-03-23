@@ -1,0 +1,90 @@
+{
+  "run_id": "B-pilot",
+  "condition": "B",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    },
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1,
+      "notes": "Called in the contained Failed() closure at AD_CalcOutput line 2223; defined at NWTC_Base.f90:92"
+    },
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 2,
+      "notes": "Re-invoked inside RotCalcOutput (lines 2271, 2278, 2286+) and AD_CalcWind (line 1996), both direct callees of AD_CalcOutput"
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "MeshType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 102
+    },
+    {
+      "type_name": "MeshMapType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Mapping.f90",
+      "approx_line": 51
+    },
+    {
+      "type_name": "ProgDesc",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 71
+    },
+    {
+      "type_name": "FileInfoType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 98
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Registry.txt",
+      "line_range": "386-387",
+      "change": "Add typedef entry for BladeLoadCorrFactor (ReKi, default 1.0) to RotParameterType; regenerate AeroDyn_Types.f90"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "300-446",
+      "change": "Auto-generated: RotParameterType and (via rotors(:)) AD_ParameterType gain the new ReKi field \u2014 regenerate, do not edit by hand"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "234-651",
+      "change": "In AD_Init: read BladeLoadCorrFactor from input/InitInp and store in p%rotors(iR)%BladeLoadCorrFactor for every rotor"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Subs.f90",
+      "line_range": "695-718",
+      "change": "Before the AD_Init call (line 716), populate Init%InData_AD%rotors(iRot)%BladeLoadCorrFactor from the FAST input so the value flows into AeroDyn's parameter struct"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Funcs.f90",
+      "line_range": "722-870",
+      "change": "FAST_CalcOutput dispatches to AD_CalcOutput at line 754; no signature change needed \u2014 BladeLoadCorrFactor lives in AD_ParameterType (p), which is already passed through"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2336",
+      "change": "In RotCalcOutput after BEMT_CalcOutput (line 2277) and SetOutputsFromBEMT (line 2280): scale blade-load mesh forces/moments by p%BladeLoadCorrFactor"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "4068-4143",
+      "change": "Preferred alternative injection point: apply BladeLoadCorrFactor scaling inside SetOutputsFromBEMT where distributed BEMT loads are mapped onto the blade-load mesh, ensuring correction applies to all wake-model code paths"
+    }
+  ],
+  "tool_calls_total": 47
+}

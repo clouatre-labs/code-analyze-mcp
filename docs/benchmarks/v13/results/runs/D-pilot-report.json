@@ -1,0 +1,98 @@
+{
+  "run_id": "D-pilot",
+  "condition": "D",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    },
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "IfW_FlowField_GetVelAcc",
+      "file": "modules/inflowwind/src/IfW_FlowField.f90",
+      "call_depth": 2
+    },
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "IfW_FlowField_CopyFlowFieldType",
+      "file": "modules/inflowwind/src/IfW_FlowField_Types.f90",
+      "call_depth": 2
+    },
+    {
+      "routine": "AD_CopyInput",
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "AD_CopyInflowType",
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "call_depth": 1
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "FlowFieldType",
+      "declared_in": "modules/inflowwind/src/IfW_FlowField_Types.f90",
+      "approx_line": 152
+    },
+    {
+      "type_name": "MeshType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 102
+    },
+    {
+      "type_name": "DbKi",
+      "declared_in": "modules/nwtc-library/src/NWTC_Num.f90",
+      "approx_line": 0
+    },
+    {
+      "type_name": "ReKi",
+      "declared_in": "modules/nwtc-library/src/NWTC_Num.f90",
+      "approx_line": 0
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/openfast-library/src/FAST_Funcs.f90",
+      "line_range": "722-770",
+      "change": "FAST_CalcOutput subroutine: Add BladeLoadCorrFactor parameter extraction and pass to AD_CalcOutput call at line 754"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2148-2226",
+      "change": "AD_CalcOutput signature: Add BladeLoadCorrFactor REAL(ReKi) input parameter and pass through to RotCalcOutput calls at line 2189-2191"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2336",
+      "change": "RotCalcOutput signature: Add BladeLoadCorrFactor REAL(ReKi) input parameter and pass through to BEMT_CalcOutput call at line 2277"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2270-2280",
+      "change": "SetInputs call: Modify to accept and apply BladeLoadCorrFactor to blade element calculations"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "0-0",
+      "change": "RotParameterType: Add BladeLoadCorrFactor REAL(ReKi) field to type definition"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "0-0",
+      "change": "AD_ParameterType: Add BladeLoadCorrFactor REAL(ReKi) field to type definition"
+    }
+  ],
+  "tool_calls_total": 35
+}

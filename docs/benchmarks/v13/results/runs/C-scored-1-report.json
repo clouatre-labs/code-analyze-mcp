@@ -1,0 +1,133 @@
+{
+  "run_id": "C-openfast-audit",
+  "condition": "C",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    },
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Library_IncSubs.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "allocated",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "size",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "associated",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "ClearTmpStorage",
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "call_depth": 2
+    },
+    {
+      "routine": "SetErrStat_F2C",
+      "file": "modules/nwtc-library/src/NWTC_C_Binding.f90",
+      "call_depth": 2
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "ProgDesc",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 1
+    },
+    {
+      "type_name": "FASTdataType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 280
+    },
+    {
+      "type_name": "OutParmType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 365
+    },
+    {
+      "type_name": "FileInfoType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 410
+    },
+    {
+      "type_name": "Quaternion",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 530
+    },
+    {
+      "type_name": "ModVarType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 690
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/openfast-library/src/FAST_Subs.f90",
+      "line_range": "5052-5122",
+      "change": "Add BladeLoadCorrFactor parameter to FAST_Solution_T call sequence; pass through glue-code state initialization"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Subs.f90",
+      "line_range": "5122-5173",
+      "change": "Pass BladeLoadCorrFactor from glue code into FAST_Prework_T before AD_CalcOutput is invoked"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2148-2222",
+      "change": "Add BladeLoadCorrFactor parameter to AD_CalcOutput subroutine signature; pass to RotCalcOutput"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2338",
+      "change": "Propagate BladeLoadCorrFactor in RotCalcOutput; pass to SetInputsForBEMT and other blade-element routines"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "3335-3654",
+      "change": "Add BladeLoadCorrFactor to SetInputsForBEMT signature; apply correction to blade element inputs before BEMT_CalcOutput call"
+    },
+    {
+      "file": "modules/aerodyn/src/BEMT.f90",
+      "line_range": "1-100",
+      "change": "Define BladeLoadCorrFactor in BEMT_ParameterType; document within Init and CalcOutput"
+    },
+    {
+      "file": "modules/aerodyn/src/BEMT_Types.f90",
+      "line_range": "1-200",
+      "change": "Add BladeLoadCorrFactor field to BEMT_ParameterType structure definition"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "1-200",
+      "change": "Add BladeLoadCorrFactor to AD_RotParameterType structure; update pack/unpack/copy routines"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Types.f90",
+      "line_range": "1-200",
+      "change": "Add BladeLoadCorrFactor to FAST_ParameterType or FAST_AeroDyn state; update initialization code"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_ModGlue.f90",
+      "line_range": "1-500",
+      "change": "Map BladeLoadCorrFactor from FAST glue-code inputs to AeroDyn parameter initialization; route through Glue_Types"
+    }
+  ],
+  "tool_calls_total": 19
+}

@@ -115,24 +115,28 @@ fi
 # ---------------------------------------------------------------------------
 # Condition dispatch
 # ---------------------------------------------------------------------------
+# Resolve model IDs: prefer env vars set by ~/.zshrc.local (Bedrock), fall back to aliases
+SONNET_MODEL="${ANTHROPIC_DEFAULT_SONNET_MODEL:-claude-sonnet-4-6}"
+HAIKU_MODEL="${ANTHROPIC_DEFAULT_HAIKU_MODEL:-claude-haiku-4-5}"
+
 case "$CONDITION_ID" in
   A)
-    MODEL="claude-sonnet-4-6"
+    MODEL="$SONNET_MODEL"
     TOOL_SET="mcp"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-a-mcp-sonnet.md"
     ;;
   B)
-    MODEL="claude-sonnet-4-6"
+    MODEL="$SONNET_MODEL"
     TOOL_SET="native"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-b-native-sonnet.md"
     ;;
   C)
-    MODEL="claude-haiku-4-5"
+    MODEL="$HAIKU_MODEL"
     TOOL_SET="mcp"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-c-mcp-haiku.md"
     ;;
   D)
-    MODEL="claude-haiku-4-5"
+    MODEL="$HAIKU_MODEL"
     TOOL_SET="native"
     SYSTEM_PROMPT_FILE="$PROMPTS_DIR/condition-d-native-haiku.md"
     ;;
@@ -317,8 +321,10 @@ PYEOF
 _REPO_SLUG="${REPO_ROOT//\//-}"
 SESSION_DIR="${CLAUDE_SESSION_DIR:-$HOME/.claude/projects/${_REPO_SLUG}}"
 
-mapfile -t _sessions < <(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v13-run-marker 2>/dev/null || true)
-if (( ${#_sessions[@]} > 0 )); then
+# Use portable find (bash 3 compat; mapfile is bash 4+ only)
+_sessions=()
+while IFS= read -r f; do _sessions+=("$f"); done < <(find "$SESSION_DIR" -name "*.jsonl" -newer /tmp/.v13-run-marker 2>/dev/null || true)
+if [[ ${#_sessions[@]} -gt 0 ]]; then
   LATEST_SESSION=$(ls -t "${_sessions[@]}" 2>/dev/null | head -1)
   SESSION_COPY="$RUNS_DIR/${RUN_ID}-session.jsonl"
   cp "$LATEST_SESSION" "$SESSION_COPY"
