@@ -17,13 +17,21 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Benchmarks
 
-Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Claude Code against the Django (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
+Auth migration task on Claude Code against [Django](https://github.com/django/django) (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
 
 | Mode | Sonnet 4.6 | Haiku 4.5 |
 |---|---|---|
-| MCP | 150k tokens / 1.2m | 403k tokens / 0.8m |
-| Native | 284k tokens / 2.3m | 478k tokens / 1.3m |
-| **Savings** | **47% fewer tokens, 2x faster** | **16% fewer tokens, 40% faster** |
+| MCP | 145k tokens, $0.51 | 399k tokens, $0.42 |
+| Native | 276k tokens, $0.94 | 473k tokens, $0.53 |
+| **Savings** | **47% fewer tokens, 46% cheaper** | **16% fewer tokens, 21% cheaper** |
+
+AeroDyn integration audit task on Claude Code against [OpenFAST](https://github.com/OpenFAST/openfast) (Fortran) source tree. [Full methodology](docs/benchmarks/v13/methodology.md).
+
+| Mode | Sonnet 4.6 | Haiku 4.5 |
+|---|---|---|
+| MCP | 472k tokens, $1.65 | 687k tokens, $0.72 |
+| Native | 877k tokens, $2.85 | 2162k tokens, $2.21 |
+| **Savings** | **46% fewer tokens, 42% cheaper** | **68% fewer tokens, 68% cheaper** |
 
 ## Overview
 
