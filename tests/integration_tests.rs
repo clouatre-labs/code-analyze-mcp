@@ -4072,3 +4072,62 @@ fn test_analyze_symbol_java_callees() {
         "expected CALLEES section with callee 'inner', got:\n{output}"
     );
 }
+
+#[tokio::test]
+async fn test_analyze_symbol_callers_to_callees_cursor_transition() {
+    use code_analyze_mcp::pagination::{CursorData, PaginationMode, decode_cursor, encode_cursor};
+
+    // Verify the cursor encoding/decoding round-trips correctly for the
+    // Callees transition cursor that the handler emits.
+    let cursor_str = encode_cursor(&CursorData {
+        mode: PaginationMode::Callees,
+        offset: 0,
+    })
+    .expect("encode must succeed");
+    let decoded = decode_cursor(&cursor_str).expect("cursor must decode");
+    assert_eq!(decoded.mode, PaginationMode::Callees);
+    assert_eq!(decoded.offset, 0);
+
+    // Verify analyze_focused produces both callers and callees sections in
+    // the formatted output, confirming the handler's post-match override will
+    // have the right inputs at runtime.
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("lib.rs"),
+        "fn inner() {}\n\nfn outer() {\n    inner();\n}\n\nfn caller() {\n    outer();\n}\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    assert!(
+        result.formatted.contains("CALLERS:"),
+        "expected CALLERS section:\n{}",
+        result.formatted
+    );
+    assert!(
+        result.formatted.contains("CALLEES:") && !result.formatted.contains("CALLEES:\n  (none)"),
+        "expected non-empty CALLEES section:\n{}",
+        result.formatted
+    );
+}
+
+#[test]
+fn test_analyze_symbol_no_callees_no_transition_cursor() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("lib.rs"),
+        "fn isolated() {\n    let x = 42;\n}\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "isolated", 1, None, None).unwrap();
+
+    assert!(
+        result.next_cursor.is_none(),
+        "expected no next_cursor when no callees exist; got: {:?}",
+        result.next_cursor
+    );
+    assert!(
+        result.formatted.contains("CALLEES:\n  (none)"),
+        "expected CALLEES section with (none):\n{}",
+        result.formatted
+    );
+}

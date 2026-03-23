@@ -1296,17 +1296,9 @@ pub(crate) fn format_focused_paginated(
     let start = offset + 1; // 1-indexed
     let end = offset + paginated_chains.len();
 
-    let callers_count = prod_chains
-        .iter()
-        .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
-        .collect::<std::collections::HashSet<_>>()
-        .len();
+    let callers_count = prod_chains.len();
 
-    let callees_count = outgoing_chains
-        .iter()
-        .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
-        .collect::<std::collections::HashSet<_>>()
-        .len();
+    let callees_count = outgoing_chains.len();
 
     let mut output = String::new();
 
