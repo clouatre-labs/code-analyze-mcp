@@ -626,6 +626,44 @@ impl SemanticExtractor {
         }
     }
 
+    /// Returns the name of the enclosing function/method/subroutine for a given AST node,
+    /// by walking ancestors and matching all language-specific function container kinds.
+    fn enclosing_function_name(mut node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+        while let Some(parent) = node.parent() {
+            let name_node = match parent.kind() {
+                // Direct name field: Rust, Python, Go, Java, TypeScript/TSX
+                "function_item"
+                | "method_item"
+                | "function_definition"
+                | "function_declaration"
+                | "method_declaration"
+                | "method_definition" => parent.child_by_field_name("name"),
+                // Fortran subroutine: name is inside subroutine_statement child
+                "subroutine" => {
+                    let mut cursor = parent.walk();
+                    parent
+                        .children(&mut cursor)
+                        .find(|c| c.kind() == "subroutine_statement")
+                        .and_then(|s| s.child_by_field_name("name"))
+                }
+                // Fortran function: name is inside function_statement child
+                "function" => {
+                    let mut cursor = parent.walk();
+                    parent
+                        .children(&mut cursor)
+                        .find(|c| c.kind() == "function_statement")
+                        .and_then(|s| s.child_by_field_name("name"))
+                }
+                _ => {
+                    node = parent;
+                    continue;
+                }
+            };
+            return name_node.map(|n| source[n.start_byte()..n.end_byte()].to_string());
+        }
+        None
+    }
+
     fn extract_calls(
         source: &str,
         compiled: &CompiledQueries,
@@ -650,17 +688,8 @@ impl SemanticExtractor {
                 let call_name = source[node.start_byte()..node.end_byte()].to_string();
                 *call_frequency.entry(call_name.clone()).or_insert(0) += 1;
 
-                let mut current = node;
-                let mut caller = "<module>".to_string();
-                while let Some(parent) = current.parent() {
-                    if parent.kind() == "function_item"
-                        && let Some(name_node) = parent.child_by_field_name("name")
-                    {
-                        caller = source[name_node.start_byte()..name_node.end_byte()].to_string();
-                        break;
-                    }
-                    current = parent;
-                }
+                let caller = Self::enclosing_function_name(node, source)
+                    .unwrap_or_else(|| "<module>".to_string());
 
                 let mut arg_count = None;
                 let mut arg_node = node;
@@ -854,17 +883,8 @@ impl SemanticExtractor {
             }
 
             if !variable.is_empty() && !value.is_empty() {
-                let mut current = mat.captures[0].node;
-                let mut scope = "global".to_string();
-                while let Some(parent) = current.parent() {
-                    if parent.kind() == "function_item"
-                        && let Some(name_node) = parent.child_by_field_name("name")
-                    {
-                        scope = source[name_node.start_byte()..name_node.end_byte()].to_string();
-                        break;
-                    }
-                    current = parent;
-                }
+                let scope = Self::enclosing_function_name(mat.captures[0].node, source)
+                    .unwrap_or_else(|| "global".to_string());
                 assignments.push(AssignmentInfo {
                     variable,
                     value,
@@ -912,17 +932,8 @@ impl SemanticExtractor {
             }
 
             if !object.is_empty() && !field.is_empty() {
-                let mut current = mat.captures[0].node;
-                let mut scope = "global".to_string();
-                while let Some(parent) = current.parent() {
-                    if parent.kind() == "function_item"
-                        && let Some(name_node) = parent.child_by_field_name("name")
-                    {
-                        scope = source[name_node.start_byte()..name_node.end_byte()].to_string();
-                        break;
-                    }
-                    current = parent;
-                }
+                let scope = Self::enclosing_function_name(mat.captures[0].node, source)
+                    .unwrap_or_else(|| "global".to_string());
                 field_accesses.push(FieldAccessInfo {
                     object,
                     field,

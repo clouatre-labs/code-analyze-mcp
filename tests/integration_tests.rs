@@ -3969,3 +3969,106 @@ fn test_format_summary_max_depth_zero_unchanged() {
         "expected no annotated count when max_depth=Some(0) and subtree_counts=None but got:\n{summary}"
     );
 }
+
+#[test]
+fn test_analyze_symbol_python_callees() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("foo.py");
+    fs::write(
+        &src,
+        "def inner():\n    pass\n\ndef outer():\n    inner()\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    let output = result.formatted;
+    // CALLEES section format: "  outer -> outer\n    -> inner"
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
+    );
+}
+
+#[test]
+fn test_analyze_symbol_go_callees() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("foo.go");
+    fs::write(
+        &src,
+        "package main\n\nfunc inner() {}\n\ntype S struct{}\n\nfunc (s S) outer() {\n    inner()\n}\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    let output = result.formatted;
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
+    );
+}
+
+#[test]
+fn test_analyze_symbol_typescript_callees() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("foo.ts");
+    fs::write(
+        &src,
+        "function inner(): void {}\n\nclass MyClass {\n    outer(): void {\n        inner();\n    }\n}\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    let output = result.formatted;
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
+    );
+}
+
+#[test]
+fn test_analyze_symbol_fortran_callees() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("foo.f90");
+    fs::write(
+        &src,
+        "subroutine inner()\nend subroutine\n\nsubroutine outer()\n    call inner()\nend subroutine\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    let output = result.formatted;
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
+    );
+}
+
+#[test]
+fn test_analyze_symbol_rust_method_item_callees() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("lib.rs");
+    fs::write(
+        &src,
+        "fn inner() {}\n\nstruct S;\n\nimpl S {\n    fn outer(&self) {\n        inner();\n    }\n}\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    let output = result.formatted;
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
+    );
+}
+
+#[test]
+fn test_analyze_symbol_java_callees() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("Foo.java");
+    fs::write(
+        &src,
+        "class Foo {\n    void inner() {}\n\n    void outer() {\n        inner();\n    }\n}\n",
+    )
+    .unwrap();
+    let result = analyze_focused(dir.path(), "outer", 1, None, None).unwrap();
+    let output = result.formatted;
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> inner"),
+        "expected CALLEES section with callee 'inner', got:\n{output}"
+    );
+}
