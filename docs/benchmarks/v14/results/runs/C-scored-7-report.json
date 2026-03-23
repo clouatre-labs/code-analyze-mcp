@@ -1,0 +1,134 @@
+{
+  "run_id": "C-scored-7",
+  "condition": "C",
+  "sink_impls": [
+    {
+      "type": "StandardSink",
+      "file": "crates/printer/src/standard.rs",
+      "impl_line": 810,
+      "category": "live-path"
+    },
+    {
+      "type": "JSONSink",
+      "file": "crates/printer/src/json.rs",
+      "impl_line": 684,
+      "category": "live-path"
+    },
+    {
+      "type": "SummarySink",
+      "file": "crates/printer/src/summary.rs",
+      "impl_line": 646,
+      "category": "live-path"
+    },
+    {
+      "type": "UTF8",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 550,
+      "category": "test-only"
+    },
+    {
+      "type": "Lossy",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 598,
+      "category": "test-only"
+    },
+    {
+      "type": "Bytes",
+      "file": "crates/searcher/src/sink.rs",
+      "impl_line": 648,
+      "category": "test-only"
+    }
+  ],
+  "call_chain": [
+    {
+      "name": "SearchWorker::search",
+      "file": "crates/core/search.rs",
+      "approx_line": 244,
+      "description": "Entry point in search.rs that routes to various search paths based on file type"
+    },
+    {
+      "name": "search_preprocessor",
+      "file": "crates/core/search.rs",
+      "approx_line": 296,
+      "description": "Handles preprocessing step if configured"
+    },
+    {
+      "name": "search_decompress",
+      "file": "crates/core/search.rs",
+      "approx_line": 330,
+      "description": "Handles decompression step if needed"
+    },
+    {
+      "name": "search_path (member fn)",
+      "file": "crates/core/search.rs",
+      "approx_line": 340,
+      "description": "Routes to multi-path search via free function"
+    },
+    {
+      "name": "search_path (free fn)",
+      "file": "crates/core/search.rs",
+      "approx_line": 378,
+      "description": "Free function dispatcher that instantiates Sink via printer.sink_with_path() or printer.sink()"
+    },
+    {
+      "name": "search_reader (free fn)",
+      "file": "crates/core/search.rs",
+      "approx_line": 414,
+      "description": "Calls Searcher::search_reader with the instantiated Sink"
+    },
+    {
+      "name": "Searcher::search_reader",
+      "file": "crates/searcher/src/searcher/mod.rs",
+      "approx_line": 0,
+      "description": "grep_searcher crate: executes search using Sink trait methods"
+    }
+  ],
+  "change_impact_map": [
+    {
+      "file": "crates/printer/src/lib.rs",
+      "line_range": "60-104",
+      "change": "Add re-export for new printer type (e.g., CSVBuilder, CSVSink)"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "new",
+      "change": "Create new file with CSV printer struct and impl Sink"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "1-100",
+      "change": "Define CSVBuilder and CSV struct, implement sink() and sink_with_path() methods"
+    },
+    {
+      "file": "crates/printer/src/csv.rs",
+      "line_range": "200-400",
+      "change": "Implement Sink trait for CSVSink: matched(), context(), binary_data(), begin(), finish()"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "196-214",
+      "change": "Add CSV enum variant to PatternMatcher union; add CSV case to dispatch in search_path() free function"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "206-214",
+      "change": "Update Printer type union to include csv::CSV<W> variant"
+    },
+    {
+      "file": "crates/core/search.rs",
+      "line_range": "378-410",
+      "change": "Update search_path() free function match arms to instantiate CSV Sink for CSV printer variant"
+    },
+    {
+      "file": "crates/core/main.rs",
+      "line_range": "0-100",
+      "change": "Add CLI flag parsing for CSV output format (likely in flags/defs.rs)"
+    },
+    {
+      "file": "crates/core/flags/defs.rs",
+      "line_range": "0-500",
+      "change": "Add csv_output flag and add CSV printer config to SearchWorkerBuilder initialization"
+    }
+  ],
+  "tool_calls_total": 9
+}

@@ -156,7 +156,7 @@ esac
 OUTPUT_FILE="$RUNS_DIR/${RUN_ID}-report.json"
 TELEMETRY_FILE="$RUNS_DIR/${RUN_ID}-telemetry.json"
 LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
-SCRATCH_FILE=$(mktemp /tmp/bench-v14-XXXXXX.json)
+SCRATCH_FILE=$(mktemp /tmp/bench-v14-scratch-XXXXXX.json)
 
 # ---------------------------------------------------------------------------
 # Tool isolation flags
