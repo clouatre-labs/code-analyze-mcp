@@ -1,0 +1,102 @@
+{
+  "run_id": "B-scored-1",
+  "condition": "B",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    },
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1,
+      "note": "Called via Failed() closure inside AD_CalcOutput (line 2223); pure subroutine at NWTC_Base.f90:92"
+    },
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 2,
+      "note": "Called repeatedly inside RotCalcOutput (lines 2271, 2278, 2286, 2288, 2296, 2306, 2312, 2318, 2324), invoked by AD_CalcOutput at line 2189"
+    },
+    {
+      "routine": "NWTC_Init",
+      "file": "modules/nwtc-library/src/NWTC_Library.f90",
+      "call_depth": 2,
+      "note": "Called inside AD_Init at line 286; defined at NWTC_Library.f90:97"
+    },
+    {
+      "routine": "DispNVD",
+      "file": "modules/nwtc-library/src/NWTC_IO.f90",
+      "call_depth": 2,
+      "note": "Called inside AD_Init at line 290 via generic interface; overloads DispNVD1/DispNVD2 at NWTC_IO.f90:1716 and 1741"
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "MeshType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 102
+    },
+    {
+      "type_name": "MeshMapType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Mapping.f90",
+      "approx_line": 67
+    },
+    {
+      "type_name": "ProgDesc",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 71
+    },
+    {
+      "type_name": "OutParmType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 90
+    },
+    {
+      "type_name": "FileInfoType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 98
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/openfast-library/src/FAST_Subs.f90",
+      "line_range": "700-726",
+      "change": "Populate Init%InData_AD%rotors(iRot)%BladeLoadCorrFactor from p_FAST before the AD_Init call at line 716. p_FAST receives the value from the primary FAST input file parser."
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Registry.txt",
+      "line_range": "308-360",
+      "change": "Add 'typedef ^ RotParameterType ReKi BladeLoadCorrFactor - - - \"Blade-element load correction factor\" -' inside the RotParameterType block; regenerate AeroDyn_Types.f90 afterwards."
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "348-425",
+      "change": "After Registry regeneration RotParameterType gains BladeLoadCorrFactor (ReKi). If editing manually, insert the scalar field declaration inside TYPE RotParameterType at approximately line 390."
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "234-651",
+      "change": "Inside AD_Init, assign p%rotors(iR)%BladeLoadCorrFactor from parsed input file data for each rotor (near lines 400-500 where other RotParameterType scalars are populated)."
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2330",
+      "change": "Inside RotCalcOutput, after SetOutputsFromBEMT transfers blade loads to y (line 2280), multiply y%BladeLoad(k)%Force and %Moment arrays by p%BladeLoadCorrFactor over all blades k."
+    },
+    {
+      "file": "modules/aerodyn/src/BEMT.f90",
+      "line_range": "1271-1457",
+      "change": "Optional deeper injection: extend BEMT_ParameterType with BladeLoadCorrFactor via BEMT_Registry and apply correction inside BEMT_CalcOutput_Inductions (line 1458) at per-blade-element level for finer control."
+    }
+  ],
+  "tool_calls_total": 22
+}

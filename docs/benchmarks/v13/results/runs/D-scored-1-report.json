@@ -1,0 +1,128 @@
+{
+  "run_id": "D-scored-1",
+  "condition": "D",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    },
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "AllocAry",
+      "file": "modules/nwtc-library/src/NWTC_Library.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "NWTC_Init",
+      "file": "modules/nwtc-library/src/NWTC_Library.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "DispNVD",
+      "file": "modules/nwtc-library/src/NWTC_IO.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "WrScr",
+      "file": "modules/nwtc-library/src/NWTC_IO.f90",
+      "call_depth": 1
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "MeshType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 102
+    },
+    {
+      "type_name": "FileInfoType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 50
+    },
+    {
+      "type_name": "IntKi",
+      "declared_in": "modules/nwtc-library/src/SingPrec.f90",
+      "approx_line": 40
+    },
+    {
+      "type_name": "ReKi",
+      "declared_in": "modules/nwtc-library/src/SingPrec.f90",
+      "approx_line": 50
+    },
+    {
+      "type_name": "DbKi",
+      "declared_in": "modules/nwtc-library/src/SingPrec.f90",
+      "approx_line": 60
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/openfast-library/src/FAST_Funcs.f90",
+      "line_range": "435-470",
+      "change": "FAST_UpdateStates: Add BladeLoadCorrFactor parameter to AD_UpdateStates call signature and pass through ModData or as separate parameter"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Funcs.f90",
+      "line_range": "722-760",
+      "change": "FAST_CalcOutput: Add BladeLoadCorrFactor parameter to AD_CalcOutput call signature and pass through ModData or as separate parameter"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "1830-1850",
+      "change": "AD_UpdateStates signature: Add REAL scalar parameter BladeLoadCorrFactor to subroutine arguments"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "1887-1898",
+      "change": "SetInputs call in AD_UpdateStates loop: Pass BladeLoadCorrFactor parameter to SetInputs routine"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2148-2170",
+      "change": "AD_CalcOutput signature: Add REAL scalar parameter BladeLoadCorrFactor to subroutine arguments"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2188-2192",
+      "change": "RotCalcOutput call in AD_CalcOutput: Pass BladeLoadCorrFactor parameter through to rotor-level calculation"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2250",
+      "change": "RotCalcOutput signature: Add REAL scalar parameter BladeLoadCorrFactor to subroutine arguments"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2270-2280",
+      "change": "SetInputs call in RotCalcOutput: Pass BladeLoadCorrFactor to SetInputs for blade element load scaling"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2277-2278",
+      "change": "BEMT_CalcOutput call: Pass BladeLoadCorrFactor through to BEMT module for blade load calculations"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "1-50",
+      "change": "AeroDyn_ParameterType definition: Add REAL(ReKi) BladeLoadCorrFactor field to store correction factor during initialization"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Types.f90",
+      "line_range": "1-100",
+      "change": "FAST_TurbineType or AD-related parameter structure: Add BladeLoadCorrFactor field to enable passing from FAST glue code to AeroDyn"
+    }
+  ],
+  "tool_calls_total": 27
+}

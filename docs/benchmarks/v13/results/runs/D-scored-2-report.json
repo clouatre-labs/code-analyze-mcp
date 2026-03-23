@@ -1,0 +1,98 @@
+{
+  "run_id": "D-scored-2",
+  "condition": "D",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    },
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "AllocAry",
+      "file": "modules/nwtc-library/src/NWTC_Library_IncSubs.f90",
+      "call_depth": 1
+    },
+    {
+      "routine": "MeshCopy",
+      "file": "modules/nwtc-library/src/ModMesh.f90",
+      "call_depth": 2
+    },
+    {
+      "routine": "Num2LStr",
+      "file": "modules/nwtc-library/src/NWTC_Str.f90",
+      "call_depth": 1
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "MeshType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 102
+    },
+    {
+      "type_name": "OutParmType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 90
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/openfast-library/src/FAST_Funcs.f90",
+      "line_range": "435-474",
+      "change": "Add BladeLoadCorrFactor parameter passing in FAST_UpdateStates case (Module_AD) before calling AD_UpdateStates at line 465"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Funcs.f90",
+      "line_range": "722-760",
+      "change": "Add BladeLoadCorrFactor parameter passing in FAST_CalcOutput case (Module_AD) before calling AD_CalcOutput at line 754"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "1830-1942",
+      "change": "Add BladeLoadCorrFactor parameter to AD_UpdateStates subroutine signature and thread through to SetInputs and BEMT_UpdateStates calls"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2148-2226",
+      "change": "Add BladeLoadCorrFactor parameter to AD_CalcOutput subroutine signature and thread through to RotCalcOutput call at line 2189"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2336",
+      "change": "Add BladeLoadCorrFactor parameter to RotCalcOutput subroutine signature and thread through to BEMT_CalcOutput call at line 2277"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "428-450",
+      "change": "Add REAL(ReKi) :: BladeLoadCorrFactor field to AD_ParameterType derived type definition"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "200-300",
+      "change": "Add BladeLoadCorrFactor to RotParameterType or relevant rotor-level parameter types"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_IO.f90",
+      "line_range": "0-0",
+      "change": "Add input file parsing for BladeLoadCorrFactor parameter from AeroDyn input file"
+    },
+    {
+      "file": "modules/aerodyn/src/BEMT.f90",
+      "line_range": "0-0",
+      "change": "Add BladeLoadCorrFactor parameter to BEMT_CalcOutput and BEMT_UpdateStates interfaces; apply correction in blade element load calculations"
+    }
+  ],
+  "tool_calls_total": 27
+}

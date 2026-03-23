@@ -1,0 +1,129 @@
+{
+  "run_id": "A-scored-1",
+  "condition": "A",
+  "aerodyn_entry_points": [
+    {
+      "subroutine": "AD_CalcOutput",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 2148
+    },
+    {
+      "subroutine": "AD_UpdateStates",
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line": 1830
+    }
+  ],
+  "nwtc_callees": [
+    {
+      "routine": "SetErrStat",
+      "file": "modules/nwtc-library/src/NWTC_Base.f90",
+      "call_depth": 2,
+      "note": "Defined at line 92; called by contained sub Failed (line 2222 in AD_CalcOutput), by RotCalcOutput (line 2228), and by FVW_CalcOutput"
+    },
+    {
+      "routine": "num2lstr",
+      "file": "modules/nwtc-library/src/NWTC_IO.f90",
+      "call_depth": 2,
+      "note": "Called by FVW_CalcOutput, which is a depth-1 callee of AD_CalcOutput"
+    },
+    {
+      "routine": "WrScr",
+      "file": "modules/nwtc-library/src/NWTC_IO.f90",
+      "call_depth": 2,
+      "note": "Called by FVW_CalcOutput, which is a depth-1 callee of AD_CalcOutput"
+    }
+  ],
+  "nwtc_types_used": [
+    {
+      "type_name": "MeshType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 150
+    },
+    {
+      "type_name": "ElemRecType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 86
+    },
+    {
+      "type_name": "ElemTabType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 94
+    },
+    {
+      "type_name": "ElemListType",
+      "declared_in": "modules/nwtc-library/src/ModMesh_Types.f90",
+      "approx_line": 99
+    },
+    {
+      "type_name": "ProgDesc",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 190,
+      "note": "NWTC_Library_CopyProgDesc at line 221 implies TYPE defined ~line 190"
+    },
+    {
+      "type_name": "OutParmType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 355,
+      "note": "NWTC_Library_CopyOutParmType at line 371 implies TYPE defined ~line 355"
+    },
+    {
+      "type_name": "FileInfoType",
+      "declared_in": "modules/nwtc-library/src/NWTC_Library_Types.f90",
+      "approx_line": 400,
+      "note": "NWTC_Library_CopyFileInfoType at line 418 implies TYPE defined ~line 400"
+    },
+    {
+      "type_name": "DLL_Type",
+      "declared_in": "modules/nwtc-library/src/NWTC_Base.f90",
+      "approx_line": 82
+    }
+  ],
+  "integration_map": [
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Registry.txt",
+      "line_range": "1-531",
+      "change": "Declare BladeLoadCorrFactor as a ReKi scalar in the AD_ParameterType section so the Registry code-generator emits the new field in AD_ParameterType"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_Types.f90",
+      "line_range": "1-7389",
+      "change": "Regenerated file: after Registry update, re-run the Registry tool so AD_ParameterType gains the BladeLoadCorrFactor field; do not hand-edit"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn_IO.f90",
+      "line_range": "1-2740",
+      "change": "Add BladeLoadCorrFactor keyword in ReadPrimaryFile / input-parsing routines so the parameter is read from AeroDyn's own input deck"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "1447-1584",
+      "change": "SetParameters: assign p%BladeLoadCorrFactor from parsed InputFileData; add validation in ValidateInputData (line 4305)"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "4068-4147",
+      "change": "SetOutputsFromBEMT: preferred injection point -- multiply blade-element force/moment values by p%BladeLoadCorrFactor when transferring BEMT results to the blade mesh, keeping RotCalcOutput clean"
+    },
+    {
+      "file": "modules/aerodyn/src/AeroDyn.f90",
+      "line_range": "2228-2337",
+      "change": "RotCalcOutput: alternative injection point -- apply p%BladeLoadCorrFactor to y%BladeLoad mesh after SetOutputsFromBEMT returns; choose exactly one of this or the SetOutputsFromBEMT site to avoid double-application"
+    },
+    {
+      "file": "modules/aerodyn/src/BEMT.f90",
+      "line_range": "1271-1415",
+      "change": "BEMT_CalcOutput (deepest blade-element site): if the correction must influence induction or aerodynamic coefficients before output assembly, pass BladeLoadCorrFactor into BEMT_ParameterType and apply it here; requires parallel Registry/Types changes for BEMT"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Funcs.f90",
+      "line_range": "722-870",
+      "change": "FAST_CalcOutput: no structural changes required if BladeLoadCorrFactor stays within AD_ParameterType (opaque to the glue layer); only modify if a FAST-level override mechanism is needed"
+    },
+    {
+      "file": "modules/openfast-library/src/FAST_Subs.f90",
+      "line_range": "107-1562",
+      "change": "FAST_InitializeAll: passes AeroDyn InitInput to AD_Init; add BladeLoadCorrFactor to that structure only if the parameter must be settable from the FAST primary input file rather than AeroDyn's own input deck"
+    }
+  ],
+  "tool_calls_total": 18
+}
