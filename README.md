@@ -17,7 +17,7 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Benchmarks
 
-Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Claude Code against the Django (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
+Benchmarked on a Django auth migration task (4 conditions, 8 scored runs) on Claude Code against the [Django](https://github.com/django/django) (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
 
 | Mode | Sonnet 4.6 | Haiku 4.5 |
 |---|---|---|
