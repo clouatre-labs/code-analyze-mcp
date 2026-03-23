@@ -29,9 +29,9 @@ Benchmarked on an OpenFAST AeroDyn integration audit task (4 conditions, 2 score
 
 | Mode | Sonnet 4.6 | Haiku 4.5 |
 |---|---|---|
-| MCP | 9/9 score, 472k tokens, $1.65 | 7/9 score, 687k tokens, $0.72 |
-| Native | 8.5/9 score, 877k tokens, $2.85 | 7/9 score, 2162k tokens, $2.21 |
-| **Savings** | **+0.5 score, 46% fewer tokens, 42% less cost** | **equal score, 68% fewer tokens, 68% less cost, 3.8x faster** |
+| MCP | 472k tokens, $1.65 | 687k tokens, $0.72 |
+| Native | 877k tokens, $2.85 | 2162k tokens, $2.21 |
+| **Savings** | **46% fewer tokens, 42% less cost** | **68% fewer tokens, 68% less cost, 3.8x faster** |
 
 ## Overview
 
