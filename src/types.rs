@@ -63,6 +63,18 @@ pub struct AnalyzeDirectoryParams {
     pub output_control: OutputControlParams,
 }
 
+/// Output section selector for analyze_file fields projection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalyzeFileField {
+    /// Include function definitions with signatures, types, and line ranges.
+    Functions,
+    /// Include class and method definitions with inheritance and fields.
+    Classes,
+    /// Include import statements.
+    Imports,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyzeFileParams {
     /// File path to analyze
@@ -77,7 +89,7 @@ pub struct AnalyzeFileParams {
     /// Omitting this field returns all sections (current behavior).
     /// Ignored when summary=true (summary takes precedence).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fields: Option<Vec<String>>,
+    pub fields: Option<Vec<AnalyzeFileField>>,
 
     #[serde(flatten)]
     pub pagination: PaginationParams,

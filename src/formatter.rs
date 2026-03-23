@@ -8,7 +8,9 @@ use crate::graph::InternalCallChain;
 use crate::pagination::PaginationMode;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
-use crate::types::{ClassInfo, FileInfo, FunctionInfo, ImportInfo, ModuleInfo, SemanticAnalysis};
+use crate::types::{
+    AnalyzeFileField, ClassInfo, FileInfo, FunctionInfo, ImportInfo, ModuleInfo, SemanticAnalysis,
+};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -1222,7 +1224,7 @@ pub fn format_file_details_paginated(
     line_count: usize,
     offset: usize,
     verbose: bool,
-    fields: Option<&[String]>,
+    fields: Option<&[AnalyzeFileField]>,
 ) -> String {
     let mut output = String::new();
 
@@ -1242,9 +1244,10 @@ pub fn format_file_details_paginated(
 
     // Compute field visibility flags. Empty slice behaves same as None (show all).
     let show_all = fields.is_none_or(|f| f.is_empty());
-    let show_classes = show_all || fields.is_some_and(|f| f.iter().any(|s| s == "classes"));
-    let show_imports = show_all || fields.is_some_and(|f| f.iter().any(|s| s == "imports"));
-    let show_functions = show_all || fields.is_some_and(|f| f.iter().any(|s| s == "functions"));
+    let show_classes = show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Classes));
+    let show_imports = show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Imports));
+    let show_functions =
+        show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Functions));
 
     // Classes section on first page for both verbose and compact modes
     if show_classes && offset == 0 && !semantic.classes.is_empty() {
@@ -1254,8 +1257,8 @@ pub fn format_file_details_paginated(
         ));
     }
 
-    // Imports section only on first page in verbose mode
-    if show_imports && offset == 0 && verbose {
+    // Imports section only on first page in verbose mode, or when explicitly listed in fields
+    if show_imports && offset == 0 && (verbose || !show_all) {
         output.push_str(&format_imports_section(&semantic.imports));
     }
 
@@ -2242,7 +2245,7 @@ mod tests {
             impl_traits: vec![],
         };
 
-        let fields = Some(vec!["functions".to_string()]);
+        let fields = Some(vec![AnalyzeFileField::Functions]);
         let output = format_file_details_paginated(
             &functions,
             functions.len(),
@@ -2300,7 +2303,7 @@ mod tests {
             impl_traits: vec![],
         };
 
-        let fields = Some(vec!["classes".to_string()]);
+        let fields = Some(vec![AnalyzeFileField::Classes]);
         let output = format_file_details_paginated(
             &functions,
             functions.len(),
@@ -2361,7 +2364,7 @@ mod tests {
             impl_traits: vec![],
         };
 
-        let fields = Some(vec!["imports".to_string()]);
+        let fields = Some(vec![AnalyzeFileField::Imports]);
         let output = format_file_details_paginated(
             &functions,
             functions.len(),
@@ -2422,7 +2425,7 @@ mod tests {
             impl_traits: vec![],
         };
 
-        let fields = Some(vec!["imports".to_string()]);
+        let fields = Some(vec![AnalyzeFileField::Imports]);
         let output = format_file_details_paginated(
             &functions,
             functions.len(),
@@ -2437,8 +2440,8 @@ mod tests {
         assert!(output.contains("FILE: test.rs"), "FILE header missing");
         assert!(!output.contains("C:"), "Classes section should not appear");
         assert!(
-            !output.contains("I:"),
-            "Imports section should not appear (verbose=false)"
+            output.contains("I:"),
+            "Imports section should appear (explicitly listed in fields)"
         );
         assert!(
             !output.contains("F:"),
@@ -2553,9 +2556,9 @@ mod tests {
             impl_traits: vec![],
         };
 
-        let fields = Some(vec!["classes".to_string(), "imports".to_string()]);
+        let fields = Some(vec![AnalyzeFileField::Classes, AnalyzeFileField::Imports]);
         let output = format_file_details_paginated(
-            &[],
+            &functions,
             functions.len(),
             &semantic,
             "test.rs",
@@ -2566,11 +2569,15 @@ mod tests {
         );
 
         assert!(output.contains("FILE: test.rs"), "FILE header missing");
+        assert!(
+            output.contains("1-1/1F"),
+            "FILE header should contain valid range (1-1/1F)"
+        );
         assert!(output.contains("C:"), "Classes section missing");
         assert!(output.contains("I:"), "Imports section missing");
         assert!(
             !output.contains("F:"),
-            "Functions section should not appear (empty page)"
+            "Functions section should not appear (filtered by fields)"
         );
     }
 }
