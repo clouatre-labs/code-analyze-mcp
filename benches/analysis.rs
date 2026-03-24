@@ -63,6 +63,7 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
                 progress,
                 ct,
                 false,
+                None,
             )
         });
     });
