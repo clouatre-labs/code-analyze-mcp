@@ -26,8 +26,6 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9
-        with:
-          toolchain: stable
 
       - name: Rust cache
         uses: Swatinem/rust-cache@f51f967e158417aafa338a1e46ab22095f07aa01
