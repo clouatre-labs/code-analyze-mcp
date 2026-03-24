@@ -40,6 +40,6 @@ This document maps every repo-level artifact to its purpose and the rationale be
 3. **CI:** Copy `ci.yml`; update path filters. Set `CI Result` as the sole required status check. Copy `.commitlintrc.yml`.
 4. **Release:** Copy `build-and-attest.yml` and `release.yml`; update distribution channel config.
 5. **Cargo profiles:** Copy the `[profile.release]` and `[profile.ci]` blocks verbatim.
-7. **Docs:** Add `ARCHITECTURE.md` for the target repo; link this document and the orchestration guide from README.
+6. **Docs:** Add `ARCHITECTURE.md` for the target repo; link this document and the orchestration guide from README.
 
 
