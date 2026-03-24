@@ -1,0 +1,13 @@
+{
+  "run_id": "A-scored-3",
+  "condition": "A",
+  "model": "global.anthropic.claude-sonnet-4-6",
+  "total_cost_usd": 0.34512,
+  "num_turns": 7,
+  "input_tokens": 97595,
+  "output_tokens": 3489,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "duration_ms": 63566,
+  "duration_api_ms": 63247
+}

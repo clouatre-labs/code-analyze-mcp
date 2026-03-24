@@ -1,0 +1,10 @@
+{
+  "run_id": "C-scored-3",
+  "condition": "C",
+  "model": "claude-haiku-4-5",
+  "total_cost_usd": 0.35524200000000006,
+  "input_tokens": 342907,
+  "output_tokens": 2467,
+  "num_turns": 7,
+  "tool_calls_total": 5
+}

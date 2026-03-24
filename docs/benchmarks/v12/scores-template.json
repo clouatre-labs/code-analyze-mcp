@@ -201,6 +201,102 @@
         "cost_usd": 0.7987029999999999,
         "num_turns": 29
       }
+    },
+    {
+      "run_id": "A-scored-3",
+      "condition": "A",
+      "model": "claude-sonnet-4-6",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": 3,
+        "cross_module_tracing": 3,
+        "approach_quality": 3,
+        "total": 9
+      },
+      "notes": "",
+      "tool_calls_total": 4,
+      "telemetry": {
+        "wall_time_ms": 63566,
+        "api_time_ms": 63247,
+        "input_tokens": 97595,
+        "output_tokens": 3489,
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cost_usd": 0.34512,
+        "num_turns": 7
+      }
+    },
+    {
+      "run_id": "A-scored-4",
+      "condition": "A",
+      "model": "claude-sonnet-4-6",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": 3,
+        "cross_module_tracing": 3,
+        "approach_quality": 3,
+        "total": 9
+      },
+      "notes": "",
+      "tool_calls_total": 6,
+      "telemetry": {
+        "wall_time_ms": 76537,
+        "api_time_ms": 0,
+        "input_tokens": 126336,
+        "output_tokens": 4009,
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cost_usd": 0.439143,
+        "num_turns": 8
+      }
+    },
+    {
+      "run_id": "C-scored-3",
+      "condition": "C",
+      "model": "claude-haiku-4-5",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": 2,
+        "cross_module_tracing": 2,
+        "approach_quality": 2,
+        "total": 6
+      },
+      "notes": "D1: missing backends.py and checks.py as integration points. D2: backends.py not traced, forms/admin paths not followed; only 1-2 paths with file:line. D3: strategies present for all 3 fields but secondary impacts (forms, admin) not detailed; 3-4 files cited but forms/admin missing.",
+      "tool_calls_total": 5,
+      "telemetry": {
+        "wall_time_ms": 0,
+        "api_time_ms": 0,
+        "input_tokens": 342907,
+        "output_tokens": 2467,
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cost_usd": 0.355242,
+        "num_turns": 7
+      }
+    },
+    {
+      "run_id": "C-scored-4",
+      "condition": "C",
+      "model": "claude-haiku-4-5",
+      "tool_set": "mcp",
+      "scores": {
+        "structural_accuracy": 3,
+        "cross_module_tracing": 3,
+        "approach_quality": 3,
+        "total": 9
+      },
+      "notes": "",
+      "tool_calls_total": 7,
+      "telemetry": {
+        "wall_time_ms": 59647,
+        "api_time_ms": 59289,
+        "input_tokens": 469547,
+        "output_tokens": 3791,
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cost_usd": 0.488502,
+        "num_turns": 10
+      }
     }
   ]
 }

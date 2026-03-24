@@ -1,0 +1,9 @@
+{
+  "run_id": "A-scored-4",
+  "total_cost_usd": 0.43914299999999995,
+  "input_tokens": 126336,
+  "output_tokens": 4009,
+  "num_turns": 8,
+  "duration_ms": 76537,
+  "model": "global.anthropic.claude-sonnet-4-6"
+}
