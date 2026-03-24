@@ -175,7 +175,7 @@ impl CallGraph {
         callee.to_string()
     }
 
-    /// Pick the best definition from a list based on same-file preference, type matching, and line proximity.
+    /// Build a call graph from semantic analysis results and trait implementation info.
     #[instrument(skip_all)]
     pub fn build_from_results(
         results: Vec<(PathBuf, SemanticAnalysis)>,

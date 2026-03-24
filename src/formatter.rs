@@ -215,7 +215,6 @@ pub fn format_structure(
     // PATH block - tree structure (production and test files in single pass)
     output.push_str("PATH [LOC, FUNCTIONS, CLASSES]\n");
 
-    let mut prod_buf = String::new();
     let mut test_buf = String::new();
 
     for entry in entries {
@@ -246,25 +245,23 @@ pub fn format_structure(
                     if analysis.is_test {
                         test_buf.push_str(&line);
                     } else {
-                        prod_buf.push_str(&line);
+                        output.push_str(&line);
                     }
                 } else {
                     let line = format!("{}{}\n", indent, name);
                     if analysis.is_test {
                         test_buf.push_str(&line);
                     } else {
-                        prod_buf.push_str(&line);
+                        output.push_str(&line);
                     }
                 }
             }
             // Skip files not in analysis_map (binary/unreadable files)
         } else {
             let line = format!("{}{}/\n", indent, name);
-            prod_buf.push_str(&line);
+            output.push_str(&line);
         }
     }
-
-    output.push_str(&prod_buf);
 
     // TEST FILES section (if any test files exist)
     if !test_buf.is_empty() {
