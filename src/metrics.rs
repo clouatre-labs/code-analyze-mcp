@@ -106,6 +106,7 @@ impl MetricsWriter {
                         let _ = file.write_all(json.as_bytes()).await;
                     }
                 }
+                let _ = file.flush().await;
             }
         }
     }
