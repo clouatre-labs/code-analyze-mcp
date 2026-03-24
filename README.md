@@ -17,13 +17,13 @@ Standalone MCP server for code structure analysis using tree-sitter.
 
 ## Benchmarks
 
-Auth migration task on Claude Code against [Django](https://github.com/django/django) (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md).
+Auth migration task on Claude Code against [Django](https://github.com/django/django) (Python) source tree. [Full methodology](docs/benchmarks/v12/methodology.md) · [Results](docs/benchmarks/v12/results/). Numbers reflect runs 3-4 (current build baseline, n=2 per condition).
 
 | Mode | Sonnet 4.6 | Haiku 4.5 |
 |---|---|---|
-| MCP | 145k tokens, $0.51 | 399k tokens, $0.42 |
-| Native | 276k tokens, $0.94 | 473k tokens, $0.53 |
-| **Savings** | **47% fewer tokens, 46% cheaper** | **16% fewer tokens, 21% cheaper** |
+| MCP | 112k tokens, $0.39 | 406k tokens, $0.42 |
+| Native | 276k tokens, $0.95 | 473k tokens, $0.53 |
+| **Savings** | **59% fewer tokens, 59% cheaper** | **14% fewer tokens, 21% cheaper** |
 
 AeroDyn integration audit task on Claude Code against [OpenFAST](https://github.com/OpenFAST/openfast) (Fortran) source tree. [Full methodology](docs/benchmarks/v13/methodology.md).
 

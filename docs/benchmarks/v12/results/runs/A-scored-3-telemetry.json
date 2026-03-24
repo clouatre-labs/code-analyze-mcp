@@ -1,0 +1,13 @@
+{
+  "run_id": "A-scored-3",
+  "condition": "A",
+  "model": "claude-sonnet-4-6",
+  "wall_time_ms": 63566,
+  "api_time_ms": 63247,
+  "num_turns": 7,
+  "cost_usd": 0.34512,
+  "input_tokens": 97595,
+  "output_tokens": 3489,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 0
+}

@@ -1,0 +1,14 @@
+{
+  "run_id": "C-scored-4",
+  "condition": "C",
+  "model": "claude-haiku-4-5",
+  "wall_time_ms": 59647,
+  "api_time_ms": 59289,
+  "num_turns": 10,
+  "cost_usd": 0.48850200000000005,
+  "input_tokens": 469547,
+  "output_tokens": 3791,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 0,
+  "tool_calls_total": 7
+}

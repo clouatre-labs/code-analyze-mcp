@@ -1,0 +1,55 @@
+{
+  "run_id": "C-scored-3",
+  "condition": "C",
+  "auth_module_map": [
+    {
+      "file": "django/contrib/auth/base_user.py",
+      "role": "Defines AbstractBaseUser (lines 43-164) with password and last_login fields; BaseUserManager (lines 21-40) provides user creation utilities"
+    },
+    {
+      "file": "django/contrib/auth/models.py",
+      "role": "Defines AbstractUser (lines 446-514) extending AbstractBaseUser + PermissionsMixin; defines PermissionsMixin (lines 317-443) with groups and user_permissions M2M fields"
+    },
+    {
+      "file": "django/contrib/auth/models.py",
+      "role": "Defines User concrete model (lines 517-526) as default Django user; UserManager (lines 140-239) handles user creation with username validation"
+    },
+    {
+      "file": "django/contrib/auth/migrations/0001_initial.py",
+      "role": "Initial migration defining User model schema with all fields"
+    },
+    {
+      "file": "django/contrib/auth/validators.py",
+      "role": "Defines UnicodeUsernameValidator used in AbstractUser.username field"
+    }
+  ],
+  "migration_trace": [
+    "1. Start with AbstractBaseUser (base_user.py:43-164): password (CharField, line 44), last_login (DateTimeField, line 45)",
+    "2. AbstractUser extends AbstractBaseUser + PermissionsMixin (models.py:446); adds username (line 454-457), first_name (line 468), last_name (line 469), email (line 470), is_staff (line 471), is_active (line 476), date_joined (line 484)",
+    "3. PermissionsMixin (models.py:317-443) adds groups M2M (line 331) and user_permissions M2M (line 342)",
+    "4. User concrete model (models.py:517-526) uses UserManager (models.py:140-239) for creation",
+    "5. Initial migration (migrations/0001_initial.py) captures all fields in database schema",
+    "6. Custom app must add 3 fields not in AbstractUser/AbstractBaseUser: profile_tier, external_sso_id, last_sync_at"
+  ],
+  "unmappable_fields": [
+    {
+      "field": "profile_tier",
+      "reason": "No CharField with choices equivalent exists in AbstractUser or AbstractBaseUser. AbstractUser provides basic user attributes (username, email, first_name, last_name) and auth state (is_staff, is_active, date_joined) but no application-specific tier/subscription fields.",
+      "migration_strategy": "Add profile_tier as custom field on custom User model extending AbstractBaseUser: `profile_tier = models.CharField(max_length=20, choices=[('free', 'Free'), ('pro', 'Pro'), ('enterprise', 'Enterprise')], default='free')`. This field will coexist with Django auth fields without conflict.",
+      "evidence": "AbstractUser field definitions (models.py:454-484) show only standard auth fields; no field with choices pattern exists for subscription/tier management"
+    },
+    {
+      "field": "external_sso_id",
+      "reason": "AbstractBaseUser and AbstractUser have no unique nullable CharField for external system identifiers. AbstractBaseUser only tracks password/last_login; AbstractUser adds username (which has unique constraint by default) but it's reserved for Django auth. External SSO IDs require separate tracking.",
+      "migration_strategy": "Add external_sso_id as custom field on custom User model: `external_sso_id = models.CharField(max_length=255, unique=True, null=True, blank=True)`. Document that this field is managed separately from AbstractUser.username to enable SSO-based login via authentication backend.",
+      "evidence": "AbstractUser defines username field (models.py:454-457) with UnicodeUsernameValidator (validators.py reference); no SSO identifier field. UserManager._create_user_object (models.py:143-156) normalizes username but has no SSO field handling."
+    },
+    {
+      "field": "last_sync_at",
+      "reason": "AbstractBaseUser provides last_login (base_user.py:45); AbstractUser adds date_joined (models.py:484). Neither tracks external system sync timestamps. last_login records auth events; date_joined records account creation; neither fits an external sync timestamp.",
+      "migration_strategy": "Add last_sync_at as custom field on custom User model: `last_sync_at = models.DateTimeField(null=True, blank=True)`. This field will be updated independently via custom signals or management commands when syncing with external SSO provider; it does not conflict with Django's auth_user.last_login.",
+      "evidence": "base_user.py:45 defines last_login as DateTimeField; models.py:484 defines date_joined. Neither serves sync tracking purpose. update_last_login signal (models.py:18-24) updates only last_login on authentication, not sync time."
+    }
+  ],
+  "tool_calls_total": 5
+}
