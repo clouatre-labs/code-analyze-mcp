@@ -17,6 +17,7 @@ cargo test
 cargo fmt --check
 cargo clippy -- -D warnings
 cargo test
+cargo deny check advisories licenses
 ```
 
 ## Commit Message Format
@@ -74,7 +75,8 @@ The `-S` flag GPG-signs the commit (required by branch protection).
 
 - [ ] Tests pass (`cargo test`)
 - [ ] No clippy warnings (`cargo clippy -- -D warnings`)
-- [ ] Code formatted (`cargo fmt`)
+- [ ] Code formatted (`cargo fmt --check`)
+- [ ] Dependency audit clean (`cargo deny check advisories licenses`)
 - [ ] Commits GPG-signed and signed off (`git commit -S --signoff`)
 - [ ] Clear PR description
 

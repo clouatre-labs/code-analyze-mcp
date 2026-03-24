@@ -213,7 +213,9 @@ Extracts functions, classes, and imports from a single file.
 
 **Required:** `path` *(string)* -- file to analyze
 
-**Additional optional:** `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
+**Additional optional:**
+- `ast_recursion_limit` *(integer, optional)* -- tree-sitter AST traversal depth cap; leave unset for unlimited depth. Minimum value is 1; 0 is treated as unset.
+- `fields` *(array of strings, optional)* -- limit output to specific sections. Valid values: `"functions"`, `"classes"`, `"imports"`. Omit to return all sections. The FILE header (path, line count, section counts) is always emitted regardless. Ignored when `summary=true`. When `"imports"` is listed explicitly, the `I:` section is rendered regardless of the `verbose` flag.
 
 **Example output (default, page 1 of 2):**
 
@@ -296,7 +298,8 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
 **Additional optional:**
 - `follow_depth` *(integer, default 1)* -- call graph traversal depth
 - `max_depth` *(integer, default unlimited)* -- directory recursion limit
-- `ast_recursion_limit` *(integer, default 256)* -- tree-sitter recursion cap for stack safety
+- `ast_recursion_limit` *(integer, optional)* -- tree-sitter AST traversal depth cap; leave unset for unlimited depth. Minimum value is 1; 0 is treated as unset.
+- `impl_only` *(boolean, optional)* -- when true, restrict callers to only those originating from an `impl Trait for Type` block (Rust only). Returns `INVALID_PARAMS` if the path contains no `.rs` files. Emits a `FILTER:` header showing how many callers were retained out of total.
 - `match_mode` *(string, default exact)* -- Symbol lookup strategy:
   - `exact`: Case-sensitive exact match (default)
   - `insensitive`: Case-insensitive exact match

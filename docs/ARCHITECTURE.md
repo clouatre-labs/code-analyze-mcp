@@ -26,7 +26,7 @@ For the reasoning behind these goals, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md).
 | `parser` | `src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
 | `formatter` | `src/formatter.rs` | Output formatting for all four tools |
 | `traversal` | `src/traversal.rs` | Directory walking with .gitignore support via ignore crate |
-| `types` | `src/types.rs` | Shared data structures (AnalyzeParams, AnalysisResult, etc.) |
+| `types` | `src/types.rs` | Shared data structures (`AnalyzeDirectoryParams`, `AnalyzeFileParams`, `AnalyzeModuleParams`, `AnalyzeSymbolParams`, `AnalysisResult`, etc.) |
 | `lang` | `src/lang.rs` | Extension-to-language mapping |
 | `languages/mod` | `src/languages/mod.rs` | LanguageInfo registry and handler function types |
 | `languages/rust` | `src/languages/rust.rs` | Rust-specific queries and semantic handlers |
@@ -37,6 +37,7 @@ For the reasoning behind these goals, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md).
 | `test_detection` | `src/test_detection.rs` | Test file detection by path heuristics (directory and filename patterns) |
 | `pagination` | `src/pagination.rs` | Cursor-based pagination with CursorData and PaginationMode (Default, Callers, Callees) |
 | `graph` | `src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
+| `metrics` | `src/metrics.rs` | Metrics collection and daily-rotating JSONL emission; `MetricEvent`, `MetricsSender`, `MetricsWriter` |
 
 ## Data Flow
 
@@ -55,7 +56,7 @@ graph TD
     K --> L["format_file_details"]
     B4 --> R["Read File"]
     R --> S["analyze_module_file"]
-    S --> T["format_module"]
+    S --> T["format_module_info"]
     T --> Q["MCP Response"]
     B3 --> G["walk_directory"]
     G --> H["Build CallGraph BFS"]
@@ -101,7 +102,7 @@ graph TD
 Each language is registered in `languages/mod.rs` as a `LanguageInfo` with tree-sitter queries and optional handler functions:
 
 - Mandatory queries: `element_query`, `call_query`
-- Optional queries: `reference_query`, `import_query`, `impl_query`, `assignment_query`, `field_query`
+- Optional queries: `reference_query`, `import_query`, `impl_query`, `impl_trait_query`
 - Handler functions: `extract_function_name`, `find_method_for_receiver`, `find_receiver_type`, `extract_inheritance` (optional)
 
 Adding a language requires: a tree-sitter grammar crate, a language module with `ELEMENT_QUERY` and `CALL_QUERY`, registration in `languages/mod.rs`, and extension mappings in `lang.rs`. See CONTRIBUTING.md for a step-by-step guide.
