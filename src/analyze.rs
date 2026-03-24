@@ -166,7 +166,7 @@ pub fn analyze_directory_with_progress(
     );
 
     // Format output
-    let formatted = format_structure(&entries, &analysis_results, None, Some(root));
+    let formatted = format_structure(&entries, &analysis_results, None);
 
     Ok(AnalysisOutput {
         formatted,

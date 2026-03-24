@@ -105,6 +105,10 @@ fn world() {
     assert!(output.formatted.contains("PATH [LOC, FUNCTIONS, CLASSES]"));
     assert!(output.formatted.contains("lib.rs"));
     assert!(output.formatted.contains("2F")); // 2 functions
+    assert!(
+        !output.formatted.contains("TEST FILES"),
+        "TEST FILES header must be absent when no test files exist"
+    );
 }
 
 #[test]
@@ -1407,13 +1411,8 @@ fn test_summary_auto_detect_large_directory() {
     let output = analyze_directory(root, None).unwrap();
 
     // Generate summary
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        None,
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));
@@ -1447,13 +1446,8 @@ fn test_summary_explicit_on_small_directory() {
     let output = analyze_directory(root, None).unwrap();
 
     // Generate summary
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        None,
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));
@@ -1483,13 +1477,8 @@ fn test_summary_top_hint_shown() {
     fs::write(root.join("src/util.rs"), "pub fn helper() {}").unwrap();
 
     let output = analyze_directory(root, None).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        None,
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     assert!(summary.contains("top:"), "summary should contain top hint");
     assert!(
@@ -1507,13 +1496,8 @@ fn test_summary_top_hint_omitted_for_single_file() {
     fs::write(root.join("src/main.rs"), "fn main() {} fn helper() {}").unwrap();
 
     let output = analyze_directory(root, None).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        None,
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     assert!(
         !summary.contains("top:"),
@@ -1534,13 +1518,8 @@ fn test_format_summary_sibling_dir_prefix() {
     fs::write(src_extra.join("lib.rs"), "fn bar() {}").unwrap();
 
     let output = analyze_directory(root, None).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        None,
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // src/ should show exactly 1 file, not 2
     let src_line = summary
@@ -1885,6 +1864,36 @@ fn test_format_structure_partitions_test_files() {
     assert!(
         output.formatted.contains("main.rs"),
         "Production file should be listed in PATH section"
+    );
+}
+
+#[test]
+fn test_format_structure_test_only_section_present() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Arrange: Create only test files (no production files)
+    fs::create_dir(root.join("tests")).unwrap();
+    fs::write(root.join("tests/test_module.rs"), "fn test_helper() {}").unwrap();
+    fs::write(root.join("tests/test_utils.rs"), "fn test_utility() {}").unwrap();
+
+    // Act: Analyze directory
+    let output = analyze_directory(root, None).unwrap();
+
+    // Assert: TEST FILES header must appear when test files exist
+    assert!(
+        output.formatted.contains("TEST FILES"),
+        "TEST FILES header must appear when test files exist"
+    );
+
+    // Assert: Test files are listed in TEST FILES section
+    assert!(
+        output.formatted.contains("test_module.rs"),
+        "Test file should be listed in TEST FILES section"
+    );
+    assert!(
+        output.formatted.contains("test_utils.rs"),
+        "Test file should be listed in TEST FILES section"
     );
 }
 
@@ -3466,13 +3475,8 @@ fn test_summary_true_produces_summary_output_no_next_cursor() {
         std::fs::write(src.join(format!("file{i:03}.rs")), "fn f() {}").unwrap();
     }
     let output = analyze_directory(root, None).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        None,
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
     assert!(
         summary.contains("SUMMARY:"),
         "expected SUMMARY: in output but got:\n{summary}"
@@ -3492,13 +3496,8 @@ fn test_summary_sub_annotation_present_for_nested_dirs() {
     std::fs::write(root.join("core/handlers/base.rs"), "fn f() {}").unwrap();
     std::fs::write(root.join("core/management/cmd.rs"), "fn f() {}").unwrap();
     let output = analyze_directory(root, None).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        None,
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
     let core_line = summary
         .lines()
         .find(|l| l.contains("core/"))
@@ -3967,7 +3966,6 @@ fn test_format_summary_with_max_depth_annotation() {
         &output.entries,
         &output.files,
         Some(1),
-        Some(root),
         Some(&counts),
     );
 
@@ -3996,7 +3994,6 @@ fn test_format_summary_suggestion_uses_true_count() {
         &output.entries,
         &output.files,
         Some(1),
-        Some(root),
         Some(&counts),
     );
 
@@ -4017,13 +4014,8 @@ fn test_format_summary_max_depth_none_unchanged() {
 
     // Act: pass subtree_counts=None
     let output = analyze_directory(root, None).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        None,
-        Some(root),
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert: no annotated format
     assert!(
@@ -4042,13 +4034,8 @@ fn test_format_summary_max_depth_zero_unchanged() {
 
     // Act: max_depth=Some(0) with subtree_counts=None (zero is the unlimited sentinel)
     let output = analyze_directory(root, Some(0)).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
-        &output.entries,
-        &output.files,
-        Some(0),
-        Some(root),
-        None,
-    );
+    let summary =
+        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, Some(0), None);
 
     // Assert: no annotated format
     assert!(

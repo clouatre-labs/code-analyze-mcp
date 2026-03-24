@@ -713,7 +713,6 @@ impl CodeAnalyzer {
                 &output.entries,
                 &output.files,
                 params.max_depth,
-                Some(Path::new(&params.path)),
                 output.subtree_counts.as_deref(),
             );
         }
@@ -771,7 +770,8 @@ impl CodeAnalyzer {
         let mut final_text = output.formatted.clone();
         if !use_summary && let Some(cursor) = paginated.next_cursor {
             final_text.push('\n');
-            final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
+            final_text.push_str("NEXT_CURSOR: ");
+            final_text.push_str(&cursor);
         }
 
         let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
@@ -783,7 +783,7 @@ impl CodeAnalyzer {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_directory",
             duration_ms: _dur,
-            output_chars: final_text.chars().count(),
+            output_chars: final_text.len(),
             param_path_depth: crate::metrics::path_component_count(&_param_path),
             max_depth: _max_depth_val,
             result: "ok",
@@ -794,7 +794,7 @@ impl CodeAnalyzer {
         Ok(result)
     }
 
-    #[instrument(skip(self, context))]
+    #[instrument(skip(self, _context))]
     #[tool(
         name = "analyze_file",
         description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Generated code with deeply nested ASTs may exceed 50K chars; use summary=true to get counts only. Supports pagination for large files via cursor/page_size. Use summary=true for compact output. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py. The fields parameter limits output to specific sections. Valid values: \"functions\", \"classes\", \"imports\". The FILE header (path, line count, section counts) is always emitted. Omit fields to return all sections. When summary=true, fields is ignored. When fields explicitly lists \"imports\", the imports section is rendered regardless of the verbose flag; in all other cases imports require verbose=true.",
@@ -810,10 +810,9 @@ impl CodeAnalyzer {
     async fn analyze_file(
         &self,
         params: Parameters<AnalyzeFileParams>,
-        context: RequestContext<RoleServer>,
+        _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
-        let _ct = context.ct.clone();
         let _t_start = std::time::Instant::now();
         let _param_path = params.path.clone();
         let _seq = self
@@ -937,7 +936,8 @@ impl CodeAnalyzer {
         let mut final_text = formatted.clone();
         if !use_summary && let Some(ref cursor) = next_cursor {
             final_text.push('\n');
-            final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
+            final_text.push_str("NEXT_CURSOR: ");
+            final_text.push_str(cursor);
         }
 
         // Build the response output, sharing SemanticAnalysis from the Arc to avoid cloning it.
@@ -957,7 +957,7 @@ impl CodeAnalyzer {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_file",
             duration_ms: _dur,
-            output_chars: final_text.chars().count(),
+            output_chars: final_text.len(),
             param_path_depth: crate::metrics::path_component_count(&_param_path),
             max_depth: None,
             result: "ok",
@@ -1128,7 +1128,8 @@ impl CodeAnalyzer {
         let mut final_text = output.formatted.clone();
         if let Some(cursor) = callee_cursor {
             final_text.push('\n');
-            final_text.push_str(&format!("NEXT_CURSOR: {}", cursor));
+            final_text.push_str("NEXT_CURSOR: ");
+            final_text.push_str(&cursor);
         }
 
         let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
@@ -1140,7 +1141,7 @@ impl CodeAnalyzer {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_symbol",
             duration_ms: _dur,
-            output_chars: final_text.chars().count(),
+            output_chars: final_text.len(),
             param_path_depth: crate::metrics::path_component_count(&_param_path),
             max_depth: _max_depth_val,
             result: "ok",
@@ -1239,7 +1240,7 @@ impl CodeAnalyzer {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_module",
             duration_ms: _dur,
-            output_chars: text.chars().count(),
+            output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&_param_path),
             max_depth: None,
             result: "ok",
