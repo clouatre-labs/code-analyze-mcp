@@ -46,7 +46,7 @@ Files are named `metrics-YYYY-MM-DD.jsonl` and stored in the XDG data directory:
 
 The `MetricsWriter` checks the current UTC date on each drain iteration. When the date changes, it closes the current file handle and opens a new one.
 
-`cleanup_old_files()` is the first operation in `MetricsWriter::run()`, called asynchronously before the drain loop begins. It removes any `metrics-*.jsonl` file whose date suffix is more than 30 days in the past. Errors during cleanup are silently ignored.
+`cleanup_old_files()` is the first operation in `MetricsWriter::run()`, called asynchronously before the drain loop begins. It removes any `metrics-*.jsonl` file whose date suffix is more than 30 days in the past. Directory entry read errors are logged at `tracing::warn!` level; individual file deletion failures are ignored.
 
 ## Testability
 
