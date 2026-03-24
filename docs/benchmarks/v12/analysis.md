@@ -2,26 +2,26 @@
 
 ## Summary
 
-This analysis covers all 8 scored runs across four experimental conditions (A, B, C, D), each with n=2 replicates. All runs produced valid JSON outputs with structured scoring.
+This analysis covers 12 scored runs across four experimental conditions (A, B, C, D). Conditions A and C were extended with two additional replicates each (runs 3-4) to measure performance after significant server improvements. All runs produced valid JSON outputs with structured scoring.
 
 Conditions:
-- **A**: claude-sonnet-4-6, MCP tool set (n=2)
+- **A**: claude-sonnet-4-6, MCP tool set (n=4; runs 1-2 original, runs 3-4 re-run on current build)
 - **B**: claude-sonnet-4-6, native tool set (n=2)
-- **C**: claude-haiku-4-5, MCP tool set (n=2)
+- **C**: claude-haiku-4-5, MCP tool set (n=4; runs 1-2 original, runs 3-4 re-run on current build)
 - **D**: claude-haiku-4-5, native tool set (n=2, re-run with --json-schema fix applied)
 
 Condition D initially failed to produce valid JSON (0/2 outputs parseable). The runner was updated to enforce --json-schema at invocation, which eliminated prose-wrapping and produced 2/2 valid outputs.
 
 ## Quality Metrics
 
-Median total scores (0-9 scale) across all 8 runs:
+Median total scores across all runs per condition:
 
-| Condition | Model | Tool Set | Median Score | n |
-|-----------|-------|----------|--------------|---|
-| A | Sonnet | MCP | 9.0 | 2 |
-| B | Sonnet | Native | 8.5 | 2 |
-| C | Haiku | MCP | 8.0 | 2 |
-| D | Haiku | Native | 9.0 | 2 |
+| Condition | Model | Tool Set | n | Median Score |
+|-----------|-------|----------|---|--------------|
+| A | Sonnet | MCP | 4 | 9.0 |
+| B | Sonnet | Native | 2 | 8.5 |
+| C | Haiku | MCP | 4 | 8.0 |
+| D | Haiku | Native | 2 | 9.0 |
 
 All conditions achieved high quality. Conditions A and D both reached the maximum median of 9.0.
 
@@ -40,13 +40,13 @@ All conditions scored 3.0 on cross-module tracing and approach quality. Structur
 
 ## Reliability
 
-JSON validity rates (runs producing parseable JSON outputs / total runs per condition):
+JSON validity rates per condition (all runs):
 
 | Condition | Valid Outputs | Total Runs | Rate |
 |-----------|---------------|-----------|------|
-| A | 2 | 2 | 100% |
+| A | 4 | 4 | 100% |
 | B | 2 | 2 | 100% |
-| C | 2 | 2 | 100% |
+| C | 4 | 4 | 100% |
 | D | 2 | 2 | 100% (post-fix) |
 
 Condition D initially produced 0/2 valid outputs due to a prose-wrapping issue in the runner. The fix was to pass --json-schema to enforce structured output. After re-run with the fix, D achieved 100% validity.
@@ -99,7 +99,7 @@ Sonnet achieves a median of 9.0 across both MCP (A) and native (B) tool sets, wh
 ## Notes
 
 - **Runner fix (Condition D)**: The initial D runs were invoked without --json-schema, allowing the model to wrap structured output in prose. This caused JSON parsing to fail. The fix explicitly passes --json-schema at invocation, enforcing strict structure. All subsequent D runs produced valid JSON.
-- **Telemetry gap (A/B/C)**: These conditions used an earlier runner version that did not capture cost, wall time, input/output tokens, or turn counts. Re-running all conditions with telemetry capture is recommended for future iterations to enable cost-benefit analysis across all tool set and model combinations.
+- **Telemetry coverage**: All conditions have telemetry in `scores-template.json` and per-run sidecar files. A-scored-4 and C-scored-3 are missing `api_time_ms` (recorded as `null`); wall time was not captured for C-scored-3. Future runs should ensure timing capture is enabled consistently.
 - **Sample size**: All analyses use n=2 per condition. Extending to n=3-5 would reduce variability and increase confidence in effect estimates.
 - **Structural accuracy trade-off**: Condition B (Sonnet + native) shows the largest drop in structural accuracy (2.5 vs 3.0), suggesting this combination may sacrifice precision for broader exploration.
 
