@@ -21,9 +21,9 @@ Auth migration task on Claude Code against [Django](https://github.com/django/dj
 
 | Mode | Sonnet 4.6 | Haiku 4.5 |
 |---|---|---|
-| MCP | 130k tokens, $0.46 | 399k tokens, $0.42 |
+| MCP | 112k tokens, $0.39 | 406k tokens, $0.42 |
 | Native | 276k tokens, $0.95 | 473k tokens, $0.53 |
-| **Savings** | **53% fewer tokens, 52% cheaper** | **16% fewer tokens, 21% cheaper** |
+| **Savings** | **59% fewer tokens, 59% cheaper** | **14% fewer tokens, 21% cheaper** |
 
 AeroDyn integration audit task on Claude Code against [OpenFAST](https://github.com/OpenFAST/openfast) (Fortran) source tree. [Full methodology](docs/benchmarks/v13/methodology.md).
 
