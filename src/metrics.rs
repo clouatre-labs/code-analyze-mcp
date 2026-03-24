@@ -50,11 +50,11 @@ impl MetricsWriter {
         base_dir: Option<PathBuf>,
     ) -> Self {
         let dir = base_dir.unwrap_or_else(xdg_metrics_dir);
-        cleanup_old_files(&dir);
         Self { rx, base_dir: dir }
     }
 
     pub async fn run(mut self) {
+        cleanup_old_files(&self.base_dir).await;
         let mut current_date = current_date_str();
         let mut current_file: Option<PathBuf> = None;
 
@@ -101,9 +101,9 @@ impl MetricsWriter {
 
             if let Ok(mut file) = file {
                 for event in batch {
-                    if let Ok(json) = serde_json::to_string(&event) {
+                    if let Ok(mut json) = serde_json::to_string(&event) {
+                        json.push('\n');
                         let _ = file.write_all(json.as_bytes()).await;
-                        let _ = file.write_all(b"\n").await;
                     }
                 }
             }
@@ -129,8 +129,6 @@ pub fn error_code_to_type(code: rmcp::model::ErrorCode) -> &'static str {
     match code {
         rmcp::model::ErrorCode::PARSE_ERROR => "parse",
         rmcp::model::ErrorCode::INVALID_PARAMS => "invalid_params",
-        rmcp::model::ErrorCode::METHOD_NOT_FOUND => "unknown",
-        rmcp::model::ErrorCode::INTERNAL_ERROR => "unknown",
         _ => "unknown",
     }
 }
@@ -156,47 +154,56 @@ fn rotate_path(base_dir: &Path, date_str: &str) -> PathBuf {
     base_dir.join(format!("metrics-{}.jsonl", date_str))
 }
 
-fn cleanup_old_files(base_dir: &Path) {
+async fn cleanup_old_files(base_dir: &Path) {
     let now_days = (unix_ms() / 86_400_000) as u32;
 
-    let Ok(entries) = std::fs::read_dir(base_dir) else {
+    let Ok(mut entries) = tokio::fs::read_dir(base_dir).await else {
         return;
     };
 
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let file_name = match path.file_name() {
-            Some(n) => n.to_string_lossy().into_owned(),
-            None => continue,
-        };
+    loop {
+        match entries.next_entry().await {
+            Ok(Some(entry)) => {
+                let path = entry.path();
+                let file_name = match path.file_name() {
+                    Some(n) => n.to_string_lossy().into_owned(),
+                    None => continue,
+                };
 
-        // Expected format: metrics-YYYY-MM-DD.jsonl
-        if !file_name.starts_with("metrics-") || !file_name.ends_with(".jsonl") {
-            continue;
-        }
-        let date_part = &file_name[8..file_name.len() - 6];
-        if date_part.len() != 10
-            || date_part.as_bytes().get(4) != Some(&b'-')
-            || date_part.as_bytes().get(7) != Some(&b'-')
-        {
-            continue;
-        }
-        let Ok(year) = date_part[0..4].parse::<u32>() else {
-            continue;
-        };
-        let Ok(month) = date_part[5..7].parse::<u32>() else {
-            continue;
-        };
-        let Ok(day) = date_part[8..10].parse::<u32>() else {
-            continue;
-        };
-        if month == 0 || month > 12 || day == 0 || day > 31 {
-            continue;
-        }
+                // Expected format: metrics-YYYY-MM-DD.jsonl
+                if !file_name.starts_with("metrics-") || !file_name.ends_with(".jsonl") {
+                    continue;
+                }
+                let date_part = &file_name[8..file_name.len() - 6];
+                if date_part.len() != 10
+                    || date_part.as_bytes().get(4) != Some(&b'-')
+                    || date_part.as_bytes().get(7) != Some(&b'-')
+                {
+                    continue;
+                }
+                let Ok(year) = date_part[0..4].parse::<u32>() else {
+                    continue;
+                };
+                let Ok(month) = date_part[5..7].parse::<u32>() else {
+                    continue;
+                };
+                let Ok(day) = date_part[8..10].parse::<u32>() else {
+                    continue;
+                };
+                if month == 0 || month > 12 || day == 0 || day > 31 {
+                    continue;
+                }
 
-        let file_days = date_to_days_since_epoch(year, month, day);
-        if now_days > file_days && (now_days - file_days) > 30 {
-            let _ = std::fs::remove_file(&path);
+                let file_days = date_to_days_since_epoch(year, month, day);
+                if now_days > file_days && (now_days - file_days) > 30 {
+                    let _ = tokio::fs::remove_file(&path).await;
+                }
+            }
+            Ok(None) => break,
+            Err(e) => {
+                tracing::warn!("error reading metrics directory entry: {}", e);
+                continue;
+            }
         }
     }
 }

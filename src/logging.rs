@@ -7,7 +7,6 @@ use rmcp::model::LoggingLevel;
 use serde_json::{Map, Value};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tracing::span::Attributes;
 use tracing::subscriber::Interest;
 use tracing::{Level, Subscriber};
 use tracing_subscriber::Layer;
@@ -100,8 +99,6 @@ where
         let filter_level = self.log_level_filter.lock().unwrap();
         *metadata.level() <= *filter_level
     }
-
-    fn on_new_span(&self, _attrs: &Attributes<'_>, _id: &tracing::span::Id, _ctx: Context<'_, S>) {}
 }
 
 /// Visitor to extract fields from tracing event into a JSON Map.

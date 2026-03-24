@@ -1496,8 +1496,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -1545,8 +1543,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -1656,8 +1652,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -1739,8 +1733,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -1852,8 +1844,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2033,8 +2023,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2143,8 +2131,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2200,8 +2186,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2258,8 +2242,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2319,8 +2301,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2380,8 +2360,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2444,8 +2422,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
@@ -2511,8 +2487,6 @@ mod tests {
             references: vec![],
             call_frequency: HashMap::new(),
             calls: vec![],
-            assignments: vec![],
-            field_accesses: vec![],
             impl_traits: vec![],
         };
 
