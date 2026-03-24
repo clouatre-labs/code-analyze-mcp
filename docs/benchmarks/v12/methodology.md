@@ -202,3 +202,4 @@ See [v12/run-order.txt](run-order.txt) for randomized execution sequence (seed=4
 - Condition D (Haiku+native): [v12/prompts/condition-d-native-haiku.md](prompts/condition-d-native-haiku.md)
 - Scoring template: [v12/scores-template.json](scores-template.json)
 - Django commit: 6b90f8a8d6994dc62cd91dde911fe56ec3389494
+- Results and analysis: [v12/analysis.md](analysis.md)
