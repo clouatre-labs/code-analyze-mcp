@@ -130,7 +130,6 @@ pub fn format_structure(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
     max_depth: Option<u32>,
-    _base_path: Option<&Path>,
 ) -> String {
     let mut output = String::new();
 
@@ -213,8 +212,11 @@ pub fn format_structure(
 
     output.push('\n');
 
-    // PATH block - tree structure (production files only)
+    // PATH block - tree structure (production and test files in single pass)
     output.push_str("PATH [LOC, FUNCTIONS, CLASSES]\n");
+
+    let mut prod_buf = String::new();
+    let mut test_buf = String::new();
 
     for entry in entries {
         // Skip the root directory itself
@@ -235,67 +237,39 @@ pub fn format_structure(
         // For files, append analysis info
         if !entry.is_dir {
             if let Some(analysis) = analysis_map.get(&entry.path.display().to_string()) {
-                // Skip test files in production section
-                if analysis.is_test {
-                    continue;
-                }
-
                 if let Some(info_str) = format_file_info_parts(
                     analysis.line_count,
                     analysis.function_count,
                     analysis.class_count,
                 ) {
-                    output.push_str(&format!("{}{} {}\n", indent, name, info_str));
+                    let line = format!("{}{} {}\n", indent, name, info_str);
+                    if analysis.is_test {
+                        test_buf.push_str(&line);
+                    } else {
+                        prod_buf.push_str(&line);
+                    }
                 } else {
-                    output.push_str(&format!("{}{}\n", indent, name));
+                    let line = format!("{}{}\n", indent, name);
+                    if analysis.is_test {
+                        test_buf.push_str(&line);
+                    } else {
+                        prod_buf.push_str(&line);
+                    }
                 }
             }
             // Skip files not in analysis_map (binary/unreadable files)
         } else {
-            output.push_str(&format!("{}{}/\n", indent, name));
+            let line = format!("{}{}/\n", indent, name);
+            prod_buf.push_str(&line);
         }
     }
 
+    output.push_str(&prod_buf);
+
     // TEST FILES section (if any test files exist)
-    if !test_files.is_empty() {
+    if !test_buf.is_empty() {
         output.push_str("\nTEST FILES [LOC, FUNCTIONS, CLASSES]\n");
-
-        for entry in entries {
-            // Skip the root directory itself
-            if entry.depth == 0 {
-                continue;
-            }
-
-            // Calculate indentation
-            let indent = "  ".repeat(entry.depth - 1);
-
-            // Get just the filename/dirname
-            let name = entry
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("?");
-
-            // For files, append analysis info
-            if !entry.is_dir
-                && let Some(analysis) = analysis_map.get(&entry.path.display().to_string())
-            {
-                // Only show test files in test section
-                if !analysis.is_test {
-                    continue;
-                }
-
-                if let Some(info_str) = format_file_info_parts(
-                    analysis.line_count,
-                    analysis.function_count,
-                    analysis.class_count,
-                ) {
-                    output.push_str(&format!("{}{} {}\n", indent, name, info_str));
-                } else {
-                    output.push_str(&format!("{}{}\n", indent, name));
-                }
-            }
-        }
+        output.push_str(&test_buf);
     }
 
     output
@@ -435,7 +409,7 @@ pub fn format_focused(
 
     // Partition incoming_chains into production and test callers
     let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
-        incoming_chains.clone().into_iter().partition(|chain| {
+        incoming_chains.into_iter().partition(|chain| {
             chain
                 .chain
                 .first()
@@ -553,18 +527,8 @@ pub fn format_focused(
 
     // STATISTICS section
     output.push_str("STATISTICS:\n");
-    let incoming_count = prod_refs
-        .iter()
-        .map(|(p, _)| p)
-        .collect::<std::collections::HashSet<_>>()
-        .len();
-    let outgoing_count = outgoing_refs
-        .iter()
-        .map(|(p, _)| p)
-        .collect::<std::collections::HashSet<_>>()
-        .len();
-    output.push_str(&format!("  Incoming calls: {}\n", incoming_count));
-    output.push_str(&format!("  Outgoing calls: {}\n", outgoing_count));
+    output.push_str(&format!("  Incoming calls: {}\n", callers_count));
+    output.push_str(&format!("  Outgoing calls: {}\n", callees_count));
 
     // FILES section - collect unique files from production chains
     let mut files = HashSet::new();
@@ -762,7 +726,6 @@ pub fn format_summary(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
     max_depth: Option<u32>,
-    _base_path: Option<&Path>,
     subtree_counts: Option<&[(PathBuf, usize)]>,
 ) -> String {
     let mut output = String::new();
