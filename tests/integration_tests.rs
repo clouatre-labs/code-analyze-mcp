@@ -2905,8 +2905,6 @@ pub fn world() {}
         references: vec![],
         call_frequency: HashMap::new(),
         calls: vec![],
-        assignments: vec![],
-        field_accesses: vec![],
         impl_traits: vec![],
     };
 
@@ -2947,8 +2945,6 @@ fn test_file_details_force_bypasses_summary() {
         references: vec![],
         call_frequency: HashMap::new(),
         calls: vec![],
-        assignments: vec![],
-        field_accesses: vec![],
         impl_traits: vec![],
     };
 
@@ -2993,8 +2989,6 @@ fn test_format_file_details_summary_many_classes() {
         references: vec![],
         call_frequency: HashMap::new(),
         calls: vec![],
-        assignments: vec![],
-        field_accesses: vec![],
         impl_traits: vec![],
     };
 
@@ -3040,8 +3034,6 @@ fn test_file_details_pagination_first_page() {
         references: vec![],
         call_frequency: HashMap::new(),
         calls: vec![],
-        assignments: vec![],
-        field_accesses: vec![],
         impl_traits: vec![],
     };
 
@@ -3106,8 +3098,6 @@ fn test_file_details_pagination_last_page() {
         references: vec![],
         call_frequency: HashMap::new(),
         calls: vec![],
-        assignments: vec![],
-        field_accesses: vec![],
         impl_traits: vec![],
     };
 
@@ -3226,8 +3216,6 @@ fn test_format_file_details_paginated_unit() {
         references: vec![],
         call_frequency: HashMap::new(),
         calls: vec![],
-        assignments: vec![],
-        field_accesses: vec![],
         impl_traits: vec![],
     };
 

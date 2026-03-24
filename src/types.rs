@@ -373,14 +373,6 @@ pub struct SemanticAnalysis {
     pub call_frequency: HashMap<String, usize>,
     /// Caller-callee pairs extracted from call expressions.
     pub calls: Vec<CallInfo>,
-    /// Variable assignments and reassignments.
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub assignments: Vec<AssignmentInfo>,
-    /// Field access patterns.
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub field_accesses: Vec<FieldAccessInfo>,
     /// `impl Trait for Type` blocks found in this file (Rust only).
     #[serde(skip)]
     #[schemars(skip)]

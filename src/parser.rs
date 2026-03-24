@@ -9,8 +9,8 @@
 
 use crate::languages::get_language_info;
 use crate::types::{
-    AssignmentInfo, CallInfo, ClassInfo, FieldAccessInfo, FunctionInfo, ImplTraitInfo, ImportInfo,
-    ReferenceInfo, ReferenceType, SemanticAnalysis,
+    CallInfo, ClassInfo, FunctionInfo, ImplTraitInfo, ImportInfo, ReferenceInfo, ReferenceType,
+    SemanticAnalysis,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -40,8 +40,7 @@ struct CompiledQueries {
     import: Option<Query>,
     impl_block: Option<Query>,
     reference: Option<Query>,
-    assignment: Option<Query>,
-    field: Option<Query>,
+    impl_trait: Option<Query>,
 }
 
 /// Build compiled queries for a given language.
@@ -99,24 +98,11 @@ fn build_compiled_queries(
         None
     };
 
-    let assignment = if let Some(assignment_query_str) = lang_info.assignment_query {
+    let impl_trait = if let Some(impl_trait_query_str) = lang_info.impl_trait_query {
         Some(
-            Query::new(&lang_info.language, assignment_query_str).map_err(|e| {
+            Query::new(&lang_info.language, impl_trait_query_str).map_err(|e| {
                 ParserError::QueryError(format!(
-                    "Failed to compile assignment query for {}: {}",
-                    lang_info.name, e
-                ))
-            })?,
-        )
-    } else {
-        None
-    };
-
-    let field = if let Some(field_query_str) = lang_info.field_query {
-        Some(
-            Query::new(&lang_info.language, field_query_str).map_err(|e| {
-                ParserError::QueryError(format!(
-                    "Failed to compile field query for {}: {}",
+                    "Failed to compile impl_trait query for {}: {}",
                     lang_info.name, e
                 ))
             })?,
@@ -131,8 +117,7 @@ fn build_compiled_queries(
         import,
         impl_block,
         reference,
-        assignment,
-        field,
+        impl_trait,
     })
 }
 
@@ -513,8 +498,6 @@ impl SemanticExtractor {
         let mut references = Vec::new();
         let mut call_frequency = HashMap::new();
         let mut calls = Vec::new();
-        let mut assignments: Vec<AssignmentInfo> = Vec::new();
-        let mut field_accesses: Vec<FieldAccessInfo> = Vec::new();
 
         Self::extract_elements(
             source,
@@ -536,8 +519,6 @@ impl SemanticExtractor {
         Self::extract_imports(source, compiled, root, max_depth, &mut imports);
         Self::extract_impl_methods(source, compiled, root, max_depth, &mut classes);
         Self::extract_references(source, compiled, root, max_depth, &mut references);
-        Self::extract_assignments(source, compiled, root, max_depth, &mut assignments);
-        Self::extract_field_accesses(source, compiled, root, max_depth, &mut field_accesses);
 
         tracing::debug!(language = %language, functions = functions.len(), classes = classes.len(), imports = imports.len(), references = references.len(), calls = calls.len(), "extraction complete");
 
@@ -548,8 +529,6 @@ impl SemanticExtractor {
             references,
             call_frequency,
             calls,
-            assignments,
-            field_accesses,
             impl_traits: vec![],
         })
     }
@@ -847,104 +826,6 @@ impl SemanticExtractor {
             }
         }
     }
-
-    fn extract_assignments(
-        source: &str,
-        compiled: &CompiledQueries,
-        root: Node<'_>,
-        max_depth: Option<u32>,
-        assignments: &mut Vec<AssignmentInfo>,
-    ) {
-        let Some(ref assignment_query) = compiled.assignment else {
-            return;
-        };
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-        let mut matches = cursor.matches(assignment_query, root, source.as_bytes());
-
-        while let Some(mat) = matches.next() {
-            let mut variable = String::new();
-            let mut value = String::new();
-            let mut line = 0usize;
-
-            for capture in mat.captures {
-                let capture_name = assignment_query.capture_names()[capture.index as usize];
-                let node = capture.node;
-                match capture_name {
-                    "variable" => {
-                        variable = source[node.start_byte()..node.end_byte()].to_string();
-                    }
-                    "value" => {
-                        value = source[node.start_byte()..node.end_byte()].to_string();
-                        line = node.start_position().row + 1;
-                    }
-                    _ => {}
-                }
-            }
-
-            if !variable.is_empty() && !value.is_empty() {
-                let scope = Self::enclosing_function_name(mat.captures[0].node, source)
-                    .unwrap_or_else(|| "global".to_string());
-                assignments.push(AssignmentInfo {
-                    variable,
-                    value,
-                    line,
-                    scope,
-                });
-            }
-        }
-    }
-
-    fn extract_field_accesses(
-        source: &str,
-        compiled: &CompiledQueries,
-        root: Node<'_>,
-        max_depth: Option<u32>,
-        field_accesses: &mut Vec<FieldAccessInfo>,
-    ) {
-        let Some(ref field_query) = compiled.field else {
-            return;
-        };
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-        let mut matches = cursor.matches(field_query, root, source.as_bytes());
-
-        while let Some(mat) = matches.next() {
-            let mut object = String::new();
-            let mut field = String::new();
-            let mut line = 0usize;
-
-            for capture in mat.captures {
-                let capture_name = field_query.capture_names()[capture.index as usize];
-                let node = capture.node;
-                match capture_name {
-                    "object" => {
-                        object = source[node.start_byte()..node.end_byte()].to_string();
-                    }
-                    "field" => {
-                        field = source[node.start_byte()..node.end_byte()].to_string();
-                        line = node.start_position().row + 1;
-                    }
-                    _ => {}
-                }
-            }
-
-            if !object.is_empty() && !field.is_empty() {
-                let scope = Self::enclosing_function_name(mat.captures[0].node, source)
-                    .unwrap_or_else(|| "global".to_string());
-                field_accesses.push(FieldAccessInfo {
-                    object,
-                    field,
-                    line,
-                    scope,
-                });
-            }
-        }
-    }
 }
 
 /// Extract `impl Trait for Type` blocks from Rust source.
@@ -952,16 +833,19 @@ impl SemanticExtractor {
 /// Runs independently of `extract_references` to avoid shared deduplication state.
 /// Returns an empty vec for non-Rust source (no error; caller decides).
 pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
-    use crate::languages::rust::IMPL_TRAIT_QUERY;
-
     let lang_info = match get_language_info("rust") {
         Some(info) => info,
         None => return vec![],
     };
 
-    let query = match Query::new(&lang_info.language, IMPL_TRAIT_QUERY) {
-        Ok(q) => q,
+    let compiled = match get_compiled_queries("rust") {
+        Ok(c) => c,
         Err(_) => return vec![],
+    };
+
+    let query = match &compiled.impl_trait {
+        Some(q) => q,
+        None => return vec![],
     };
 
     let tree = match PARSER.with(|p| {
@@ -975,7 +859,7 @@ pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
 
     let root = tree.root_node();
     let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(&query, root, source.as_bytes());
+    let mut matches = cursor.matches(query, root, source.as_bytes());
     let mut results = Vec::new();
 
     while let Some(mat) = matches.next() {
@@ -1015,44 +899,6 @@ pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_extract_assignments() {
-        let source = r#"
-fn main() {
-    let x = 42;
-    let y = x + 1;
-}
-"#;
-        let result = SemanticExtractor::extract(source, "rust", None);
-        assert!(result.is_ok());
-        let analysis = result.unwrap();
-        assert!(!analysis.assignments.is_empty());
-        assert_eq!(analysis.assignments[0].variable, "x");
-        assert_eq!(analysis.assignments[0].value, "42");
-        assert_eq!(analysis.assignments[0].scope, "main");
-    }
-
-    #[test]
-    fn test_extract_field_accesses() {
-        let source = r#"
-fn process(user: &User) {
-    let name = user.name;
-    let age = user.age;
-}
-"#;
-        let result = SemanticExtractor::extract(source, "rust", None);
-        assert!(result.is_ok());
-        let analysis = result.unwrap();
-        assert!(!analysis.field_accesses.is_empty());
-        assert!(
-            analysis
-                .field_accesses
-                .iter()
-                .any(|fa| fa.object == "user" && fa.field == "name")
-        );
-        assert_eq!(analysis.field_accesses[0].scope, "process");
-    }
 
     #[test]
     fn test_ast_recursion_limit_zero_is_unlimited() {

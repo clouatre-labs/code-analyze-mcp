@@ -14,6 +14,8 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tracing::{debug, instrument};
 
+const DIR_CACHE_CAPACITY: usize = 20;
+
 /// Cache key combining path, modification time, and analysis mode.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct CacheKey {
@@ -74,7 +76,6 @@ where
 /// LRU cache for file analysis results with mutex protection.
 pub struct AnalysisCache {
     file_capacity: usize,
-    dir_capacity: usize,
     cache: Arc<Mutex<LruCache<CacheKey, Arc<FileAnalysisOutput>>>>,
     directory_cache: Arc<Mutex<LruCache<DirectoryCacheKey, Arc<AnalysisOutput>>>>,
 }
@@ -83,12 +84,10 @@ impl AnalysisCache {
     /// Create a new cache with the specified capacity.
     pub fn new(capacity: usize) -> Self {
         let file_capacity = capacity.max(1);
-        let dir_capacity = 20_usize;
         let cache_size = NonZeroUsize::new(file_capacity).unwrap();
-        let dir_cache_size = NonZeroUsize::new(dir_capacity).unwrap();
+        let dir_cache_size = NonZeroUsize::new(DIR_CACHE_CAPACITY).unwrap();
         Self {
             file_capacity,
-            dir_capacity,
             cache: Arc::new(Mutex::new(LruCache::new(cache_size))),
             directory_cache: Arc::new(Mutex::new(LruCache::new(dir_cache_size))),
         }
@@ -137,7 +136,7 @@ impl AnalysisCache {
     /// Get a cached directory analysis result if it exists.
     #[instrument(skip(self))]
     pub fn get_directory(&self, key: &DirectoryCacheKey) -> Option<Arc<AnalysisOutput>> {
-        lock_or_recover(&self.directory_cache, self.dir_capacity, |guard| {
+        lock_or_recover(&self.directory_cache, DIR_CACHE_CAPACITY, |guard| {
             let result = guard.get(key).cloned();
             let cache_size = guard.len();
             match result {
@@ -156,7 +155,7 @@ impl AnalysisCache {
     /// Store a directory analysis result in the cache.
     #[instrument(skip(self, value))]
     pub fn put_directory(&self, key: DirectoryCacheKey, value: Arc<AnalysisOutput>) {
-        lock_or_recover(&self.directory_cache, self.dir_capacity, |guard| {
+        lock_or_recover(&self.directory_cache, DIR_CACHE_CAPACITY, |guard| {
             let push_result = guard.push(key.clone(), value);
             let cache_size = guard.len();
             match push_result {
@@ -175,7 +174,6 @@ impl Clone for AnalysisCache {
     fn clone(&self) -> Self {
         Self {
             file_capacity: self.file_capacity,
-            dir_capacity: self.dir_capacity,
             cache: Arc::clone(&self.cache),
             directory_cache: Arc::clone(&self.directory_cache),
         }

@@ -503,10 +503,6 @@ pub fn analyze_focused_with_progress(
     })
 }
 
-/// Analyze a symbol's call graph with use_summary parameter (internal).
-#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
-#[allow(clippy::too_many_arguments)]
-/// Analyze a symbol's call graph across a directory.
 #[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
 pub fn analyze_focused(
     root: &Path,
