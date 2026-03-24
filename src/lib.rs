@@ -3,11 +3,11 @@
 //! This crate exposes four MCP tools for multiple programming languages:
 //!
 //! - **analyze_directory**: Directory tree with file counts and structure
-//! - **analyze_file**: Semantic extraction (functions, classes, assignments, references)
+//! - **analyze_file**: Semantic extraction (functions, classes, imports, references)
 //! - **analyze_symbol**: Call graph analysis (callers and callees)
 //! - **analyze_module**: Lightweight function and import index
 //!
-//! Key types:
+//! Key entry points:
 //! - [`analyze::analyze_directory`]: Analyze entire directory tree
 //! - [`analyze::analyze_file`]: Analyze single file
 //! - [`parser::ElementExtractor`]: Parse language-specific elements

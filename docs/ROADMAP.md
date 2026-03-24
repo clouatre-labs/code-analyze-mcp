@@ -63,7 +63,7 @@ These models follow tool descriptions literally; they do not apply contextual re
 
 ## Shared Exclusion List
 
-The following directories are non-source and excluded from SUGGESTION footer logic (`src/formatter.rs`) and server instruction guidance (`src/lib.rs`):
+The following directories are non-source and excluded from SUGGESTION footer logic (`src/formatter.rs`) and server instruction guidance (`src/lib.rs`). The constant is defined in `src/lib.rs`:
 
 ```
 node_modules, vendor, .git, __pycache__, target, dist, build, .venv
@@ -72,14 +72,14 @@ node_modules, vendor, .git, __pycache__, target, dist, build, .venv
 This list is a single constant in the codebase:
 
 ```rust
-// src/formatter.rs
+// src/lib.rs
 pub(crate) const EXCLUDED_DIRS: &[&str] = &[
     "node_modules", "vendor", ".git", "__pycache__",
     "target", "dist", "build", ".venv",
 ];
 ```
 
-Do not duplicate this constant across modules. Both `#341` and `#342` reference `EXCLUDED_DIRS` from `src/formatter.rs`.
+Do not duplicate this constant across modules. Both `#341` and `#342` reference `EXCLUDED_DIRS` from `src/lib.rs`.
 
 ---
 
