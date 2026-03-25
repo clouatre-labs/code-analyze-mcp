@@ -320,6 +320,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    outputs:
+      commit_sha: ${{ steps.push.outputs.commit_sha }}
     steps:
       - name: Checkout repository at main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -374,6 +376,7 @@ jobs:
             server.json > server.json.tmp && mv server.json.tmp server.json
 
       - name: Commit and push server.json
+        id: push
         run: |
           set -euo pipefail
 
@@ -385,12 +388,14 @@ jobs:
           # Only commit and push if server.json has changed
           if git diff --quiet -- server.json; then
             echo "server.json unchanged; skipping commit and push"
+            echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           git add server.json
           git commit --signoff -m "chore(registry): update server.json for v${VERSION}"
           git push origin main
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   publish-registry:
     name: Publish to MCP Registry
@@ -404,7 +409,7 @@ jobs:
       - name: Checkout repository at main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: main
+          ref: ${{ needs.update-server-json.outputs.commit_sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install mcp-publisher
