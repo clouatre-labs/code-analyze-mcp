@@ -102,9 +102,5 @@ No annotation changes until new MCP SEPs land (tracked in #1913, #1984, #1561, #
 
 Unimplemented and pertinent:
 
-- Fix A from #341: true total file annotation in directory count line (deferred from Wave 6 -- requires full subtree walk; benchmark-backed)
-- MCP SEP adoption: #1487 (`trustedHint`), #1560 (`secretHint`), #1561 (`unsafeOutputHint`), #1913 (trust/sensitivity annotations), #1984 (governance annotations) -- all open upstream; no action until specs stabilize
-
-Not pertinent for current deployment:
-
-- Streamable HTTP or remote transport: not currently implemented; the deployment uses stdio transport for co-located agent use. Revisit only if remote or multi-agent deployment becomes a goal.
+- MCP SEP adoption: #1487 (`trustedHint`), #1561 (`unsafeOutputHint`), #1913 (trust/sensitivity annotations), #1984 (governance annotations) -- open upstream; no action until specs stabilize. #1560 (`secretHint`) closed 2026-03-23; evaluate adoption once merged into spec.
+- Streamable HTTP transport: add `--http` flag exposing `StreamableHttpService` (axum + rmcp `transport-streamable-http-server` + `transport-streamable-http-server-session` features) alongside existing stdio. Tower middleware: `RequestBodyLimitLayer` (4 MB) + `tower-governor` (per-token rate limit) + static Bearer token from env var. Target deployment: GCP e2-micro Always Free (us-central1) behind Cloudflare proxy (free tier, TLS termination, WAF, 5 rate-limit rules). No changes to tool handlers or session logic required.
