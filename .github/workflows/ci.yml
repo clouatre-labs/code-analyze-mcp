@@ -180,7 +180,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: changes
     timeout-minutes: 10
-    if: github.actor == 'renovate[bot]'
+    if: github.actor == 'renovate[bot]'  # zizmor: ignore[spoofable-github-context]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -199,11 +199,27 @@ jobs:
       - name: Compile check
         run: cargo check
 
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-24.04
+    needs: changes
+    timeout-minutes: 10
+    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2
+        with:
+          advanced-security: false
+          annotations: true
+          min-severity: high
+
   ci-result:
     name: CI Result
     runs-on: ubuntu-24.04
     if: always()
-    needs: [changes, commitlint, check-base, format, lint, test, bench, deny, renovate-check]
+    needs: [changes, commitlint, check-base, format, lint, test, bench, deny, renovate-check, zizmor]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |

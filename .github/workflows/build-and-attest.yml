@@ -76,7 +76,9 @@ jobs:
 
       - name: Build binary (dry-run)
         if: ${{ inputs.dry_run }}
-        run: cargo build --release --target ${{ inputs.target }}
+        env:
+          TARGET: ${{ inputs.target }}
+        run: cargo build --release --target "${TARGET}"
 
       - name: Sign tarball with cosign
         if: ${{ !inputs.dry_run }}
@@ -86,7 +88,8 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "v${{ inputs.version }}" "${{ steps.upload.outputs.tar }}.bundle" --clobber
+          VERSION: ${{ inputs.version }}
+        run: gh release upload "v${VERSION}" "${{ steps.upload.outputs.tar }}.bundle" --clobber
 
       - name: Attest build provenance
         if: ${{ !inputs.dry_run }}
