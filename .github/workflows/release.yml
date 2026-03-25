@@ -320,6 +320,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    outputs:
+      commit_sha: ${{ steps.push.outputs.commit_sha }}
     steps:
       - name: Checkout repository at main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -374,6 +376,7 @@ jobs:
             server.json > server.json.tmp && mv server.json.tmp server.json
 
       - name: Commit and push server.json
+        id: push
         run: |
           set -euo pipefail
 
@@ -385,12 +388,49 @@ jobs:
           # Only commit and push if server.json has changed
           if git diff --quiet -- server.json; then
             echo "server.json unchanged; skipping commit and push"
+            echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           git add server.json
           git commit --signoff -m "chore(registry): update server.json for v${VERSION}"
           git push origin main
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  publish-registry:
+    name: Publish to MCP Registry
+    needs: [create-release, update-server-json]
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository at main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.update-server-json.outputs.commit_sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.5.0/mcp-publisher_linux_amd64.tar.gz" \
+            -o /tmp/mcp-publisher.tar.gz
+          echo "79bbb73ba048c5906034f73ef6286d7763bd53cf368ea0b358fc593ed360cbd5  /tmp/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf /tmp/mcp-publisher.tar.gz -C /tmp mcp-publisher
+          test -f /tmp/mcp-publisher || { echo "mcp-publisher binary not found in tarball"; exit 1; }
+          sudo mv /tmp/mcp-publisher /usr/local/bin/mcp-publisher
+          rm -f /tmp/mcp-publisher.tar.gz
+
+      - name: Validate server.json
+        run: mcp-publisher validate
+
+      - name: Login via GitHub OIDC
+        run: mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: mcp-publisher publish
 
   publish:
     name: Publish to crates.io
