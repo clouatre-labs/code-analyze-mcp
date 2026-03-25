@@ -57,7 +57,7 @@ These controls address GitHub Actions supply chain attacks and credential compro
 The default `GITHUB_TOKEN` carries write permissions to repository contents; restricting it to read-only limits the blast radius of a compromised workflow. Setting `allowed_actions: selected` blocks unreviewed third-party actions at queue time, before they reach a runner. The `sha_pinning_required` field enforces commit-SHA pinning for all allowed actions at the organization level, complementing the zizmor per-PR check.
 
 ```bash
-# Restrict GITHUB_TOKEN to read-only, enable action allowlist, and require SHA pinning.
+# Restrict GITHUB_TOKEN to read-only, enable action allowlist, and require SHA pinning
 gh api \
   --method PUT \
   -H "Accept: application/vnd.github+json" \
@@ -92,7 +92,7 @@ Run poutine as a required CI status check. If `pull_request_target` is unavoidab
 ```
 
 ```bash
-# Org-wide audit for pull_request_target usage via gh api with base64 decode.
+# Org-wide audit for pull_request_target usage via gh api with base64 decode
 gh api /orgs/{org}/repos --paginate --jq '.[].full_name' | while read repo; do
   gh api /repos/$repo/contents/.github/workflows --jq '.[].path' 2>/dev/null | \
   while read path; do
@@ -110,7 +110,7 @@ done
 Requiring approval before CI runs on fork PRs prevents untrusted code from executing on org runners and avoids burning CI minutes on first-time contributors before a maintainer has reviewed the PR. The `first_time_contributors` policy requires approval only from contributors with no merged PR; contributors who have had a PR merged run CI freely alongside org members and collaborators.
 
 ```bash
-# Set org-wide default.
+# Set org-wide default
 gh api \
   --method PUT \
   -H "Accept: application/vnd.github+json" \
@@ -118,7 +118,7 @@ gh api \
   /orgs/{org}/actions/permissions/fork-pr-contributor-approval \
   -f approval_policy=first_time_contributors
 
-# Apply to all existing repos (org setting applies to new repos automatically).
+# Apply to all existing repos (org setting applies to new repos automatically)
 gh api /orgs/{org}/repos --paginate --jq '.[].full_name' | while read repo; do
   gh api \
     --method PUT \
@@ -142,12 +142,12 @@ done
 A compromised contributor account with write access can modify workflow files to exfiltrate secrets or escalate privileges. Requiring CODEOWNERS review on workflow changes adds a mandatory human gate that applies even to collaborators with write access.
 
 ```bash
-# .github/CODEOWNERS entry: require security-reviewers team approval for all workflow changes.
+# .github/CODEOWNERS entry: require security-reviewers team approval for all workflow changes
 .github/workflows/ @{org}/security-reviewers
 ```
 
 ```yaml
-# Branch ruleset pull_request rule parameters (add to main branch ruleset).
+# Branch ruleset pull_request rule parameters (add to main branch ruleset)
 # Apply via PATCH /orgs/{org}/rulesets/{ruleset_id}
 parameters:
   required_approving_review_count: 1
@@ -179,7 +179,7 @@ graph TD
 *Figure 1: Tag poisoning attack chain and how SHA pinning combined with zizmor breaks it.*
 
 ```yaml
-# zizmor step in CI; pin zizmor itself to a SHA.
+# zizmor step in CI; pin zizmor itself to a SHA
 - name: Lint GitHub Actions workflows
   uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8  # v0.5.2
   with:
@@ -188,7 +188,7 @@ graph TD
 *Code Snippet 5: zizmor CI step for SHA pinning enforcement.*
 
 ```yaml
-# .github/dependabot.yml: keep action SHAs current via weekly PRs.
+# .github/dependabot.yml: keep action SHAs current via weekly PRs
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -209,7 +209,7 @@ The LiteLLM breach involved a stored `PYPI_PUBLISH_PASSWORD` exfiltrated from a 
 Configure PyPI, npm, and RubyGems as Trusted Publishers in each registry's dashboard, then use the short-lived token in the publish workflow with no `password=` field.
 
 ```yaml
-# Publish workflow using OIDC; no stored registry token.
+# Publish workflow using OIDC; no stored registry token
 name: Publish
 on:
   push:
@@ -230,7 +230,7 @@ jobs:
 *Code Snippet 7: Publish workflow using OIDC Trusted Publisher; no stored registry token.*
 
 ```bash
-# Audit org secrets for stored registry tokens.
+# Audit org secrets for stored registry tokens
 gh api /orgs/{org}/actions/secrets --paginate --jq \
   '.secrets[].name | select(test("PYPI|NPM|RUBYGEMS|DOCKER|PUBLISH"; "i"))'
 ```
@@ -241,7 +241,7 @@ gh api /orgs/{org}/actions/secrets --paginate --jq \
 In the aquasec/trivy incident, the attacker force-pushed 75 release tags. A tag protection ruleset blocking deletion, non-fast-forward updates, and any update to `refs/tags/**` prevents this at the Git protocol layer, including for administrators. The `required_signatures` rule on the default branch ruleset ensures every commit in the release path is GPG-signed.
 
 ```bash
-# Create an org-level tag immutability ruleset.
+# Create an org-level tag immutability ruleset
 gh api \
   --method POST \
   -H "Accept: application/vnd.github+json" \
@@ -276,7 +276,7 @@ During the LiteLLM incident, CI ran `apt install trivy` without a pinned version
 Pin every tool to a specific version and verify the SHA256 digest before execution. For Docker images, use the image digest (`@sha256:...`) instead of a tag in `FROM` and `docker pull`.
 
 ```bash
-# Pin a binary download to a specific version and verify SHA256 before execution.
+# Pin a binary download to a specific version and verify SHA256 before execution
 TOOL_VERSION="1.2.3"
 TOOL_URL="https://example.com/tool-${TOOL_VERSION}-linux-amd64.tar.gz"
 EXPECTED_SHA256="<sha256-of-tool-tarball>"  # obtain from the upstream release page
@@ -285,7 +285,7 @@ curl -fsSL "$TOOL_URL" -o tool.tar.gz
 echo "${EXPECTED_SHA256}  tool.tar.gz" | sha256sum --check
 tar -xzf tool.tar.gz
 
-# Docker: use image digest instead of a tag.
+# Docker: use image digest instead of a tag
 # Dockerfile:
 #   FROM ubuntu@sha256:<digest-from-upstream>
 # CLI pull:
@@ -300,7 +300,7 @@ tar -xzf tool.tar.gz
 Secret scanning runs on every PR and push as a required CI check using a shared org-level configuration and license secret. This prevents long-lived tokens committed to any repository from persisting in history or appearing in CI log artifacts.
 
 ```yaml
-# gitleaks workflow step referencing org-level license and config secrets.
+# gitleaks workflow step referencing org-level license and config secrets
 - name: Scan for committed secrets
   uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
   env:
@@ -317,7 +317,7 @@ Classic PATs grant wildcard access across all repositories a user can access; fi
 PAT type restriction and token expiry limits are configured in the GitHub UI: Org Settings > Personal access tokens > Restrict access > "Require approval" and "Token expiration". The fork restriction below is patchable via API.
 
 ```bash
-# Prevent members from forking private repositories (patchable via API).
+# Prevent members from forking private repositories (patchable via API)
 gh api \
   --method PATCH \
   -H "Accept: application/vnd.github+json" \
@@ -325,7 +325,7 @@ gh api \
   /orgs/{org} \
   -F members_can_fork_private_repositories=false
 
-# Audit org secrets for tokens that should be replaced with OIDC or fine-grained PATs.
+# Audit org secrets for tokens that should be replaced with OIDC or fine-grained PATs
 gh api /orgs/{org}/actions/secrets --paginate --jq '.secrets[].name'
 ```
 *Code Snippet 12: Prevent private repository forks and audit org secrets for tokens requiring rotation.*
@@ -337,7 +337,7 @@ GitHub Apps receive short-lived installation tokens scoped to the installation a
 If a PAT is unavoidable, it must be fine-grained, scoped to a single repository, use minimum required permissions, and have a 90-day maximum expiry.
 
 ```bash
-# Audit active credential authorizations.
+# Audit active credential authorizations
 gh api /orgs/{org}/credential-authorizations --paginate \
   --jq '.[] | {login: .login, credential_type: .credential_type, token_last_eight: .token_last_eight}'
 ```
@@ -350,8 +350,8 @@ gh api /orgs/{org}/credential-authorizations --paginate \
 Publish, deploy, and sign jobs are gated on GitHub Environments configured with required reviewers, making it structurally impossible to trigger them from a fork PR or unapproved ref. Secrets are scoped to the Environment, not the repository level: even if a maintainer account is compromised, a second maintainer must approve before secrets reach the runner.
 
 ```bash
-# Create a protected publish environment with required reviewer and branch restriction.
-# Replace {reviewer_id} with the GitHub user or team numeric ID.
+# Create a protected publish environment with required reviewer and branch restriction
+# Replace {reviewer_id} with the GitHub user or team numeric ID
 gh api \
   --method PUT \
   -H "Accept: application/vnd.github+json" \
@@ -379,7 +379,7 @@ EOF
 The Aqua breach was detected externally, not by the org. Querying the audit log for high-signal events enables detection of the patterns that precede or confirm a breach: tag mutations on release repos, unexpected repository creation used for exfiltration staging, out-of-band member additions, and bursts of secret scanning bypass events. Audit log streaming to a SIEM is available on GitHub Enterprise plans; on Team and Free plans, use the audit log query API with a scheduled job or webhook.
 
 ```bash
-# Query org audit log (available on all plans).
+# Query org audit log (available on all plans)
 gh api "/orgs/{org}/audit-log?phrase=action:tag.create+action:repo.create&per_page=100" \
   --paginate \
   --jq '.[] | {action: .action, actor: .actor, repo: .repo, created_at: .created_at}'
