@@ -10,6 +10,7 @@
 Standalone MCP server for code structure analysis using tree-sitter.
 
 </div>
+<!-- mcp-name: io.github.clouatre-labs/code-analyze-mcp -->
 
 > [!NOTE]
 > Native agent tools (regex search, path matching, file reading) handle targeted lookups well. `code-analyze-mcp` handles the mechanical, non-AI work: mapping directory structure, extracting symbols, and tracing call graphs. Offloading this to a dedicated tool reduces token usage and speeds up coding with better accuracy.
