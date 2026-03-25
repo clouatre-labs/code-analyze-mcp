@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document is a production reference for engineers building systems with Claude and the Model Context Protocol (MCP). It covers the agentic loop, orchestration patterns, MCP tool design, memory management, safety controls, and prompt engineering for agents, cross-referenced against the MCP specification (2025-06-18), official Anthropic SDK documentation, and security references.
+This document is a production reference for engineers building systems with Claude and the Model Context Protocol (MCP). It covers the agentic loop, orchestration patterns, MCP tool design, memory management, safety controls, and prompt engineering for agents, cross-referenced against the MCP specification (2025-11-25), official Anthropic SDK documentation, and security references.
 
 The scope covers three interrelated areas: the mechanics of the agentic loop and how agents perceive, plan, act, and reflect; orchestration patterns for coordinating multiple agents and managing context at scale; and MCP as the interface layer through which agents access tools and external data.
 
@@ -11,7 +11,7 @@ A senior engineer reading this document should be able to design a production ag
 ## See Also
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - module map and data flow for this MCP server implementation
-- [MCP Specification 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) - canonical protocol reference
+- [MCP Specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) - canonical protocol reference
 - [DESIGN-GUIDE.md](DESIGN-GUIDE.md) - Design decisions, rationale, and replication guide for building high-performance MCP servers
 
 ---
@@ -197,7 +197,7 @@ A minimal structured handoff contains the task description, any prior results th
 
 ### 3.1 Architecture Overview
 
-MCP defines a client/server protocol through which a host application (the MCP client, typically Claude or a Claude-powered agent) discovers and calls tools, reads resources, and uses prompts exposed by an MCP server (MCP specification 2025-06-18, server/tools).
+MCP defines a client/server protocol through which a host application (the MCP client, typically Claude or a Claude-powered agent) discovers and calls tools, reads resources, and uses prompts exposed by an MCP server (MCP specification 2025-11-25, server/tools).
 
 The server exposes a catalog of tools. The client queries that catalog at session start and receives tool definitions including name, description, and input schema. When the model decides to use a tool, the client sends a tool call to the server, receives the result, and injects it into the conversation as a `tool_result` block.
 
@@ -213,7 +213,7 @@ Three principles govern tool design at the MCP layer:
 
 ### 3.3 Tool Annotations
 
-MCP tool definitions support annotations that communicate the behavioral characteristics of a tool to the client. These are not enforced at the protocol level but allow clients to present appropriate confirmation UI and apply policy rules (MCP specification 2025-06-18, server/tools).
+MCP tool definitions support annotations that communicate the behavioral characteristics of a tool to the client. These are not enforced at the protocol level but allow clients to present appropriate confirmation UI and apply policy rules (MCP specification 2025-11-25, server/tools).
 
 | Annotation | Type | Meaning |
 |---|---|---|
@@ -247,7 +247,7 @@ For **Streamable HTTP** (preferred since 2025-03-26): the client POSTs JSON-RPC 
 
 ### 3.5 Elicitation
 
-Elicitation (introduced in MCP 2025-06-18) allows a server to pause tool execution and request additional information from the user via a structured client-side form. This is the spec's mechanism for human-in-the-loop within a single tool call, without requiring the orchestrator to restart the call with new parameters.
+Elicitation allows a server to pause tool execution and request additional information from the user via a structured client-side form. This is the spec's mechanism for human-in-the-loop within a single tool call, without requiring the orchestrator to restart the call with new parameters.
 
 **How it works:** During tool execution the server sends an `elicitation/create` request to the client, containing a human-readable message and an optional JSON Schema describing the expected input. The client presents this to the user and returns their response. Execution then resumes with the collected data.
 
@@ -263,6 +263,7 @@ Elicitation (introduced in MCP 2025-06-18) allows a server to pause tool executi
 - Clients may decline elicitation; servers must handle a declined or empty response gracefully.
 
 **FastMCP usage:**
+
 ```python
 result = await ctx.elicit(
     message="Which environment should this deploy to?",
@@ -272,9 +273,7 @@ if result.action == "accept":
     env = result.data["env"]
 ```
 
-**Reference:** [MCP 2025-06-18 Elicitation spec](https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation)
-
-
+*Code Snippet 3: FastMCP elicitation call. The server pauses tool execution, collects user input via a structured form, and resumes on `accept`. See [MCP 2025-11-25 Elicitation spec](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation).*
 ## 4. Tool Use Best Practices
 
 ### 4.1 Tool Definition Schema
@@ -303,9 +302,9 @@ Tool definitions in the Anthropic API require three fields: `name`, `description
 }
 ```
 
-*Code Snippet 3: Anthropic API tool definition with input_schema, required fields, and optional enum parameter.*
+*Code Snippet 4: Anthropic API tool definition with input_schema, required fields, and optional enum parameter.*
 
-The MCP specification extends this with an optional `outputSchema` field that documents the structure of the tool's return value. Defining an `outputSchema` enables downstream validation and allows orchestrators to verify that tool output matches expectations before injecting it into context (MCP specification 2025-06-18, server/tools).
+The MCP specification extends this with an optional `outputSchema` field that documents the structure of the tool's return value. Defining an `outputSchema` enables downstream validation and allows orchestrators to verify that tool output matches expectations before injecting it into context (MCP specification 2025-11-25, server/tools).
 
 ```json
 {
@@ -352,6 +351,8 @@ The MCP specification extends this with an optional `outputSchema` field that do
 }
 ```
 
+*Code Snippet 5: MCP tool definition with `inputSchema` and `outputSchema`.*
+
 **Structured output:** `outputSchema` is optional. If defined, tool results must include a `structuredContent` field matching that schema alongside the traditional `content` array. The `content` array remains as the human-readable fallback. Some SDKs (including FastMCP) automatically populate `structuredContent` from the return type annotation; servers not using such an SDK must populate it explicitly. Example result:
 
 ```json
@@ -366,7 +367,7 @@ The MCP specification extends this with an optional `outputSchema` field that do
 }
 ```
 
-*Code Snippet 4: MCP tool definition using inputSchema with format constraints and outputSchema for structured results.*
+*Code Snippet 6: Tool result with `structuredContent` alongside the human-readable `content` fallback.*
 
 ### 4.2 Specificity and Naming
 
@@ -399,7 +400,7 @@ The orchestrator uses the error category and retryable flag to drive retry logic
 }
 ```
 
-*Code Snippet 5: Structured error response with category, retryable flag, and user-facing message.*
+*Code Snippet 7: Structured error response with category, retryable flag, and user-facing message.*
 
 ### 4.4 Composition
 
@@ -600,8 +601,8 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 
 ### Official
 
-- MCP Specification 2025-06-18, Server/Tools: https://modelcontextprotocol.io/specification/2025-06-18/server/tools
-- MCP Specification, Server/Resources: https://modelcontextprotocol.io/specification/2025-06-18/server/resources
+- MCP Specification 2025-11-25, Server/Tools: https://modelcontextprotocol.io/specification/2025-11-25/server/tools
+- MCP Specification, Server/Resources: https://modelcontextprotocol.io/specification/2025-11-25/server/resources
 - MCP Specification, Transports (draft): https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/draft/basic/transports.mdx
 - MCP Specification, Transports (legacy): https://github.com/modelcontextprotocol/specification/blob/main/docs/legacy/concepts/transports.mdx
 - MCP Prompts Concept: https://modelcontextprotocol.info/docs/concepts/prompts/
