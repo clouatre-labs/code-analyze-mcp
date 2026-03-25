@@ -137,7 +137,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run tests
-        run: cargo test
+        run: cargo test --profile ci
 
   bench:
     name: Benchmark

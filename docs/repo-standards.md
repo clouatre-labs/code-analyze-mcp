@@ -22,7 +22,7 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `SECURITY.md` | Vulnerability disclosure policy |
 | `Cargo.toml` `[profile.release]` | `opt-level=z`, `lto=true`, `codegen-units=1`, `panic=abort`, `strip=true` for minimal distribution binaries |
 | `Cargo.toml` `[profile.ci]` | Inherits release; `lto=false`, `codegen-units=16` for faster CI builds without sacrificing correctness |
-| `.github/workflows/ci.yml` permissions block | Top-level `permissions:` block on every workflow. Use `contents: read` + `pull-requests: read` for CI workflows; use `{}` (deny-all) for lint-only jobs. Required even after the org default was flipped to `read` on 2026-03-25, as defence in depth. |
+| `.github/workflows/ci.yml` permissions block | Top-level `permissions:` block on every workflow. Use `contents: read` + `pull-requests: read` for CI workflows; set the minimum required permissions per job, noting that jobs using `actions/checkout` need at least `contents: read`. Required even after the org default was flipped to `read` on 2026-03-25, as defence in depth. |
 | Runner pin (`ubuntu-24.04`) | Pin every job to `ubuntu-24.04` rather than `ubuntu-latest`. `ubuntu-latest` resolves to the newest image mid-cycle and can silently change toolchain versions between runs. |
 
 *Table 1: Repository artifact map and purpose of each file.*
@@ -39,13 +39,13 @@ This document maps every repo-level artifact to its purpose and the rationale be
 
 **Runner pinning to ubuntu-24.04.** `ubuntu-latest` is a moving alias; GitHub advances it to the next LTS image with short notice. Pinning to a specific image (`ubuntu-24.04`) makes toolchain changes explicit and reviewable rather than silent. Renovate keeps the pin current via automated PRs.
 
-**Permissions-first sequencing.** The org default GITHUB_TOKEN permission was flipped to `read` on 2026-03-25. New repos work without per-workflow blocks, but explicit blocks are still required as defence in depth and must appear before the first `jobs:` key in every workflow file.
+**Permissions-first sequencing.** The org default GITHUB_TOKEN permission was flipped to `read` on 2026-03-25. New repos work without per-workflow blocks, but explicit blocks are still required as defence in depth and should be placed before the first `jobs:` key by convention for readability.
 
 ## Applying to a New Repo
 
 1. **GitHub metadata:** Set topics, copy the 11-label taxonomy (names, colors, descriptions), create the two rulesets.
 2. **Templates:** Copy all three issue templates and the PR template; adapt wording to the target domain.
-3. **CI:** Copy `ci.yml`; update path filters; pin runner to `ubuntu-24.04` on every job; add top-level `permissions: contents: read` block; pass `--profile ci` on `cargo clippy`, `cargo test`, and `cargo bench`. Set `CI Result` as the sole required status check in the branch ruleset. Copy `.commitlintrc.yml`.
+3. **CI:** Copy `ci.yml`; update path filters; pin runner to `ubuntu-24.04` on every job; add a top-level `permissions` block with `contents: read` and `pull-requests: read`; pass `--profile ci` on `cargo clippy`, `cargo test`, and `cargo bench`. Set `CI Result` as the sole required status check in the branch ruleset. Copy `.commitlintrc.yml`.
 4. **Release:** Copy `build-and-attest.yml` and `release.yml`; update distribution channel config.
 5. **Cargo profiles:** Copy the `[profile.release]` and `[profile.ci]` blocks verbatim.
 6. **Docs:** Add `ARCHITECTURE.md` for the target repo; link this document and the orchestration guide from README.
@@ -83,7 +83,7 @@ gh api \
 ```
 *Code Snippet 1: Org-wide GITHUB_TOKEN read-only enforcement, action allowlist, and SHA pinning.*
 
-**Enforcement state (2026-03-25).** Org default GITHUB_TOKEN permission set to `read`. All active workflows carry an explicit `permissions:` block as defence in depth. Per-workflow pattern for CI: `contents: read` / `pull-requests: read`. Pattern for lint-only jobs: `{}` (deny-all).
+**Enforcement state (2026-03-25).** Org default GITHUB_TOKEN permission set to `read`. All active workflows carry an explicit `permissions:` block as defence in depth. Per-workflow pattern for CI: `contents: read` / `pull-requests: read`. Minimum required permissions set per job; jobs using `actions/checkout` need at least `contents: read`.
 
 **4. `pull_request_target` Audit and Ban**
 
@@ -226,7 +226,7 @@ on:
     tags: ["v*.*.*"]
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: publish
     permissions:
       id-token: write  # required to request an OIDC token
