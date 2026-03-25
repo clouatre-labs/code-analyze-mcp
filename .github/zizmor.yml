@@ -2,6 +2,6 @@
 # ci.yml uses github.actor to gate Renovate-only jobs; this is intentional
 # and not attacker-controllable in this context.
 rules:
-  spoofable-github-context:
+  bot-conditions:
     ignore:
       - ci.yml:183
