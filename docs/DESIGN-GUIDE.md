@@ -71,7 +71,7 @@ Use this tool for directories; use analyze_file for a single file.
 Returns a tree with LOC, function count, and class count."
 ```
 
-*Code Snippet 1: Suggestive vs. prescriptive tool description. The prescriptive version explicitly excludes the file case and names the alternative.*
+*Code Snippet 1: Suggestive vs. prescriptive tool description.*
 
 ### Actionable Error Messages
 
