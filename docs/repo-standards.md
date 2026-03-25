@@ -11,7 +11,7 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `.github/ISSUE_TEMPLATE/refactor.md` | Tracks refactors as first-class work, not hidden in feature PRs |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Verification checklist: tests, clippy, fmt, no-unwrap, API verification, GPG+DCO |
 | `.github/copilot-instructions.md` | Repo context for Copilot agents |
-| `.github/workflows/ci.yml` | Lint, test, bench, audit; path-filtered; aggregate `CI Result` job; pass `--profile ci` explicitly on `cargo clippy`, `cargo test`, and `cargo bench` |
+| `.github/workflows/ci.yml` | Lint, test, bench, audit; path-filtered; aggregate `CI Result` job; pass `--profile ci` explicitly on `cargo clippy` and `cargo bench` (not `cargo test`: profile.ci inherits `panic=abort` which aborts the test harness) |
 | `.github/workflows/build-and-attest.yml` | Reusable multi-platform build with cosign signing and provenance attestation |
 | `.github/workflows/release.yml` | GPG tag verification, SBOM, Homebrew + cargo-binstall + crates.io distribution |
 | `.commitlintrc.yml` | Enforces Conventional Commits for automated changelog and searchable history |
@@ -45,7 +45,7 @@ This document maps every repo-level artifact to its purpose and the rationale be
 
 1. **GitHub metadata:** Set topics, copy the 11-label taxonomy (names, colors, descriptions), create the two rulesets.
 2. **Templates:** Copy all three issue templates and the PR template; adapt wording to the target domain.
-3. **CI:** Copy `ci.yml`; update path filters; pin runner to `ubuntu-24.04` on every job; add a top-level `permissions` block with `contents: read` and `pull-requests: read`; pass `--profile ci` on `cargo clippy`, `cargo test`, and `cargo bench`. Set `CI Result` as the sole required status check in the branch ruleset. Copy `.commitlintrc.yml`.
+3. **CI:** Copy `ci.yml`; update path filters; pin runner to `ubuntu-24.04` on every job; add a top-level `permissions` block with `contents: read` and `pull-requests: read`; pass `--profile ci` on `cargo clippy` and `cargo bench` (not `cargo test`). Set `CI Result` as the sole required status check in the branch ruleset. Copy `.commitlintrc.yml`.
 4. **Release:** Copy `build-and-attest.yml` and `release.yml`; update distribution channel config.
 5. **Cargo profiles:** Copy the `[profile.release]` and `[profile.ci]` blocks verbatim.
 6. **Docs:** Add `ARCHITECTURE.md` for the target repo; link this document and the orchestration guide from README.
