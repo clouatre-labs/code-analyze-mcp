@@ -250,6 +250,148 @@ jobs:
           # Auto-merge after Audit check passes (ruleset requires status checks)
           gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
 
+  generate-mcpb:
+    name: Generate MCPB Bundles
+    needs: [create-release, build-and-attest]
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Generate and upload MCPB bundles
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          
+          RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
+          VERSION="${{ needs.create-release.outputs.version }}"
+          
+          declare -a targets=("aarch64-apple-darwin" "aarch64-unknown-linux-musl" "x86_64-unknown-linux-musl")
+          
+          for target in "${targets[@]}"; do
+            echo "Processing target: $target"
+            
+            # Download the release artifact
+            ARTIFACT_NAME="code-analyze-mcp-${VERSION}-${target}.tar.gz"
+            DOWNLOAD_URL="https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/${ARTIFACT_NAME}"
+            
+            if ! curl -fsSL "$DOWNLOAD_URL" -o "/tmp/${ARTIFACT_NAME}"; then
+              echo "Error: Failed to download artifact from ${DOWNLOAD_URL}" >&2
+              exit 1
+            fi
+
+            # Validate the downloaded tarball before extracting
+            if ! tar -tzf "/tmp/${ARTIFACT_NAME}" >/dev/null 2>&1; then
+              echo "Error: Downloaded file /tmp/${ARTIFACT_NAME} is not a valid tar.gz archive" >&2
+              exit 1
+            fi
+
+            # Extract the binary
+            mkdir -p "/tmp/mcpb-${target}"
+            tar -xzf "/tmp/${ARTIFACT_NAME}" -C "/tmp/mcpb-${target}"
+            
+            # Create manifest.json
+            printf '%s\n' \
+              '{' \
+              '  "name": "code-analyze-mcp",' \
+              "  \"version\": \"${VERSION}\"," \
+              '  "description": "MCP server for code structure analysis using tree-sitter",' \
+              '  "args": []' \
+              '}' > "/tmp/mcpb-${target}/manifest.json"
+            
+            # Create the .mcpb zip file
+            MCPB_NAME="code-analyze-mcp-${VERSION}-${target}.mcpb"
+            cd "/tmp/mcpb-${target}"
+            zip -r "/tmp/${MCPB_NAME}" code-analyze-mcp manifest.json
+            cd -
+            
+            # Upload to GitHub release
+            gh release upload "${RELEASE_TAG}" "/tmp/${MCPB_NAME}" --clobber
+          done
+
+  update-server-json:
+    name: Update server.json
+    needs: [create-release, generate-mcpb]
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository at main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download MCPB files and compute SHA256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          
+          RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
+          VERSION="${{ needs.create-release.outputs.version }}"
+          
+          declare -a targets=("aarch64-apple-darwin" "aarch64-unknown-linux-musl" "x86_64-unknown-linux-musl")
+          declare -A shas
+          
+          for target in "${targets[@]}"; do
+            MCPB_NAME="code-analyze-mcp-${VERSION}-${target}.mcpb"
+            DOWNLOAD_URL="https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/${MCPB_NAME}"
+            
+            curl -fsSL "$DOWNLOAD_URL" -o "/tmp/${MCPB_NAME}"
+            
+            sha=$(sha256sum "/tmp/${MCPB_NAME}" | cut -d' ' -f1)
+            shas["${target}"]="$sha"
+          done
+          
+          # Write to environment for next step
+          echo "SHA_AARCH64_APPLE_DARWIN=${shas[aarch64-apple-darwin]}" >> "$GITHUB_ENV"
+          echo "SHA_AARCH64_LINUX_MUSL=${shas[aarch64-unknown-linux-musl]}" >> "$GITHUB_ENV"
+          echo "SHA_X86_64_LINUX_MUSL=${shas[x86_64-unknown-linux-musl]}" >> "$GITHUB_ENV"
+
+      - name: Update server.json with new SHAs and version
+        run: |
+          set -euo pipefail
+          
+          VERSION="${{ needs.create-release.outputs.version }}"
+          
+          jq \
+            --arg version "$VERSION" \
+            --arg sha_darwin "${{ env.SHA_AARCH64_APPLE_DARWIN }}" \
+            --arg sha_linux_arm "${{ env.SHA_AARCH64_LINUX_MUSL }}" \
+            --arg sha_linux_x86 "${{ env.SHA_X86_64_LINUX_MUSL }}" \
+            '.packages[0].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-apple-darwin.mcpb" |
+             .packages[0].fileSha256 = $sha_darwin |
+             .packages[1].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-unknown-linux-musl.mcpb" |
+             .packages[1].fileSha256 = $sha_linux_arm |
+             .packages[2].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-x86_64-unknown-linux-musl.mcpb" |
+             .packages[2].fileSha256 = $sha_linux_x86' \
+            server.json > server.json.tmp && mv server.json.tmp server.json
+
+      - name: Commit and push server.json
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ needs.create-release.outputs.version }}"
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          # Only commit and push if server.json has changed
+          if git diff --quiet -- server.json; then
+            echo "server.json unchanged; skipping commit and push"
+            exit 0
+          fi
+
+          git add server.json
+          git commit --signoff -m "chore(registry): update server.json for v${VERSION}"
+          git push origin main
+
   publish:
     name: Publish to crates.io
     needs: create-release

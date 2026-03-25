@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.clouatre-labs/code-analyze-mcp",
+  "title": "Code Analyze MCP",
+  "description": "MCP server for code structure analysis using tree-sitter. Provides directory overview, file semantic details, symbol call graphs, and lightweight module indexing for Rust, Go, Java, Python, TypeScript, and TSX.",
+  "repository": {
+    "url": "https://github.com/clouatre-labs/code-analyze-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.1.9/code-analyze-mcp-0.1.9-aarch64-apple-darwin.mcpb",
+      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.1.9/code-analyze-mcp-0.1.9-aarch64-unknown-linux-musl.mcpb",
+      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.1.9/code-analyze-mcp-0.1.9-x86_64-unknown-linux-musl.mcpb",
+      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
