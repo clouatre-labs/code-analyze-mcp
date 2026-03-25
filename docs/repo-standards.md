@@ -297,7 +297,7 @@ tar -xzf tool.tar.gz
 
 **7. Secret Scanning with gitleaks**
 
-Secret scanning runs on every PR and push as a required CI check using a shared org-level configuration and license secret. This prevents long-lived tokens committed to any repository from persisting in history or appearing in CI log artifacts.
+Secret scanning runs on every PR and push as a required CI check using a shared org-level configuration and license secret. This prevents long-lived tokens committed to any repository from persisting in history or appearing in CI log artifacts. Before enabling as a required check, run a full-history scan across all org repos with `gitleaks detect --source .` to resolve any pre-existing findings; a required check on a repo with unresolved history violations will block all PRs immediately.
 
 ```yaml
 # gitleaks workflow step referencing org-level license and config secrets
