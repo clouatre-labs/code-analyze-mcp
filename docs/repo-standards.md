@@ -11,7 +11,7 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `.github/ISSUE_TEMPLATE/refactor.md` | Tracks refactors as first-class work, not hidden in feature PRs |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Verification checklist: tests, clippy, fmt, no-unwrap, API verification, GPG+DCO |
 | `.github/copilot-instructions.md` | Repo context for Copilot agents |
-| `.github/workflows/ci.yml` | Lint, test, bench, audit; path-filtered; aggregate `CI Result` job |
+| `.github/workflows/ci.yml` | Lint, test, bench, audit; path-filtered; aggregate `CI Result` job; pass `--profile ci` explicitly on `cargo clippy`, `cargo test`, and `cargo bench` |
 | `.github/workflows/build-and-attest.yml` | Reusable multi-platform build with cosign signing and provenance attestation |
 | `.github/workflows/release.yml` | GPG tag verification, SBOM, Homebrew + cargo-binstall + crates.io distribution |
 | `.commitlintrc.yml` | Enforces Conventional Commits for automated changelog and searchable history |
@@ -22,6 +22,8 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `SECURITY.md` | Vulnerability disclosure policy |
 | `Cargo.toml` `[profile.release]` | `opt-level=z`, `lto=true`, `codegen-units=1`, `panic=abort`, `strip=true` for minimal distribution binaries |
 | `Cargo.toml` `[profile.ci]` | Inherits release; `lto=false`, `codegen-units=16` for faster CI builds without sacrificing correctness |
+| `.github/workflows/ci.yml` permissions block | Top-level `permissions:` block on every workflow. Use `contents: read` + `pull-requests: read` for CI workflows; use `{}` (deny-all) for lint-only jobs. Required even after the org default was flipped to `read` on 2026-03-25, as defence in depth. |
+| Runner pin (`ubuntu-24.04`) | Pin every job to `ubuntu-24.04` rather than `ubuntu-latest`. `ubuntu-latest` resolves to the newest image mid-cycle and can silently change toolchain versions between runs. |
 
 *Table 1: Repository artifact map and purpose of each file.*
 
@@ -35,11 +37,15 @@ This document maps every repo-level artifact to its purpose and the rationale be
 
 **Provenance attestation.** `build-and-attest.yml` generates a signed attestation via `actions/attest-build-provenance`. Consumers can verify with `gh attestation verify` before installing. Combined with cosign signing and an SBOM, this covers the supply chain end to end.
 
+**Runner pinning to ubuntu-24.04.** `ubuntu-latest` is a moving alias; GitHub advances it to the next LTS image with short notice. Pinning to a specific image (`ubuntu-24.04`) makes toolchain changes explicit and reviewable rather than silent. Renovate keeps the pin current via automated PRs.
+
+**Permissions-first sequencing.** The org default GITHUB_TOKEN permission was flipped to `read` on 2026-03-25. New repos work without per-workflow blocks, but explicit blocks are still required as defence in depth and must appear before the first `jobs:` key in every workflow file.
+
 ## Applying to a New Repo
 
 1. **GitHub metadata:** Set topics, copy the 11-label taxonomy (names, colors, descriptions), create the two rulesets.
 2. **Templates:** Copy all three issue templates and the PR template; adapt wording to the target domain.
-3. **CI:** Copy `ci.yml`; update path filters. Set `CI Result` as the sole required status check. Copy `.commitlintrc.yml`.
+3. **CI:** Copy `ci.yml`; update path filters; pin runner to `ubuntu-24.04` on every job; add top-level `permissions: contents: read` block; pass `--profile ci` on `cargo clippy`, `cargo test`, and `cargo bench`. Set `CI Result` as the sole required status check in the branch ruleset. Copy `.commitlintrc.yml`.
 4. **Release:** Copy `build-and-attest.yml` and `release.yml`; update distribution channel config.
 5. **Cargo profiles:** Copy the `[profile.release]` and `[profile.ci]` blocks verbatim.
 6. **Docs:** Add `ARCHITECTURE.md` for the target repo; link this document and the orchestration guide from README.
@@ -76,6 +82,8 @@ gh api \
   -F can_approve_pull_request_reviews=false
 ```
 *Code Snippet 1: Org-wide GITHUB_TOKEN read-only enforcement, action allowlist, and SHA pinning.*
+
+**Enforcement state (2026-03-25).** Org default GITHUB_TOKEN permission set to `read`. All active workflows carry an explicit `permissions:` block as defence in depth. Per-workflow pattern for CI: `contents: read` / `pull-requests: read`. Pattern for lint-only jobs: `{}` (deny-all).
 
 **4. `pull_request_target` Audit and Ban**
 
@@ -186,6 +194,8 @@ graph TD
     severity: medium
 ```
 *Code Snippet 5: zizmor CI step for SHA pinning enforcement.*
+
+Use `advanced-security: false` unless the repo has GitHub Advanced Security (GHAS) enabled. Setting it to `true` on a non-GHAS repo causes zizmor to emit false positives for features that are unavailable. `min-severity: high` suppresses informational and medium findings that do not represent exploitable vulnerabilities in typical org workflows.
 
 ```yaml
 # .github/dependabot.yml: keep action SHAs current via weekly PRs
@@ -310,6 +320,8 @@ Secret scanning runs on every PR and push as a required CI check using a shared 
 ```
 *Code Snippet 11: gitleaks required CI check using org-level license and configuration secrets.*
 
+**Full-history scan result (2026-03-25).** Ran `gitleaks detect --source .` across all org repos. Result: clean. All findings were false positives from test fixtures and example tokens. Recommendation: add a `.gitleaks.toml` allowlist to `aptu` to suppress test-fixture false positives and reduce noise in future scans.
+
 **8. Fine-Grained PATs Only, Classic PATs Banned, Expiry Enforced**
 
 Classic PATs grant wildcard access across all repositories a user can access; fine-grained PATs are scoped per repository and per permission. After the Aqua breach, token rotation was non-atomic and the gap lasted days: the correct procedure is to revoke all tokens, re-issue all tokens, and verify old tokens are dead in a single scripted operation.
@@ -330,6 +342,8 @@ gh api /orgs/{org}/actions/secrets --paginate --jq '.secrets[].name'
 ```
 *Code Snippet 12: Prevent private repository forks and audit org secrets for tokens requiring rotation.*
 
+**PAT inventory (2026-03-25).** No legacy OAuth token authorizations. Four installed GitHub Apps: Renovate, Prefect Horizon, DCO, clouatre-labs-org-admin.
+
 **9. GitHub Apps, 2FA, and SAML SSO**
 
 GitHub Apps receive short-lived installation tokens scoped to the installation and cannot be reused outside the workflow run, reducing the value of any single exfiltrated token. 2FA and SAML SSO are the minimum authentication baseline for org members; an account without 2FA is one phishing attempt away from full repository access. Enable 2FA enforcement in Org Settings > Authentication security > Require two-factor authentication.
@@ -342,6 +356,8 @@ gh api /orgs/{org}/credential-authorizations --paginate \
   --jq '.[] | {login: .login, credential_type: .credential_type, token_last_eight: .token_last_eight}'
 ```
 *Code Snippet 13: Audit active credential authorizations to identify long-lived or classic tokens.*
+
+**2FA enforcement state (2026-03-25).** Organization-level 2FA requirement enabled. Zero members without 2FA. All members verified.
 
 ### Environment and Release Protection
 
