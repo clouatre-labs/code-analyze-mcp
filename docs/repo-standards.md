@@ -132,6 +132,7 @@ done
 |---|---|---|
 | `first_time_contributors` | First-time contributors with no merged PR | Org members; collaborators; contributors with a merged PR |
 | `all_external_contributors` | All non-members, including repeat contributors | Org members only |
+
 *Table 2: `first_time_contributors` vs `all_external_contributors` fork PR approval policy comparison.*
 
 **13. CODEOWNERS on `.github/workflows/`**
@@ -407,4 +408,5 @@ gh api "/orgs/{org}/audit-log?phrase=action:tag.create+action:repo.create&per_pa
 | 11 | Pinned tool versions | Compromised package via unpinned install (LiteLLM breach) | Workflow hardening; SHA256 verification |
 | 12 | Audit log and alerting | Breach invisible to org until external disclosure (Aqua breach) | `GET /orgs/{org}/audit-log` |
 | 13 | CODEOWNERS on workflows | Workflow modification by compromised contributor account | CODEOWNERS; branch ruleset |
+
 *Table 3: Security hardening controls, risks blocked, and enforcement path.*
