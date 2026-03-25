@@ -23,6 +23,8 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `Cargo.toml` `[profile.release]` | `opt-level=z`, `lto=true`, `codegen-units=1`, `panic=abort`, `strip=true` for minimal distribution binaries |
 | `Cargo.toml` `[profile.ci]` | Inherits release; `lto=false`, `codegen-units=16` for faster CI builds without sacrificing correctness |
 
+*Table 1: Repository artifact map and purpose of each file.*
+
 ## Non-obvious Decisions
 
 **Rulesets over legacy branch protection.** GitHub Rulesets apply consistently across the organization and support conditions the legacy API cannot express. Two rulesets are active: main branch protection (no force push, no deletion, required status on `CI Result`) and release tag protection (`v*.*.*` format, no overwrites).
