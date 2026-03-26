@@ -41,6 +41,10 @@ This document maps every repo-level artifact to its purpose and the rationale be
 
 **Permissions-first sequencing.** The org default GITHUB_TOKEN permission was flipped to `read` on 2026-03-25. New repos work without per-workflow blocks, but explicit blocks are still required as defence in depth and should be placed before the first `jobs:` key by convention for readability.
 
+## Merge Strategy
+
+**Squash merge only.** The repository is configured with `allow_squash_merge: true`, `delete_branch_on_merge: true`, and merge commits and rebase merges disabled. Squash merging linearizes the commit history and prevents feature branches from adding noise; automatic branch deletion keeps the repository clean.
+
 ## Applying to a New Repo
 
 1. **GitHub metadata:** Set topics, copy the 11-label taxonomy (names, colors, descriptions), create the two rulesets.
