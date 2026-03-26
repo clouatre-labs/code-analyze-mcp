@@ -179,7 +179,7 @@ jobs:
     name: MSRV Check
     runs-on: ubuntu-24.04
     needs: changes
-    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'  # zizmor: ignore[spoofable-github-context]
+    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -200,7 +200,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: changes
     timeout-minutes: 10
-    if: github.actor == 'renovate[bot]'  # zizmor: ignore[spoofable-github-context]
+    if: github.actor == 'renovate[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
