@@ -207,10 +207,10 @@ The software produced by this project (a code analysis MCP server) does not impl
 
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
-| `dynamic_analysis` | **SUGGESTED** -- At least one dynamic analysis tool applied to proposed major production releases. | **Not Met** | No fuzzer or dynamic analysis tool (e.g., cargo-fuzz, cargo-afl) is currently configured. No `fuzz/` directory exists. This is a suggestion, not a MUST. **Recommended action:** Add a minimal cargo-fuzz harness for the parser entry points. |
+| `dynamic_analysis` | **SUGGESTED** -- At least one dynamic analysis tool applied to proposed major production releases. | **Met** | A cargo-fuzz harness is present in [`fuzz/`](../fuzz/) with three targets exercising the main entry points via libFuzzer. URL: https://github.com/clouatre-labs/code-analyze-mcp/tree/main/fuzz |
 | `dynamic_analysis_unsafe` | **SUGGESTED** -- If the project uses memory-unsafe languages, at least one dynamic tool detects memory safety problems. | **N/A** | The project is written entirely in Rust (memory-safe by design). No C or C++ code is produced. |
-| `dynamic_analysis_enable_assertions` | **SUGGESTED** -- Dynamic analysis configuration enables many assertions. | **Not Met** | No dynamic analysis is configured. If fuzzing is added, assertions should be enabled. Not a MUST. |
-| `dynamic_analysis_fixed` | **MUST** -- Medium+ severity exploitable vulnerabilities discovered by dynamic analysis are fixed in a timely way. | **N/A** | No dynamic analysis is currently performed. When added, this becomes a MUST. |
+| `dynamic_analysis_enable_assertions` | **SUGGESTED** -- Dynamic analysis configuration enables many assertions. | **Met** | The `[profile.fuzz]` section in `Cargo.toml` sets `debug-assertions = true`. URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/Cargo.toml |
+| `dynamic_analysis_fixed` | **MUST** -- Medium+ severity exploitable vulnerabilities discovered by dynamic analysis are fixed in a timely way. | **Met** | The fuzz harness is in place. Any vulnerability found during fuzzing would follow the same security disclosure and fix process documented in SECURITY.md. URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/SECURITY.md |
 
 ---
 
@@ -229,8 +229,8 @@ The software produced by this project (a code analysis MCP server) does not impl
 | Security -- Delivery | 2 | 0 | 0 |
 | Security -- Vulns | 2 | 0 | 0 |
 | Security -- Other | 1 | 0 | 0 |
-| Analysis | 4 | 1 | 1 |
-| **Total** | **49** | **1** | **10** |
+| Analysis | 7 | 0 | 0 |
+| **Total** | **52** | **0** | **9** |
 
 ### Required Actions (MUST criteria not yet met)
 
@@ -238,11 +238,7 @@ All MUST criteria are met. No required actions remain.
 
 ### Recommended Actions (SHOULD / SUGGESTED criteria not yet met)
 
-2. **`dynamic_analysis`** (SUGGESTED)
-   Add a `fuzz/` directory with a minimal `cargo-fuzz` harness targeting the tree-sitter parser entry point (e.g., `src/parser.rs`). Run it in CI against proposed releases. Because this project is written in Rust, the memory-safety concern is lower, but a fuzzer would still catch logic panics and assertion failures.
-
-3. **`dynamic_analysis_enable_assertions`** (SUGGESTED)
-   If fuzzing is added, enable debug assertions in the fuzz profile (`[profile.fuzz]` with `debug-assertions = true`).
+All SUGGESTED criteria are now met. No recommended actions remain.
 
 ### Badge
 
