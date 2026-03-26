@@ -31,3 +31,11 @@ Verify these against the actual `Cargo.lock` version of `rmcp` -- do not rely on
 - Flag any new dependency added to `Cargo.toml` that is not referenced in the PR description.
 - Flag `unsafe` blocks unconditionally.
 - Flag changes to files outside the scope described in the PR description.
+
+## Tool parameter invariants
+
+These are enforced at runtime and must be preserved in any refactor:
+
+- `summary=true` and `cursor` passed together must return `INVALID_PARAMS`. Flag any change to the `summary_cursor_conflict` function or callers that weakens this check.
+- `impl_only=true` is Rust-only; passing it for a non-Rust directory must return `INVALID_PARAMS`. Flag any change that allows `impl_only` to silently no-op on non-Rust paths instead of erroring.
+- `analyze_module` accepts `path` only; `pagination`, `summary`, `force`, and `verbose` are not supported. Flag any PR that adds these parameters to `AnalyzeModuleParams`.

@@ -1,7 +1,5 @@
 # Copilot Instructions
 
-For universal project instructions, see `AGENTS.md` in the repo root.
-
 ## Assigning issues to Copilot
 
 REST API method:
@@ -21,8 +19,12 @@ Flag:
 - Hallucinated APIs; verify against `Cargo.lock` and `cargo doc --open`
 - Scope creep beyond the issue deliverables
 - Missing error handling
-- Only Rust is implemented; SymbolFocus mode is stubbed (Wave 3)
 - rmcp, tree-sitter, schemars version assumptions; verify against installed versions
+- Missing `cargo deny check advisories licenses` run when `Cargo.toml` changes
+- New dependency added without justification in the PR description
+- `gh release create` used instead of `git tag -s vX.Y.Z -m "Release vX.Y.Z"`
+- Tool descriptions or server instructions reference host-specific clients (e.g. "Claude Code", "Cursor")
+- Commit missing GPG signature or DCO sign-off (`-S --signoff`)
 
 ## Design references
 
