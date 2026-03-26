@@ -6,7 +6,7 @@
 use crate::formatter::{
     format_file_details, format_focused, format_focused_summary, format_structure,
 };
-use crate::graph::{CallGraph, InternalCallChain, resolve_symbol};
+use crate::graph::{CallGraph, InternalCallChain};
 use crate::lang::language_from_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor, extract_impl_traits};
 use crate::test_detection::is_test_file;
@@ -405,8 +405,6 @@ pub fn analyze_focused_with_progress(
     )?;
 
     // Resolve symbol name using the requested match mode.
-    // Exact mode: check the graph directly without building a sorted set (O(1) lookups).
-    // Fuzzy modes: collect a sorted, deduplicated set of all known symbols for deterministic results.
     let resolved_focus = if match_mode == SymbolMatchMode::Exact {
         let exists = graph.definitions.contains_key(focus)
             || graph.callers.contains_key(focus)
@@ -421,16 +419,7 @@ pub fn analyze_focused_with_progress(
             .into());
         }
     } else {
-        let all_known: Vec<String> = graph
-            .definitions
-            .keys()
-            .chain(graph.callers.keys())
-            .chain(graph.callees.keys())
-            .cloned()
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        resolve_symbol(all_known.iter(), focus, &match_mode)?
+        graph.resolve_symbol_indexed(focus, &match_mode)?
     };
 
     // Count unique callers for the focus symbol before applying impl_only filter.

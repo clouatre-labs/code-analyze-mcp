@@ -7,6 +7,7 @@ use crate::analyze::{AnalysisOutput, FileAnalysisOutput};
 use crate::traversal::WalkEntry;
 use crate::types::AnalysisMode;
 use lru::LruCache;
+use rayon::prelude::*;
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -35,9 +36,12 @@ pub struct DirectoryCacheKey {
 impl DirectoryCacheKey {
     /// Build a cache key from walk entries, capturing mtime for each file.
     /// Files are sorted by path for deterministic hashing.
+    /// Directories are filtered out; only file entries are processed.
+    /// Metadata collection is parallelized using rayon.
     pub fn from_entries(entries: &[WalkEntry], max_depth: Option<u32>, mode: AnalysisMode) -> Self {
         let mut files: Vec<(PathBuf, SystemTime)> = entries
-            .iter()
+            .par_iter()
+            .filter(|e| !e.is_dir)
             .map(|e| {
                 let mtime = fs::metadata(&e.path)
                     .and_then(|m| m.modified())
@@ -177,5 +181,43 @@ impl Clone for AnalysisCache {
             cache: Arc::clone(&self.cache),
             directory_cache: Arc::clone(&self.directory_cache),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_entries_skips_dirs() {
+        // Arrange: create a real temp dir and a real temp file for hermetic isolation.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = tempfile::NamedTempFile::new_in(dir.path()).expect("tempfile");
+        let file_path = file.path().to_path_buf();
+
+        let entries = vec![
+            WalkEntry {
+                path: dir.path().to_path_buf(),
+                depth: 0,
+                is_dir: true,
+                is_symlink: false,
+                symlink_target: None,
+            },
+            WalkEntry {
+                path: file_path.clone(),
+                depth: 0,
+                is_dir: false,
+                is_symlink: false,
+                symlink_target: None,
+            },
+        ];
+
+        // Act: build cache key from entries
+        let key = DirectoryCacheKey::from_entries(&entries, None, AnalysisMode::Overview);
+
+        // Assert: only the file entry should be in the cache key
+        // The directory entry should be filtered out
+        assert_eq!(key.files.len(), 1);
+        assert_eq!(key.files[0].0, file_path);
     }
 }
