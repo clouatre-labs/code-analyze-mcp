@@ -139,26 +139,6 @@ jobs:
       - name: Run tests
         run: cargo test
 
-  bench:
-    name: Benchmark
-    runs-on: ubuntu-24.04
-    needs: changes
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true' && github.actor != 'renovate[bot]'
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
-        with:
-          toolchain: stable
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Run benchmarks
-        run: cargo bench --profile ci
-
   deny:
     name: Audit Dependencies
     runs-on: ubuntu-24.04
@@ -200,7 +180,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: changes
     timeout-minutes: 10
-    if: github.actor == 'renovate[bot]'
+    if: github.event.pull_request.user.login == 'renovate[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -239,7 +219,7 @@ jobs:
     name: CI Result
     runs-on: ubuntu-24.04
     if: always()
-    needs: [changes, commitlint, check-base, format, lint, test, bench, deny, msrv, renovate-check, zizmor]
+    needs: [changes, commitlint, check-base, format, lint, test, deny, msrv, renovate-check, zizmor]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
