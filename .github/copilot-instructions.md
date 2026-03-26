@@ -22,7 +22,7 @@ Flag:
 - rmcp, tree-sitter, schemars version assumptions; verify against installed versions
 - Missing `cargo deny check advisories licenses` run when `Cargo.toml` changes
 - New dependency added without justification in the PR description
-- `gh release create` used instead of `git tag -s vX.Y.Z -m "Release vX.Y.Z"`
+- `gh release create` used instead of `git tag -s vX.Y.Z -m "vX.Y.Z"`
 - Tool descriptions or server instructions reference host-specific clients (e.g. "Claude Code", "Cursor")
 - Commit missing GPG signature or DCO sign-off (`-S --signoff`)
 

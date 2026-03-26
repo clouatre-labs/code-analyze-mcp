@@ -8,7 +8,7 @@ description: "Test conventions for code-analyze-mcp"
 
 - One happy path and one edge case per distinct behavior. Flag test files where multiple tests exercise the same code path with only input variation (e.g., testing the same parse logic for five different languages when one representative suffices).
 - Use AAA layout (Arrange, Act, Assert) with a blank line between each section. Flag tests that interleave setup and assertions.
-- Use `TempDir` from the `tempfile` crate for filesystem fixtures. Flag tests that write to hardcoded paths or use `std::env::temp_dir()` directly.
+- Use `TempDir` from the `tempfile` crate for filesystem fixtures. Flag tests that write to hardcoded paths, and avoid introducing new uses of `std::env::temp_dir()` directly.
 
 ## Assertions
 
@@ -27,4 +27,4 @@ description: "Test conventions for code-analyze-mcp"
 ## Scope
 
 - Test files must not contain `#[allow(dead_code)]` suppressing unused fixture helpers. Flag it: the helper should be removed or moved to `fixtures.rs`.
-- Flag `use code_analyze_mcp::*` glob imports in test files; prefer explicit imports so it is clear what is under test.
+- Do not introduce new `use code_analyze_mcp::*` glob imports in test files; if you touch an existing glob import, replace it with explicit imports so it is clear what is under test.
