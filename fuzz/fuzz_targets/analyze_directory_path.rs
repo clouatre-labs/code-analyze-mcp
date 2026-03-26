@@ -13,11 +13,9 @@ fuzz_target!(|data: &[u8]| {
             return;
         }
         if let Ok(dir) = tempfile::tempdir() {
-            let path = dir.path().join("input.rs");
-            if std::fs::write(&path, s).is_ok() {
-                if let Some(path_str) = path.to_str() {
-                    let _ = code_analyze_mcp::analyze::analyze_file(path_str, None);
-                }
+            let file_path = dir.path().join("input.rs");
+            if std::fs::write(&file_path, s).is_ok() {
+                let _ = code_analyze_mcp::analyze::analyze_directory(dir.path(), None);
             }
         }
     }
