@@ -227,20 +227,18 @@ pub fn another_caller() {
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
+    use code_analyze_mcp::analyze::AnalyzeSymbolParams;
     use code_analyze_mcp::types::SymbolMatchMode;
-    let output = analyze_focused_with_progress(
-        root,
-        "target_fn",
-        SymbolMatchMode::Exact,
-        1,
-        None,
-        None,
-        counter,
-        ct,
-        true, // use_summary=true
-        None, // impl_only
-    )
-    .unwrap();
+    let params = AnalyzeSymbolParams {
+        focus: "target_fn".to_string(),
+        match_mode: SymbolMatchMode::Exact,
+        follow_depth: 1,
+        max_depth: None,
+        ast_recursion_limit: None,
+        use_summary: true,
+        impl_only: None,
+    };
+    let output = analyze_focused_with_progress(root, &params, counter, ct).unwrap();
 
     // Assert: Output should contain summary format markers
     assert!(
@@ -294,20 +292,18 @@ pub fn another_caller() {
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
+    use code_analyze_mcp::analyze::AnalyzeSymbolParams;
     use code_analyze_mcp::types::SymbolMatchMode;
-    let output = analyze_focused_with_progress(
-        root,
-        "target_fn",
-        SymbolMatchMode::Exact,
-        1,
-        None,
-        None,
-        counter,
-        ct,
-        false, // use_summary=false
-        None,  // impl_only
-    )
-    .unwrap();
+    let params = AnalyzeSymbolParams {
+        focus: "target_fn".to_string(),
+        match_mode: SymbolMatchMode::Exact,
+        follow_depth: 1,
+        max_depth: None,
+        ast_recursion_limit: None,
+        use_summary: false,
+        impl_only: None,
+    };
+    let output = analyze_focused_with_progress(root, &params, counter, ct).unwrap();
 
     // Assert: Output should contain full format markers
     assert!(
