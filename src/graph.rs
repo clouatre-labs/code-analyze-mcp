@@ -228,14 +228,11 @@ impl CallGraph {
         }
     }
 
-    /// Count parameters in a parameter string.
-    /// Handles: "(x: i32, y: String)" -> 2, "(&self, x: i32)" -> 2, "()" -> 0, "(&self)" -> 1
-    /// Resolve a callee name using four strategies:
-    /// 1. Try the raw callee name first in definitions
-    /// 2. If not found, try the stripped name (via `strip_scope_prefix`)
-    /// 3. If multiple definitions exist, prefer same-file candidates
-    /// 4. Among same-file candidates, use type info as tiebreaker, then line proximity
-    /// 5. If no same-file candidates, use any definition (first one)
+    /// Resolve a callee name using two strategies:
+    /// 1. Try the raw callee name first in definitions; return it if found.
+    /// 2. Strip any scope prefix (e.g. `Foo::bar` → `bar`) and look up the stripped name; return it if found.
+    ///
+    /// If neither strategy finds a definition, returns the original callee unchanged.
     ///
     /// Returns the resolved callee name (which may be the stripped version).
     fn resolve_callee(
@@ -266,15 +263,17 @@ impl CallGraph {
     /// Build a call graph from semantic analysis results and trait implementation info.
     #[instrument(skip_all)]
     #[allow(clippy::too_many_lines)] // exhaustive graph construction pass; splitting into subfunctions harms readability
+    // public API; callers expect owned semantics
+    #[allow(clippy::needless_pass_by_value)]
     pub fn build_from_results(
-        results: &[(PathBuf, SemanticAnalysis)],
+        results: Vec<(PathBuf, SemanticAnalysis)>,
         impl_traits: &[ImplTraitInfo],
         impl_only: bool,
     ) -> Result<Self, GraphError> {
         let mut graph = CallGraph::new();
 
         // Build definitions and function_types maps first
-        for (path, analysis) in results {
+        for (path, analysis) in &results {
             for func in &analysis.functions {
                 graph
                     .definitions
@@ -307,7 +306,7 @@ impl CallGraph {
         }
 
         // Process calls with resolved callee names
-        for (path, analysis) in results {
+        for (path, analysis) in &results {
             for call in &analysis.calls {
                 let resolved_callee = Self::resolve_callee(
                     &call.callee,
@@ -618,7 +617,7 @@ mod tests {
             vec![("main", "foo", 2), ("foo", "bar", 15)],
         );
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
         assert!(graph.definitions.contains_key("main"));
         assert!(graph.definitions.contains_key("foo"));
@@ -630,7 +629,7 @@ mod tests {
     fn test_find_incoming_chains_depth_zero() {
         let analysis = make_analysis(vec![("main", 1), ("foo", 10)], vec![("main", "foo", 2)]);
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
         assert!(
             !graph
@@ -644,7 +643,7 @@ mod tests {
     fn test_find_outgoing_chains_depth_zero() {
         let analysis = make_analysis(vec![("main", 1), ("foo", 10)], vec![("main", "foo", 2)]);
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
         assert!(
             !graph
@@ -675,7 +674,7 @@ mod tests {
         let analysis_b = make_analysis(vec![("helper", 20)], vec![]);
 
         let graph = CallGraph::build_from_results(
-            &[
+            vec![
                 (PathBuf::from("a.rs"), analysis_a),
                 (PathBuf::from("b.rs"), analysis_b),
             ],
@@ -713,7 +712,7 @@ mod tests {
         );
 
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Check that main calls process
@@ -746,7 +745,7 @@ mod tests {
         );
 
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Check that all three callers have "method" as their callee
@@ -771,7 +770,7 @@ mod tests {
         let analysis_b = make_analysis(vec![("helper", 10)], vec![]);
 
         let graph = CallGraph::build_from_results(
-            &[
+            vec![
                 (PathBuf::from("a.rs"), analysis_a),
                 (PathBuf::from("b.rs"), analysis_b),
             ],
@@ -817,7 +816,7 @@ mod tests {
         );
 
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Check that main calls process
@@ -847,7 +846,7 @@ mod tests {
         );
 
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Check that main calls process
@@ -883,7 +882,7 @@ mod tests {
 
         // Act: build with impl_only=true
         let graph = CallGraph::build_from_results(
-            &[(PathBuf::from("test.rs"), analysis)],
+            vec![(PathBuf::from("test.rs"), analysis)],
             &impl_traits,
             true,
         )
@@ -926,7 +925,7 @@ mod tests {
 
         // Act: build with impl_only=false
         let graph = CallGraph::build_from_results(
-            &[(PathBuf::from("test.rs"), analysis)],
+            vec![(PathBuf::from("test.rs"), analysis)],
             &impl_traits,
             false,
         )
@@ -965,7 +964,7 @@ mod tests {
         }];
 
         let graph = CallGraph::build_from_results(
-            &[(PathBuf::from("test.rs"), analysis)],
+            vec![(PathBuf::from("test.rs"), analysis)],
             &impl_traits,
             true,
         )
@@ -1065,7 +1064,7 @@ mod tests {
             vec![("A", "B", 2), ("B", "C", 15)],
         );
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         let chains = graph
@@ -1110,7 +1109,7 @@ mod tests {
             vec![("ParseConfig", "parse_args", 10)],
         );
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Act: resolve using insensitive mode via the indexed method
@@ -1130,7 +1129,7 @@ mod tests {
             vec![],
         );
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Act: resolve using prefix mode via the indexed method
@@ -1150,7 +1149,7 @@ mod tests {
         // Arrange: two symbols that differ only by case map to the same lowercase key
         let analysis = make_analysis(vec![("Foo", 1), ("foo", 5)], vec![("Foo", "foo", 10)]);
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Act: insensitive lookup for "foo" hits both Foo and foo
@@ -1173,7 +1172,7 @@ mod tests {
             vec![],
         );
         let graph =
-            CallGraph::build_from_results(&[(PathBuf::from("test.rs"), analysis)], &[], false)
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
                 .expect("Failed to build graph");
 
         // Act: resolve using contains mode; "config" matches parse_config and build_config

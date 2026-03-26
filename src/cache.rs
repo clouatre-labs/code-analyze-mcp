@@ -117,7 +117,9 @@ impl AnalysisCache {
 
     /// Store an analysis result in the cache.
     #[instrument(skip(self, value), fields(path = ?key.path))]
-    pub fn put(&self, key: &CacheKey, value: Arc<FileAnalysisOutput>) {
+    // public API; callers expect owned semantics
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn put(&self, key: CacheKey, value: Arc<FileAnalysisOutput>) {
         lock_or_recover(&self.cache, self.file_capacity, |guard| {
             let push_result = guard.push(key.clone(), value);
             let cache_size = guard.len();
@@ -126,7 +128,7 @@ impl AnalysisCache {
                     debug!(cache_event = "insert", cache_size = cache_size, path = ?key.path);
                 }
                 Some((returned_key, _)) => {
-                    if returned_key == *key {
+                    if returned_key == key {
                         debug!(cache_event = "update", cache_size = cache_size, path = ?key.path);
                     } else {
                         debug!(cache_event = "eviction", cache_size = cache_size, path = ?key.path, evicted_path = ?returned_key.path);
@@ -154,9 +156,9 @@ impl AnalysisCache {
 
     /// Store a directory analysis result in the cache.
     #[instrument(skip(self, value))]
-    pub fn put_directory(&self, key: &DirectoryCacheKey, value: Arc<AnalysisOutput>) {
+    pub fn put_directory(&self, key: DirectoryCacheKey, value: Arc<AnalysisOutput>) {
         lock_or_recover(&self.directory_cache, DIR_CACHE_CAPACITY, |guard| {
-            let push_result = guard.push(key.clone(), value);
+            let push_result = guard.push(key, value);
             let cache_size = guard.len();
             match push_result {
                 None => {

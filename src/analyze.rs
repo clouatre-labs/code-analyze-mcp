@@ -80,11 +80,13 @@ pub struct FileAnalysisOutput {
 
 /// Analyze a directory structure with progress tracking.
 #[instrument(skip_all, fields(path = %root.display()))]
+// public API; callers expect owned semantics
+#[allow(clippy::needless_pass_by_value)]
 pub fn analyze_directory_with_progress(
     root: &Path,
     entries: Vec<WalkEntry>,
-    progress: &Arc<AtomicUsize>,
-    ct: &CancellationToken,
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
 ) -> Result<AnalysisOutput, AnalyzeError> {
     // Check if already cancelled
     if ct.is_cancelled() {
@@ -182,7 +184,7 @@ pub fn analyze_directory(
     let entries = walk_directory(root, max_depth)?;
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    analyze_directory_with_progress(root, entries, &counter, &ct)
+    analyze_directory_with_progress(root, entries, counter, ct)
 }
 
 /// Determine analysis mode based on parameters and path.
@@ -391,7 +393,7 @@ fn collect_file_analysis(
 
 /// Phase 2: Build call graph from analysis results.
 fn build_call_graph(
-    analysis_results: &[(PathBuf, SemanticAnalysis)],
+    analysis_results: Vec<(PathBuf, SemanticAnalysis)>,
     all_impl_traits: &[ImplTraitInfo],
 ) -> Result<CallGraph, AnalyzeError> {
     // Build call graph. Always build without impl_only filter first so we can
@@ -534,11 +536,13 @@ fn compute_chains(
 }
 
 /// Analyze a symbol's call graph across a directory with progress tracking.
+// public API; callers expect owned semantics
+#[allow(clippy::needless_pass_by_value)]
 pub fn analyze_focused_with_progress(
     root: &Path,
     params: &AnalyzeSymbolParams,
-    progress: &Arc<AtomicUsize>,
-    ct: &CancellationToken,
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     let entries = walk_directory(root, params.max_depth)?;
     let internal_params = FocusedAnalysisParams {
@@ -552,8 +556,8 @@ pub fn analyze_focused_with_progress(
     analyze_focused_with_progress_with_entries_internal(
         root,
         params.max_depth,
-        progress,
-        ct,
+        &progress,
+        &ct,
         &internal_params,
         &entries,
     )
@@ -601,7 +605,7 @@ fn analyze_focused_with_progress_with_entries_internal(
     }
 
     // Phase 2: Build call graph
-    let mut graph = build_call_graph(&analysis_results, &all_impl_traits)?;
+    let mut graph = build_call_graph(analysis_results, &all_impl_traits)?;
 
     // Check for cancellation before resolving the symbol (phase 3)
     if ct.is_cancelled() {
@@ -1161,8 +1165,8 @@ fn regular_caller() {
         let output = analyze_focused_with_progress(
             temp_dir.path(),
             &params,
-            &Arc::new(AtomicUsize::new(0)),
-            &CancellationToken::new(),
+            Arc::new(AtomicUsize::new(0)),
+            CancellationToken::new(),
         )
         .unwrap();
 
