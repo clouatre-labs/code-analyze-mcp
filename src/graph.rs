@@ -98,6 +98,91 @@ pub fn resolve_symbol<'a>(
     }
 }
 
+/// Resolve a symbol using the lowercase_index for O(1) case-insensitive lookup.
+/// For other modes, iterates the lowercase_index keys to avoid per-symbol allocations.
+impl CallGraph {
+    pub fn resolve_symbol_indexed(
+        &self,
+        query: &str,
+        mode: &SymbolMatchMode,
+    ) -> Result<String, GraphError> {
+        // Fast path for exact, case-sensitive lookups: O(1) contains_key checks with no
+        // intermediate allocations.
+        if matches!(mode, SymbolMatchMode::Exact) {
+            if self.definitions.contains_key(query)
+                || self.callers.contains_key(query)
+                || self.callees.contains_key(query)
+            {
+                return Ok(query.to_string());
+            }
+            return Err(GraphError::SymbolNotFound {
+                symbol: query.to_string(),
+                hint: "Try match_mode=insensitive for a case-insensitive search.".to_string(),
+            });
+        }
+
+        let query_lower = query.to_lowercase();
+        let mut matches: Vec<String> = {
+            match mode {
+                SymbolMatchMode::Insensitive => {
+                    // O(1) lookup using lowercase_index
+                    if let Some(originals) = self.lowercase_index.get(&query_lower) {
+                        if originals.len() > 1 {
+                            // Multiple originals map to the same lowercase key; report all.
+                            return Err(GraphError::MultipleCandidates {
+                                query: query.to_string(),
+                                candidates: originals.clone(),
+                            });
+                        }
+                        // Exactly one original maps to this lowercase key; return it.
+                        vec![originals[0].clone()]
+                    } else {
+                        vec![]
+                    }
+                }
+                SymbolMatchMode::Prefix => {
+                    // Use .iter() to avoid redundant hash lookup.
+                    self.lowercase_index
+                        .iter()
+                        .filter(|(k, _)| k.starts_with(&query_lower))
+                        .flat_map(|(_, v)| v.iter().cloned())
+                        .collect()
+                }
+                SymbolMatchMode::Contains => {
+                    // Use .iter() to avoid redundant hash lookup.
+                    self.lowercase_index
+                        .iter()
+                        .filter(|(k, _)| k.contains(&query_lower))
+                        .flat_map(|(_, v)| v.iter().cloned())
+                        .collect()
+                }
+                SymbolMatchMode::Exact => unreachable!("handled above"),
+            }
+        };
+        matches.sort();
+        matches.dedup();
+
+        debug!(
+            query,
+            mode = ?mode,
+            candidate_count = matches.len(),
+            "resolve_symbol_indexed"
+        );
+
+        match matches.len() {
+            1 => Ok(matches.into_iter().next().expect("len==1")),
+            0 => Err(GraphError::SymbolNotFound {
+                symbol: query.to_string(),
+                hint: "No symbols matched; try a shorter query or match_mode=contains.".to_string(),
+            }),
+            _ => Err(GraphError::MultipleCandidates {
+                query: query.to_string(),
+                candidates: matches,
+            }),
+        }
+    }
+}
+
 /// Strip scope prefixes from a callee name.
 /// Handles patterns: 'self.method' -> 'method', 'Type::method' -> 'method', 'module::function' -> 'function'.
 /// If no prefix is found, returns the original name.
@@ -127,6 +212,8 @@ pub struct CallGraph {
     pub definitions: HashMap<String, Vec<(PathBuf, usize)>>,
     /// Internal: maps function name to type info for type-aware disambiguation.
     function_types: HashMap<String, Vec<FunctionTypeInfo>>,
+    /// Index for O(1) case-insensitive symbol lookup: lowercased -> vec of originals.
+    lowercase_index: HashMap<String, Vec<String>>,
 }
 
 impl CallGraph {
@@ -136,6 +223,7 @@ impl CallGraph {
             callees: HashMap::new(),
             definitions: HashMap::new(),
             function_types: HashMap::new(),
+            lowercase_index: HashMap::new(),
         }
     }
 
@@ -287,6 +375,26 @@ impl CallGraph {
             for edges in graph.callers.values_mut() {
                 edges.retain(|e| e.is_impl_trait);
             }
+        }
+
+        // Build lowercase_index for O(1) case-insensitive lookup.
+        // Union of all keys from definitions, callers, and callees.
+        // Group all originals per lowercase key; sort so min() is stable.
+        for key in graph
+            .definitions
+            .keys()
+            .chain(graph.callers.keys())
+            .chain(graph.callees.keys())
+        {
+            graph
+                .lowercase_index
+                .entry(key.to_lowercase())
+                .or_default()
+                .push(key.clone());
+        }
+        for originals in graph.lowercase_index.values_mut() {
+            originals.sort();
+            originals.dedup();
         }
 
         let total_edges = graph.callees.values().map(|v| v.len()).sum::<usize>()
@@ -989,5 +1097,95 @@ mod tests {
             "chain[2] should be focus node C, got {}",
             chain.chain[2].0
         );
+    }
+
+    // ---- resolve_symbol_indexed tests ----
+
+    #[test]
+    fn test_insensitive_resolve_via_index() {
+        // Arrange: build a CallGraph with known symbols
+        let analysis = make_analysis(
+            vec![("ParseConfig", 1), ("parse_args", 5)],
+            vec![("ParseConfig", "parse_args", 10)],
+        );
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
+
+        // Act: resolve using insensitive mode via the indexed method
+        let result = graph
+            .resolve_symbol_indexed("parseconfig", &SymbolMatchMode::Insensitive)
+            .expect("Should resolve ParseConfig");
+
+        // Assert: O(1) lookup via lowercase_index returns the original symbol
+        assert_eq!(result, "ParseConfig");
+    }
+
+    #[test]
+    fn test_prefix_resolve_via_index() {
+        // Arrange: build a CallGraph with multiple symbols matching a prefix
+        let analysis = make_analysis(
+            vec![("parse_config", 1), ("parse_args", 5), ("build", 10)],
+            vec![],
+        );
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
+
+        // Act: resolve using prefix mode via the indexed method
+        let err = graph
+            .resolve_symbol_indexed("parse", &SymbolMatchMode::Prefix)
+            .unwrap_err();
+
+        // Assert: multiple candidates found
+        assert!(matches!(&err, GraphError::MultipleCandidates { .. }));
+        if let GraphError::MultipleCandidates { candidates, .. } = err {
+            assert_eq!(candidates.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_insensitive_case_collision_returns_multiple_candidates() {
+        // Arrange: two symbols that differ only by case map to the same lowercase key
+        let analysis = make_analysis(vec![("Foo", 1), ("foo", 5)], vec![("Foo", "foo", 10)]);
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
+
+        // Act: insensitive lookup for "foo" hits both Foo and foo
+        let err = graph
+            .resolve_symbol_indexed("foo", &SymbolMatchMode::Insensitive)
+            .unwrap_err();
+
+        // Assert: MultipleCandidates returned for case collision
+        assert!(matches!(&err, GraphError::MultipleCandidates { .. }));
+        if let GraphError::MultipleCandidates { candidates, .. } = err {
+            assert_eq!(candidates.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_contains_resolve_via_index() {
+        // Arrange: symbols where two match the query substring; one does not
+        let analysis = make_analysis(
+            vec![("parse_config", 1), ("build_config", 5), ("run", 10)],
+            vec![],
+        );
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
+
+        // Act: resolve using contains mode; "config" matches parse_config and build_config
+        let err = graph
+            .resolve_symbol_indexed("config", &SymbolMatchMode::Contains)
+            .unwrap_err();
+
+        // Assert: both matching symbols returned as MultipleCandidates
+        assert!(matches!(&err, GraphError::MultipleCandidates { .. }));
+        if let GraphError::MultipleCandidates { candidates, .. } = err {
+            let mut sorted = candidates.clone();
+            sorted.sort();
+            assert_eq!(sorted, vec!["build_config", "parse_config"]);
+        }
     }
 }
