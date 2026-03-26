@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 code-analyze-mcp Contributors
+
 [workspace]
 members = []
 
@@ -7,19 +10,11 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-[[bin]]
-name = "parse_source"
-path = "fuzz_targets/parse_source.rs"
-
-[[bin]]
-name = "analyze_directory_path"
-path = "fuzz_targets/analyze_directory_path.rs"
-
-[[bin]]
-name = "lang_extension"
-path = "fuzz_targets/lang_extension.rs"
-
 [dependencies]
 libfuzzer-sys = "0.4"
 code-analyze-mcp = { path = ".." }
 tempfile = "3"
+
+[[bin]]
+name = "parse_source"
+path = "fuzz_targets/parse_source.rs"

@@ -84,8 +84,4 @@ precedence = "override"
 SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
-[[annotations]]
-path = ["fuzz/**/*.rs", "fuzz/**/*.toml", "fuzz/.gitignore"]
-precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
-SPDX-License-Identifier = "Apache-2.0"
+
