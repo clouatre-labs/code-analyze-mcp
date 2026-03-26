@@ -421,16 +421,24 @@ impl CodeAnalyzer {
         let ct_clone = ct.clone();
         let impl_only = params.impl_only;
 
+        // Walk directory once at entry point
+        let entries = match walk_directory(path, max_depth) {
+            Ok(e) => e,
+            Err(e) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("Failed to walk directory: {}", e),
+                    error_meta("resource", false, "check path permissions and availability"),
+                ));
+            }
+        };
+        let entries = std::sync::Arc::new(entries);
+
         // Validate impl_only: only valid for directories that contain Rust source files.
         if impl_only == Some(true) {
-            let has_rust = walk_directory(path, max_depth)
-                .ok()
-                .map(|entries| {
-                    entries.iter().any(|e| {
-                        !e.is_dir && e.path.extension().and_then(|x| x.to_str()) == Some("rs")
-                    })
-                })
-                .unwrap_or(false);
+            let has_rust = entries
+                .iter()
+                .any(|e| !e.is_dir && e.path.extension().and_then(|x| x.to_str()) == Some("rs"));
 
             if !has_rust {
                 return Err(ErrorData::new(
@@ -449,15 +457,13 @@ impl CodeAnalyzer {
         let use_summary_for_task = params.output_control.force != Some(true)
             && params.output_control.summary == Some(true);
 
-        // Get total file count for progress reporting
-        let total_files = match walk_directory(path, max_depth) {
-            Ok(entries) => entries.iter().filter(|e| !e.is_dir).count(),
-            Err(_) => 0,
-        };
+        // Get total file count for progress reporting from the single walk
+        let total_files = entries.iter().filter(|e| !e.is_dir).count();
 
         // Spawn blocking analysis with progress tracking
+        let entries_clone = std::sync::Arc::clone(&entries);
         let handle = tokio::task::spawn_blocking(move || {
-            analyze::analyze_focused_with_progress(
+            analyze::analyze_focused_with_progress_with_entries(
                 &path_owned,
                 &symbol_owned,
                 match_mode,
@@ -468,6 +474,7 @@ impl CodeAnalyzer {
                 ct_clone,
                 use_summary_for_task,
                 impl_only,
+                &entries_clone,
             )
         });
 
@@ -552,7 +559,7 @@ impl CodeAnalyzer {
         };
 
         // Auto-detect: if no explicit summary param and output exceeds limit,
-        // re-run analysis with use_summary=true
+        // re-run analysis with use_summary=true (reuse same entries from initial walk)
         if params.output_control.summary.is_none()
             && params.output_control.force != Some(true)
             && output.formatted.len() > SIZE_LIMIT
@@ -566,8 +573,9 @@ impl CodeAnalyzer {
             let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
             let ct2 = ct.clone();
             let impl_only2 = impl_only;
+            let entries_clone2 = std::sync::Arc::clone(&entries);
             let summary_result = tokio::task::spawn_blocking(move || {
-                analyze::analyze_focused_with_progress(
+                analyze::analyze_focused_with_progress_with_entries(
                     &path_owned2,
                     &symbol_owned2,
                     match_mode2,
@@ -578,6 +586,7 @@ impl CodeAnalyzer {
                     ct2,
                     true, // use_summary=true
                     impl_only2,
+                    &entries_clone2,
                 )
             })
             .await;
