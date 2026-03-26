@@ -51,7 +51,7 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
-| `sites_https` | **MUST** -- Project sites support HTTPS. | **Met** | GitHub (https://github.com/clouatre-labs/code-analyze-mcp), crates.io (https://crates.io/crates/code-analyze-mcp), Homebrew tap all use HTTPS. |
+| `sites_https` | **MUST** -- Project sites support HTTPS. | **Met** | GitHub (https://github.com/clouatre-labs/code-analyze-mcp), crates.io (https://crates.io/crates/code-analyze-mcp), Homebrew tap all use HTTPS. URL: https://github.com/clouatre-labs/code-analyze-mcp |
 | `discussion` | **MUST** -- Project has searchable discussion mechanisms with URL-addressable topics that do not require proprietary client software. | **Met** | GitHub Issues are searchable, URL-addressable, and publicly accessible without proprietary software. URL: https://github.com/clouatre-labs/code-analyze-mcp/issues |
 | `english` | **SHOULD** -- Documentation is in English and the project can accept bug reports in English. | **Met** | All documentation is in English; issue tracker accepts reports in English. URL: https://github.com/clouatre-labs/code-analyze-mcp#readme |
 | `maintained` | **MUST** -- Project is maintained. | **Met** | Active development: v0.1.10 released 2026-03-26, dozens of issues closed in March 2026, Renovate bot running weekly. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.1.10 |
@@ -82,7 +82,7 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
 | `release_notes` | **MUST** -- Each release provides human-readable release notes summarizing major changes. | **Met** | Every GitHub release has curated release notes (e.g., v0.1.10) with categorized sections (New Features, Performance, Fixes, CI/Chore). URL: https://github.com/clouatre-labs/code-analyze-mcp/releases |
-| `release_notes_vulns` | **MUST** -- Release notes identify every publicly known run-time vulnerability fixed in that release that had a CVE assignment. | **Met** | No CVE-assigned vulnerabilities have been fixed to date. The criterion is satisfied when there is nothing to report; if a CVE is fixed in a future release, it must be listed explicitly. |
+| `release_notes_vulns` | **MUST** -- Release notes identify every publicly known run-time vulnerability fixed in that release that had a CVE assignment. | **Met** | No CVE-assigned vulnerabilities have been fixed to date. The criterion is satisfied when there is nothing to report; if a CVE is fixed in a future release, it must be listed explicitly. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases |
 
 ---
 
