@@ -14,7 +14,7 @@ use crate::types::{
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use thiserror::Error;
 use tracing::instrument;
@@ -520,7 +520,14 @@ impl SemanticExtractor {
         Self::extract_impl_methods(source, compiled, root, max_depth, &mut classes);
         Self::extract_references(source, compiled, root, max_depth, &mut references);
 
-        tracing::debug!(language = %language, functions = functions.len(), classes = classes.len(), imports = imports.len(), references = references.len(), calls = calls.len(), "extraction complete");
+        // Extract impl-trait blocks for Rust files (empty for other languages)
+        let impl_traits = if language == "rust" {
+            Self::extract_impl_traits_from_tree(source, compiled, root)
+        } else {
+            vec![]
+        };
+
+        tracing::debug!(language = %language, functions = functions.len(), classes = classes.len(), imports = imports.len(), references = references.len(), calls = calls.len(), impl_traits = impl_traits.len(), "extraction complete");
 
         Ok(SemanticAnalysis {
             functions,
@@ -529,7 +536,7 @@ impl SemanticExtractor {
             references,
             call_frequency,
             calls,
-            impl_traits: vec![],
+            impl_traits,
         })
     }
 
@@ -852,6 +859,57 @@ impl SemanticExtractor {
                 }
             }
         }
+    }
+
+    /// Extract impl-trait blocks from an already-parsed tree.
+    ///
+    /// Called during `extract()` for Rust files to avoid a second parse.
+    /// Returns an empty vec if the query is not available.
+    fn extract_impl_traits_from_tree(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+    ) -> Vec<ImplTraitInfo> {
+        let Some(query) = &compiled.impl_trait else {
+            return vec![];
+        };
+
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(query, root, source.as_bytes());
+        let mut results = Vec::new();
+
+        while let Some(mat) = matches.next() {
+            let mut trait_name = String::new();
+            let mut impl_type = String::new();
+            let mut line = 0usize;
+
+            for capture in mat.captures {
+                let capture_name = query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                let text = source[node.start_byte()..node.end_byte()].to_string();
+                match capture_name {
+                    "trait_name" => {
+                        trait_name = text;
+                        line = node.start_position().row + 1;
+                    }
+                    "impl_type" => {
+                        impl_type = text;
+                    }
+                    _ => {}
+                }
+            }
+
+            if !trait_name.is_empty() && !impl_type.is_empty() {
+                results.push(ImplTraitInfo {
+                    trait_name,
+                    impl_type,
+                    path: PathBuf::new(), // Path will be set by caller
+                    line,
+                });
+            }
+        }
+
+        results
     }
 }
 

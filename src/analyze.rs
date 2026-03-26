@@ -4,11 +4,11 @@
 //! `analyze_symbol` (call graph), and `analyze_module` (lightweight index). Handles parallel processing and cancellation.
 
 use crate::formatter::{
-    format_file_details, format_focused, format_focused_summary, format_structure,
+    format_file_details, format_focused_internal, format_focused_summary_internal, format_structure,
 };
 use crate::graph::{CallGraph, InternalCallChain};
 use crate::lang::language_from_extension;
-use crate::parser::{ElementExtractor, SemanticExtractor, extract_impl_traits};
+use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
 use crate::types::{
@@ -293,7 +293,7 @@ pub struct FocusedAnalysisOutput {
 }
 
 /// Analyze a symbol's call graph across a directory with progress tracking.
-#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
+/// Public API: matches the original signature before PR 491.
 #[allow(clippy::too_many_arguments)]
 pub fn analyze_focused_with_progress(
     root: &Path,
@@ -307,7 +307,38 @@ pub fn analyze_focused_with_progress(
     use_summary: bool,
     impl_only: Option<bool>,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
-    #[allow(clippy::too_many_arguments)]
+    let entries = walk_directory(root, max_depth)?;
+    analyze_focused_with_progress_with_entries(
+        root,
+        focus,
+        match_mode,
+        follow_depth,
+        max_depth,
+        ast_recursion_limit,
+        progress,
+        ct,
+        use_summary,
+        impl_only,
+        &entries,
+    )
+}
+
+/// Analyze a symbol's call graph using pre-walked directory entries.
+#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn analyze_focused_with_progress_with_entries(
+    root: &Path,
+    focus: &str,
+    match_mode: SymbolMatchMode,
+    follow_depth: u32,
+    _max_depth: Option<u32>,
+    ast_recursion_limit: Option<usize>,
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
+    use_summary: bool,
+    impl_only: Option<bool>,
+    entries: &[WalkEntry],
+) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     // Check if already cancelled
     if ct.is_cancelled() {
         return Err(AnalyzeError::Cancelled);
@@ -330,9 +361,7 @@ pub fn analyze_focused_with_progress(
         });
     }
 
-    // Walk the directory
-    let entries = walk_directory(root, max_depth)?;
-
+    // Use pre-walked entries (passed by caller)
     // Collect semantic analysis for all files in parallel
     let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
 
@@ -370,9 +399,9 @@ pub fn analyze_focused_with_progress(
                     for r in &mut semantic.references {
                         r.location = entry.path.display().to_string();
                     }
-                    // Extract impl-trait blocks independently (Rust only; empty for other langs)
-                    if language == "rust" {
-                        semantic.impl_traits = extract_impl_traits(&source, &entry.path);
+                    // Populate file path on impl_traits (already extracted during SemanticExtractor::extract)
+                    for trait_info in &mut semantic.impl_traits {
+                        trait_info.path = entry.path.clone();
                     }
                     progress.fetch_add(1, Ordering::Relaxed);
                     Some((entry.path.clone(), semantic))
@@ -466,18 +495,32 @@ pub fn analyze_focused_with_progress(
     let outgoing_chains = graph.find_outgoing_chains(&resolved_focus, follow_depth)?;
 
     let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
-        incoming_chains.into_iter().partition(|chain| {
+        incoming_chains.iter().cloned().partition(|chain| {
             chain
                 .chain
                 .first()
                 .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
         });
 
-    // Format output
+    // Format output with pre-computed chains
     let formatted = if use_summary {
-        format_focused_summary(&graph, &resolved_focus, follow_depth, Some(root))?
+        format_focused_summary_internal(
+            &graph,
+            &resolved_focus,
+            follow_depth,
+            Some(root),
+            Some(&incoming_chains),
+            Some(&outgoing_chains),
+        )?
     } else {
-        format_focused(&graph, &resolved_focus, follow_depth, Some(root))?
+        format_focused_internal(
+            &graph,
+            &resolved_focus,
+            follow_depth,
+            Some(root),
+            Some(&incoming_chains),
+            Some(&outgoing_chains),
+        )?
     };
 
     Ok(FocusedAnalysisOutput {
@@ -500,9 +543,10 @@ pub fn analyze_focused(
     max_depth: Option<u32>,
     ast_recursion_limit: Option<usize>,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    let entries = walk_directory(root, max_depth)?;
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    analyze_focused_with_progress(
+    analyze_focused_with_progress_with_entries(
         root,
         focus,
         SymbolMatchMode::Exact,
@@ -513,6 +557,7 @@ pub fn analyze_focused(
         ct,
         false,
         None,
+        &entries,
     )
 }
 
@@ -960,6 +1005,53 @@ mod tests {
         assert!(
             paginated.next_cursor.is_none(),
             "no next_cursor for empty or single-page prod_chains"
+        );
+    }
+
+    #[test]
+    fn test_callers_count_matches_formatted_output() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a file with multiple callers of `target`
+        let code = r#"
+fn target() {}
+fn caller_a() { target(); }
+fn caller_b() { target(); }
+fn caller_c() { target(); }
+"#;
+        fs::write(temp_dir.path().join("lib.rs"), code).unwrap();
+
+        // Analyze the symbol
+        let output = analyze_focused(temp_dir.path(), "target", 1, None, None).unwrap();
+
+        // Extract CALLERS count from formatted output
+        let formatted = &output.formatted;
+        let callers_count_from_output = formatted
+            .lines()
+            .find(|line| line.contains("FOCUS:"))
+            .and_then(|line| {
+                line.split(',')
+                    .find(|part| part.contains("callers"))
+                    .and_then(|part| {
+                        part.trim()
+                            .split_whitespace()
+                            .next()
+                            .and_then(|s| s.parse::<usize>().ok())
+                    })
+            })
+            .expect("should find CALLERS count in formatted output");
+
+        // Compute expected count from prod_chains (unique first-caller names)
+        let expected_callers_count = output
+            .prod_chains
+            .iter()
+            .filter_map(|chain| chain.chain.first().map(|(name, _, _)| name))
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+
+        assert_eq!(
+            callers_count_from_output, expected_callers_count,
+            "CALLERS count in formatted output should match unique-first-caller count in prod_chains"
         );
     }
 }

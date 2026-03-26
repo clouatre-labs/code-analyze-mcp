@@ -391,22 +391,37 @@ fn format_chains_as_tree(chains: &[(&str, &str)], arrow: &str, focus_symbol: &st
 
 /// Format focused symbol analysis with call graph.
 #[instrument(skip_all)]
-pub fn format_focused(
+/// Internal helper that accepts pre-computed chains.
+pub(crate) fn format_focused_internal(
     graph: &CallGraph,
     symbol: &str,
     follow_depth: u32,
     base_path: Option<&Path>,
+    incoming_chains: Option<&[InternalCallChain]>,
+    outgoing_chains: Option<&[InternalCallChain]>,
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
     // Compute all counts BEFORE output begins
     let def_count = graph.definitions.get(symbol).map_or(0, |d| d.len());
-    let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
-    let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
+
+    // Use pre-computed chains if provided, otherwise compute them
+    let (incoming_chains_vec, outgoing_chains_vec);
+    let (incoming_chains_ref, outgoing_chains_ref) =
+        if let (Some(inc), Some(out)) = (incoming_chains, outgoing_chains) {
+            (inc, out)
+        } else {
+            incoming_chains_vec = graph.find_incoming_chains(symbol, follow_depth)?;
+            outgoing_chains_vec = graph.find_outgoing_chains(symbol, follow_depth)?;
+            (
+                incoming_chains_vec.as_slice(),
+                outgoing_chains_vec.as_slice(),
+            )
+        };
 
     // Partition incoming_chains into production and test callers
     let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
-        incoming_chains.into_iter().partition(|chain| {
+        incoming_chains_ref.iter().cloned().partition(|chain| {
             chain
                 .chain
                 .first()
@@ -421,7 +436,7 @@ pub fn format_focused(
         .len();
 
     // Count unique callees
-    let callees_count = outgoing_chains
+    let callees_count = outgoing_chains_ref
         .iter()
         .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
         .collect::<std::collections::HashSet<_>>()
@@ -503,7 +518,7 @@ pub fn format_focused(
 
     // CALLEES section - what this symbol calls
     output.push_str("CALLEES:\n");
-    let outgoing_refs: Vec<_> = outgoing_chains
+    let outgoing_refs: Vec<_> = outgoing_chains_ref
         .iter()
         .filter_map(|chain| {
             if chain.chain.len() >= 2 {
@@ -534,7 +549,7 @@ pub fn format_focused(
             files.insert(path.clone());
         }
     }
-    for chain in &outgoing_chains {
+    for chain in outgoing_chains_ref {
         for (_, path, _) in &chain.chain {
             files.insert(path.clone());
         }
@@ -579,22 +594,37 @@ pub fn format_focused(
 /// Format a compact summary of focused symbol analysis.
 /// Used when output would exceed the size threshold or when explicitly requested.
 #[instrument(skip_all)]
-pub fn format_focused_summary(
+/// Internal helper that accepts pre-computed chains.
+pub(crate) fn format_focused_summary_internal(
     graph: &CallGraph,
     symbol: &str,
     follow_depth: u32,
     base_path: Option<&Path>,
+    incoming_chains: Option<&[InternalCallChain]>,
+    outgoing_chains: Option<&[InternalCallChain]>,
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
     // Compute all counts BEFORE output begins
     let def_count = graph.definitions.get(symbol).map_or(0, |d| d.len());
-    let incoming_chains = graph.find_incoming_chains(symbol, follow_depth)?;
-    let outgoing_chains = graph.find_outgoing_chains(symbol, follow_depth)?;
+
+    // Use pre-computed chains if provided, otherwise compute them
+    let (incoming_chains_vec, outgoing_chains_vec);
+    let (incoming_chains_ref, outgoing_chains_ref) =
+        if let (Some(inc), Some(out)) = (incoming_chains, outgoing_chains) {
+            (inc, out)
+        } else {
+            incoming_chains_vec = graph.find_incoming_chains(symbol, follow_depth)?;
+            outgoing_chains_vec = graph.find_outgoing_chains(symbol, follow_depth)?;
+            (
+                incoming_chains_vec.as_slice(),
+                outgoing_chains_vec.as_slice(),
+            )
+        };
 
     // Partition incoming_chains into production and test callers
     let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
-        incoming_chains.into_iter().partition(|chain| {
+        incoming_chains_ref.iter().cloned().partition(|chain| {
             chain
                 .chain
                 .first()
@@ -609,7 +639,7 @@ pub fn format_focused_summary(
         .len();
 
     // Count unique callees
-    let callees_count = outgoing_chains
+    let callees_count = outgoing_chains_ref
         .iter()
         .filter_map(|chain| chain.chain.first().map(|(p, _, _)| p))
         .collect::<std::collections::HashSet<_>>()
@@ -688,13 +718,13 @@ pub fn format_focused_summary(
 
     // CALLEES (top 10 by frequency)
     output.push_str("CALLEES (top 10):\n");
-    if outgoing_chains.is_empty() {
+    if outgoing_chains_ref.is_empty() {
         output.push_str("  (none)\n");
     } else {
         // Collect callee names and count frequency
         let mut callee_freq: std::collections::HashMap<String, usize> =
             std::collections::HashMap::new();
-        for chain in &outgoing_chains {
+        for chain in outgoing_chains_ref {
             if let Some((name, _, _)) = chain.chain.first() {
                 *callee_freq.entry(name.clone()).or_insert(0) += 1;
             }
@@ -714,6 +744,28 @@ pub fn format_focused_summary(
     output.push_str("Use summary=false with force=true for full output\n");
 
     Ok(output)
+}
+
+/// Format focused symbol analysis with call graph.
+/// Public wrapper that computes chains if not provided.
+pub fn format_focused(
+    graph: &CallGraph,
+    symbol: &str,
+    follow_depth: u32,
+    base_path: Option<&Path>,
+) -> Result<String, FormatterError> {
+    format_focused_internal(graph, symbol, follow_depth, base_path, None, None)
+}
+
+/// Format a compact summary of focused symbol analysis.
+/// Public wrapper that computes chains if not provided.
+pub fn format_focused_summary(
+    graph: &CallGraph,
+    symbol: &str,
+    follow_depth: u32,
+    base_path: Option<&Path>,
+) -> Result<String, FormatterError> {
+    format_focused_summary_internal(graph, symbol, follow_depth, base_path, None, None)
 }
 
 /// Format a compact summary for large directory analysis results.
