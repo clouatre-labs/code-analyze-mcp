@@ -1,5 +1,7 @@
 # Security Policy
 
+This project has earned the [OpenSSF Best Practices passing badge](https://www.bestpractices.dev/projects/12275).
+
 ## Reporting
 
 Please report vulnerabilities privately via [GitHub's private vulnerability reporting](https://github.com/clouatre-labs/code-analyze-mcp/security/advisories/new).
