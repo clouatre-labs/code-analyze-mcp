@@ -320,8 +320,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      pull-requests: write
     outputs:
-      commit_sha: ${{ steps.push.outputs.commit_sha }}
+      pr_branch: ${{ steps.push.outputs.pr_branch }}
     steps:
       - name: Checkout repository at main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -375,27 +376,59 @@ jobs:
              .packages[2].fileSha256 = $sha_linux_x86' \
             server.json > server.json.tmp && mv server.json.tmp server.json
 
-      - name: Commit and push server.json
+      - name: Create feature branch and commit server.json
         id: push
         run: |
           set -euo pipefail
 
           VERSION="${{ needs.create-release.outputs.version }}"
+          BRANCH_NAME="chore/registry-update-v${VERSION}"
 
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
           # Only commit and push if server.json has changed
           if git diff --quiet -- server.json; then
-            echo "server.json unchanged; skipping commit and push"
-            echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "server.json unchanged; skipping PR creation"
+            echo "pr_branch=main" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          git fetch origin
+          if git ls-remote --exit-code origin "$BRANCH_NAME" 2>/dev/null; then
+            echo "Stale branch $BRANCH_NAME exists, deleting..."
+            git push origin --delete "$BRANCH_NAME"
+          fi
+
+          git checkout -b "$BRANCH_NAME"
           git add server.json
           git commit --signoff -m "chore(registry): update server.json for v${VERSION}"
-          git push origin main
-          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git push origin "$BRANCH_NAME"
+          echo "pr_branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request with auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ needs.create-release.outputs.version }}"
+          BRANCH_NAME="chore/registry-update-v${VERSION}"
+
+          # Only create PR if server.json was changed
+          if [ "${{ steps.push.outputs.pr_branch }}" = "main" ]; then
+            echo "server.json unchanged; skipping PR creation"
+            exit 0
+          fi
+
+          gh pr create \
+            --title "chore(registry): update server.json for v${VERSION}" \
+            --body "Automated server.json update with MCPB checksums for release v${VERSION}" \
+            --head "$BRANCH_NAME" \
+            --base main
+
+          # Auto-merge after status checks pass
+          gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
 
   publish-registry:
     name: Publish to MCP Registry
@@ -406,10 +439,50 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Wait for server.json PR to merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          BRANCH_NAME="${{ needs.update-server-json.outputs.pr_branch }}"
+
+          # If no PR was created (server.json unchanged), skip waiting
+          if [ "$BRANCH_NAME" = "main" ]; then
+            echo "No PR created; server.json unchanged"
+            exit 0
+          fi
+
+          echo "Waiting for PR on branch $BRANCH_NAME to merge (max 5 minutes)..."
+          ELAPSED=0
+          MAX_WAIT=300
+          SLEEP_INTERVAL=30
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATE=$(gh pr view "$BRANCH_NAME" --json state --jq .state 2>/dev/null || echo "UNKNOWN")
+            echo "PR state: $STATE"
+
+            if [ "$STATE" = "MERGED" ]; then
+              echo "PR merged successfully"
+              exit 0
+            fi
+
+            if [ "$STATE" = "CLOSED" ]; then
+              echo "ERROR: PR was closed without merging"
+              exit 1
+            fi
+
+            sleep $SLEEP_INTERVAL
+            ELAPSED=$((ELAPSED + SLEEP_INTERVAL))
+          done
+
+          echo "ERROR: PR did not merge within 5 minutes"
+          exit 1
+
       - name: Checkout repository at main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ needs.update-server-json.outputs.commit_sha }}
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install mcp-publisher
