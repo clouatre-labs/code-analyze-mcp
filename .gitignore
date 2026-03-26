@@ -32,7 +32,8 @@ Thumbs.db
 # Project-Specific
 .handoff/
 
-# Override global .gitignore to track MCP config
+# Override global .gitignore to track MCP config and agent instructions
 !.mcp.json
+!AGENTS.md
 __pycache__/
 *.pyc
