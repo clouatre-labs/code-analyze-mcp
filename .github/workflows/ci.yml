@@ -180,7 +180,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: changes
     timeout-minutes: 10
-    if: github.actor == 'renovate[bot]'
+    if: github.event.pull_request.user.login == 'renovate[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
