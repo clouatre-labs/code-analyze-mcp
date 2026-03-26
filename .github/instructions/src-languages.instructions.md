@@ -12,7 +12,6 @@ Flag a new language extension that is not added to the map in `src/lang.rs`.
 
 ## tree-sitter query strings
 
-- Queries are `&'static str` constants named `ELEMENT_QUERY`, `CALL_QUERY`, `REFERENCE_QUERY`, `IMPORT_QUERY`, `IMPL_QUERY`, `IMPL_TRAIT_QUERY`. Flag new query constants with non-standard names.
 - Queries must use named captures (`@func_name`, `@call`, `@import_path`). Flag positional-only captures.
 - `IMPL_TRAIT_QUERY` must only match `(type_identifier)` for the trait name -- scoped traits (`impl io::Sink for T`) are intentionally out of scope. Flag attempts to extend it to `scoped_type_identifier`.
 
