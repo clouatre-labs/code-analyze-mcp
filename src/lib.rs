@@ -66,10 +66,10 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
-use traversal::walk_directory;
+use traversal::{WalkEntry, walk_directory};
 use types::{
     AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
-    AnalyzeSymbolParams,
+    AnalyzeSymbolParams, SymbolMatchMode,
 };
 
 static GLOBAL_SESSION_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -400,85 +400,70 @@ impl CodeAnalyzer {
         }
     }
 
-    /// Private helper: Extract analysis logic for focused mode (analyze_symbol).
-    /// Returns the complete focused analysis output after spawning and monitoring progress.
-    /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
-    #[instrument(skip(self, params, ct))]
-    async fn handle_focused_mode(
-        &self,
-        params: &AnalyzeSymbolParams,
-        ct: tokio_util::sync::CancellationToken,
-    ) -> Result<analyze::FocusedAnalysisOutput, ErrorData> {
-        let follow_depth = params.follow_depth.unwrap_or(1);
-        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let counter_clone = counter.clone();
-        let path = Path::new(&params.path);
-        let path_owned = path.to_path_buf();
-        let max_depth = params.max_depth;
-        let symbol_owned = params.symbol.clone();
-        let match_mode = params.match_mode.clone().unwrap_or_default();
-        let ast_recursion_limit = params.ast_recursion_limit;
-        let ct_clone = ct.clone();
-        let impl_only = params.impl_only;
+    // Validate impl_only: only valid for directories that contain Rust source files.
+    fn validate_impl_only(entries: &[WalkEntry]) -> Result<(), ErrorData> {
+        let has_rust = entries.iter().any(|e| {
+            !e.is_dir
+                && e.path
+                    .extension()
+                    .and_then(|x: &std::ffi::OsStr| x.to_str())
+                    == Some("rs")
+        });
 
-        // Walk directory once at entry point
-        let entries = match walk_directory(path, max_depth) {
-            Ok(e) => e,
-            Err(e) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    format!("Failed to walk directory: {}", e),
-                    error_meta("resource", false, "check path permissions and availability"),
-                ));
-            }
-        };
-        let entries = std::sync::Arc::new(entries);
-
-        // Validate impl_only: only valid for directories that contain Rust source files.
-        if impl_only == Some(true) {
-            let has_rust = entries
-                .iter()
-                .any(|e| !e.is_dir && e.path.extension().and_then(|x| x.to_str()) == Some("rs"));
-
-            if !has_rust {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                    "impl_only=true requires Rust source files. No .rs files found in the given path. Use analyze_symbol without impl_only for cross-language analysis.".to_string(),
-                    error_meta(
-                        "validation",
-                        false,
-                        "remove impl_only or point to a directory containing .rs files",
-                    ),
-                ));
-            }
+        if !has_rust {
+            return Err(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "impl_only=true requires Rust source files. No .rs files found in the given path. Use analyze_symbol without impl_only for cross-language analysis.".to_string(),
+                error_meta(
+                    "validation",
+                    false,
+                    "remove impl_only or point to a directory containing .rs files",
+                ),
+            ));
         }
+        Ok(())
+    }
 
-        // Compute use_summary before spawning: explicit params only
-        let use_summary_for_task = params.output_control.force != Some(true)
-            && params.output_control.summary == Some(true);
-
-        // Get total file count for progress reporting from the single walk
-        let total_files = entries.iter().filter(|e| !e.is_dir).count();
-
-        // Spawn blocking analysis with progress tracking
+    // Poll progress until analysis task completes.
+    async fn poll_progress_until_done(
+        &self,
+        analysis_params: &FocusedAnalysisParams,
+        counter: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        ct: tokio_util::sync::CancellationToken,
+        entries: std::sync::Arc<Vec<WalkEntry>>,
+        total_files: usize,
+        symbol_display: &str,
+    ) -> Result<analyze::FocusedAnalysisOutput, ErrorData> {
+        let counter_clone = counter.clone();
+        let ct_clone = ct.clone();
         let entries_clone = std::sync::Arc::clone(&entries);
+        let path_owned = analysis_params.path.clone();
+        let symbol_owned = analysis_params.symbol.clone();
+        let match_mode_owned = analysis_params.match_mode.clone();
+        let follow_depth = analysis_params.follow_depth;
+        let max_depth = analysis_params.max_depth;
+        let ast_recursion_limit = analysis_params.ast_recursion_limit;
+        let use_summary = analysis_params.use_summary;
+        let impl_only = analysis_params.impl_only;
         let handle = tokio::task::spawn_blocking(move || {
-            analyze::analyze_focused_with_progress_with_entries(
-                &path_owned,
-                &symbol_owned,
-                match_mode,
+            let params = analyze::AnalyzeSymbolParams {
+                focus: symbol_owned,
+                match_mode: match_mode_owned,
                 follow_depth,
                 max_depth,
                 ast_recursion_limit,
+                use_summary,
+                impl_only,
+            };
+            analyze::analyze_focused_with_progress_with_entries(
+                &path_owned,
+                &params,
                 counter_clone,
                 ct_clone,
-                use_summary_for_task,
-                impl_only,
                 &entries_clone,
             )
         });
 
-        // Poll and emit progress every 100ms
         let token = ProgressToken(NumberOrString::String(
             format!(
                 "analyze-symbol-{}",
@@ -492,6 +477,7 @@ impl CodeAnalyzer {
         let peer = self.peer.lock().await.clone();
         let mut last_progress = 0usize;
         let mut cancelled = false;
+
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             if ct.is_cancelled() {
@@ -507,7 +493,7 @@ impl CodeAnalyzer {
                     total_files as f64,
                     format!(
                         "Analyzing {}/{} files for symbol '{}'",
-                        current, total_files, params.symbol
+                        current, total_files, symbol_display
                     ),
                 )
                 .await;
@@ -518,7 +504,6 @@ impl CodeAnalyzer {
             }
         }
 
-        // Emit final 100% progress only if not cancelled
         if !cancelled && total_files > 0 {
             self.emit_progress(
                 peer.clone(),
@@ -527,75 +512,86 @@ impl CodeAnalyzer {
                 total_files as f64,
                 format!(
                     "Completed analyzing {} files for symbol '{}'",
-                    total_files, params.symbol
+                    total_files, symbol_display
                 ),
             )
             .await;
         }
 
-        let mut output = match handle.await {
-            Ok(Ok(output)) => output,
-            Ok(Err(analyze::AnalyzeError::Cancelled)) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    "Analysis cancelled".to_string(),
-                    error_meta("transient", true, "analysis was cancelled"),
-                ));
-            }
-            Ok(Err(e)) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    format!("Error analyzing symbol: {}", e),
-                    error_meta("resource", false, "check symbol name and file"),
-                ));
-            }
-            Err(e) => {
-                return Err(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    format!("Task join error: {}", e),
-                    error_meta("transient", true, "retry the request"),
-                ));
-            }
+        match handle.await {
+            Ok(Ok(output)) => Ok(output),
+            Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                "Analysis cancelled".to_string(),
+                error_meta("transient", true, "analysis was cancelled"),
+            )),
+            Ok(Err(e)) => Err(ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Error analyzing symbol: {}", e),
+                error_meta("resource", false, "check symbol name and file"),
+            )),
+            Err(e) => Err(ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Task join error: {}", e),
+                error_meta("transient", true, "retry the request"),
+            )),
+        }
+    }
+
+    // Run focused analysis with auto-summary retry on SIZE_LIMIT overflow.
+    async fn run_focused_with_auto_summary(
+        &self,
+        params: &AnalyzeSymbolParams,
+        analysis_params: &FocusedAnalysisParams,
+        counter: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        ct: tokio_util::sync::CancellationToken,
+        entries: std::sync::Arc<Vec<WalkEntry>>,
+        total_files: usize,
+    ) -> Result<analyze::FocusedAnalysisOutput, ErrorData> {
+        let use_summary_for_task = params.output_control.force != Some(true)
+            && params.output_control.summary == Some(true);
+
+        let analysis_params_initial = FocusedAnalysisParams {
+            use_summary: use_summary_for_task,
+            ..analysis_params.clone()
         };
 
-        // Auto-detect: if no explicit summary param and output exceeds limit,
-        // re-run analysis with use_summary=true (reuse same entries from initial walk)
+        let mut output = self
+            .poll_progress_until_done(
+                &analysis_params_initial,
+                counter.clone(),
+                ct.clone(),
+                entries.clone(),
+                total_files,
+                &params.symbol,
+            )
+            .await?;
+
         if params.output_control.summary.is_none()
             && params.output_control.force != Some(true)
             && output.formatted.len() > SIZE_LIMIT
         {
-            let path_owned2 = Path::new(&params.path).to_path_buf();
-            let symbol_owned2 = params.symbol.clone();
-            let match_mode2 = params.match_mode.clone().unwrap_or_default();
-            let follow_depth2 = params.follow_depth.unwrap_or(1);
-            let max_depth2 = params.max_depth;
-            let ast_recursion_limit2 = params.ast_recursion_limit;
             let counter2 = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-            let ct2 = ct.clone();
-            let impl_only2 = impl_only;
-            let entries_clone2 = std::sync::Arc::clone(&entries);
-            let summary_result = tokio::task::spawn_blocking(move || {
-                analyze::analyze_focused_with_progress_with_entries(
-                    &path_owned2,
-                    &symbol_owned2,
-                    match_mode2,
-                    follow_depth2,
-                    max_depth2,
-                    ast_recursion_limit2,
+            let analysis_params_retry = FocusedAnalysisParams {
+                use_summary: true,
+                ..analysis_params.clone()
+            };
+            let summary_result = self
+                .poll_progress_until_done(
+                    &analysis_params_retry,
                     counter2,
-                    ct2,
-                    true, // use_summary=true
-                    impl_only2,
-                    &entries_clone2,
+                    ct,
+                    entries,
+                    total_files,
+                    &params.symbol,
                 )
-            })
-            .await;
+                .await;
+
             match summary_result {
-                Ok(Ok(summary_output)) => {
+                Ok(summary_output) => {
                     output.formatted = summary_output.formatted;
                 }
                 _ => {
-                    // Fallback: return error (summary generation failed)
                     let estimated_tokens = output.formatted.len() / 4;
                     let message = format!(
                         "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
@@ -613,7 +609,6 @@ impl CodeAnalyzer {
             && params.output_control.force != Some(true)
             && params.output_control.summary == Some(false)
         {
-            // Explicit summary=false with large output: return error
             let estimated_tokens = output.formatted.len() / 4;
             let message = format!(
                 "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
@@ -634,8 +629,61 @@ impl CodeAnalyzer {
             ));
         }
 
-        // Emit FILTER header and non-trait note when impl_only=true.
-        if impl_only == Some(true) {
+        Ok(output)
+    }
+
+    /// Private helper: Extract analysis logic for focused mode (analyze_symbol).
+    /// Returns the complete focused analysis output after spawning and monitoring progress.
+    /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
+    #[instrument(skip(self, params, ct))]
+    async fn handle_focused_mode(
+        &self,
+        params: &AnalyzeSymbolParams,
+        ct: tokio_util::sync::CancellationToken,
+    ) -> Result<analyze::FocusedAnalysisOutput, ErrorData> {
+        let path = Path::new(&params.path);
+        let entries = match walk_directory(path, params.max_depth) {
+            Ok(e) => e,
+            Err(e) => {
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("Failed to walk directory: {}", e),
+                    error_meta("resource", false, "check path permissions and availability"),
+                ));
+            }
+        };
+        let entries = std::sync::Arc::new(entries);
+
+        if params.impl_only == Some(true) {
+            Self::validate_impl_only(&entries)?;
+        }
+
+        let total_files = entries.iter().filter(|e| !e.is_dir).count();
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+        let analysis_params = FocusedAnalysisParams {
+            path: path.to_path_buf(),
+            symbol: params.symbol.clone(),
+            match_mode: params.match_mode.clone().unwrap_or_default(),
+            follow_depth: params.follow_depth.unwrap_or(1),
+            max_depth: params.max_depth,
+            ast_recursion_limit: params.ast_recursion_limit,
+            use_summary: false,
+            impl_only: params.impl_only,
+        };
+
+        let mut output = self
+            .run_focused_with_auto_summary(
+                params,
+                &analysis_params,
+                counter,
+                ct,
+                entries,
+                total_files,
+            )
+            .await?;
+
+        if params.impl_only == Some(true) {
             let filter_line = format!(
                 "FILTER: impl_only=true ({} of {} callers shown)\n",
                 output.impl_trait_caller_count, output.unfiltered_caller_count
@@ -1259,6 +1307,19 @@ impl CodeAnalyzer {
         });
         Ok(result)
     }
+}
+
+// Parameters for focused analysis task.
+#[derive(Clone)]
+struct FocusedAnalysisParams {
+    path: std::path::PathBuf,
+    symbol: String,
+    match_mode: SymbolMatchMode,
+    follow_depth: u32,
+    max_depth: Option<u32>,
+    ast_recursion_limit: Option<usize>,
+    use_summary: bool,
+    impl_only: Option<bool>,
 }
 
 #[tool_handler]
