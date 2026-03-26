@@ -6,6 +6,7 @@
 [![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org)
 [![MCP](https://img.shields.io/badge/protocol-MCP-purple.svg)](https://modelcontextprotocol.io)
 [![crates.io](https://img.shields.io/crates/v/code-analyze-mcp.svg)](https://crates.io/crates/code-analyze-mcp)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/clouatre-labs/code-analyze-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/clouatre-labs/code-analyze-mcp)
 
 Standalone MCP server for code structure analysis using tree-sitter.
 
