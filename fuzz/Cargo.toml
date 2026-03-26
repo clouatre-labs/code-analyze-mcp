@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 code-analyze-mcp Contributors
+
+[workspace]
+members = []
+
+[package]
+name = "code-analyze-mcp-fuzz"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+code-analyze-mcp = { path = ".." }
+tempfile = "3"
+
+[[bin]]
+name = "parse_source"
+path = "fuzz_targets/parse_source.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "analyze_directory_path"
+path = "fuzz_targets/analyze_directory_path.rs"
+test = false
+doc = false
+
+[profile.fuzz]
+inherits = "dev"
+opt-level = 1
+debug-assertions = true
+incremental = false
