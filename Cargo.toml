@@ -2,6 +2,9 @@
 name = "code-analyze-mcp"
 version = "0.1.9"
 edition = "2024"
+rust-version = "1.94.1"
+readme = "README.md"
+documentation = "https://docs.rs/code-analyze-mcp"
 authors = ["Hugues Clouatre"]
 license = "Apache-2.0"
 description = "MCP server for code structure analysis using tree-sitter"
@@ -41,6 +44,16 @@ criterion = { version = "=0.8.2", features = ["html_reports"] }
 [[bench]]
 name = "analysis"
 harness = false
+
+[lints.rust]
+unsafe_code = "warn"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
 
 [profile.release]
 opt-level = "z"
