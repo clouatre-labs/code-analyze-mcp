@@ -1,7 +1,7 @@
 //! MCP logging integration via tracing.
 //!
 //! Provides a custom tracing subscriber that forwards log events to MCP clients.
-//! Maps Rust tracing levels to MCP LoggingLevel.
+//! Maps Rust tracing levels to `MCP` [`LoggingLevel`].
 
 use rmcp::model::LoggingLevel;
 use serde_json::{Map, Value};
@@ -13,7 +13,8 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::Context;
 
-/// Maps tracing::Level to MCP LoggingLevel.
+/// Maps `tracing::Level` to `MCP` [`LoggingLevel`].
+#[must_use]
 pub fn level_to_mcp(level: &Level) -> LoggingLevel {
     match *level {
         Level::TRACE | Level::DEBUG => LoggingLevel::Debug,
@@ -23,7 +24,7 @@ pub fn level_to_mcp(level: &Level) -> LoggingLevel {
     }
 }
 
-/// Lightweight event sent from McpLoggingLayer to consumer task via unbounded channel.
+/// Lightweight event sent from `McpLoggingLayer` to consumer task via unbounded channel.
 #[derive(Clone, Debug)]
 pub struct LogEvent {
     pub level: LoggingLevel,
@@ -31,8 +32,8 @@ pub struct LogEvent {
     pub data: Value,
 }
 
-/// Custom tracing Layer that bridges tracing events to MCP client via unbounded channel.
-/// Sends lightweight LogEvent to channel; consumer task in on_initialized drains with recv_many.
+/// Custom tracing Layer that bridges tracing events to `MCP` client via unbounded channel.
+/// Sends lightweight [`LogEvent`] to channel; consumer task in `on_initialized` drains with `recv_many`.
 pub struct McpLoggingLayer {
     event_tx: mpsc::UnboundedSender<LogEvent>,
     log_level_filter: Arc<Mutex<LevelFilter>>,
@@ -63,7 +64,7 @@ where
         let filter_level = self
             .log_level_filter
             .lock()
-            .unwrap_or_else(|p| p.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if level > *filter_level {
             return;
         }
@@ -93,7 +94,7 @@ where
         let filter_level = self
             .log_level_filter
             .lock()
-            .unwrap_or_else(|p| p.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if *metadata.level() <= *filter_level {
             Interest::always()
         } else {
@@ -105,7 +106,7 @@ where
         let filter_level = self
             .log_level_filter
             .lock()
-            .unwrap_or_else(|p| p.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *metadata.level() <= *filter_level
     }
 }
@@ -113,11 +114,11 @@ where
 /// Visitor to extract fields from tracing event into a JSON Map.
 struct MessageVisitor<'a>(&'a mut Map<String, Value>);
 
-impl<'a> tracing::field::Visit for MessageVisitor<'a> {
+impl tracing::field::Visit for MessageVisitor<'_> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         self.0.insert(
             field.name().to_string(),
-            Value::String(format!("{:?}", value)),
+            Value::String(format!("{value:?}")),
         );
     }
 

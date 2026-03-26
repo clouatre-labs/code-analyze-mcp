@@ -713,7 +713,7 @@ fn hello() {
     // Store with first mtime
     let output1 = analyze_file(file_path.to_str().unwrap(), None).unwrap();
     let arc_output1 = Arc::new(output1);
-    cache.put(key1.clone(), arc_output1);
+    cache.put(key1, arc_output1);
 
     // Simulate file modification by creating a key with different mtime
     let mtime2 = mtime1 + Duration::from_secs(1);
@@ -820,7 +820,7 @@ fn test_directory_cache_hit_on_identical_call() {
     );
     let output1 = analyze_directory(root, None).unwrap();
     let arc_output1 = Arc::new(output1);
-    cache.put_directory(key1.clone(), arc_output1.clone());
+    cache.put_directory(key1, arc_output1.clone());
 
     // Second call with identical parameters should hit cache
     let entries2 = walk_directory(root, None).unwrap();

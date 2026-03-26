@@ -23,6 +23,7 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
 ///
 /// The lookup is case-insensitive. Supported extensions include `rs`, `py`, `go`, `java`,
 /// `ts`, `tsx`, `f90`, `f95`, `for`, `ftn`, and other Fortran variants.
+#[must_use]
 pub fn language_from_extension(ext: &str) -> Option<&'static str> {
     EXTENSION_MAP
         .iter()

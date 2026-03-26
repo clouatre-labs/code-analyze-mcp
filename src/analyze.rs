@@ -1,6 +1,6 @@
 //! Main analysis engine for extracting code structure from files and directories.
 //!
-//! Implements the four MCP tools: `analyze_directory` (Overview), `analyze_file` (FileDetails),
+//! Implements the four MCP tools: `analyze_directory` (Overview), `analyze_file` (`FileDetails`),
 //! `analyze_symbol` (call graph), and `analyze_module` (lightweight index). Handles parallel processing and cancellation.
 
 use crate::formatter::{
@@ -50,7 +50,7 @@ pub struct AnalysisOutput {
     #[serde(skip)]
     #[schemars(skip)]
     pub entries: Vec<WalkEntry>,
-    /// Subtree file counts computed from an unbounded walk; used by format_summary; not serialized.
+    /// Subtree file counts computed from an unbounded walk; used by `format_summary`; not serialized.
     #[serde(skip)]
     #[schemars(skip)]
     pub subtree_counts: Option<Vec<(std::path::PathBuf, usize)>>,
@@ -80,6 +80,8 @@ pub struct FileAnalysisOutput {
 
 /// Analyze a directory structure with progress tracking.
 #[instrument(skip_all, fields(path = %root.display()))]
+// public API; callers expect owned semantics
+#[allow(clippy::needless_pass_by_value)]
 pub fn analyze_directory_with_progress(
     root: &Path,
     entries: Vec<WalkEntry>,
@@ -111,14 +113,10 @@ pub fn analyze_directory_with_progress(
             // Detect language from extension
             let ext = entry.path.extension().and_then(|e| e.to_str());
 
-            // Try to read file content
-            let source = match std::fs::read_to_string(&entry.path) {
-                Ok(content) => content,
-                Err(_) => {
-                    // Binary file or unreadable - exclude from output
-                    progress.fetch_add(1, Ordering::Relaxed);
-                    return None;
-                }
+            // Try to read file content; skip binary or unreadable files
+            let Ok(source) = std::fs::read_to_string(&entry.path) else {
+                progress.fetch_add(1, Ordering::Relaxed);
+                return None;
             };
 
             // Count lines
@@ -161,7 +159,7 @@ pub fn analyze_directory_with_progress(
 
     tracing::debug!(
         file_count = file_entries.len(),
-        duration_ms = start.elapsed().as_millis() as u64,
+        duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
         "analysis complete"
     );
 
@@ -190,6 +188,7 @@ pub fn analyze_directory(
 }
 
 /// Determine analysis mode based on parameters and path.
+#[must_use]
 pub fn determine_mode(path: &str, focus: Option<&str>) -> AnalysisMode {
     if focus.is_some() {
         return AnalysisMode::SymbolFocus;
@@ -220,8 +219,7 @@ pub fn analyze_file(
         .extension()
         .and_then(|e| e.to_str())
         .and_then(language_from_extension)
-        .map(|l| l.to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+        .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
 
     // Extract semantic information
     let mut semantic = SemanticExtractor::extract(&source, &ext, ast_recursion_limit)?;
@@ -245,7 +243,7 @@ pub fn analyze_file(
     // Format output
     let formatted = format_file_details(path, &semantic, line_count, is_test, parent_dir);
 
-    tracing::debug!(path = %path, language = %ext, functions = semantic.functions.len(), classes = semantic.classes.len(), imports = semantic.imports.len(), duration_ms = start.elapsed().as_millis() as u64, "file analysis complete");
+    tracing::debug!(path = %path, language = %ext, functions = semantic.functions.len(), classes = semantic.classes.len(), imports = semantic.imports.len(), duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX), "file analysis complete");
 
     Ok(FileAnalysisOutput {
         formatted,
@@ -282,11 +280,11 @@ pub struct FocusedAnalysisOutput {
     #[serde(skip)]
     #[schemars(skip)]
     pub def_count: usize,
-    /// Total unique callers before impl_only filter. Not serialized; used for FILTER header.
+    /// Total unique callers before `impl_only` filter. Not serialized; used for FILTER header.
     #[serde(skip)]
     #[schemars(skip)]
     pub unfiltered_caller_count: usize,
-    /// Unique callers after impl_only filter. Not serialized; used for FILTER header.
+    /// Unique callers after `impl_only` filter. Not serialized; used for FILTER header.
     #[serde(skip)]
     #[schemars(skip)]
     pub impl_trait_caller_count: usize,
@@ -316,14 +314,14 @@ struct FocusedAnalysisParams {
     impl_only: Option<bool>,
 }
 
-/// Type alias for analysis results: (file_path, semantic_analysis) pairs and impl-trait info.
+/// Type alias for analysis results: (`file_path`, `semantic_analysis`) pairs and impl-trait info.
 type AnalysisResults = (Vec<(PathBuf, SemanticAnalysis)>, Vec<ImplTraitInfo>);
 
 /// Phase 1: Collect semantic analysis for all files in parallel.
 fn collect_file_analysis(
     entries: &[WalkEntry],
-    progress: Arc<AtomicUsize>,
-    ct: CancellationToken,
+    progress: &Arc<AtomicUsize>,
+    ct: &CancellationToken,
     ast_recursion_limit: Option<usize>,
 ) -> Result<AnalysisResults, AnalyzeError> {
     // Check if already cancelled
@@ -346,40 +344,35 @@ fn collect_file_analysis(
             let ext = entry.path.extension().and_then(|e| e.to_str());
 
             // Try to read file content
-            let source = match std::fs::read_to_string(&entry.path) {
-                Ok(content) => content,
-                Err(_) => {
-                    progress.fetch_add(1, Ordering::Relaxed);
-                    return None;
-                }
+            let Ok(source) = std::fs::read_to_string(&entry.path) else {
+                progress.fetch_add(1, Ordering::Relaxed);
+                return None;
             };
 
             // Detect language and extract semantic information
             let language = if let Some(ext_str) = ext {
                 language_from_extension(ext_str)
-                    .map(|l| l.to_string())
-                    .unwrap_or_else(|| "unknown".to_string())
+                    .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string)
             } else {
                 "unknown".to_string()
             };
 
-            match SemanticExtractor::extract(&source, &language, ast_recursion_limit) {
-                Ok(mut semantic) => {
-                    // Populate file path on references
-                    for r in &mut semantic.references {
-                        r.location = entry.path.display().to_string();
-                    }
-                    // Populate file path on impl_traits (already extracted during SemanticExtractor::extract)
-                    for trait_info in &mut semantic.impl_traits {
-                        trait_info.path = entry.path.clone();
-                    }
-                    progress.fetch_add(1, Ordering::Relaxed);
-                    Some((entry.path.clone(), semantic))
+            if let Ok(mut semantic) =
+                SemanticExtractor::extract(&source, &language, ast_recursion_limit)
+            {
+                // Populate file path on references
+                for r in &mut semantic.references {
+                    r.location = entry.path.display().to_string();
                 }
-                Err(_) => {
-                    progress.fetch_add(1, Ordering::Relaxed);
-                    None
+                // Populate file path on impl_traits (already extracted during SemanticExtractor::extract)
+                for trait_info in &mut semantic.impl_traits {
+                    trait_info.path.clone_from(&entry.path);
                 }
+                progress.fetch_add(1, Ordering::Relaxed);
+                Some((entry.path.clone(), semantic))
+            } else {
+                progress.fetch_add(1, Ordering::Relaxed);
+                None
             }
         })
         .collect();
@@ -410,13 +403,13 @@ fn build_call_graph(
         all_impl_traits,
         false, // filter applied below after counting
     )
-    .map_err(|e| e.into())
+    .map_err(std::convert::Into::into)
 }
 
-/// Phase 3: Resolve symbol and apply impl_only filter.
-/// Returns (resolved_focus, unfiltered_caller_count, impl_trait_caller_count).
-/// CRITICAL: Must capture unfiltered_caller_count BEFORE retain(), then apply retain(),
-/// then compute impl_trait_caller_count.
+/// Phase 3: Resolve symbol and apply `impl_only` filter.
+/// Returns (`resolved_focus`, `unfiltered_caller_count`, `impl_trait_caller_count`).
+/// CRITICAL: Must capture `unfiltered_caller_count` BEFORE `retain()`, then apply `retain()`,
+/// then compute `impl_trait_caller_count`.
 fn resolve_symbol(
     graph: &mut CallGraph,
     params: &FocusedAnalysisParams,
@@ -440,17 +433,13 @@ fn resolve_symbol(
     };
 
     // Count unique callers for the focus symbol before applying impl_only filter.
-    let unfiltered_caller_count = graph
-        .callers
-        .get(&resolved_focus)
-        .map(|edges| {
-            edges
-                .iter()
-                .map(|e| &e.neighbor_name)
-                .collect::<std::collections::HashSet<_>>()
-                .len()
-        })
-        .unwrap_or(0);
+    let unfiltered_caller_count = graph.callers.get(&resolved_focus).map_or(0, |edges| {
+        edges
+            .iter()
+            .map(|e| &e.neighbor_name)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    });
 
     // Apply impl_only filter now if requested, then count filtered callers.
     // Filter all caller adjacency lists so traversal and formatting are consistently
@@ -459,17 +448,13 @@ fn resolve_symbol(
         for edges in graph.callers.values_mut() {
             edges.retain(|e| e.is_impl_trait);
         }
-        graph
-            .callers
-            .get(&resolved_focus)
-            .map(|edges| {
-                edges
-                    .iter()
-                    .map(|e| &e.neighbor_name)
-                    .collect::<std::collections::HashSet<_>>()
-                    .len()
-            })
-            .unwrap_or(0)
+        graph.callers.get(&resolved_focus).map_or(0, |edges| {
+            edges
+                .iter()
+                .map(|e| &e.neighbor_name)
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+        })
     } else {
         unfiltered_caller_count
     };
@@ -481,7 +466,7 @@ fn resolve_symbol(
     ))
 }
 
-/// Type alias for compute_chains return type: (formatted_output, prod_chains, test_chains, outgoing_chains, def_count).
+/// Type alias for `compute_chains` return type: (`formatted_output`, `prod_chains`, `test_chains`, `outgoing_chains`, `def_count`).
 type ChainComputeResult = (
     String,
     Vec<InternalCallChain>,
@@ -500,7 +485,7 @@ fn compute_chains(
     impl_trait_caller_count: usize,
 ) -> Result<ChainComputeResult, AnalyzeError> {
     // Compute chain data for pagination (always, regardless of summary mode)
-    let def_count = graph.definitions.get(resolved_focus).map_or(0, |d| d.len());
+    let def_count = graph.definitions.get(resolved_focus).map_or(0, Vec::len);
     let incoming_chains = graph.find_incoming_chains(resolved_focus, params.follow_depth)?;
     let outgoing_chains = graph.find_outgoing_chains(resolved_focus, params.follow_depth)?;
 
@@ -536,10 +521,9 @@ fn compute_chains(
     // Add FILTER header if impl_only filter was applied
     if params.impl_only.unwrap_or(false) {
         let filter_header = format!(
-            "FILTER: impl_only=true ({} of {} callers shown)\n",
-            impl_trait_caller_count, unfiltered_caller_count
+            "FILTER: impl_only=true ({impl_trait_caller_count} of {unfiltered_caller_count} callers shown)\n",
         );
-        formatted = format!("{}{}", filter_header, formatted);
+        formatted = format!("{filter_header}{formatted}");
     }
 
     Ok((
@@ -552,6 +536,8 @@ fn compute_chains(
 }
 
 /// Analyze a symbol's call graph across a directory with progress tracking.
+// public API; callers expect owned semantics
+#[allow(clippy::needless_pass_by_value)]
 pub fn analyze_focused_with_progress(
     root: &Path,
     params: &AnalyzeSymbolParams,
@@ -570,8 +556,8 @@ pub fn analyze_focused_with_progress(
     analyze_focused_with_progress_with_entries_internal(
         root,
         params.max_depth,
-        progress,
-        ct,
+        &progress,
+        &ct,
         &internal_params,
         &entries,
     )
@@ -582,8 +568,8 @@ pub fn analyze_focused_with_progress(
 fn analyze_focused_with_progress_with_entries_internal(
     root: &Path,
     _max_depth: Option<u32>,
-    progress: Arc<AtomicUsize>,
-    ct: CancellationToken,
+    progress: &Arc<AtomicUsize>,
+    ct: &CancellationToken,
     params: &FocusedAnalysisParams,
     entries: &[WalkEntry],
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
@@ -609,10 +595,9 @@ fn analyze_focused_with_progress_with_entries_internal(
         });
     }
 
-    // Phase 1: Collect file analysis (ct is cloned so phases 2-4 can still observe cancellation)
-    let phase1_ct = ct.clone();
+    // Phase 1: Collect file analysis
     let (analysis_results, all_impl_traits) =
-        collect_file_analysis(entries, progress, phase1_ct, params.ast_recursion_limit)?;
+        collect_file_analysis(entries, progress, ct, params.ast_recursion_limit)?;
 
     // Check for cancellation before building the call graph (phase 2)
     if ct.is_cancelled() {
@@ -662,8 +647,8 @@ fn analyze_focused_with_progress_with_entries_internal(
 pub(crate) fn analyze_focused_with_progress_with_entries(
     root: &Path,
     params: &AnalyzeSymbolParams,
-    progress: Arc<AtomicUsize>,
-    ct: CancellationToken,
+    progress: &Arc<AtomicUsize>,
+    ct: &CancellationToken,
     entries: &[WalkEntry],
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     let internal_params = FocusedAnalysisParams {
@@ -704,7 +689,7 @@ pub fn analyze_focused(
         use_summary: false,
         impl_only: None,
     };
-    analyze_focused_with_progress_with_entries(root, &params, counter, ct, &entries)
+    analyze_focused_with_progress_with_entries(root, &params, &counter, &ct, &entries)
 }
 
 /// Analyze a single file and return a minimal fixed schema (name, line count, language,
@@ -764,7 +749,7 @@ pub fn analyze_module_file(path: &str) -> Result<crate::types::ModuleInfo, Analy
 
 /// Resolve Python wildcard imports to actual symbol names.
 ///
-/// For each import with items=["*"], this function:
+/// For each import with items=`["*"]`, this function:
 /// 1. Parses the relative dots (if any) and climbs the directory tree
 /// 2. Finds the target .py file or __init__.py
 /// 3. Extracts symbols (functions and classes) from the target
@@ -775,12 +760,9 @@ fn resolve_wildcard_imports(file_path: &Path, imports: &mut [ImportInfo]) {
     use std::collections::HashMap;
 
     let mut resolved_cache: HashMap<PathBuf, Vec<String>> = HashMap::new();
-    let file_path_canonical = match file_path.canonicalize() {
-        Ok(p) => p,
-        Err(_) => {
-            tracing::debug!(file = ?file_path, "unable to canonicalize current file path");
-            return;
-        }
+    let Ok(file_path_canonical) = file_path.canonicalize() else {
+        tracing::debug!(file = ?file_path, "unable to canonicalize current file path");
+        return;
     };
 
     for import in imports.iter_mut() {
@@ -805,17 +787,14 @@ fn resolve_single_wildcard(
     }
     let module_path = module.trim_start_matches('.');
 
-    let target_to_read = match locate_target_file(file_path, dot_count, module_path, &module) {
-        Some(p) => p,
-        None => return,
+    let Some(target_to_read) = locate_target_file(file_path, dot_count, module_path, &module)
+    else {
+        return;
     };
 
-    let canonical = match target_to_read.canonicalize() {
-        Ok(p) => p,
-        Err(_) => {
-            tracing::debug!(target = ?target_to_read, import = %module, "unable to canonicalize path");
-            return;
-        }
+    let Ok(canonical) = target_to_read.canonicalize() else {
+        tracing::debug!(target = ?target_to_read, import = %module, "unable to canonicalize path");
+        return;
     };
 
     if canonical == file_path_canonical {
@@ -825,13 +804,13 @@ fn resolve_single_wildcard(
 
     if let Some(cached) = resolved_cache.get(&canonical) {
         tracing::debug!(import = %module, symbols_count = cached.len(), "using cached symbols");
-        import.items = cached.clone();
+        import.items.clone_from(cached);
         return;
     }
 
     if let Some(symbols) = parse_target_symbols(&target_to_read, &module) {
         tracing::debug!(import = %module, resolved_count = symbols.len(), "wildcard import resolved");
-        import.items = symbols.clone();
+        import.items.clone_from(&symbols);
         resolved_cache.insert(canonical, symbols);
     }
 }
@@ -872,6 +851,8 @@ fn locate_target_file(
 
 /// Read and parse a target .py file, returning its exported symbols.
 fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>> {
+    use tree_sitter::Parser;
+
     let source = match std::fs::read_to_string(target_path) {
         Ok(s) => s,
         Err(e) => {
@@ -881,7 +862,6 @@ fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>>
     };
 
     // Parse once with tree-sitter
-    use tree_sitter::Parser;
     let lang_info = crate::languages::get_language_info("python")?;
     let mut parser = Parser::new();
     if parser.set_language(&lang_info.language).is_err() {
@@ -901,24 +881,13 @@ fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>>
     let root = tree.root_node();
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
-        match child.kind() {
-            "function_definition" => {
-                if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
-                    if !name.starts_with('_') {
-                        symbols.push(name);
-                    }
-                }
+        if matches!(child.kind(), "function_definition" | "class_definition")
+            && let Some(name_node) = child.child_by_field_name("name")
+        {
+            let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
+            if !name.starts_with('_') {
+                symbols.push(name);
             }
-            "class_definition" => {
-                if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
-                    if !name.starts_with('_') {
-                        symbols.push(name);
-                    }
-                }
-            }
-            _ => {}
         }
     }
     tracing::debug!(import = %module, fallback_symbols = ?symbols, "using fallback function/class names");

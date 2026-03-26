@@ -32,16 +32,16 @@ fn collect_class_methods<'a>(
 ) -> HashMap<String, Vec<&'a FunctionInfo>> {
     let mut methods_by_class: HashMap<String, Vec<&'a FunctionInfo>> = HashMap::new();
     for class in classes {
-        if !class.methods.is_empty() {
-            // Rust: parser already populated methods via extract_impl_methods
-            methods_by_class.insert(class.name.clone(), class.methods.iter().collect());
-        } else {
+        if class.methods.is_empty() {
             // Python/Java/TS/Go: infer methods by line-range containment
             let methods: Vec<&FunctionInfo> = functions
                 .iter()
                 .filter(|f| is_method_of_class(f, class))
                 .collect();
             methods_by_class.insert(class.name.clone(), methods);
+        } else {
+            // Rust: parser already populated methods via extract_impl_methods
+            methods_by_class.insert(class.name.clone(), class.methods.iter().collect());
         }
     }
     methods_by_class
@@ -60,7 +60,7 @@ fn format_function_list_wrapped<'a>(
         if let Some(&count) = call_frequency.get(&func.name)
             && count > 3
         {
-            call_marker.push_str(&format!("\u{2022}{}", count));
+            let _ = write!(call_marker, "\u{2022}{count}");
         }
 
         if i == 0 {
@@ -89,13 +89,13 @@ fn format_function_list_wrapped<'a>(
 fn format_file_info_parts(line_count: usize, fn_count: usize, cls_count: usize) -> Option<String> {
     let mut parts = Vec::new();
     if line_count > 0 {
-        parts.push(format!("{}L", line_count));
+        parts.push(format!("{line_count}L"));
     }
     if fn_count > 0 {
-        parts.push(format!("{}F", fn_count));
+        parts.push(format!("{fn_count}F"));
     }
     if cls_count > 0 {
-        parts.push(format!("{}C", cls_count));
+        parts.push(format!("{cls_count}C"));
     }
     if parts.is_empty() {
         None
@@ -126,6 +126,7 @@ pub enum FormatterError {
 
 /// Format directory structure analysis results.
 #[instrument(skip_all)]
+#[allow(clippy::too_many_lines)] // exhaustive directory formatting logic; splitting harms readability
 pub fn format_structure(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
@@ -159,37 +160,36 @@ pub fn format_structure(
     let primary_lang = lang_counts
         .iter()
         .max_by_key(|&(_, count)| count)
-        .map(|(name, count)| {
-            let percentage = if total_files > 0 {
-                (*count * 100) / total_files
-            } else {
-                0
-            };
-            format!("{} {}%", name, percentage)
-        })
-        .unwrap_or_else(|| "unknown 0%".to_string());
+        .map_or_else(
+            || "unknown 0%".to_string(),
+            |(name, count)| {
+                let percentage = if total_files > 0 {
+                    (*count * 100) / total_files
+                } else {
+                    0
+                };
+                format!("{name} {percentage}%")
+            },
+        );
 
-    output.push_str(&format!(
-        "{} files, {}L, {}F, {}C ({})\n",
-        total_files, total_loc, total_functions, total_classes, primary_lang
-    ));
+    let _ = writeln!(
+        output,
+        "{total_files} files, {total_loc}L, {total_functions}F, {total_classes}C ({primary_lang})"
+    );
 
     // SUMMARY block
     output.push_str("SUMMARY:\n");
     let depth_label = match max_depth {
-        Some(n) if n > 0 => format!(" (max_depth={})", n),
+        Some(n) if n > 0 => format!(" (max_depth={n})"),
         _ => String::new(),
     };
-    output.push_str(&format!(
-        "Shown: {} files ({} prod, {} test), {}L, {}F, {}C{}\n",
+    let _ = writeln!(
+        output,
+        "Shown: {} files ({} prod, {} test), {total_loc}L, {total_functions}F, {total_classes}C{depth_label}",
         total_files,
         prod_files.len(),
-        test_files.len(),
-        total_loc,
-        total_functions,
-        total_classes,
-        depth_label
-    ));
+        test_files.len()
+    );
 
     if !lang_counts.is_empty() {
         output.push_str("Languages: ");
@@ -203,7 +203,7 @@ pub fn format_structure(
                 } else {
                     0
                 };
-                format!("{} ({}%)", name, percentage)
+                format!("{name} ({percentage}%)")
             })
             .collect();
         output.push_str(&lang_strs.join(", "));
@@ -234,32 +234,30 @@ pub fn format_structure(
             .unwrap_or("?");
 
         // For files, append analysis info
-        if !entry.is_dir {
-            if let Some(analysis) = analysis_map.get(&entry.path.display().to_string()) {
-                if let Some(info_str) = format_file_info_parts(
-                    analysis.line_count,
-                    analysis.function_count,
-                    analysis.class_count,
-                ) {
-                    let line = format!("{}{} {}\n", indent, name, info_str);
-                    if analysis.is_test {
-                        test_buf.push_str(&line);
-                    } else {
-                        output.push_str(&line);
-                    }
+        if entry.is_dir {
+            let line = format!("{indent}{name}/\n");
+            output.push_str(&line);
+        } else if let Some(analysis) = analysis_map.get(&entry.path.display().to_string()) {
+            if let Some(info_str) = format_file_info_parts(
+                analysis.line_count,
+                analysis.function_count,
+                analysis.class_count,
+            ) {
+                let line = format!("{indent}{name} {info_str}\n");
+                if analysis.is_test {
+                    test_buf.push_str(&line);
                 } else {
-                    let line = format!("{}{}\n", indent, name);
-                    if analysis.is_test {
-                        test_buf.push_str(&line);
-                    } else {
-                        output.push_str(&line);
-                    }
+                    output.push_str(&line);
+                }
+            } else {
+                let line = format!("{indent}{name}\n");
+                if analysis.is_test {
+                    test_buf.push_str(&line);
+                } else {
+                    output.push_str(&line);
                 }
             }
             // Skip files not in analysis_map (binary/unreadable files)
-        } else {
-            let line = format!("{}{}/\n", indent, name);
-            output.push_str(&line);
         }
     }
 
@@ -285,24 +283,19 @@ pub fn format_file_details(
 
     // FILE: header with counts, prepend [TEST] if applicable
     let display_path = strip_base_path(Path::new(path), base_path);
+    let fn_count = analysis.functions.len();
+    let class_count = analysis.classes.len();
+    let import_count = analysis.imports.len();
     if is_test {
-        output.push_str(&format!(
-            "FILE [TEST] {}({}L, {}F, {}C, {}I)\n",
-            display_path,
-            line_count,
-            analysis.functions.len(),
-            analysis.classes.len(),
-            analysis.imports.len()
-        ));
+        let _ = writeln!(
+            output,
+            "FILE [TEST] {display_path}({line_count}L, {fn_count}F, {class_count}C, {import_count}I)"
+        );
     } else {
-        output.push_str(&format!(
-            "FILE: {}({}L, {}F, {}C, {}I)\n",
-            display_path,
-            line_count,
-            analysis.functions.len(),
-            analysis.classes.len(),
-            analysis.imports.len()
-        ));
+        let _ = writeln!(
+            output,
+            "FILE: {display_path}({line_count}L, {fn_count}F, {class_count}C, {import_count}I)"
+        );
     }
 
     // C: section with classes and methods
@@ -340,7 +333,7 @@ pub fn format_file_details(
 /// Format chains as a tree-indented output, grouped by depth-1 symbol.
 /// Groups chains by their first symbol (depth-1), deduplicates and sorts depth-2 children,
 /// then renders with 2-space indentation using the provided arrow.
-/// focus_symbol is the name of the depth-0 symbol (focus point) to prepend on depth-1 lines.
+/// `focus_symbol` is the name of the depth-0 symbol (focus point) to prepend on depth-1 lines.
 ///
 /// Indentation rules:
 /// - Depth-1: `  {focus} {arrow} {parent}` (2-space indent)
@@ -359,29 +352,31 @@ fn format_chains_as_tree(chains: &[(&str, &str)], arrow: &str, focus_symbol: &st
     let mut groups: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     for (parent, child) in chains {
         // Only count non-empty children
-        if !child.is_empty() {
+        if child.is_empty() {
+            // Ensure parent is in groups even if no children
+            groups.entry(parent.to_string()).or_default();
+        } else {
             *groups
                 .entry(parent.to_string())
                 .or_default()
                 .entry(child.to_string())
                 .or_insert(0) += 1;
-        } else {
-            // Ensure parent is in groups even if no children
-            groups.entry(parent.to_string()).or_default();
         }
     }
 
     // Render grouped tree
+    #[allow(clippy::similar_names)]
+    // domain-appropriate pairs (arrow/parent, child/count); renaming harms clarity
     for (parent, children) in groups {
-        let _ = writeln!(output, "  {} {} {}", focus_symbol, arrow, parent);
+        let _ = writeln!(output, "  {focus_symbol} {arrow} {parent}");
         // Sort children by count descending, then alphabetically
         let mut sorted: Vec<_> = children.into_iter().collect();
         sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         for (child, count) in sorted {
             if count > 1 {
-                let _ = writeln!(output, "    {} {} (x{})", arrow, child, count);
+                let _ = writeln!(output, "    {arrow} {child} (x{count})");
             } else {
-                let _ = writeln!(output, "    {} {}", arrow, child);
+                let _ = writeln!(output, "    {arrow} {child}");
             }
         }
     }
@@ -391,7 +386,9 @@ fn format_chains_as_tree(chains: &[(&str, &str)], arrow: &str, focus_symbol: &st
 
 /// Format focused symbol analysis with call graph.
 #[instrument(skip_all)]
+#[allow(clippy::too_many_lines)] // exhaustive symbol focus formatting; splitting harms readability
 /// Internal helper that accepts pre-computed chains.
+#[allow(clippy::similar_names)] // callers_count/callees_count are domain-clear distinct pairs
 pub(crate) fn format_focused_internal(
     graph: &CallGraph,
     symbol: &str,
@@ -403,7 +400,7 @@ pub(crate) fn format_focused_internal(
     let mut output = String::new();
 
     // Compute all counts BEFORE output begins
-    let def_count = graph.definitions.get(symbol).map_or(0, |d| d.len());
+    let def_count = graph.definitions.get(symbol).map_or(0, Vec::len);
 
     // Use pre-computed chains if provided, otherwise compute them
     let (incoming_chains_vec, outgoing_chains_vec);
@@ -443,23 +440,20 @@ pub(crate) fn format_focused_internal(
         .len();
 
     // FOCUS section - with inline counts
-    output.push_str(&format!(
-        "FOCUS: {} ({} defs, {} callers, {} callees)\n",
-        symbol, def_count, callers_count, callees_count
-    ));
+    let _ = writeln!(
+        output,
+        "FOCUS: {symbol} ({def_count} defs, {callers_count} callers, {callees_count} callees)"
+    );
 
     // DEPTH section
-    output.push_str(&format!("DEPTH: {}\n", follow_depth));
+    let _ = writeln!(output, "DEPTH: {follow_depth}");
 
     // DEFINED section - show where the symbol is defined
     if let Some(definitions) = graph.definitions.get(symbol) {
         output.push_str("DEFINED:\n");
         for (path, line) in definitions {
-            output.push_str(&format!(
-                "  {}:{}\n",
-                strip_base_path(path, base_path),
-                line
-            ));
+            let display = strip_base_path(path, base_path);
+            let _ = writeln!(output, "  {display}:{line}");
         }
     } else {
         output.push_str("DEFINED: (not found)\n");
@@ -509,11 +503,11 @@ pub(crate) fn format_focused_internal(
             .collect();
 
         let file_list = display_files.join(", ");
-        output.push_str(&format!(
-            "CALLERS (test): {} test functions (in {})\n",
-            test_chains.len(),
-            file_list
-        ));
+        let test_count = test_chains.len();
+        let _ = writeln!(
+            output,
+            "CALLERS (test): {test_count} test functions (in {file_list})"
+        );
     }
 
     // CALLEES section - what this symbol calls
@@ -539,8 +533,8 @@ pub(crate) fn format_focused_internal(
 
     // STATISTICS section
     output.push_str("STATISTICS:\n");
-    output.push_str(&format!("  Incoming calls: {}\n", callers_count));
-    output.push_str(&format!("  Outgoing calls: {}\n", callees_count));
+    let _ = writeln!(output, "  Incoming calls: {callers_count}");
+    let _ = writeln!(output, "  Outgoing calls: {callees_count}");
 
     // FILES section - collect unique files from production chains
     let mut files = HashSet::new();
@@ -573,7 +567,8 @@ pub(crate) fn format_focused_internal(
             let mut sorted_files = prod_files;
             sorted_files.sort();
             for file in sorted_files {
-                output.push_str(&format!("  {}\n", strip_base_path(&file, base_path)));
+                let display = strip_base_path(&file, base_path);
+                let _ = writeln!(output, "  {display}");
             }
         }
 
@@ -583,7 +578,8 @@ pub(crate) fn format_focused_internal(
             let mut sorted_files = test_files;
             sorted_files.sort();
             for file in sorted_files {
-                output.push_str(&format!("    {}\n", strip_base_path(&file, base_path)));
+                let display = strip_base_path(&file, base_path);
+                let _ = writeln!(output, "    {display}");
             }
         }
     }
@@ -594,6 +590,8 @@ pub(crate) fn format_focused_internal(
 /// Format a compact summary of focused symbol analysis.
 /// Used when output would exceed the size threshold or when explicitly requested.
 #[instrument(skip_all)]
+#[allow(clippy::too_many_lines)] // exhaustive symbol summary formatting; splitting harms readability
+#[allow(clippy::similar_names)] // domain pairs: callers_count/callees_count are intentionally similar
 /// Internal helper that accepts pre-computed chains.
 pub(crate) fn format_focused_summary_internal(
     graph: &CallGraph,
@@ -606,7 +604,7 @@ pub(crate) fn format_focused_summary_internal(
     let mut output = String::new();
 
     // Compute all counts BEFORE output begins
-    let def_count = graph.definitions.get(symbol).map_or(0, |d| d.len());
+    let def_count = graph.definitions.get(symbol).map_or(0, Vec::len);
 
     // Use pre-computed chains if provided, otherwise compute them
     let (incoming_chains_vec, outgoing_chains_vec);
@@ -646,23 +644,20 @@ pub(crate) fn format_focused_summary_internal(
         .len();
 
     // FOCUS header
-    output.push_str(&format!(
-        "FOCUS: {} ({} defs, {} callers, {} callees)\n",
-        symbol, def_count, callers_count, callees_count
-    ));
+    let _ = writeln!(
+        output,
+        "FOCUS: {symbol} ({def_count} defs, {callers_count} callers, {callees_count} callees)"
+    );
 
     // DEPTH line
-    output.push_str(&format!("DEPTH: {}\n", follow_depth));
+    let _ = writeln!(output, "DEPTH: {follow_depth}");
 
     // DEFINED section
     if let Some(definitions) = graph.definitions.get(symbol) {
         output.push_str("DEFINED:\n");
         for (path, line) in definitions {
-            output.push_str(&format!(
-                "  {}:{}\n",
-                strip_base_path(path, base_path),
-                line
-            ));
+            let display = strip_base_path(path, base_path);
+            let _ = writeln!(output, "  {display}:{line}");
         }
     } else {
         output.push_str("DEFINED: (not found)\n");
@@ -691,7 +686,7 @@ pub(crate) fn format_focused_summary_internal(
         sorted_callers.sort_by(|a, b| b.1.0.cmp(&a.1.0));
 
         for (name, (_, file_path)) in sorted_callers.into_iter().take(10) {
-            output.push_str(&format!("  {} {}\n", name, file_path));
+            let _ = writeln!(output, "  {name} {file_path}");
         }
     }
 
@@ -709,11 +704,12 @@ pub(crate) fn format_focused_summary_internal(
         test_files.sort();
         test_files.dedup();
 
-        output.push_str(&format!(
-            "CALLERS (test): {} test functions (in {} files)\n",
-            test_chains.len(),
-            test_files.len()
-        ));
+        let test_count = test_chains.len();
+        let test_file_count = test_files.len();
+        let _ = writeln!(
+            output,
+            "CALLERS (test): {test_count} test functions (in {test_file_count} files)"
+        );
     }
 
     // CALLEES (top 10 by frequency)
@@ -735,7 +731,7 @@ pub(crate) fn format_focused_summary_internal(
         sorted_callees.sort_by(|a, b| b.1.cmp(&a.1));
 
         for (name, _) in sorted_callees.into_iter().take(10) {
-            output.push_str(&format!("  {}\n", name));
+            let _ = writeln!(output, "  {name}");
         }
     }
 
@@ -771,6 +767,7 @@ pub fn format_focused_summary(
 /// Format a compact summary for large directory analysis results.
 /// Used when output would exceed the size threshold or when explicitly requested.
 #[instrument(skip_all)]
+#[allow(clippy::too_many_lines)] // exhaustive directory summary formatting; splitting harms readability
 pub fn format_summary(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
@@ -798,19 +795,15 @@ pub fn format_summary(
     // SUMMARY block
     output.push_str("SUMMARY:\n");
     let depth_label = match max_depth {
-        Some(n) if n > 0 => format!(" (max_depth={})", n),
+        Some(n) if n > 0 => format!(" (max_depth={n})"),
         _ => String::new(),
     };
-    output.push_str(&format!(
-        "{} files ({} prod, {} test), {}L, {}F, {}C{}\n",
-        total_files,
-        prod_files.len(),
-        test_files.len(),
-        total_loc,
-        total_functions,
-        total_classes,
-        depth_label
-    ));
+    let prod_count = prod_files.len();
+    let test_count = test_files.len();
+    let _ = writeln!(
+        output,
+        "{total_files} files ({prod_count} prod, {test_count} test), {total_loc}L, {total_functions}F, {total_classes}C{depth_label}"
+    );
 
     if !lang_counts.is_empty() {
         output.push_str("Languages: ");
@@ -824,7 +817,7 @@ pub fn format_summary(
                 } else {
                     0
                 };
-                format!("{} ({}%)", name, percentage)
+                format!("{name} ({percentage}%)")
             })
             .collect();
         output.push_str(&lang_strs.join(", "));
@@ -866,7 +859,42 @@ pub fn format_summary(
                 .filter(|f| Path::new(&f.path).starts_with(&entry.path))
                 .collect();
 
-            if !files_in_dir.is_empty() {
+            if files_in_dir.is_empty() {
+                // No analyzed files at this depth, but subtree_counts may have a true count
+                let entry_name_str = name.to_string();
+                if let Some(counts) = subtree_counts {
+                    let true_count = counts
+                        .binary_search_by_key(&&entry.path, |(p, _)| p)
+                        .ok()
+                        .map_or(0, |i| counts[i].1);
+                    if true_count > 0 {
+                        // Track for SUGGESTION
+                        if !crate::EXCLUDED_DIRS.contains(&entry_name_str.as_str())
+                            && true_count > largest_dir_count
+                        {
+                            largest_dir_count = true_count;
+                            largest_dir_name = Some(entry_name_str);
+                            largest_dir_path = Some(
+                                entry
+                                    .path
+                                    .canonicalize()
+                                    .unwrap_or_else(|_| entry.path.clone())
+                                    .display()
+                                    .to_string(),
+                            );
+                        }
+                        let depth_val = max_depth.unwrap_or(0);
+                        let _ = writeln!(
+                            output,
+                            "  {name}/ [{true_count} files total; showing 0 at depth={depth_val}, 0L, 0F, 0C]"
+                        );
+                    } else {
+                        let _ = writeln!(output, "  {name}/");
+                    }
+                } else {
+                    let _ = writeln!(output, "  {name}/");
+                }
+            } else {
                 let dir_file_count = files_in_dir.len();
                 let dir_loc: usize = files_in_dir.iter().map(|f| f.line_count).sum();
                 let dir_functions: usize = files_in_dir.iter().map(|f| f.function_count).sum();
@@ -878,8 +906,7 @@ pub fn format_summary(
                     counts
                         .binary_search_by_key(&&entry.path, |(p, _)| p)
                         .ok()
-                        .map(|i| counts[i].1)
-                        .unwrap_or(dir_file_count)
+                        .map_or(dir_file_count, |i| counts[i].1)
                 } else {
                     dir_file_count
                 };
@@ -931,29 +958,32 @@ pub fn format_summary(
                             }
                         })
                         .map(|f| {
-                            let rel = Path::new(&f.path)
-                                .strip_prefix(dir_path)
-                                .map(|p| p.to_string_lossy().into_owned())
-                                .unwrap_or_else(|_| {
+                            let rel = Path::new(&f.path).strip_prefix(dir_path).map_or_else(
+                                |_| {
                                     Path::new(&f.path)
                                         .file_name()
                                         .and_then(|n| n.to_str())
-                                        .map(|s| s.to_owned())
-                                        .unwrap_or_else(|| "?".to_owned())
-                                });
+                                        .map_or_else(
+                                            || "?".to_owned(),
+                                            std::borrow::ToOwned::to_owned,
+                                        )
+                                },
+                                |p| p.to_string_lossy().into_owned(),
+                            );
                             let count = if has_classes {
                                 f.class_count
                             } else {
                                 f.function_count
                             };
                             let suffix = if has_classes { 'C' } else { 'F' };
-                            format!("{}({}{})", rel, count, suffix)
+                            format!("{rel}({count}{suffix})")
                         })
                         .collect();
                     if top_n.is_empty() {
                         String::new()
                     } else {
-                        format!(" top: {}", top_n.join(", "))
+                        let joined = top_n.join(", ");
+                        format!(" top: {joined}")
                     }
                 } else {
                     String::new()
@@ -967,7 +997,7 @@ pub fn format_summary(
                         e.path
                             .file_name()
                             .and_then(|n| n.to_str())
-                            .map(|s| s.to_owned())
+                            .map(std::borrow::ToOwned::to_owned)
                     })
                     .collect();
                 subdirs.sort();
@@ -976,79 +1006,30 @@ pub fn format_summary(
                     String::new()
                 } else {
                     let subdirs_capped: Vec<String> =
-                        subdirs.iter().take(5).map(|s| format!("{}/", s)).collect();
-                    format!("  sub: {}", subdirs_capped.join(", "))
+                        subdirs.iter().take(5).map(|s| format!("{s}/")).collect();
+                    let joined = subdirs_capped.join(", ");
+                    format!("  sub: {joined}")
                 };
 
                 let files_label = if let Some(counts) = subtree_counts {
                     let true_count = counts
                         .binary_search_by_key(&&entry.path, |(p, _)| p)
                         .ok()
-                        .map(|i| counts[i].1)
-                        .unwrap_or(dir_file_count);
-                    if true_count != dir_file_count {
-                        let depth_val = max_depth.unwrap_or(0);
+                        .map_or(dir_file_count, |i| counts[i].1);
+                    if true_count == dir_file_count {
                         format!(
-                            "{} files total; showing {} at depth={}, {}L, {}F, {}C",
-                            true_count,
-                            dir_file_count,
-                            depth_val,
-                            dir_loc,
-                            dir_functions,
-                            dir_classes
+                            "{dir_file_count} files, {dir_loc}L, {dir_functions}F, {dir_classes}C"
                         )
                     } else {
+                        let depth_val = max_depth.unwrap_or(0);
                         format!(
-                            "{} files, {}L, {}F, {}C",
-                            dir_file_count, dir_loc, dir_functions, dir_classes
+                            "{true_count} files total; showing {dir_file_count} at depth={depth_val}, {dir_loc}L, {dir_functions}F, {dir_classes}C"
                         )
                     }
                 } else {
-                    format!(
-                        "{} files, {}L, {}F, {}C",
-                        dir_file_count, dir_loc, dir_functions, dir_classes
-                    )
+                    format!("{dir_file_count} files, {dir_loc}L, {dir_functions}F, {dir_classes}C")
                 };
-                output.push_str(&format!(
-                    "  {}/ [{}]{}{}\n",
-                    name, files_label, hint, subdir_suffix
-                ));
-            } else {
-                // No analyzed files at this depth, but subtree_counts may have a true count
-                let entry_name_str = name.to_string();
-                if let Some(counts) = subtree_counts {
-                    let true_count = counts
-                        .binary_search_by_key(&&entry.path, |(p, _)| p)
-                        .ok()
-                        .map(|i| counts[i].1)
-                        .unwrap_or(0);
-                    if true_count > 0 {
-                        // Track for SUGGESTION
-                        if !crate::EXCLUDED_DIRS.contains(&entry_name_str.as_str())
-                            && true_count > largest_dir_count
-                        {
-                            largest_dir_count = true_count;
-                            largest_dir_name = Some(entry_name_str);
-                            largest_dir_path = Some(
-                                entry
-                                    .path
-                                    .canonicalize()
-                                    .unwrap_or_else(|_| entry.path.clone())
-                                    .display()
-                                    .to_string(),
-                            );
-                        }
-                        let depth_val = max_depth.unwrap_or(0);
-                        output.push_str(&format!(
-                            "  {}/ [{} files total; showing 0 at depth={}, 0L, 0F, 0C]\n",
-                            name, true_count, depth_val
-                        ));
-                    } else {
-                        output.push_str(&format!("  {}/\n", name));
-                    }
-                } else {
-                    output.push_str(&format!("  {}/\n", name));
-                }
+                let _ = writeln!(output, "  {name}/ [{files_label}]{hint}{subdir_suffix}");
             }
         } else {
             // For files, show individual stats
@@ -1058,9 +1039,9 @@ pub fn format_summary(
                     analysis.function_count,
                     analysis.class_count,
                 ) {
-                    output.push_str(&format!("  {} {}\n", name, info_str));
+                    let _ = writeln!(output, "  {name} {info_str}");
                 } else {
-                    output.push_str(&format!("  {}\n", name));
+                    let _ = writeln!(output, "  {name}");
                 }
             }
         }
@@ -1070,10 +1051,10 @@ pub fn format_summary(
 
     // SUGGESTION block
     if let (Some(name), Some(path)) = (largest_dir_name, largest_dir_path) {
-        output.push_str(&format!(
-            "SUGGESTION: Largest source directory: {}/ ({} files total). For module details, re-run with path={} and max_depth=2.\n",
-            name, largest_dir_count, path
-        ));
+        let _ = writeln!(
+            output,
+            "SUGGESTION: Largest source directory: {name}/ ({largest_dir_count} files total). For module details, re-run with path={path} and max_depth=2."
+        );
     } else {
         output.push_str("SUGGESTION:\n");
         output.push_str("Use a narrower path for details (e.g., analyze src/core/)\n");
@@ -1082,9 +1063,9 @@ pub fn format_summary(
     output
 }
 
-/// Format a compact summary of file details for large FileDetails output.
+/// Format a compact summary of file details for large `FileDetails` output.
 ///
-/// Returns FILE header with path/LOC/counts, top 10 functions by line span descending,
+/// Returns `FILE` header with path/LOC/counts, top 10 functions by line span descending,
 /// classes inline if <=10, import count, and suggestion block.
 #[instrument(skip_all)]
 pub fn format_file_details_summary(
@@ -1096,13 +1077,10 @@ pub fn format_file_details_summary(
 
     // FILE header
     output.push_str("FILE:\n");
-    output.push_str(&format!("  path: {}\n", path));
-    output.push_str(&format!(
-        "  {}L, {}F, {}C\n",
-        line_count,
-        semantic.functions.len(),
-        semantic.classes.len()
-    ));
+    let _ = writeln!(output, "  path: {path}");
+    let fn_count = semantic.functions.len();
+    let class_count = semantic.classes.len();
+    let _ = writeln!(output, "  {line_count}L, {fn_count}F, {class_count}C");
     output.push('\n');
 
     // Top 10 functions by line span (end_line - start_line) descending
@@ -1130,10 +1108,11 @@ pub fn format_file_details_summary(
             } else {
                 format!("({})", func.parameters.join(", "))
             };
-            output.push_str(&format!(
-                "  {}:{}: {} {} [{}L]\n",
+            let _ = writeln!(
+                output,
+                "  {}:{}: {} {} [{}L]",
                 func.line, func.end_line, func.name, params, span
-            ));
+            );
         }
         output.push('\n');
     }
@@ -1145,26 +1124,23 @@ pub fn format_file_details_summary(
             // Inline format: one class per line with method count
             for class in &semantic.classes {
                 let methods_count = class.methods.len();
-                output.push_str(&format!("  {}: {}M\n", class.name, methods_count));
+                let _ = writeln!(output, "  {}: {}M", class.name, methods_count);
             }
         } else {
             // Multiline format with summary
-            output.push_str(&format!("  {} classes total\n", semantic.classes.len()));
+            let _ = writeln!(output, "  {} classes total", semantic.classes.len());
             for class in semantic.classes.iter().take(5) {
-                output.push_str(&format!("    {}\n", class.name));
+                let _ = writeln!(output, "    {}", class.name);
             }
             if semantic.classes.len() > 5 {
-                output.push_str(&format!(
-                    "    ... and {} more\n",
-                    semantic.classes.len() - 5
-                ));
+                let _ = writeln!(output, "    ... and {} more", semantic.classes.len() - 5);
             }
         }
         output.push('\n');
     }
 
     // Import count only
-    output.push_str(&format!("Imports: {}\n", semantic.imports.len()));
+    let _ = writeln!(output, "Imports: {}", semantic.imports.len());
     output.push('\n');
 
     // SUGGESTION block
@@ -1186,15 +1162,16 @@ pub fn format_structure_paginated(
     let mut output = String::new();
 
     let depth_label = match max_depth {
-        Some(n) if n > 0 => format!(" (max_depth={})", n),
+        Some(n) if n > 0 => format!(" (max_depth={n})"),
         _ => String::new(),
     };
-    output.push_str(&format!(
-        "PAGINATED: showing {} of {} files{}\n\n",
+    let _ = writeln!(
+        output,
+        "PAGINATED: showing {} of {} files{}\n",
         paginated_files.len(),
         total_files,
         depth_label
-    ));
+    );
 
     let prod_files: Vec<&FileInfo> = paginated_files.iter().filter(|f| !f.is_test).collect();
     let test_files: Vec<&FileInfo> = paginated_files.iter().filter(|f| f.is_test).collect();
@@ -1222,7 +1199,7 @@ pub fn format_structure_paginated(
     output
 }
 
-/// Format a paginated subset of functions for FileDetails mode.
+/// Format a paginated subset of functions for `FileDetails` mode.
 /// When `verbose=false` (default/compact): shows `C:` (if non-empty) and `F:` with wrapped rendering; omits `I:`.
 /// When `verbose=true`: shows `C:`, `I:`, and `F:` with wrapped rendering on the first page (offset == 0).
 /// Header shows position context: `FILE: path (NL, start-end/totalF, CC, II)`.
@@ -1243,19 +1220,20 @@ pub fn format_file_details_paginated(
     let start = offset + 1; // 1-indexed for display
     let end = offset + functions_page.len();
 
-    output.push_str(&format!(
-        "FILE: {} ({}L, {}-{}/{}F, {}C, {}I)\n",
+    let _ = writeln!(
+        output,
+        "FILE: {} ({}L, {}-{}/{}F, {}C, {}I)",
         path,
         line_count,
         start,
         end,
         total_functions,
         semantic.classes.len(),
-        semantic.imports.len(),
-    ));
+        semantic.imports.len()
+    );
 
     // Compute field visibility flags. Empty slice behaves same as None (show all).
-    let show_all = fields.is_none_or(|f| f.is_empty());
+    let show_all = fields.is_none_or(<[AnalyzeFileField]>::is_empty);
     let show_classes = show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Classes));
     let show_imports = show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Imports));
     let show_functions =
@@ -1296,12 +1274,13 @@ pub fn format_file_details_paginated(
     output
 }
 
-/// Format a paginated subset of callers or callees for SymbolFocus mode.
+/// Format a paginated subset of callers or callees for `SymbolFocus` mode.
 /// Mode is determined by the `mode` parameter:
 /// - `PaginationMode::Callers`: paginate production callers; show test callers summary and callees summary.
 /// - `PaginationMode::Callees`: paginate callees; show callers summary and test callers summary.
 #[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::similar_names)] // domain-appropriate pairs (callers_count/callees_count); renaming harms clarity
 pub(crate) fn format_focused_paginated(
     paginated_chains: &[InternalCallChain],
     total: usize,
@@ -1324,15 +1303,15 @@ pub(crate) fn format_focused_paginated(
 
     let mut output = String::new();
 
-    output.push_str(&format!(
-        "FOCUS: {} ({} defs, {} callers, {} callees)\n",
-        symbol, def_count, callers_count, callees_count
-    ));
+    let _ = writeln!(
+        output,
+        "FOCUS: {symbol} ({def_count} defs, {callers_count} callers, {callees_count} callees)"
+    );
 
     match mode {
         PaginationMode::Callers => {
             // Paginate production callers
-            output.push_str(&format!("CALLERS ({}-{} of {}):\n", start, end, total));
+            let _ = writeln!(output, "CALLERS ({start}-{end} of {total}):");
 
             let page_refs: Vec<_> = paginated_chains
                 .iter()
@@ -1372,11 +1351,12 @@ pub(crate) fn format_focused_paginated(
                     .map(|f| strip_base_path(std::path::Path::new(f), base_path))
                     .collect();
 
-                output.push_str(&format!(
-                    "CALLERS (test): {} test functions (in {})\n",
+                let _ = writeln!(
+                    output,
+                    "CALLERS (test): {} test functions (in {})",
                     test_chains.len(),
                     display_files.join(", ")
-                ));
+                );
             }
 
             // Callees summary
@@ -1389,26 +1369,27 @@ pub(crate) fn format_focused_paginated(
             if callee_names.is_empty() {
                 output.push_str("CALLEES: (none)\n");
             } else {
-                output.push_str(&format!(
-                    "CALLEES: {} (use cursor for callee pagination)\n",
-                    callees_count
-                ));
+                let _ = writeln!(
+                    output,
+                    "CALLEES: {callees_count} (use cursor for callee pagination)"
+                );
             }
         }
         PaginationMode::Callees => {
             // Callers summary
-            output.push_str(&format!("CALLERS: {} production callers\n", callers_count));
+            let _ = writeln!(output, "CALLERS: {callers_count} production callers");
 
             // Test callers summary
             if !test_chains.is_empty() {
-                output.push_str(&format!(
-                    "CALLERS (test): {} test functions\n",
+                let _ = writeln!(
+                    output,
+                    "CALLERS (test): {} test functions",
                     test_chains.len()
-                ));
+                );
             }
 
             // Paginate callees
-            output.push_str(&format!("CALLEES ({}-{} of {}):\n", start, end, total));
+            let _ = writeln!(output, "CALLEES ({start}-{end} of {total}):");
 
             let page_refs: Vec<_> = paginated_chains
                 .iter()
@@ -1450,9 +1431,9 @@ fn format_file_entry(file: &FileInfo, base_path: Option<&Path>) -> String {
     }
     let display_path = strip_base_path(Path::new(&file.path), base_path);
     if parts.is_empty() {
-        format!("{}\n", display_path)
+        format!("{display_path}\n")
     } else {
-        format!("{} [{}]\n", display_path, parts.join(", "))
+        format!("{display_path} [{}]\n", parts.join(", "))
     }
 }
 
@@ -2601,18 +2582,16 @@ fn format_classes_section(classes: &[ClassInfo], functions: &[FunctionInfo]) -> 
     } else {
         for class in classes {
             if class.inherits.is_empty() {
-                output.push_str(&format!(
-                    "  {}:{}-{}\n",
-                    class.name, class.line, class.end_line
-                ));
+                let _ = writeln!(output, "  {}:{}-{}", class.name, class.line, class.end_line);
             } else {
-                output.push_str(&format!(
-                    "  {}:{}-{} ({})\n",
+                let _ = writeln!(
+                    output,
+                    "  {}:{}-{} ({})",
                     class.name,
                     class.line,
                     class.end_line,
                     class.inherits.join(", ")
-                ));
+                );
             }
 
             // Append methods for each class
@@ -2620,9 +2599,9 @@ fn format_classes_section(classes: &[ClassInfo], functions: &[FunctionInfo]) -> 
                 && !methods.is_empty()
             {
                 for (i, method) in methods.iter().take(10).enumerate() {
-                    output.push_str(&format!("    {}:{}\n", method.name, method.line));
+                    let _ = writeln!(output, "    {}:{}", method.name, method.line);
                     if i + 1 == 10 && methods.len() > 10 {
-                        output.push_str(&format!("    ... ({} more)\n", methods.len() - 10));
+                        let _ = writeln!(output, "    ... ({} more)", methods.len() - 10);
                         break;
                     }
                 }
@@ -2633,7 +2612,7 @@ fn format_classes_section(classes: &[ClassInfo], functions: &[FunctionInfo]) -> 
 }
 
 /// Format related files section (incoming/outgoing imports).
-/// Returns empty string when import_graph is None.
+/// Returns empty string when `import_graph` is None.
 fn format_imports_section(imports: &[ImportInfo]) -> String {
     let mut output = String::new();
     if imports.is_empty() {

@@ -9,7 +9,7 @@ use std::path::Path;
 use tracing::instrument;
 
 /// Get path completions for a given prefix within a root directory.
-/// Uses ignore crate with standard filters to respect .gitignore.
+/// Uses ignore crate with standard filters to respect `.gitignore`.
 /// Returns matching file and directory paths up to 100 results.
 #[instrument(skip_all, fields(prefix = %prefix))]
 pub fn path_completions(root: &Path, prefix: &str) -> Vec<String> {
@@ -46,28 +46,20 @@ pub fn path_completions(root: &Path, prefix: &str) -> Vec<String> {
             break;
         }
 
-        match result {
-            Ok(entry) => {
-                let path = entry.path();
-                // Skip the root directory itself
-                if path == search_dir {
-                    continue;
-                }
-
-                // Get the filename
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
-                    && file_name.starts_with(&name_prefix)
-                {
-                    // Construct relative path from root
-                    if let Ok(rel_path) = path.strip_prefix(root) {
-                        let rel_str = rel_path.to_string_lossy().to_string();
-                        results.push(rel_str);
-                    }
-                }
-            }
-            Err(_) => {
-                // Skip unreadable entries
-                continue;
+        let Ok(entry) = result else { continue };
+        let path = entry.path();
+        // Skip the root directory itself
+        if path == search_dir {
+            continue;
+        }
+        // Get the filename
+        if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
+            && file_name.starts_with(&name_prefix)
+        {
+            // Construct relative path from root
+            if let Ok(rel_path) = path.strip_prefix(root) {
+                let rel_str = rel_path.to_string_lossy().to_string();
+                results.push(rel_str);
             }
         }
     }
@@ -76,7 +68,7 @@ pub fn path_completions(root: &Path, prefix: &str) -> Vec<String> {
 }
 
 /// Get symbol completions (function and class names) for a given file path.
-/// Looks up cached FileAnalysisOutput and extracts matching symbols.
+/// Looks up cached [`AnalysisCache`] and extracts matching symbols.
 /// Returns matching function and class names up to 100 results.
 #[instrument(skip(cache), fields(path = %path.display(), prefix = %prefix))]
 pub fn symbol_completions(cache: &AnalysisCache, path: &Path, prefix: &str) -> Vec<String> {
@@ -98,9 +90,8 @@ pub fn symbol_completions(cache: &AnalysisCache, path: &Path, prefix: &str) -> V
     };
 
     // Look up in cache
-    let cached = match cache.get(&cache_key) {
-        Some(output) => output,
-        None => return Vec::new(),
+    let Some(cached) = cache.get(&cache_key) else {
+        return Vec::new();
     };
 
     let mut results = Vec::new();

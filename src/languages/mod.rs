@@ -41,6 +41,7 @@ pub struct LanguageInfo {
 }
 
 /// Get language information by language name.
+#[allow(clippy::too_many_lines)] // exhaustive match over all supported languages; splitting harms readability
 pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
     match lang_name {
         "rust" => Some(LanguageInfo {

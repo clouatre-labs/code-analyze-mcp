@@ -1,53 +1,54 @@
 use tree_sitter::Node;
 
 /// Tree-sitter query for extracting Rust elements (functions and structs/enums/traits).
-pub const ELEMENT_QUERY: &str = r#"
+pub const ELEMENT_QUERY: &str = r"
 (function_item
   name: (identifier) @func_name
   parameters: (parameters) @params) @function
 (struct_item) @class
 (enum_item) @class
 (trait_item) @class
-"#;
+";
 
 /// Tree-sitter query for extracting function calls.
-pub const CALL_QUERY: &str = r#"
+pub const CALL_QUERY: &str = r"
 (call_expression function: (identifier) @call)
 (call_expression function: (field_expression field: (field_identifier) @call))
 (call_expression function: (scoped_identifier name: (identifier) @call))
-"#;
+";
 
 /// Tree-sitter query for extracting type references.
-pub const REFERENCE_QUERY: &str = r#"
+pub const REFERENCE_QUERY: &str = r"
 (type_identifier) @type_ref
-"#;
+";
 
 /// Tree-sitter query for extracting imports.
-pub const IMPORT_QUERY: &str = r#"
+pub const IMPORT_QUERY: &str = r"
 (use_declaration argument: (_) @import_path) @import
-"#;
+";
 
 /// Tree-sitter query for extracting `impl Trait for Type` blocks.
 /// Captures the trait name and the concrete implementor type.
 // Note: matches only simple trait names (type_identifier). Scoped traits
 // (e.g. `impl io::Sink for T`) are not matched; scoped coverage is out of scope for v1.
-pub const IMPL_TRAIT_QUERY: &str = r#"
+pub const IMPL_TRAIT_QUERY: &str = r"
 (impl_item
   trait: (type_identifier) @trait_name
   type: (type_identifier) @impl_type)
-"#;
+";
 
 /// Tree-sitter query for extracting impl blocks and methods.
-pub const IMPL_QUERY: &str = r#"
+pub const IMPL_QUERY: &str = r"
 (impl_item
   type: (type_identifier) @impl_type
   body: (declaration_list
     (function_item
       name: (identifier) @method_name
       parameters: (parameters) @method_params) @method))
-"#;
+";
 
 /// Extract function name from a function node.
+#[must_use]
 pub fn extract_function_name(node: &Node, source: &str, _query_name: &str) -> Option<String> {
     if node.kind() != "function_item" {
         return None;
@@ -64,6 +65,7 @@ pub fn extract_function_name(node: &Node, source: &str, _query_name: &str) -> Op
 }
 
 /// Find method name for a receiver type.
+#[must_use]
 pub fn find_method_for_receiver(
     node: &Node,
     source: &str,
@@ -84,6 +86,7 @@ pub fn find_method_for_receiver(
 }
 
 /// Find receiver type for a method.
+#[must_use]
 pub fn find_receiver_type(node: &Node, source: &str) -> Option<String> {
     if node.kind() != "impl_item" {
         return None;
@@ -100,8 +103,9 @@ pub fn find_receiver_type(node: &Node, source: &str) -> Option<String> {
 }
 
 /// Extract inheritance information from a Rust class node.
-/// Rust class nodes (struct_item, enum_item, trait_item) have no syntactic inheritance.
-/// Inheritance is via impl blocks, not on the type declaration itself.
+/// Rust class nodes (`struct_item`, `enum_item`, `trait_item`) have no syntactic inheritance.
+/// Inheritance is via `impl` blocks, not on the type declaration itself.
+#[must_use]
 pub fn extract_inheritance(_node: &Node, _source: &str) -> Vec<String> {
     Vec::new()
 }
