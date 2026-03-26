@@ -29,8 +29,8 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 |----|-------------|--------|-------------------|
 | `description_good` | **MUST** -- Website succinctly describes what the software does. | **Met** | README opens with "Standalone MCP server for code structure analysis using tree-sitter." Crates.io description matches. |
 | `interact` | **MUST** -- Website provides information on how to obtain, give feedback, and contribute. | **Met** | README has Installation section (Homebrew, cargo-binstall, cargo install), links CONTRIBUTING.md, SECURITY.md, and issue tracker. |
-| `contribution` | **MUST** -- Contribution information explains the contribution process. | **Met** | CONTRIBUTING.md documents fork/PR workflow, commit format, and PR checklist. |
-| `contribution_requirements` | **SHOULD** -- Contribution information includes requirements for acceptable contributions. | **Met** | CONTRIBUTING.md specifies coding standard (clippy -D warnings, cargo fmt), commit signing (GPG + DCO), and PR checklist. |
+| `contribution` | **MUST** -- Contribution information explains the contribution process. | **Met** | CONTRIBUTING.md documents fork/PR workflow, commit format, and PR checklist. URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/CONTRIBUTING.md |
+| `contribution_requirements` | **SHOULD** -- Contribution information includes requirements for acceptable contributions. | **Met** | CONTRIBUTING.md specifies coding standard (clippy -D warnings, cargo fmt), commit signing (GPG + DCO), and PR checklist. URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/CONTRIBUTING.md |
 
 ### 1.2 FLOSS license
 
@@ -38,7 +38,7 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 |----|-------------|--------|-------------------|
 | `floss_license` | **MUST** -- Software produced by the project MUST be released as FLOSS. | **Met** | Apache-2.0 license; OSI-approved. LICENSE file present, `license = "Apache-2.0"` in Cargo.toml. |
 | `floss_license_osi` | **SUGGESTED** -- License approved by the Open Source Initiative. | **Met** | Apache-2.0 is on the OSI approved list. |
-| `license_location` | **MUST** -- License posted in a standard location in the source repository. | **Met** | `LICENSE` file at repository root. |
+| `license_location` | **MUST** -- License posted in a standard location in the source repository. | **Met** | `LICENSE` file at repository root. URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/LICENSE |
 
 ### 1.3 Documentation
 
@@ -81,7 +81,7 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
-| `release_notes` | **MUST** -- Each release provides human-readable release notes summarizing major changes. | **Met** | Every GitHub release has curated release notes (e.g., v0.1.9 -- "Fields Projection, Filter & Cache") with categorized sections (New Features, Performance, Fixes, CI/Chore). |
+| `release_notes` | **MUST** -- Each release provides human-readable release notes summarizing major changes. | **Met** | Every GitHub release has curated release notes (e.g., v0.1.9 -- "Fields Projection, Filter & Cache") with categorized sections (New Features, Performance, Fixes, CI/Chore). URL: https://github.com/clouatre-labs/code-analyze-mcp/releases |
 | `release_notes_vulns` | **MUST** -- Release notes identify every publicly known run-time vulnerability fixed in that release that had a CVE assignment. | **Met** | No CVE-assigned vulnerabilities have been fixed to date. The criterion is satisfied when there is nothing to report; if a CVE is fixed in a future release, it must be listed explicitly. |
 
 ---
@@ -92,18 +92,18 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
-| `report_process` | **MUST** -- Project provides a process for users to submit bug reports. | **Met** | GitHub Issues are enabled with a structured bug report template (`.github/ISSUE_TEMPLATE/bug.md`). README links SECURITY.md for sensitive reports. |
+| `report_process` | **MUST** -- Project provides a process for users to submit bug reports. | **Met** | GitHub Issues are enabled with a structured bug report template (`.github/ISSUE_TEMPLATE/bug.md`). README links SECURITY.md for sensitive reports. URL: https://github.com/clouatre-labs/code-analyze-mcp/issues |
 | `report_tracker` | **SHOULD** -- Project uses an issue tracker for tracking individual issues. | **Met** | GitHub Issues used as the primary tracker; Renovate and Copilot bots also create tracked issues. |
 | `report_responses` | **MUST** -- Project acknowledges a majority of bug reports submitted in the last 2--12 months. | **Met** | All bug-labeled issues examined show timely responses and closure (e.g., #429, #418, #415, #368, #365 all closed with fixes). |
 | `enhancement_responses` | **SHOULD** -- Project responds to a majority (>50%) of enhancement requests in the last 2--12 months. | **Met** | Feature and enhancement issues are tracked and closed (e.g., #442 -- LRU cache extension -- closed with implementation). |
-| `report_archive` | **MUST** -- Project has a publicly available archive for reports and responses. | **Met** | GitHub Issues are publicly readable and searchable indefinitely. |
+| `report_archive` | **MUST** -- Project has a publicly available archive for reports and responses. | **Met** | GitHub Issues are publicly readable and searchable indefinitely. URL: https://github.com/clouatre-labs/code-analyze-mcp/issues |
 
 ### 3.2 Vulnerability report process
 
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
-| `vulnerability_report_process` | **MUST** -- Project publishes the process for reporting vulnerabilities on the project site. | **Met** | SECURITY.md documents the vulnerability reporting process at the repository root. |
-| `vulnerability_report_private` | **MUST** (if private reports supported) -- Project includes instructions for sending reports privately. | **Met** | SECURITY.md instructs reporters to use GitHub's private vulnerability reporting advisory form. Private vulnerability reporting is enabled on the repository (Settings → Security → Private vulnerability reporting). |
+| `vulnerability_report_process` | **MUST** -- Project publishes the process for reporting vulnerabilities on the project site. | **Met** | SECURITY.md documents the vulnerability reporting process at the repository root. URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/SECURITY.md |
+| `vulnerability_report_private` | **MUST** (if private reports supported) -- Project includes instructions for sending reports privately. | **Met** | SECURITY.md instructs reporters to use GitHub's private vulnerability reporting advisory form. Private vulnerability reporting is enabled on the repository (Settings → Security → Private vulnerability reporting). URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/SECURITY.md |
 | `vulnerability_report_response` | **MUST** -- Initial response time for vulnerability reports received in the last 6 months is ≤ 14 days. | **Met** | The repository is actively maintained with same-day or next-day turnaround on security-labeled issues. |
 
 ---
