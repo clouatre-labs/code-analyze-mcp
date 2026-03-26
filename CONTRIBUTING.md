@@ -82,7 +82,7 @@ The `-S` flag GPG-signs the commit (required by branch protection).
 
 ## Branch Protection
 
-See [docs/repo-standards.md](docs/repo-standards.md) for ruleset configuration, required status checks, signed-commit enforcement, and branch protection rationale.
+See [docs/repo-standards.md](docs/repo-standards.md) for ruleset configuration, required status checks, signed-commit enforcement, branch protection rationale, and the repo merge strategy.
 
 ## License
 
