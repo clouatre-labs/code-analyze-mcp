@@ -339,30 +339,35 @@ impl CallGraph {
                     let path = &edge.path;
                     let line = edge.line;
                     let neighbor = &edge.neighbor_name;
-                    let mut chain = vec![(current.clone(), path.clone(), line)];
+                    // Pre-allocate capacity: chain holds at most follow_depth + 2 entries
+                    // (the BFS node, up to follow_depth intermediate hops, and the neighbor).
+                    // For incoming chains we accumulate in reverse BFS order (focus first, then
+                    // deeper callers) then call reverse() at the end so that:
+                    //   chain[0]    = immediate caller of focus (closest)
+                    //   chain.last() = focus symbol (the BFS start node at depth 0) or the
+                    //                  current BFS node for deeper depth levels.
+                    // For outgoing chains the order is already focus-first.
+                    let mut chain = {
+                        let mut v = Vec::with_capacity(follow_depth as usize + 2);
+                        v.push((current.clone(), path.clone(), line));
+                        v
+                    };
                     let mut chain_node = neighbor.clone();
                     let mut chain_depth = depth;
 
                     while chain_depth < follow_depth {
                         if let Some(next_neighbors) = graph_map.get(&chain_node) {
                             if let Some(next_edge) = next_neighbors.first() {
-                                if is_incoming {
-                                    chain.insert(
-                                        0,
-                                        (
-                                            chain_node.clone(),
-                                            next_edge.path.clone(),
-                                            next_edge.line,
-                                        ),
-                                    );
-                                } else {
-                                    chain.push((
-                                        chain_node.clone(),
-                                        next_edge.path.clone(),
-                                        next_edge.line,
-                                    ));
-                                }
+                                // Advance to the next (deeper) caller before pushing, so that
+                                // for incoming chains the element pushed is the deeper ancestor
+                                // (not chain_node itself, which was already recorded or is the
+                                // immediate neighbor pushed after this loop).
                                 chain_node = next_edge.neighbor_name.clone();
+                                chain.push((
+                                    chain_node.clone(),
+                                    next_edge.path.clone(),
+                                    next_edge.line,
+                                ));
                                 chain_depth += 1;
                             } else {
                                 break;
@@ -373,10 +378,21 @@ impl CallGraph {
                     }
 
                     if is_incoming {
-                        chain.insert(0, (neighbor.clone(), path.clone(), line));
+                        // Add the immediate neighbor (closest to focus) at the end,
+                        // then reverse so chain[0] = immediate neighbor.
+                        chain.push((neighbor.clone(), path.clone(), line));
+                        chain.reverse();
                     } else {
                         chain.push((neighbor.clone(), path.clone(), line));
                     }
+
+                    debug_assert!(
+                        chain.len() <= follow_depth as usize + 2,
+                        "find_chains_bfs: chain length {} exceeds bound {}",
+                        chain.len(),
+                        follow_depth + 2
+                    );
+
                     chains.push(InternalCallChain { chain });
 
                     if !visited.contains(neighbor) && depth < follow_depth {
@@ -923,5 +939,55 @@ mod tests {
         let syms = known(&["parse_config", "build_artifact"]);
         let err = resolve_symbol(syms.iter(), "deploy", &SymbolMatchMode::Contains).unwrap_err();
         assert!(matches!(err, GraphError::SymbolNotFound { .. }));
+    }
+
+    #[test]
+    fn test_incoming_chain_order_two_hops() {
+        // Graph: A calls B calls C.  Focus = C, follow_depth = 2.
+        //
+        // Expected chains after reverse():
+        //   depth-0 chain: [B, A, C]  -- immediate caller first, then outermost, then focus
+        //   depth-1 chain: [A, B]     -- A calls B
+        //
+        // This test pins the ordering so that a missing reverse() or an off-by-one in the
+        // inner-loop push would be caught: chain[1] must be "A" (outermost), not "B" again.
+        let analysis = make_analysis(
+            vec![("A", 1), ("B", 10), ("C", 20)],
+            vec![("A", "B", 2), ("B", "C", 15)],
+        );
+        let graph =
+            CallGraph::build_from_results(vec![(PathBuf::from("test.rs"), analysis)], &[], false)
+                .expect("Failed to build graph");
+
+        let chains = graph
+            .find_incoming_chains("C", 2)
+            .expect("Failed to find incoming chains");
+
+        assert!(
+            !chains.is_empty(),
+            "Expected at least one incoming chain for C"
+        );
+
+        // The 2-hop chain has 3 elements: [immediate_caller, outermost_caller, focus].
+        let chain = chains
+            .iter()
+            .find(|c| c.chain.len() == 3)
+            .expect("Expected a 3-element chain");
+
+        assert_eq!(
+            chain.chain[0].0, "B",
+            "chain[0] should be immediate caller B, got {}",
+            chain.chain[0].0
+        );
+        assert_eq!(
+            chain.chain[1].0, "A",
+            "chain[1] should be outermost caller A, got {}",
+            chain.chain[1].0
+        );
+        assert_eq!(
+            chain.chain[2].0, "C",
+            "chain[2] should be focus node C, got {}",
+            chain.chain[2].0
+        );
     }
 }

@@ -610,7 +610,15 @@ impl SemanticExtractor {
     /// Returns the name of the enclosing function/method/subroutine for a given AST node,
     /// by walking ancestors and matching all language-specific function container kinds.
     fn enclosing_function_name(mut node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+        let mut depth = 0u32;
         while let Some(parent) = node.parent() {
+            depth += 1;
+            // Cap at 64 hops: real function nesting rarely exceeds ~10 levels; 64 is a generous
+            // upper bound that guards against pathological/malformed ASTs without false negatives
+            // on legitimate code. Returns None (treated as <module>) when the cap is hit.
+            if depth > 64 {
+                return None;
+            }
             let name_node = match parent.kind() {
                 // Direct name field: Rust, Python, Go, Java, TypeScript/TSX
                 "function_item"
@@ -642,6 +650,9 @@ impl SemanticExtractor {
             };
             return name_node.map(|n| source[n.start_byte()..n.end_byte()].to_string());
         }
+        // The loop exits here only when no parent was found (i.e., we reached the tree root
+        // without finding a function container). If the depth cap fired, we returned None early
+        // above. Nothing to assert here.
         None
     }
 
@@ -674,7 +685,19 @@ impl SemanticExtractor {
 
                 let mut arg_count = None;
                 let mut arg_node = node;
+                let mut hop = 0u32;
+                let mut cap_hit = false;
                 while let Some(parent) = arg_node.parent() {
+                    hop += 1;
+                    // Bounded parent traversal: cap at 16 hops to guard against pathological
+                    // walks on malformed/degenerate trees. Real call-expression nesting is
+                    // shallow (typically 1-3 levels). When the cap is hit we stop searching and
+                    // leave arg_count as None; the caller is still recorded, just without
+                    // argument-count information.
+                    if hop > 16 {
+                        cap_hit = true;
+                        break;
+                    }
                     if parent.kind() == "call_expression" {
                         if let Some(args) = parent.child_by_field_name("arguments") {
                             arg_count = Some(args.named_child_count());
@@ -683,6 +706,10 @@ impl SemanticExtractor {
                     }
                     arg_node = parent;
                 }
+                debug_assert!(
+                    !cap_hit,
+                    "extract_calls: parent traversal cap reached (hop > 16)"
+                );
 
                 calls.push(CallInfo {
                     caller,

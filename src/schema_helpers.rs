@@ -9,7 +9,7 @@ pub fn integer_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
         "minimum": 0
     })
     .as_object()
-    .unwrap()
+    .expect("json! object literal is always a Value::Object")
     .clone();
     Schema::from(map)
 }
@@ -21,7 +21,7 @@ pub fn option_integer_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
         "minimum": 0
     })
     .as_object()
-    .unwrap()
+    .expect("json! object literal is always a Value::Object")
     .clone();
     Schema::from(map)
 }
@@ -36,7 +36,7 @@ pub fn option_ast_limit_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
         "minimum": 1
     })
     .as_object()
-    .unwrap()
+    .expect("json! object literal is always a Value::Object")
     .clone();
     Schema::from(map)
 }
@@ -50,7 +50,7 @@ pub fn option_page_size_schema(_gen: &mut schemars::SchemaGenerator) -> Schema {
         "minimum": 1
     })
     .as_object()
-    .unwrap()
+    .expect("json! object literal is always a Value::Object")
     .clone();
     Schema::from(map)
 }
