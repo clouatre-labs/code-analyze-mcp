@@ -681,7 +681,7 @@ fn hello() {
     // First analysis
     let output1 = analyze_file(file_path.to_str().unwrap(), None).unwrap();
     let arc_output1 = Arc::new(output1);
-    cache.put(key.clone(), arc_output1.clone());
+    cache.put(&key, arc_output1.clone());
 
     // Second retrieval from cache
     let cached = cache.get(&key);
@@ -713,7 +713,7 @@ fn hello() {
     // Store with first mtime
     let output1 = analyze_file(file_path.to_str().unwrap(), None).unwrap();
     let arc_output1 = Arc::new(output1);
-    cache.put(key1.clone(), arc_output1);
+    cache.put(&key1, arc_output1);
 
     // Simulate file modification by creating a key with different mtime
     let mtime2 = mtime1 + Duration::from_secs(1);
@@ -747,7 +747,7 @@ fn test_cache_eviction_at_capacity() {
 
         let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
         let arc_output = Arc::new(output);
-        cache.put(key, arc_output);
+        cache.put(&key, arc_output);
     }
 
     // The first entry should have been evicted (LRU with capacity 3)
@@ -780,7 +780,7 @@ fn test_cache_mutex_poison_recovery() {
     // Store an entry
     let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
     let arc_output = Arc::new(output);
-    cache.put(key.clone(), arc_output);
+    cache.put(&key, arc_output);
 
     // Verify entry is cached
     assert!(cache.get(&key).is_some());
@@ -792,7 +792,7 @@ fn test_cache_mutex_poison_recovery() {
     // Verify we can add more entries
     let new_output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
     let new_arc_output = Arc::new(new_output);
-    cache.put(key.clone(), new_arc_output);
+    cache.put(&key, new_arc_output);
     assert!(
         cache.get(&key).is_some(),
         "Cache should be usable after update"
@@ -820,7 +820,7 @@ fn test_directory_cache_hit_on_identical_call() {
     );
     let output1 = analyze_directory(root, None).unwrap();
     let arc_output1 = Arc::new(output1);
-    cache.put_directory(key1.clone(), arc_output1.clone());
+    cache.put_directory(&key1, arc_output1.clone());
 
     // Second call with identical parameters should hit cache
     let entries2 = walk_directory(root, None).unwrap();
@@ -857,7 +857,7 @@ fn test_directory_cache_miss_on_mtime_change() {
     );
     let output1 = analyze_directory(root, None).unwrap();
     let arc_output1 = Arc::new(output1);
-    cache.put_directory(key1, arc_output1);
+    cache.put_directory(&key1, arc_output1);
 
     // Modify file to change mtime; sleep long enough to exceed common mtime granularity (1s on many FSes)
     std::thread::sleep(Duration::from_secs(2));
@@ -945,7 +945,7 @@ fn test_analyze_directory_with_progress_increments_counter() {
     // Analyze with progress counter
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    let output = analyze_directory_with_progress(root, entries, counter.clone(), ct).unwrap();
+    let output = analyze_directory_with_progress(root, entries, &counter, &ct).unwrap();
 
     // Verify counter was incremented for each file
     let final_count = counter.load(Ordering::Relaxed);
@@ -973,7 +973,7 @@ fn test_analyze_directory_with_progress_empty_directory() {
     // Analyze empty directory with progress counter
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    let output = analyze_directory_with_progress(root, entries, counter.clone(), ct).unwrap();
+    let output = analyze_directory_with_progress(root, entries, &counter, &ct).unwrap();
 
     // Verify counter is 0 for empty directory
     let final_count = counter.load(Ordering::Relaxed);
@@ -1108,7 +1108,7 @@ fn test_symbol_completions_with_cached_analysis() {
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
         mode: AnalysisMode::FileDetails,
     };
-    cache.put(cache_key, Arc::new(analysis));
+    cache.put(&cache_key, Arc::new(analysis));
 
     // Act: Get symbol completions for "hello" prefix
     let completions = symbol_completions(&cache, &file_path, "hello");
@@ -1155,7 +1155,7 @@ fn test_symbol_completions_empty_prefix() {
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
         mode: AnalysisMode::FileDetails,
     };
-    cache.put(cache_key, Arc::new(analysis));
+    cache.put(&cache_key, Arc::new(analysis));
 
     // Act: Get symbol completions with empty prefix
     let completions = symbol_completions(&cache, &file_path, "");
@@ -1185,7 +1185,7 @@ fn test_symbol_completions_truncates_at_100() {
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
         mode: AnalysisMode::FileDetails,
     };
-    cache.put(cache_key, Arc::new(analysis));
+    cache.put(&cache_key, Arc::new(analysis));
 
     // Act: Get symbol completions for "func" prefix
     let completions = symbol_completions(&cache, &file_path, "func");
@@ -1279,7 +1279,7 @@ fn test_cancellation_during_directory_walk() {
 
     // Act: Call analyze_directory_with_progress with cancelled token
     let counter = Arc::new(AtomicUsize::new(0));
-    let result = analyze_directory_with_progress(root, entries, counter, ct);
+    let result = analyze_directory_with_progress(root, entries, &counter, &ct);
 
     // Assert: Should return Cancelled error
     assert!(matches!(result, Err(AnalyzeError::Cancelled)));
@@ -1300,7 +1300,7 @@ fn test_cancellation_noop_after_completion() {
 
     // Act: Call analyze_directory_with_progress with active token
     let counter = Arc::new(AtomicUsize::new(0));
-    let result = analyze_directory_with_progress(root, entries, counter, ct);
+    let result = analyze_directory_with_progress(root, entries, &counter, &ct);
 
     // Assert: Should succeed (existing behavior unchanged)
     assert!(result.is_ok());

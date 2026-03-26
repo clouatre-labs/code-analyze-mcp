@@ -25,7 +25,7 @@ pub struct CacheKey {
     pub mode: AnalysisMode,
 }
 
-/// Cache key for directory analysis combining file mtimes, mode, and max_depth.
+/// Cache key for directory analysis combining file mtimes, mode, and `max_depth`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct DirectoryCacheKey {
     files: Vec<(PathBuf, SystemTime)>,
@@ -38,6 +38,7 @@ impl DirectoryCacheKey {
     /// Files are sorted by path for deterministic hashing.
     /// Directories are filtered out; only file entries are processed.
     /// Metadata collection is parallelized using rayon.
+    #[must_use]
     pub fn from_entries(entries: &[WalkEntry], max_depth: Option<u32>, mode: AnalysisMode) -> Self {
         let mut files: Vec<(PathBuf, SystemTime)> = entries
             .par_iter()
@@ -86,6 +87,7 @@ pub struct AnalysisCache {
 
 impl AnalysisCache {
     /// Create a new cache with the specified capacity.
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         let file_capacity = capacity.max(1);
         let cache_size = NonZeroUsize::new(file_capacity).unwrap();
@@ -103,22 +105,19 @@ impl AnalysisCache {
         lock_or_recover(&self.cache, self.file_capacity, |guard| {
             let result = guard.get(key).cloned();
             let cache_size = guard.len();
-            match result {
-                Some(v) => {
-                    debug!(cache_event = "hit", cache_size = cache_size, path = ?key.path);
-                    Some(v)
-                }
-                None => {
-                    debug!(cache_event = "miss", cache_size = cache_size, path = ?key.path);
-                    None
-                }
+            if let Some(v) = result {
+                debug!(cache_event = "hit", cache_size = cache_size, path = ?key.path);
+                Some(v)
+            } else {
+                debug!(cache_event = "miss", cache_size = cache_size, path = ?key.path);
+                None
             }
         })
     }
 
     /// Store an analysis result in the cache.
     #[instrument(skip(self, value), fields(path = ?key.path))]
-    pub fn put(&self, key: CacheKey, value: Arc<FileAnalysisOutput>) {
+    pub fn put(&self, key: &CacheKey, value: Arc<FileAnalysisOutput>) {
         lock_or_recover(&self.cache, self.file_capacity, |guard| {
             let push_result = guard.push(key.clone(), value);
             let cache_size = guard.len();
@@ -127,7 +126,7 @@ impl AnalysisCache {
                     debug!(cache_event = "insert", cache_size = cache_size, path = ?key.path);
                 }
                 Some((returned_key, _)) => {
-                    if returned_key == key {
+                    if returned_key == *key {
                         debug!(cache_event = "update", cache_size = cache_size, path = ?key.path);
                     } else {
                         debug!(cache_event = "eviction", cache_size = cache_size, path = ?key.path, evicted_path = ?returned_key.path);
@@ -143,22 +142,19 @@ impl AnalysisCache {
         lock_or_recover(&self.directory_cache, DIR_CACHE_CAPACITY, |guard| {
             let result = guard.get(key).cloned();
             let cache_size = guard.len();
-            match result {
-                Some(v) => {
-                    debug!(cache_event = "hit", cache_size = cache_size);
-                    Some(v)
-                }
-                None => {
-                    debug!(cache_event = "miss", cache_size = cache_size);
-                    None
-                }
+            if let Some(v) = result {
+                debug!(cache_event = "hit", cache_size = cache_size);
+                Some(v)
+            } else {
+                debug!(cache_event = "miss", cache_size = cache_size);
+                None
             }
         })
     }
 
     /// Store a directory analysis result in the cache.
     #[instrument(skip(self, value))]
-    pub fn put_directory(&self, key: DirectoryCacheKey, value: Arc<AnalysisOutput>) {
+    pub fn put_directory(&self, key: &DirectoryCacheKey, value: Arc<AnalysisOutput>) {
         lock_or_recover(&self.directory_cache, DIR_CACHE_CAPACITY, |guard| {
             let push_result = guard.push(key.clone(), value);
             let cache_size = guard.len();

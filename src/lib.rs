@@ -2,10 +2,10 @@
 //!
 //! This crate exposes four MCP tools for multiple programming languages:
 //!
-//! - **analyze_directory**: Directory tree with file counts and structure
-//! - **analyze_file**: Semantic extraction (functions, classes, imports, references)
-//! - **analyze_symbol**: Call graph analysis (callers and callees)
-//! - **analyze_module**: Lightweight function and import index
+//! - **`analyze_directory`**: Directory tree with file counts and structure
+//! - **`analyze_file`**: Semantic extraction (functions, classes, imports, references)
+//! - **`analyze_symbol`**: Call graph analysis (callers and callees)
+//! - **`analyze_module`**: Lightweight function and import index
 //!
 //! Key entry points:
 //! - [`analyze::analyze_directory`]: Analyze entire directory tree
@@ -78,22 +78,25 @@ const SIZE_LIMIT: usize = 50_000;
 
 /// Returns `true` when `summary=true` and a `cursor` are both provided, which is an invalid
 /// combination since summary mode and pagination are mutually exclusive.
+#[must_use]
 pub fn summary_cursor_conflict(summary: Option<bool>, cursor: Option<&str>) -> bool {
     summary == Some(true) && cursor.is_some()
 }
 
+#[must_use]
 fn error_meta(
     category: &'static str,
     is_retryable: bool,
     suggested_action: &'static str,
-) -> Option<serde_json::Value> {
-    Some(serde_json::json!({
+) -> serde_json::Value {
+    serde_json::json!({
         "errorCategory": category,
         "isRetryable": is_retryable,
         "suggestedAction": suggested_action,
-    }))
+    })
 }
 
+#[must_use]
 fn err_to_tool_result(e: ErrorData) -> CallToolResult {
     CallToolResult::error(vec![Content::text(e.message)])
 }
@@ -119,7 +122,7 @@ fn paginate_focus_chains(
         ErrorData::new(
             rmcp::model::ErrorCode::INTERNAL_ERROR,
             e.to_string(),
-            error_meta("transient", true, "retry the request"),
+            Some(error_meta("transient", true, "retry the request")),
         )
     })?;
 
@@ -132,7 +135,7 @@ fn paginate_focus_chains(
             ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 e.to_string(),
-                error_meta("validation", false, "invalid cursor format"),
+                Some(error_meta("validation", false, "invalid cursor format")),
             )
         })?;
         Some(
@@ -144,7 +147,7 @@ fn paginate_focus_chains(
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     e.to_string(),
-                    error_meta("validation", false, "invalid cursor format"),
+                    Some(error_meta("validation", false, "invalid cursor format")),
                 )
             })?,
         )
@@ -173,6 +176,7 @@ pub struct CodeAnalyzer {
 
 #[tool_router]
 impl CodeAnalyzer {
+    #[must_use]
     pub fn list_tools() -> Vec<rmcp::model::Tool> {
         Self::tool_router().list_all()
     }
@@ -219,9 +223,11 @@ impl CodeAnalyzer {
         }
     }
 
-    /// Private helper: Extract analysis logic for overview mode (analyze_directory).
+    /// Private helper: Extract analysis logic for overview mode (`analyze_directory`).
     /// Returns the complete analysis output after spawning and monitoring progress.
     /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
+    #[allow(clippy::too_many_lines)] // long but cohesive analysis loop; extracting sub-functions would obscure the control flow
+    #[allow(clippy::cast_precision_loss)] // progress percentage display; precision loss acceptable for usize counts
     #[instrument(skip(self, params, ct))]
     async fn handle_overview_mode(
         &self,
@@ -239,8 +245,12 @@ impl CodeAnalyzer {
         let all_entries = walk_directory(path, None).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Failed to walk directory: {}", e),
-                error_meta("resource", false, "check path permissions and availability"),
+                format!("Failed to walk directory: {e}"),
+                Some(error_meta(
+                    "resource",
+                    false,
+                    "check path permissions and availability",
+                )),
             )
         })?;
 
@@ -283,7 +293,12 @@ impl CodeAnalyzer {
 
         // Spawn blocking analysis with progress tracking
         let handle = tokio::task::spawn_blocking(move || {
-            analyze::analyze_directory_with_progress(&path_owned, entries, counter_clone, ct_clone)
+            analyze::analyze_directory_with_progress(
+                &path_owned,
+                entries,
+                &counter_clone,
+                &ct_clone,
+            )
         });
 
         // Poll and emit progress every 100ms
@@ -313,7 +328,7 @@ impl CodeAnalyzer {
                     &token,
                     current as f64,
                     total_files as f64,
-                    format!("Analyzing {}/{} files", current, total_files),
+                    format!("Analyzing {current}/{total_files} files"),
                 )
                 .await;
                 last_progress = current;
@@ -330,7 +345,7 @@ impl CodeAnalyzer {
                 &token,
                 total_files as f64,
                 total_files as f64,
-                format!("Completed analyzing {} files", total_files),
+                format!("Completed analyzing {total_files} files"),
             )
             .await;
         }
@@ -339,28 +354,32 @@ impl CodeAnalyzer {
             Ok(Ok(mut output)) => {
                 output.subtree_counts = subtree_counts;
                 let arc_output = std::sync::Arc::new(output);
-                self.cache.put_directory(cache_key, arc_output.clone());
+                self.cache.put_directory(&cache_key, arc_output.clone());
                 Ok(arc_output)
             }
             Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 "Analysis cancelled".to_string(),
-                error_meta("transient", true, "analysis was cancelled"),
+                Some(error_meta("transient", true, "analysis was cancelled")),
             )),
             Ok(Err(e)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Error analyzing directory: {}", e),
-                error_meta("resource", false, "check path and file permissions"),
+                format!("Error analyzing directory: {e}"),
+                Some(error_meta(
+                    "resource",
+                    false,
+                    "check path and file permissions",
+                )),
             )),
             Err(e) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Task join error: {}", e),
-                error_meta("transient", true, "retry the request"),
+                format!("Task join error: {e}"),
+                Some(error_meta("transient", true, "retry the request")),
             )),
         }
     }
 
-    /// Private helper: Extract analysis logic for file details mode (analyze_file).
+    /// Private helper: Extract analysis logic for file details mode (`analyze_file`).
     /// Returns the cached or newly analyzed file output.
     #[instrument(skip(self, params))]
     async fn handle_file_details_mode(
@@ -388,14 +407,18 @@ impl CodeAnalyzer {
             Ok(output) => {
                 let arc_output = std::sync::Arc::new(output);
                 if let Some(ref key) = cache_key {
-                    self.cache.put(key.clone(), arc_output.clone());
+                    self.cache.put(key, arc_output.clone());
                 }
                 Ok(arc_output)
             }
             Err(e) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Error analyzing file: {}", e),
-                error_meta("resource", false, "check file path and permissions"),
+                format!("Error analyzing file: {e}"),
+                Some(error_meta(
+                    "resource",
+                    false,
+                    "check file path and permissions",
+                )),
             )),
         }
     }
@@ -414,17 +437,18 @@ impl CodeAnalyzer {
             return Err(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 "impl_only=true requires Rust source files. No .rs files found in the given path. Use analyze_symbol without impl_only for cross-language analysis.".to_string(),
-                error_meta(
+                Some(error_meta(
                     "validation",
                     false,
                     "remove impl_only or point to a directory containing .rs files",
-                ),
+                )),
             ));
         }
         Ok(())
     }
 
     // Poll progress until analysis task completes.
+    #[allow(clippy::cast_precision_loss)] // progress percentage display; precision loss acceptable for usize counts
     async fn poll_progress_until_done(
         &self,
         analysis_params: &FocusedAnalysisParams,
@@ -458,8 +482,8 @@ impl CodeAnalyzer {
             analyze::analyze_focused_with_progress_with_entries(
                 &path_owned,
                 &params,
-                counter_clone,
-                ct_clone,
+                &counter_clone,
+                &ct_clone,
                 &entries_clone,
             )
         });
@@ -492,8 +516,7 @@ impl CodeAnalyzer {
                     current as f64,
                     total_files as f64,
                     format!(
-                        "Analyzing {}/{} files for symbol '{}'",
-                        current, total_files, symbol_display
+                        "Analyzing {current}/{total_files} files for symbol '{symbol_display}'"
                     ),
                 )
                 .await;
@@ -510,10 +533,7 @@ impl CodeAnalyzer {
                 &token,
                 total_files as f64,
                 total_files as f64,
-                format!(
-                    "Completed analyzing {} files for symbol '{}'",
-                    total_files, symbol_display
-                ),
+                format!("Completed analyzing {total_files} files for symbol '{symbol_display}'"),
             )
             .await;
         }
@@ -523,17 +543,17 @@ impl CodeAnalyzer {
             Ok(Err(analyze::AnalyzeError::Cancelled)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
                 "Analysis cancelled".to_string(),
-                error_meta("transient", true, "analysis was cancelled"),
+                Some(error_meta("transient", true, "analysis was cancelled")),
             )),
             Ok(Err(e)) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Error analyzing symbol: {}", e),
-                error_meta("resource", false, "check symbol name and file"),
+                format!("Error analyzing symbol: {e}"),
+                Some(error_meta("resource", false, "check symbol name and file")),
             )),
             Err(e) => Err(ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("Task join error: {}", e),
-                error_meta("transient", true, "retry the request"),
+                format!("Task join error: {e}"),
+                Some(error_meta("transient", true, "retry the request")),
             )),
         }
     }
@@ -587,23 +607,24 @@ impl CodeAnalyzer {
                 )
                 .await;
 
-            match summary_result {
-                Ok(summary_output) => {
-                    output.formatted = summary_output.formatted;
-                }
-                _ => {
-                    let estimated_tokens = output.formatted.len() / 4;
-                    let message = format!(
-                        "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
-                        output.formatted.len(),
-                        estimated_tokens
-                    );
-                    return Err(ErrorData::new(
-                        rmcp::model::ErrorCode::INVALID_PARAMS,
-                        message,
-                        error_meta("validation", false, "use summary=true or force=true"),
-                    ));
-                }
+            if let Ok(summary_output) = summary_result {
+                output.formatted = summary_output.formatted;
+            } else {
+                let estimated_tokens = output.formatted.len() / 4;
+                let message = format!(
+                    "Output exceeds 50K chars ({} chars, ~{} tokens). Use summary=true or force=true.",
+                    output.formatted.len(),
+                    estimated_tokens
+                );
+                return Err(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    message,
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "use summary=true or force=true",
+                    )),
+                ));
             }
         } else if output.formatted.len() > SIZE_LIMIT
             && params.output_control.force != Some(true)
@@ -621,18 +642,18 @@ impl CodeAnalyzer {
             return Err(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 message,
-                error_meta(
+                Some(error_meta(
                     "validation",
                     false,
                     "use force=true, summary=true, or narrow scope",
-                ),
+                )),
             ));
         }
 
         Ok(output)
     }
 
-    /// Private helper: Extract analysis logic for focused mode (analyze_symbol).
+    /// Private helper: Extract analysis logic for focused mode (`analyze_symbol`).
     /// Returns the complete focused analysis output after spawning and monitoring progress.
     /// Cancels the blocking task when `ct` is triggered; returns an error on cancellation.
     #[instrument(skip(self, params, ct))]
@@ -647,8 +668,12 @@ impl CodeAnalyzer {
             Err(e) => {
                 return Err(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    format!("Failed to walk directory: {}", e),
-                    error_meta("resource", false, "check path permissions and availability"),
+                    format!("Failed to walk directory: {e}"),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check path permissions and availability",
+                    )),
                 ));
             }
         };
@@ -720,13 +745,13 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
-        let _t_start = std::time::Instant::now();
-        let _param_path = params.path.clone();
-        let _max_depth_val = params.max_depth;
-        let _seq = self
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let max_depth_val = params.max_depth;
+        let seq = self
             .session_call_seq
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
+        let sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and progress tracking
         let arc_output = match self.handle_overview_mode(&params, ct).await {
@@ -750,7 +775,11 @@ impl CodeAnalyzer {
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 "summary=true is incompatible with a pagination cursor; use one or the other"
                     .to_string(),
-                error_meta("validation", false, "remove cursor or set summary=false"),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "remove cursor or set summary=false",
+                )),
             )));
         }
 
@@ -781,7 +810,7 @@ impl CodeAnalyzer {
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     e.to_string(),
-                    error_meta("validation", false, "invalid cursor format"),
+                    Some(error_meta("validation", false, "invalid cursor format")),
                 )
             }) {
                 Ok(v) => v,
@@ -800,7 +829,7 @@ impl CodeAnalyzer {
                     return Ok(err_to_tool_result(ErrorData::new(
                         rmcp::model::ErrorCode::INTERNAL_ERROR,
                         e.to_string(),
-                        error_meta("transient", true, "retry the request"),
+                        Some(error_meta("transient", true, "retry the request")),
                     )));
                 }
             };
@@ -820,7 +849,7 @@ impl CodeAnalyzer {
         if use_summary {
             output.next_cursor = None;
         } else {
-            output.next_cursor = paginated.next_cursor.clone();
+            output.next_cursor.clone_from(&paginated.next_cursor);
         }
 
         // Build final text output with pagination cursor if present (unless using summary mode)
@@ -835,18 +864,18 @@ impl CodeAnalyzer {
             .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
-        let _dur = _t_start.elapsed().as_millis() as u64;
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_directory",
-            duration_ms: _dur,
+            duration_ms: dur,
             output_chars: final_text.len(),
-            param_path_depth: crate::metrics::path_component_count(&_param_path),
-            max_depth: _max_depth_val,
+            param_path_depth: crate::metrics::path_component_count(&param_path),
+            max_depth: max_depth_val,
             result: "ok",
             error_type: None,
-            session_id: _sid,
-            seq: Some(_seq),
+            session_id: sid,
+            seq: Some(seq),
         });
         Ok(result)
     }
@@ -870,12 +899,12 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
-        let _t_start = std::time::Instant::now();
-        let _param_path = params.path.clone();
-        let _seq = self
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let seq = self
             .session_call_seq
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
+        let sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and caching
         let arc_output = match self.handle_file_details_mode(&params).await {
@@ -916,7 +945,11 @@ impl CodeAnalyzer {
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
                 message,
-                error_meta("validation", false, "use force=true or narrow scope"),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "use force=true or narrow scope",
+                )),
             )));
         }
 
@@ -927,7 +960,7 @@ impl CodeAnalyzer {
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     e.to_string(),
-                    error_meta("validation", false, "invalid cursor format"),
+                    Some(error_meta("validation", false, "invalid cursor format")),
                 )
             }) {
                 Ok(v) => v,
@@ -961,7 +994,7 @@ impl CodeAnalyzer {
                     return Ok(err_to_tool_result(ErrorData::new(
                         rmcp::model::ErrorCode::INTERNAL_ERROR,
                         e.to_string(),
-                        error_meta("transient", true, "retry the request"),
+                        Some(error_meta("transient", true, "retry the request")),
                     )));
                 }
             };
@@ -1009,18 +1042,18 @@ impl CodeAnalyzer {
             .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&response_output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
-        let _dur = _t_start.elapsed().as_millis() as u64;
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_file",
-            duration_ms: _dur,
+            duration_ms: dur,
             output_chars: final_text.len(),
-            param_path_depth: crate::metrics::path_component_count(&_param_path),
+            param_path_depth: crate::metrics::path_component_count(&param_path),
             max_depth: None,
             result: "ok",
             error_type: None,
-            session_id: _sid,
-            seq: Some(_seq),
+            session_id: sid,
+            seq: Some(seq),
         });
         Ok(result)
     }
@@ -1045,13 +1078,13 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         let ct = context.ct.clone();
-        let _t_start = std::time::Instant::now();
-        let _param_path = params.path.clone();
-        let _max_depth_val = params.follow_depth;
-        let _seq = self
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let max_depth_val = params.follow_depth;
+        let seq = self
             .session_call_seq
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
+        let sid = self.session_id.lock().await.clone();
 
         // Call handler for analysis and progress tracking
         let mut output = match self.handle_focused_mode(&params, ct).await {
@@ -1066,7 +1099,7 @@ impl CodeAnalyzer {
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     e.to_string(),
-                    error_meta("validation", false, "invalid cursor format"),
+                    Some(error_meta("validation", false, "invalid cursor format")),
                 )
             }) {
                 Ok(v) => v,
@@ -1179,7 +1212,7 @@ impl CodeAnalyzer {
         }
 
         // Update next_cursor in output
-        output.next_cursor = callee_cursor.clone();
+        output.next_cursor.clone_from(&callee_cursor);
 
         // Build final text output with pagination cursor if present
         let mut final_text = output.formatted.clone();
@@ -1193,18 +1226,18 @@ impl CodeAnalyzer {
             .with_meta(Some(no_cache_meta()));
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
-        let _dur = _t_start.elapsed().as_millis() as u64;
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_symbol",
-            duration_ms: _dur,
+            duration_ms: dur,
             output_chars: final_text.len(),
-            param_path_depth: crate::metrics::path_component_count(&_param_path),
-            max_depth: _max_depth_val,
+            param_path_depth: crate::metrics::path_component_count(&param_path),
+            max_depth: max_depth_val,
             result: "ok",
             error_type: None,
-            session_id: _sid,
-            seq: Some(_seq),
+            session_id: sid,
+            seq: Some(seq),
         });
         Ok(result)
     }
@@ -1225,33 +1258,34 @@ impl CodeAnalyzer {
     async fn analyze_module(
         &self,
         params: Parameters<AnalyzeModuleParams>,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
+        let _ = context;
         let params = params.0;
-        let _t_start = std::time::Instant::now();
-        let _param_path = params.path.clone();
-        let _seq = self
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let seq = self
             .session_call_seq
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _sid = self.session_id.lock().await.clone();
+        let sid = self.session_id.lock().await.clone();
 
         // Issue 340: Guard against directory paths
         if std::fs::metadata(&params.path)
             .map(|m| m.is_dir())
             .unwrap_or(false)
         {
-            let _dur = _t_start.elapsed().as_millis() as u64;
+            let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
                 tool: "analyze_module",
-                duration_ms: _dur,
+                duration_ms: dur,
                 output_chars: 0,
-                param_path_depth: crate::metrics::path_component_count(&_param_path),
+                param_path_depth: crate::metrics::path_component_count(&param_path),
                 max_depth: None,
                 result: "error",
                 error_type: Some("invalid_params".to_string()),
-                session_id: _sid.clone(),
-                seq: Some(_seq),
+                session_id: sid.clone(),
+                seq: Some(seq),
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -1259,19 +1293,23 @@ impl CodeAnalyzer {
                     "'{}' is a directory. Use analyze_directory to analyze a directory, or pass a specific file path to analyze_module.",
                     params.path
                 ),
-                error_meta("validation", false, "use analyze_directory for directories"),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "use analyze_directory for directories",
+                )),
             )));
         }
 
         let module_info = match analyze::analyze_module_file(&params.path).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
-                format!("Failed to analyze module: {}", e),
-                error_meta(
+                format!("Failed to analyze module: {e}"),
+                Some(error_meta(
                     "validation",
                     false,
                     "ensure file exists, is readable, and has a supported extension",
-                ),
+                )),
             )
         }) {
             Ok(v) => v,
@@ -1284,26 +1322,26 @@ impl CodeAnalyzer {
         let structured = match serde_json::to_value(&module_info).map_err(|e| {
             ErrorData::new(
                 rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("serialization failed: {}", e),
-                error_meta("internal", false, "report this as a bug"),
+                format!("serialization failed: {e}"),
+                Some(error_meta("internal", false, "report this as a bug")),
             )
         }) {
             Ok(v) => v,
             Err(e) => return Ok(err_to_tool_result(e)),
         };
         result.structured_content = Some(structured);
-        let _dur = _t_start.elapsed().as_millis() as u64;
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "analyze_module",
-            duration_ms: _dur,
+            duration_ms: dur,
             output_chars: text.len(),
-            param_path_depth: crate::metrics::path_component_count(&_param_path),
+            param_path_depth: crate::metrics::path_component_count(&param_path),
             max_depth: None,
             result: "ok",
             error_type: None,
-            session_id: _sid,
-            seq: Some(_seq),
+            session_id: sid,
+            seq: Some(seq),
         });
         Ok(result)
     }
@@ -1359,9 +1397,11 @@ impl ServerHandler for CodeAnalyzer {
         let millis = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis() as u64;
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
         let counter = GLOBAL_SESSION_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let sid = format!("{}-{}", millis, counter);
+        let sid = format!("{millis}-{counter}");
         {
             let mut session_id_lock = self.session_id.lock().await;
             *session_id_lock = Some(sid);
@@ -1459,7 +1499,7 @@ impl ServerHandler for CodeAnalyzer {
         };
 
         // Create CompletionInfo with has_more flag if >100 results
-        let total_count = completions.len() as u32;
+        let total_count = u32::try_from(completions.len()).unwrap_or(u32::MAX);
         let (values, has_more) = if completions.len() > 100 {
             (completions.into_iter().take(100).collect(), true)
         } else {
@@ -1486,13 +1526,12 @@ impl ServerHandler for CodeAnalyzer {
     ) -> Result<(), ErrorData> {
         let level_filter = match params.level {
             LoggingLevel::Debug => LevelFilter::DEBUG,
-            LoggingLevel::Info => LevelFilter::INFO,
-            LoggingLevel::Notice => LevelFilter::INFO,
+            LoggingLevel::Info | LoggingLevel::Notice => LevelFilter::INFO,
             LoggingLevel::Warning => LevelFilter::WARN,
-            LoggingLevel::Error => LevelFilter::ERROR,
-            LoggingLevel::Critical => LevelFilter::ERROR,
-            LoggingLevel::Alert => LevelFilter::ERROR,
-            LoggingLevel::Emergency => LevelFilter::ERROR,
+            LoggingLevel::Error
+            | LoggingLevel::Critical
+            | LoggingLevel::Alert
+            | LoggingLevel::Emergency => LevelFilter::ERROR,
         };
 
         let mut filter_lock = self.log_level_filter.lock().unwrap();

@@ -189,7 +189,7 @@ impl ElementExtractor {
             let mut parser = p.borrow_mut();
             parser
                 .set_language(&lang_info.language)
-                .map_err(|e| ParserError::ParseError(format!("Failed to set language: {}", e)))?;
+                .map_err(|e| ParserError::ParseError(format!("Failed to set language: {e}")))?;
             parser
                 .parse(source, None)
                 .ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))
@@ -222,6 +222,7 @@ impl ElementExtractor {
 /// Recursively extract `ImportInfo` entries from a use-clause node, respecting all Rust
 /// use-declaration forms (`scoped_identifier`, `scoped_use_list`, `use_list`,
 /// `use_as_clause`, `use_wildcard`, bare `identifier`).
+#[allow(clippy::too_many_lines)] // exhaustive match over all supported Rust use-clause forms; splitting harms readability
 fn extract_imports_from_node(
     node: &Node,
     source: &str,
@@ -245,17 +246,17 @@ fn extract_imports_from_node(
                 .child_by_field_name("name")
                 .map(|n| source[n.start_byte()..n.end_byte()].to_string())
                 .unwrap_or_default();
-            let module = node
-                .child_by_field_name("path")
-                .map(|p| {
+            let module = node.child_by_field_name("path").map_or_else(
+                || prefix.to_string(),
+                |p| {
                     let path_text = source[p.start_byte()..p.end_byte()].to_string();
                     if prefix.is_empty() {
                         path_text
                     } else {
-                        format!("{}::{}", prefix, path_text)
+                        format!("{prefix}::{path_text}")
                     }
-                })
-                .unwrap_or_else(|| prefix.to_string());
+                },
+            );
             if !item.is_empty() {
                 imports.push(ImportInfo {
                     module,
@@ -266,17 +267,17 @@ fn extract_imports_from_node(
         }
         // `std::{io, fs}` — path prefix followed by a brace list
         "scoped_use_list" => {
-            let new_prefix = node
-                .child_by_field_name("path")
-                .map(|p| {
+            let new_prefix = node.child_by_field_name("path").map_or_else(
+                || prefix.to_string(),
+                |p| {
                     let path_text = source[p.start_byte()..p.end_byte()].to_string();
                     if prefix.is_empty() {
                         path_text
                     } else {
-                        format!("{}::{}", prefix, path_text)
+                        format!("{prefix}::{path_text}")
                     }
-                })
-                .unwrap_or_else(|| prefix.to_string());
+                },
+            );
             if let Some(list) = node.child_by_field_name("list") {
                 extract_imports_from_node(&list, source, &new_prefix, line, imports);
             }
@@ -298,7 +299,7 @@ fn extract_imports_from_node(
                 if prefix.is_empty() {
                     stripped.to_string()
                 } else {
-                    format!("{}::{}", prefix, stripped)
+                    format!("{prefix}::{stripped}")
                 }
             } else {
                 prefix.to_string()
@@ -317,17 +318,17 @@ fn extract_imports_from_node(
                 .unwrap_or_default();
             let module = if let Some(path_node) = node.child_by_field_name("path") {
                 match path_node.kind() {
-                    "scoped_identifier" => path_node
-                        .child_by_field_name("path")
-                        .map(|p| {
+                    "scoped_identifier" => path_node.child_by_field_name("path").map_or_else(
+                        || prefix.to_string(),
+                        |p| {
                             let p_text = source[p.start_byte()..p.end_byte()].to_string();
                             if prefix.is_empty() {
                                 p_text
                             } else {
-                                format!("{}::{}", prefix, p_text)
+                                format!("{prefix}::{p_text}")
                             }
-                        })
-                        .unwrap_or_else(|| prefix.to_string()),
+                        },
+                    ),
                     _ => prefix.to_string(),
                 }
             } else {
@@ -361,7 +362,7 @@ fn extract_imports_from_node(
     }
 }
 
-/// Extract an item name from a dotted_name or aliased_import child node.
+/// Extract an item name from a `dotted_name` or `aliased_import` child node.
 fn extract_import_item_name(child: &Node, source: &str) -> Option<String> {
     match child.kind() {
         "dotted_name" => {
@@ -378,7 +379,7 @@ fn extract_import_item_name(child: &Node, source: &str) -> Option<String> {
     }
 }
 
-/// Collect wildcard/named imports from an import_list node or from direct named children.
+/// Collect wildcard/named imports from an `import_list` node or from direct named children.
 fn collect_import_items(
     node: &Node,
     source: &str,
@@ -468,7 +469,7 @@ impl SemanticExtractor {
             let mut parser = p.borrow_mut();
             parser
                 .set_language(&lang_info.language)
-                .map_err(|e| ParserError::ParseError(format!("Failed to set language: {}", e)))?;
+                .map_err(|e| ParserError::ParseError(format!("Failed to set language: {e}")))?;
             parser
                 .parse(source, None)
                 .ok_or_else(|| ParserError::ParseError("Failed to parse".to_string()))
@@ -917,29 +918,26 @@ impl SemanticExtractor {
 ///
 /// Runs independently of `extract_references` to avoid shared deduplication state.
 /// Returns an empty vec for non-Rust source (no error; caller decides).
+#[must_use]
 pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
-    let lang_info = match get_language_info("rust") {
-        Some(info) => info,
-        None => return vec![],
+    let Some(lang_info) = get_language_info("rust") else {
+        return vec![];
     };
 
-    let compiled = match get_compiled_queries("rust") {
-        Ok(c) => c,
-        Err(_) => return vec![],
+    let Ok(compiled) = get_compiled_queries("rust") else {
+        return vec![];
     };
 
-    let query = match &compiled.impl_trait {
-        Some(q) => q,
-        None => return vec![],
+    let Some(query) = &compiled.impl_trait else {
+        return vec![];
     };
 
-    let tree = match PARSER.with(|p| {
+    let Some(tree) = PARSER.with(|p| {
         let mut parser = p.borrow_mut();
         let _ = parser.set_language(&lang_info.language);
         parser.parse(source, None)
-    }) {
-        Some(t) => t,
-        None => return vec![],
+    }) else {
+        return vec![];
     };
 
     let root = tree.root_node();

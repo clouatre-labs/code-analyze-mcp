@@ -39,13 +39,13 @@ pub enum PaginationError {
 
 impl From<DecodeError> for PaginationError {
     fn from(err: DecodeError) -> Self {
-        PaginationError::InvalidCursor(format!("Base64 decode error: {}", err))
+        PaginationError::InvalidCursor(format!("Base64 decode error: {err}"))
     }
 }
 
 impl From<serde_json::Error> for PaginationError {
     fn from(err: serde_json::Error) -> Self {
-        PaginationError::InvalidCursor(format!("JSON parse error: {}", err))
+        PaginationError::InvalidCursor(format!("JSON parse error: {err}"))
     }
 }
 
@@ -67,7 +67,7 @@ pub fn encode_cursor(data: &CursorData) -> Result<String, PaginationError> {
 pub fn decode_cursor(cursor: &str) -> Result<CursorData, PaginationError> {
     let decoded = STANDARD.decode(cursor)?;
     let json_str = String::from_utf8(decoded)
-        .map_err(|e| PaginationError::InvalidCursor(format!("UTF-8 decode error: {}", e)))?;
+        .map_err(|e| PaginationError::InvalidCursor(format!("UTF-8 decode error: {e}")))?;
     Ok(serde_json::from_str(&json_str)?)
 }
 

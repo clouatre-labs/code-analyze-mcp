@@ -28,8 +28,8 @@ pub enum TraversalError {
     Internal(String),
 }
 
-/// Walk a directory with support for .gitignore and .ignore.
-/// max_depth=0 maps to unlimited recursion (None), positive values limit depth.
+/// Walk a directory with support for `.gitignore` and `.ignore`.
+/// `max_depth=0` maps to unlimited recursion (None), positive values limit depth.
 /// The returned entries are sorted lexicographically by path.
 #[instrument(skip_all, fields(path = %root.display(), max_depth))]
 pub fn walk_directory(
@@ -56,7 +56,7 @@ pub fn walk_directory(
             Ok(entry) => {
                 let path = entry.path().to_path_buf();
                 let depth = entry.depth();
-                let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
                 let is_symlink = entry.path_is_symlink();
 
                 let symlink_target = if is_symlink {
@@ -96,7 +96,7 @@ pub fn walk_directory(
         entries = entries.len(),
         dirs = dir_count,
         files = file_count,
-        duration_ms = start.elapsed().as_millis() as u64,
+        duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
         "walk complete"
     );
 
@@ -107,8 +107,9 @@ pub fn walk_directory(
 
 /// Compute files-per-depth-1-subdirectory counts from an already-collected entry list.
 /// Returns a Vec of (depth-1 path, file count) sorted by path.
-/// Only counts file entries (not directories); skips entries containing EXCLUDED_DIRS components.
+/// Only counts file entries (not directories); skips entries containing `EXCLUDED_DIRS` components.
 /// Output Vec is sorted by construction (entries are pre-sorted by path).
+#[must_use]
 pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> Vec<(PathBuf, usize)> {
     let mut counts: Vec<(PathBuf, usize)> = Vec::new();
     for entry in entries {
@@ -122,9 +123,8 @@ pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> Vec<(P
         }) {
             continue;
         }
-        let rel = match entry.path.strip_prefix(root) {
-            Ok(r) => r,
-            Err(_) => continue,
+        let Ok(rel) = entry.path.strip_prefix(root) else {
+            continue;
         };
         if let Some(first) = rel.components().next() {
             let key = root.join(first);

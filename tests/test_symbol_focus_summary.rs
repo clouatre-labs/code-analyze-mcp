@@ -238,7 +238,7 @@ pub fn another_caller() {
         use_summary: true,
         impl_only: None,
     };
-    let output = analyze_focused_with_progress(root, &params, counter, ct).unwrap();
+    let output = analyze_focused_with_progress(root, &params, &counter, &ct).unwrap();
 
     // Assert: Output should contain summary format markers
     assert!(
@@ -303,7 +303,7 @@ pub fn another_caller() {
         use_summary: false,
         impl_only: None,
     };
-    let output = analyze_focused_with_progress(root, &params, counter, ct).unwrap();
+    let output = analyze_focused_with_progress(root, &params, &counter, &ct).unwrap();
 
     // Assert: Output should contain full format markers
     assert!(

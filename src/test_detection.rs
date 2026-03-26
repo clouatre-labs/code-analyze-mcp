@@ -9,15 +9,16 @@ use std::path::Path;
 /// Detect if a file path represents a test file based on path-based heuristics.
 ///
 /// Checks for:
-/// - Directory patterns: tests/, test/, __tests__/, spec/
+/// - Directory patterns: tests/, test/, `__tests__`/, spec/
 /// - Filename patterns:
-///   - Rust: test_*.rs, *_test.rs
-///   - Python: test_*.py, *_test.py
-///   - Go: *_test.go
-///   - Java: Test*.java, *Test.java
-///   - TypeScript/JavaScript: *.test.ts, *.test.js, *.spec.ts, *.spec.js
+///   - Rust: `test_*.rs`, `*_test.rs`
+///   - Python: `test_*.py`, `*_test.py`
+///   - Go: `*_test.go`
+///   - Java: `Test*.java`, `*Test.java`
+///   - TypeScript/JavaScript: `*.test.ts`, `*.test.js`, `*.spec.ts`, `*.spec.js`
 ///
 /// Returns true if the path matches any test heuristic, false otherwise.
+#[must_use]
 pub fn is_test_file(path: &Path) -> bool {
     // Check directory components for test directories
     for component in path.components() {
@@ -27,13 +28,13 @@ pub fn is_test_file(path: &Path) -> bool {
     }
 
     // Check filename patterns
-    let file_name = match path.file_name().and_then(|n| n.to_str()) {
-        Some(name) => name,
-        None => return false,
+    let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
     };
 
     // Rust patterns
-    if file_name.starts_with("test_") && file_name.ends_with(".rs") {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if file_name.starts_with("test_") && ext.eq_ignore_ascii_case("rs") {
         return true;
     }
     if file_name.ends_with("_test.rs") {
@@ -41,7 +42,7 @@ pub fn is_test_file(path: &Path) -> bool {
     }
 
     // Python patterns
-    if file_name.starts_with("test_") && file_name.ends_with(".py") {
+    if file_name.starts_with("test_") && ext.eq_ignore_ascii_case("py") {
         return true;
     }
     if file_name.ends_with("_test.py") {
@@ -54,7 +55,7 @@ pub fn is_test_file(path: &Path) -> bool {
     }
 
     // Java patterns
-    if file_name.starts_with("Test") && file_name.ends_with(".java") {
+    if file_name.starts_with("Test") && ext.eq_ignore_ascii_case("java") {
         return true;
     }
     if file_name.ends_with("Test.java") {

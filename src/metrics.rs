@@ -65,8 +65,10 @@ impl MetricsWriter {
                 for _ in 0..99 {
                     match self.rx.try_recv() {
                         Ok(e) => batch.push(e),
-                        Err(mpsc::error::TryRecvError::Empty) => break,
-                        Err(mpsc::error::TryRecvError::Disconnected) => break,
+                        Err(
+                            mpsc::error::TryRecvError::Empty
+                            | mpsc::error::TryRecvError::Disconnected,
+                        ) => break,
                     }
                 }
             } else {
@@ -113,19 +115,24 @@ impl MetricsWriter {
 }
 
 /// Returns the current UNIX timestamp in milliseconds.
+#[must_use]
 pub fn unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis() as u64
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
 }
 
 /// Counts the number of path segments in a file path.
+#[must_use]
 pub fn path_component_count(path: &str) -> usize {
     Path::new(path).components().count()
 }
 
 /// Maps an MCP error code to a short string representation for metrics.
+#[must_use]
 pub fn error_code_to_type(code: rmcp::model::ErrorCode) -> &'static str {
     match code {
         rmcp::model::ErrorCode::PARSE_ERROR => "parse",
@@ -152,11 +159,11 @@ fn xdg_metrics_dir() -> PathBuf {
 }
 
 fn rotate_path(base_dir: &Path, date_str: &str) -> PathBuf {
-    base_dir.join(format!("metrics-{}.jsonl", date_str))
+    base_dir.join(format!("metrics-{date_str}.jsonl"))
 }
 
 async fn cleanup_old_files(base_dir: &Path) {
-    let now_days = (unix_ms() / 86_400_000) as u32;
+    let now_days = u32::try_from(unix_ms() / 86_400_000).unwrap_or(u32::MAX);
 
     let Ok(mut entries) = tokio::fs::read_dir(base_dir).await else {
         return;
@@ -172,7 +179,11 @@ async fn cleanup_old_files(base_dir: &Path) {
                 };
 
                 // Expected format: metrics-YYYY-MM-DD.jsonl
-                if !file_name.starts_with("metrics-") || !file_name.ends_with(".jsonl") {
+                if !file_name.starts_with("metrics-")
+                    || std::path::Path::new(&*file_name)
+                        .extension()
+                        .is_none_or(|e| !e.eq_ignore_ascii_case("jsonl"))
+                {
                     continue;
                 }
                 let date_part = &file_name[8..file_name.len() - 6];
@@ -202,8 +213,7 @@ async fn cleanup_old_files(base_dir: &Path) {
             }
             Ok(None) => break,
             Err(e) => {
-                tracing::warn!("error reading metrics directory entry: {}", e);
-                continue;
+                tracing::warn!("error reading metrics directory entry: {e}");
             }
         }
     }
@@ -222,8 +232,9 @@ fn date_to_days_since_epoch(y: u32, m: u32, d: u32) -> u32 {
 }
 
 /// Returns the current UTC date as a string in YYYY-MM-DD format.
+#[must_use]
 pub fn current_date_str() -> String {
-    let days = (unix_ms() / 86_400_000) as u32;
+    let days = u32::try_from(unix_ms() / 86_400_000).unwrap_or(u32::MAX);
     let z = days + 719_468;
     let era = z / 146_097;
     let doe = z - era * 146_097;
@@ -234,7 +245,7 @@ pub fn current_date_str() -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
-    format!("{:04}-{:02}-{:02}", y, m, d)
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 #[cfg(test)]

@@ -29,7 +29,7 @@ pub struct ImplTraitInfo {
 /// Pagination parameters shared across all tools.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PaginationParams {
-    /// Pagination cursor from a previous response's next_cursor field. Pass unchanged to retrieve the next page. Omit on the first call.
+    /// Pagination cursor from a previous response's `next_cursor` field. Pass unchanged to retrieve the next page. Omit on the first call.
     pub cursor: Option<String>,
     /// Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips.
     #[schemars(schema_with = "crate::schema_helpers::option_page_size_schema")]
@@ -63,7 +63,7 @@ pub struct AnalyzeDirectoryParams {
     pub output_control: OutputControlParams,
 }
 
-/// Output section selector for analyze_file fields projection.
+/// Output section selector for `analyze_file` fields projection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalyzeFileField {
@@ -104,7 +104,7 @@ pub struct AnalyzeModuleParams {
     pub path: String,
 }
 
-/// Symbol name matching strategy for analyze_symbol.
+/// Symbol name matching strategy for `analyze_symbol`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SymbolMatchMode {
@@ -124,7 +124,7 @@ pub struct AnalyzeSymbolParams {
     /// Directory path to search for the symbol
     pub path: String,
 
-    /// Symbol name to build call graph for (function or method). Example: 'parse_config' finds all callers and callees of that function.
+    /// Symbol name to build call graph for (function or method). Example: `parse_config` finds all callers and callees of that function.
     pub symbol: String,
 
     /// Symbol matching mode (default: exact). exact: case-sensitive exact match. insensitive: case-insensitive exact match. prefix: case-insensitive prefix match. contains: case-insensitive substring match. When exact match fails, retry with insensitive. When prefix or contains returns multiple candidates, the response lists them so you can refine.
@@ -189,7 +189,7 @@ pub struct FunctionInfo {
     pub line: usize,
     #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
     pub end_line: usize,
-    /// Parameter list as string representations (e.g., ["x: i32", "y: String"]).
+    /// Parameter list as string representations (e.g., `["x: i32", "y: String"]`).
     pub parameters: Vec<String>,
     pub return_type: Option<String>,
 }
@@ -197,12 +197,13 @@ pub struct FunctionInfo {
 impl FunctionInfo {
     /// Maximum length for parameter display before truncation.
     const MAX_PARAMS_DISPLAY_LEN: usize = 80;
-    /// Truncation point when parameters exceed MAX_PARAMS_DISPLAY_LEN.
+    /// Truncation point when parameters exceed `MAX_PARAMS_DISPLAY_LEN`.
     const TRUNCATION_POINT: usize = 77;
 
     /// Format function signature as a single-line string with truncation.
     /// Returns: `name(param1, param2, ...) -> return_type :start-end`
-    /// Parameters are truncated to ~80 chars with '...' if needed.
+    /// Parameters are truncated to ~80 chars with `...` if needed.
+    #[must_use]
     pub fn compact_signature(&self) -> String {
         let mut sig = String::with_capacity(self.name.len() + 40);
         sig.push_str(&self.name);
@@ -351,9 +352,9 @@ pub struct ElementQueryResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ImportInfo {
-    /// Full module path excluding the imported symbol (e.g., 'std::collections' for 'use std::collections::HashMap').
+    /// Full module path excluding the imported symbol (e.g., `std::collections` for `use std::collections::HashMap`).
     pub module: String,
-    /// Imported symbols (e.g., ['HashMap'] for 'use std::collections::HashMap').
+    /// Imported symbols (e.g., `[HashMap]` for `use std::collections::HashMap`).
     pub items: Vec<String>,
     /// Line number where import appears.
     #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
@@ -379,7 +380,7 @@ pub struct SemanticAnalysis {
     pub impl_traits: Vec<ImplTraitInfo>,
 }
 
-/// Minimal function info for analyze_module: name and line only.
+/// Minimal function info for `analyze_module`: name and line only.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModuleFunctionInfo {
     /// Function name
@@ -389,16 +390,16 @@ pub struct ModuleFunctionInfo {
     pub line: usize,
 }
 
-/// Minimal import info for analyze_module: module and items only.
+/// Minimal import info for `analyze_module`: module and items only.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModuleImportInfo {
-    /// Full module path (e.g., 'std::collections' for 'use std::collections::HashMap')
+    /// Full module path (e.g., `std::collections` for `use std::collections::HashMap`)
     pub module: String,
-    /// Imported symbols (e.g., ['HashMap'])
+    /// Imported symbols (e.g., `[HashMap]`)
     pub items: Vec<String>,
 }
 
-/// Minimal fixed schema for analyze_module: lightweight code understanding.
+/// Minimal fixed schema for `analyze_module`: lightweight code understanding.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModuleInfo {
     /// File name (basename only, e.g., 'lib.rs')
