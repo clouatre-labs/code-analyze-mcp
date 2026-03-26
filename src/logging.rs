@@ -60,7 +60,10 @@ where
         let target = metadata.target();
 
         // Check if event level passes the current filter before processing
-        let filter_level = self.log_level_filter.lock().unwrap();
+        let filter_level = self
+            .log_level_filter
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         if level > *filter_level {
             return;
         }
@@ -87,7 +90,10 @@ where
     }
 
     fn register_callsite(&self, metadata: &'static tracing::Metadata<'static>) -> Interest {
-        let filter_level = self.log_level_filter.lock().unwrap();
+        let filter_level = self
+            .log_level_filter
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         if *metadata.level() <= *filter_level {
             Interest::always()
         } else {
@@ -96,7 +102,10 @@ where
     }
 
     fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
-        let filter_level = self.log_level_filter.lock().unwrap();
+        let filter_level = self
+            .log_level_filter
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         *metadata.level() <= *filter_level
     }
 }
