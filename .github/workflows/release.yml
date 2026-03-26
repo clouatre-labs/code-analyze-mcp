@@ -427,8 +427,8 @@ jobs:
             --head "$BRANCH_NAME" \
             --base main
 
-          # Auto-merge after status checks pass
-          gh pr merge "$BRANCH_NAME" --auto --squash --delete-branch
+          # Merge immediately (single-file bot commit, no code to test)
+          gh pr merge "$BRANCH_NAME" --squash --delete-branch
 
   publish-registry:
     name: Publish to MCP Registry
