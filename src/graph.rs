@@ -262,7 +262,8 @@ impl CallGraph {
 
     /// Build a call graph from semantic analysis results and trait implementation info.
     #[instrument(skip_all)]
-    #[allow(clippy::too_many_lines)] // exhaustive graph construction pass; splitting into subfunctions harms readability
+    #[allow(clippy::too_many_lines)]
+    // exhaustive graph construction pass; splitting into subfunctions harms readability
     // public API; callers expect owned semantics
     #[allow(clippy::needless_pass_by_value)]
     pub fn build_from_results(

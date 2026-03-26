@@ -293,12 +293,7 @@ impl CodeAnalyzer {
 
         // Spawn blocking analysis with progress tracking
         let handle = tokio::task::spawn_blocking(move || {
-            analyze::analyze_directory_with_progress(
-                &path_owned,
-                entries,
-                counter_clone,
-                ct_clone,
-            )
+            analyze::analyze_directory_with_progress(&path_owned, entries, counter_clone, ct_clone)
         });
 
         // Poll and emit progress every 100ms
