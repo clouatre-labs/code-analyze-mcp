@@ -9,11 +9,11 @@ description: "rmcp API patterns and Rust conventions for code-analyze-mcp source
 Verify these against the actual `Cargo.lock` version of `rmcp` -- do not rely on training data.
 
 - Use `Content`, not `RawContent`. `RawContent` does not exist in this codebase.
-- Every `#[tool(...)]` attribute requires both `output_schema = schema_for_type::<T>()` and `title = "..."`. Flag any tool missing either field.
-- Tool methods must take `_context: RequestContext<RoleServer>` as the second parameter after `&self`. Flag methods that omit it or use a different type.
+- Every `#[tool(...)]` attribute requires `output_schema = schema_for_type::<T>()`. Tool titles must be provided via `annotations(title = "...")`, consistent with the existing tool definitions in `src/lib.rs`. Flag any tool missing `output_schema` or using a top-level `title = "..."` field unless the `rmcp` macros are explicitly updated to support it.
+- Tool methods must take a `RequestContext<RoleServer>` as the second parameter after `&self`, named either `context` or `_context` depending on whether it is used. Flag methods that omit this second parameter, use a different type, or place it in a different position.
 - `#[tool_router]` goes on the `impl CodeAnalyzer` block. `#[tool_handler]` goes on `impl ServerHandler for CodeAnalyzer`. Flag if either attribute appears on the wrong impl block.
 - Every `CallToolResult::success(...)` call must be followed by `.with_meta(Some(no_cache_meta()))`. Flag any success response missing `.with_meta(...)`.
-- Transport entry point must follow: `let (stdin, stdout) = stdio(); serve_server(analyzer, (stdin, stdout)).await?`. Flag deviations.
+- Transport entry point must follow: `let (stdin, stdout) = stdio(); let service = serve_server(analyzer, (stdin, stdout)).await?; service.waiting().await?`. Flag deviations.
 
 ## Error handling
 
