@@ -609,16 +609,32 @@ fn analyze_focused_with_progress_with_entries_internal(
         });
     }
 
-    // Phase 1: Collect file analysis
+    // Phase 1: Collect file analysis (ct is cloned so phases 2-4 can still observe cancellation)
+    let phase1_ct = ct.clone();
     let (analysis_results, all_impl_traits) =
-        collect_file_analysis(entries, progress, ct, params.ast_recursion_limit)?;
+        collect_file_analysis(entries, progress, phase1_ct, params.ast_recursion_limit)?;
+
+    // Check for cancellation before building the call graph (phase 2)
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
 
     // Phase 2: Build call graph
     let mut graph = build_call_graph(analysis_results, &all_impl_traits)?;
 
+    // Check for cancellation before resolving the symbol (phase 3)
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
     // Phase 3: Resolve symbol and apply impl_only filter
     let (resolved_focus, unfiltered_caller_count, impl_trait_caller_count) =
         resolve_symbol(&mut graph, params)?;
+
+    // Check for cancellation before computing chains (phase 4)
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
 
     // Phase 4: Compute chains and format output
     let (formatted, prod_chains, test_chains, outgoing_chains, def_count) = compute_chains(
