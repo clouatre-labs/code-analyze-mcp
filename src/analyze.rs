@@ -292,73 +292,43 @@ pub struct FocusedAnalysisOutput {
     pub impl_trait_caller_count: usize,
 }
 
-/// Analyze a symbol's call graph across a directory with progress tracking.
-/// Public API: matches the original signature before PR 491.
-#[allow(clippy::too_many_arguments)]
-pub fn analyze_focused_with_progress(
-    root: &Path,
-    focus: &str,
-    match_mode: SymbolMatchMode,
-    follow_depth: u32,
-    max_depth: Option<u32>,
-    ast_recursion_limit: Option<usize>,
-    progress: Arc<AtomicUsize>,
-    ct: CancellationToken,
-    use_summary: bool,
-    impl_only: Option<bool>,
-) -> Result<FocusedAnalysisOutput, AnalyzeError> {
-    let entries = walk_directory(root, max_depth)?;
-    analyze_focused_with_progress_with_entries(
-        root,
-        focus,
-        match_mode,
-        follow_depth,
-        max_depth,
-        ast_recursion_limit,
-        progress,
-        ct,
-        use_summary,
-        impl_only,
-        &entries,
-    )
+/// Parameters for focused symbol analysis. Groups high-arity parameters to keep
+/// function signatures under clippy's default 7-argument threshold.
+#[derive(Clone)]
+pub struct AnalyzeSymbolParams {
+    pub focus: String,
+    pub match_mode: SymbolMatchMode,
+    pub follow_depth: u32,
+    pub max_depth: Option<u32>,
+    pub ast_recursion_limit: Option<usize>,
+    pub use_summary: bool,
+    pub impl_only: Option<bool>,
 }
 
-/// Analyze a symbol's call graph using pre-walked directory entries.
-#[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn analyze_focused_with_progress_with_entries(
-    root: &Path,
-    focus: &str,
+/// Internal parameters for focused analysis phases.
+#[derive(Clone)]
+struct FocusedAnalysisParams {
+    focus: String,
     match_mode: SymbolMatchMode,
     follow_depth: u32,
-    _max_depth: Option<u32>,
     ast_recursion_limit: Option<usize>,
-    progress: Arc<AtomicUsize>,
-    ct: CancellationToken,
     use_summary: bool,
     impl_only: Option<bool>,
+}
+
+/// Type alias for analysis results: (file_path, semantic_analysis) pairs and impl-trait info.
+type AnalysisResults = (Vec<(PathBuf, SemanticAnalysis)>, Vec<ImplTraitInfo>);
+
+/// Phase 1: Collect semantic analysis for all files in parallel.
+fn collect_file_analysis(
     entries: &[WalkEntry],
-) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
+    ast_recursion_limit: Option<usize>,
+) -> Result<AnalysisResults, AnalyzeError> {
     // Check if already cancelled
     if ct.is_cancelled() {
         return Err(AnalyzeError::Cancelled);
-    }
-
-    // Check if path is a file (hint to use directory)
-    if root.is_file() {
-        let formatted =
-            "Single-file focus not supported. Please provide a directory path for cross-file call graph analysis.\n"
-                .to_string();
-        return Ok(FocusedAnalysisOutput {
-            formatted,
-            next_cursor: None,
-            prod_chains: vec![],
-            test_chains: vec![],
-            outgoing_chains: vec![],
-            def_count: 0,
-            unfiltered_caller_count: 0,
-            impl_trait_caller_count: 0,
-        });
     }
 
     // Use pre-walked entries (passed by caller)
@@ -425,30 +395,48 @@ pub(crate) fn analyze_focused_with_progress_with_entries(
         .flat_map(|(_, sem)| sem.impl_traits.iter().cloned())
         .collect();
 
+    Ok((analysis_results, all_impl_traits))
+}
+
+/// Phase 2: Build call graph from analysis results.
+fn build_call_graph(
+    analysis_results: Vec<(PathBuf, SemanticAnalysis)>,
+    all_impl_traits: &[ImplTraitInfo],
+) -> Result<CallGraph, AnalyzeError> {
     // Build call graph. Always build without impl_only filter first so we can
     // record the unfiltered caller count before discarding those edges.
-    let mut graph = CallGraph::build_from_results(
+    CallGraph::build_from_results(
         analysis_results,
-        &all_impl_traits,
+        all_impl_traits,
         false, // filter applied below after counting
-    )?;
+    )
+    .map_err(|e| e.into())
+}
 
+/// Phase 3: Resolve symbol and apply impl_only filter.
+/// Returns (resolved_focus, unfiltered_caller_count, impl_trait_caller_count).
+/// CRITICAL: Must capture unfiltered_caller_count BEFORE retain(), then apply retain(),
+/// then compute impl_trait_caller_count.
+fn resolve_symbol(
+    graph: &mut CallGraph,
+    params: &FocusedAnalysisParams,
+) -> Result<(String, usize, usize), AnalyzeError> {
     // Resolve symbol name using the requested match mode.
-    let resolved_focus = if match_mode == SymbolMatchMode::Exact {
-        let exists = graph.definitions.contains_key(focus)
-            || graph.callers.contains_key(focus)
-            || graph.callees.contains_key(focus);
+    let resolved_focus = if params.match_mode == SymbolMatchMode::Exact {
+        let exists = graph.definitions.contains_key(&params.focus)
+            || graph.callers.contains_key(&params.focus)
+            || graph.callees.contains_key(&params.focus);
         if exists {
-            focus.to_string()
+            params.focus.clone()
         } else {
             return Err(crate::graph::GraphError::SymbolNotFound {
-                symbol: focus.to_string(),
+                symbol: params.focus.clone(),
                 hint: "Try match_mode=insensitive for a case-insensitive search.".to_string(),
             }
             .into());
         }
     } else {
-        graph.resolve_symbol_indexed(focus, &match_mode)?
+        graph.resolve_symbol_indexed(&params.focus, &params.match_mode)?
     };
 
     // Count unique callers for the focus symbol before applying impl_only filter.
@@ -467,7 +455,7 @@ pub(crate) fn analyze_focused_with_progress_with_entries(
     // Apply impl_only filter now if requested, then count filtered callers.
     // Filter all caller adjacency lists so traversal and formatting are consistently
     // restricted to impl-trait edges regardless of follow_depth.
-    let impl_trait_caller_count = if impl_only.unwrap_or(false) {
+    let impl_trait_caller_count = if params.impl_only.unwrap_or(false) {
         for edges in graph.callers.values_mut() {
             edges.retain(|e| e.is_impl_trait);
         }
@@ -486,13 +474,35 @@ pub(crate) fn analyze_focused_with_progress_with_entries(
         unfiltered_caller_count
     };
 
+    Ok((
+        resolved_focus,
+        unfiltered_caller_count,
+        impl_trait_caller_count,
+    ))
+}
+
+/// Type alias for compute_chains return type: (formatted_output, prod_chains, test_chains, outgoing_chains, def_count).
+type ChainComputeResult = (
+    String,
+    Vec<InternalCallChain>,
+    Vec<InternalCallChain>,
+    Vec<InternalCallChain>,
+    usize,
+);
+
+/// Phase 4: Compute chains and format output.
+fn compute_chains(
+    graph: &CallGraph,
+    resolved_focus: &str,
+    root: &Path,
+    params: &FocusedAnalysisParams,
+    unfiltered_caller_count: usize,
+    impl_trait_caller_count: usize,
+) -> Result<ChainComputeResult, AnalyzeError> {
     // Compute chain data for pagination (always, regardless of summary mode)
-    let def_count = graph
-        .definitions
-        .get(&resolved_focus)
-        .map_or(0, |d| d.len());
-    let incoming_chains = graph.find_incoming_chains(&resolved_focus, follow_depth)?;
-    let outgoing_chains = graph.find_outgoing_chains(&resolved_focus, follow_depth)?;
+    let def_count = graph.definitions.get(resolved_focus).map_or(0, |d| d.len());
+    let incoming_chains = graph.find_incoming_chains(resolved_focus, params.follow_depth)?;
+    let outgoing_chains = graph.find_outgoing_chains(resolved_focus, params.follow_depth)?;
 
     let (prod_chains, test_chains): (Vec<_>, Vec<_>) =
         incoming_chains.iter().cloned().partition(|chain| {
@@ -503,25 +513,138 @@ pub(crate) fn analyze_focused_with_progress_with_entries(
         });
 
     // Format output with pre-computed chains
-    let formatted = if use_summary {
+    let mut formatted = if params.use_summary {
         format_focused_summary_internal(
-            &graph,
-            &resolved_focus,
-            follow_depth,
+            graph,
+            resolved_focus,
+            params.follow_depth,
             Some(root),
             Some(&incoming_chains),
             Some(&outgoing_chains),
         )?
     } else {
         format_focused_internal(
-            &graph,
-            &resolved_focus,
-            follow_depth,
+            graph,
+            resolved_focus,
+            params.follow_depth,
             Some(root),
             Some(&incoming_chains),
             Some(&outgoing_chains),
         )?
     };
+
+    // Add FILTER header if impl_only filter was applied
+    if params.impl_only.unwrap_or(false) {
+        let filter_header = format!(
+            "FILTER: impl_only=true ({} of {} callers shown)\n",
+            impl_trait_caller_count, unfiltered_caller_count
+        );
+        formatted = format!("{}{}", filter_header, formatted);
+    }
+
+    Ok((
+        formatted,
+        prod_chains,
+        test_chains,
+        outgoing_chains,
+        def_count,
+    ))
+}
+
+/// Analyze a symbol's call graph across a directory with progress tracking.
+pub fn analyze_focused_with_progress(
+    root: &Path,
+    params: &AnalyzeSymbolParams,
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
+) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    let entries = walk_directory(root, params.max_depth)?;
+    let internal_params = FocusedAnalysisParams {
+        focus: params.focus.clone(),
+        match_mode: params.match_mode.clone(),
+        follow_depth: params.follow_depth,
+        ast_recursion_limit: params.ast_recursion_limit,
+        use_summary: params.use_summary,
+        impl_only: params.impl_only,
+    };
+    analyze_focused_with_progress_with_entries_internal(
+        root,
+        params.max_depth,
+        progress,
+        ct,
+        &internal_params,
+        &entries,
+    )
+}
+
+/// Internal implementation of focused analysis using pre-walked entries and params struct.
+#[instrument(skip_all, fields(path = %root.display(), symbol = %params.focus))]
+fn analyze_focused_with_progress_with_entries_internal(
+    root: &Path,
+    _max_depth: Option<u32>,
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
+    params: &FocusedAnalysisParams,
+    entries: &[WalkEntry],
+) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    // Check if already cancelled
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
+    // Check if path is a file (hint to use directory)
+    if root.is_file() {
+        let formatted =
+            "Single-file focus not supported. Please provide a directory path for cross-file call graph analysis.\n"
+                .to_string();
+        return Ok(FocusedAnalysisOutput {
+            formatted,
+            next_cursor: None,
+            prod_chains: vec![],
+            test_chains: vec![],
+            outgoing_chains: vec![],
+            def_count: 0,
+            unfiltered_caller_count: 0,
+            impl_trait_caller_count: 0,
+        });
+    }
+
+    // Phase 1: Collect file analysis (ct is cloned so phases 2-4 can still observe cancellation)
+    let phase1_ct = ct.clone();
+    let (analysis_results, all_impl_traits) =
+        collect_file_analysis(entries, progress, phase1_ct, params.ast_recursion_limit)?;
+
+    // Check for cancellation before building the call graph (phase 2)
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
+    // Phase 2: Build call graph
+    let mut graph = build_call_graph(analysis_results, &all_impl_traits)?;
+
+    // Check for cancellation before resolving the symbol (phase 3)
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
+    // Phase 3: Resolve symbol and apply impl_only filter
+    let (resolved_focus, unfiltered_caller_count, impl_trait_caller_count) =
+        resolve_symbol(&mut graph, params)?;
+
+    // Check for cancellation before computing chains (phase 4)
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
+    // Phase 4: Compute chains and format output
+    let (formatted, prod_chains, test_chains, outgoing_chains, def_count) = compute_chains(
+        &graph,
+        &resolved_focus,
+        root,
+        params,
+        unfiltered_caller_count,
+        impl_trait_caller_count,
+    )?;
 
     Ok(FocusedAnalysisOutput {
         formatted,
@@ -535,6 +658,32 @@ pub(crate) fn analyze_focused_with_progress_with_entries(
     })
 }
 
+/// Analyze a symbol's call graph using pre-walked directory entries.
+pub(crate) fn analyze_focused_with_progress_with_entries(
+    root: &Path,
+    params: &AnalyzeSymbolParams,
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
+    entries: &[WalkEntry],
+) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    let internal_params = FocusedAnalysisParams {
+        focus: params.focus.clone(),
+        match_mode: params.match_mode.clone(),
+        follow_depth: params.follow_depth,
+        ast_recursion_limit: params.ast_recursion_limit,
+        use_summary: params.use_summary,
+        impl_only: params.impl_only,
+    };
+    analyze_focused_with_progress_with_entries_internal(
+        root,
+        params.max_depth,
+        progress,
+        ct,
+        &internal_params,
+        entries,
+    )
+}
+
 #[instrument(skip_all, fields(path = %root.display(), symbol = %focus))]
 pub fn analyze_focused(
     root: &Path,
@@ -546,19 +695,16 @@ pub fn analyze_focused(
     let entries = walk_directory(root, max_depth)?;
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    analyze_focused_with_progress_with_entries(
-        root,
-        focus,
-        SymbolMatchMode::Exact,
+    let params = AnalyzeSymbolParams {
+        focus: focus.to_string(),
+        match_mode: SymbolMatchMode::Exact,
         follow_depth,
         max_depth,
         ast_recursion_limit,
-        counter,
-        ct,
-        false,
-        None,
-        &entries,
-    )
+        use_summary: false,
+        impl_only: None,
+    };
+    analyze_focused_with_progress_with_entries(root, &params, counter, ct, &entries)
 }
 
 /// Analyze a single file and return a minimal fixed schema (name, line count, language,
@@ -1005,6 +1151,84 @@ mod tests {
         assert!(
             paginated.next_cursor.is_none(),
             "no next_cursor for empty or single-page prod_chains"
+        );
+    }
+
+    #[test]
+    fn test_impl_only_filter_header_correct_counts() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a Rust fixture with:
+        // - A trait definition
+        // - An impl Trait for SomeType block that calls the focus symbol
+        // - A regular (non-trait-impl) function that also calls the focus symbol
+        let code = r#"
+trait MyTrait {
+    fn focus_symbol();
+}
+
+struct SomeType;
+
+impl MyTrait for SomeType {
+    fn focus_symbol() {}
+}
+
+fn impl_caller() {
+    SomeType::focus_symbol();
+}
+
+fn regular_caller() {
+    SomeType::focus_symbol();
+}
+"#;
+        fs::write(temp_dir.path().join("lib.rs"), code).unwrap();
+
+        // Call analyze_focused with impl_only=Some(true)
+        let params = AnalyzeSymbolParams {
+            focus: "focus_symbol".to_string(),
+            match_mode: SymbolMatchMode::Insensitive,
+            follow_depth: 1,
+            max_depth: None,
+            ast_recursion_limit: None,
+            use_summary: false,
+            impl_only: Some(true),
+        };
+        let output = analyze_focused_with_progress(
+            temp_dir.path(),
+            &params,
+            Arc::new(AtomicUsize::new(0)),
+            CancellationToken::new(),
+        )
+        .unwrap();
+
+        // Assert the result contains "FILTER: impl_only=true"
+        assert!(
+            output.formatted.contains("FILTER: impl_only=true"),
+            "formatted output should contain FILTER header for impl_only=true, got: {}",
+            output.formatted
+        );
+
+        // Assert the retained count N < total count M
+        assert!(
+            output.impl_trait_caller_count < output.unfiltered_caller_count,
+            "impl_trait_caller_count ({}) should be less than unfiltered_caller_count ({})",
+            output.impl_trait_caller_count,
+            output.unfiltered_caller_count
+        );
+
+        // Assert format is "FILTER: impl_only=true (N of M callers shown)"
+        let filter_line = output
+            .formatted
+            .lines()
+            .find(|line| line.contains("FILTER: impl_only=true"))
+            .expect("should find FILTER line");
+        assert!(
+            filter_line.contains(&format!(
+                "({} of {} callers shown)",
+                output.impl_trait_caller_count, output.unfiltered_caller_count
+            )),
+            "FILTER line should show correct N of M counts, got: {}",
+            filter_line
         );
     }
 
