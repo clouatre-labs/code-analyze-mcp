@@ -1,7 +1,9 @@
 //! Language-specific handlers and query definitions for tree-sitter parsing.
 //!
-//! Provides query strings and extraction handlers for supported languages:
-//! Rust, Go, Java, Python, TypeScript, TSX, and Fortran.
+//! Provides query strings and extraction handlers for supported languages.
+//! Language support is controlled by Cargo `lang-*` features (by default all
+//! available language handlers are enabled): Rust, Go, Java, Python,
+//! TypeScript, TSX, and Fortran.
 
 #[cfg(feature = "lang-fortran")]
 pub mod fortran;

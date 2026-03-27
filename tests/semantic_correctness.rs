@@ -39,6 +39,7 @@ pub fn calculate(a: i32, b: i32) -> i32 { a + b }
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_semantic_correctness() {
     let temp_dir = TempDir::new().expect("failed to create temp dir");
@@ -82,6 +83,7 @@ class MyClass:
     );
 }
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn test_typescript_semantic_correctness() {
     let temp_dir = TempDir::new().expect("failed to create temp dir");
@@ -124,6 +126,7 @@ class MyClass {
     );
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn test_go_semantic_correctness() {
     let temp_dir = TempDir::new().expect("failed to create temp dir");
@@ -175,6 +178,7 @@ type MyInterface interface {
     );
 }
 
+#[cfg(feature = "lang-java")]
 #[test]
 fn test_java_semantic_correctness() {
     let temp_dir = TempDir::new().expect("failed to create temp dir");
