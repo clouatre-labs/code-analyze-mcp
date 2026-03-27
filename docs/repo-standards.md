@@ -34,14 +34,20 @@ This document maps every repo-level artifact to its purpose and the rationale be
 **Single aggregate CI check.** `ci.yml` ends with a `CI Result` job that depends on all others. GitHub requires only this one check to pass. A single required check is simpler to reason about and eliminates the maintenance cost of keeping the required-checks list in sync with job names. Use the following `if:` condition so that path-filtered jobs (result: `skipped`) do not block the check, while `cancelled` and `failure` still fail it:
 
 ```yaml
-# CI Result aggregator job
+# CI Result aggregator job -- list every job in 'needs'
 ci-result:
   name: CI Result
   runs-on: ubuntu-24.04
-  needs: [lint, test, audit]  # list all jobs
-  if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+  if: always()
+  needs: [changes, commitlint, check-base, format, lint, test, deny, msrv, renovate-check, zizmor]
   steps:
-    - run: echo "CI passed"
+    - name: Verify all jobs passed or were skipped
+      run: |
+        if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+          echo "::error::One or more CI jobs failed or were cancelled."
+          exit 1
+        fi
+        echo "All CI jobs passed or were skipped."
 ```
 
 **Path-based change detection.** Format, lint, and test jobs run only when `src/**`, `Cargo.*`, `tests/**`, or workflow files change. Documentation-only pushes skip expensive jobs and give faster feedback.
@@ -103,7 +109,7 @@ gh api \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   /orgs/{org}/actions/permissions/selected-actions \
   -f github_owned_allowed=true \
-  -f verified_allowed=false \
+  -F verified_allowed=false \
   --field 'patterns_allowed[]=wagoid/commitlint-github-action@*'
 ```
 *Code Snippet 1: Org-wide GITHUB_TOKEN read-only enforcement, action allowlist population, and SHA pinning.*
@@ -190,19 +196,21 @@ parameters:
 
 ```yaml
 # Branch ruleset pull_request rule parameters for main branch protection (solo repos)
-# bypass_mode: pull_request -- admin can bypass only via a PR, preserving audit trail
+# bypass_mode: pull_request -- actor can bypass only via a PR, preserving audit trail
 # require_code_owner_review: false -- CODEOWNERS still routes review requests; no merge block
+# Actor IDs are org-specific. Obtain via: gh api /orgs/{org}/rulesets | jq '.[].bypass_actors'
+# or from the GitHub UI (Settings > Rules > Rulesets > edit ruleset > Bypass list).
 parameters:
   required_approving_review_count: 0
   require_code_owner_review: false
   dismiss_stale_reviews_on_push: true
   bypass_actors:
     - actor_type: OrganizationAdmin
-      actor_id: 1
+      actor_id: {ORG_ADMIN_ACTOR_ID}
       bypass_mode: pull_request
     - actor_type: RepositoryRole
-      actor_id: 5
-      bypass_mode: always
+      actor_id: {REPO_ADMIN_ROLE_ACTOR_ID}
+      bypass_mode: pull_request
 ```
 *Code Snippet 4: CODEOWNERS entry and branch ruleset parameters for workflow-file protection and main branch protection.*
 
