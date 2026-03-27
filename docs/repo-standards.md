@@ -31,7 +31,18 @@ This document maps every repo-level artifact to its purpose and the rationale be
 
 **Rulesets over legacy branch protection.** GitHub Rulesets apply consistently across the organization and support conditions the legacy API cannot express. Two rulesets are active: main branch protection (no force push, no deletion, required status on `CI Result`) and release tag protection (`v*.*.*` format, no overwrites).
 
-**Single aggregate CI check.** `ci.yml` ends with a `CI Result` job that depends on all others. GitHub requires only this one check to pass. A single required check is simpler to reason about and eliminates the maintenance cost of keeping the required-checks list in sync with job names.
+**Single aggregate CI check.** `ci.yml` ends with a `CI Result` job that depends on all others. GitHub requires only this one check to pass. A single required check is simpler to reason about and eliminates the maintenance cost of keeping the required-checks list in sync with job names. Use the following `if:` condition so that path-filtered jobs (result: `skipped`) do not block the check, while `cancelled` and `failure` still fail it:
+
+```yaml
+# CI Result aggregator job
+ci-result:
+  name: CI Result
+  runs-on: ubuntu-24.04
+  needs: [lint, test, audit]  # list all jobs
+  if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+  steps:
+    - run: echo "CI passed"
+```
 
 **Path-based change detection.** Format, lint, and test jobs run only when `src/**`, `Cargo.*`, `tests/**`, or workflow files change. Documentation-only pushes skip expensive jobs and give faster feedback.
 
@@ -84,8 +95,18 @@ gh api \
   /orgs/{org}/actions/permissions/workflow \
   -f default_workflow_permissions=read \
   -F can_approve_pull_request_reviews=false
+
+# Populate the action allowlist (run after setting allowed_actions=selected above)
+gh api \
+  --method PUT \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  /orgs/{org}/actions/permissions/selected-actions \
+  -f github_owned_allowed=true \
+  -f verified_allowed=false \
+  --field 'patterns_allowed[]=wagoid/commitlint-github-action@*'
 ```
-*Code Snippet 1: Org-wide GITHUB_TOKEN read-only enforcement, action allowlist, and SHA pinning.*
+*Code Snippet 1: Org-wide GITHUB_TOKEN read-only enforcement, action allowlist population, and SHA pinning.*
 
 **Enforcement state (2026-03-25).** Org default GITHUB_TOKEN permission set to `read`. All active workflows carry an explicit `permissions:` block as defence in depth. Per-workflow pattern for CI: `contents: read` / `pull-requests: read`. Minimum required permissions set per job; jobs using `actions/checkout` need at least `contents: read`.
 
@@ -159,14 +180,31 @@ A compromised contributor account with write access can modify workflow files to
 ```
 
 ```yaml
-# Branch ruleset pull_request rule parameters (add to main branch ruleset)
-# Apply via PATCH /orgs/{org}/rulesets/{ruleset_id}
+# Branch ruleset pull_request rule parameters for .github/workflows/ protection
+# Apply via PATCH /orgs/{org}/rulesets/{ruleset_id} (workflow-file protection ruleset)
 parameters:
   required_approving_review_count: 1
   require_code_owner_review: true
   dismiss_stale_reviews_on_push: true
 ```
-*Code Snippet 4: CODEOWNERS entry and branch ruleset parameters for workflow file protection.*
+
+```yaml
+# Branch ruleset pull_request rule parameters for main branch protection (solo repos)
+# bypass_mode: pull_request -- admin can bypass only via a PR, preserving audit trail
+# require_code_owner_review: false -- CODEOWNERS still routes review requests; no merge block
+parameters:
+  required_approving_review_count: 0
+  require_code_owner_review: false
+  dismiss_stale_reviews_on_push: true
+  bypass_actors:
+    - actor_type: OrganizationAdmin
+      actor_id: 1
+      bypass_mode: pull_request
+    - actor_type: RepositoryRole
+      actor_id: 5
+      bypass_mode: always
+```
+*Code Snippet 4: CODEOWNERS entry and branch ruleset parameters for workflow-file protection and main branch protection.*
 
 ### Supply Chain Integrity
 
