@@ -3,19 +3,33 @@
 //! Maps file extensions to supported language identifiers.
 
 const EXTENSION_MAP: &[(&str, &str)] = &[
+    #[cfg(feature = "lang-fortran")]
     ("f", "fortran"),
+    #[cfg(feature = "lang-fortran")]
     ("f03", "fortran"),
+    #[cfg(feature = "lang-fortran")]
     ("f08", "fortran"),
+    #[cfg(feature = "lang-fortran")]
     ("f77", "fortran"),
+    #[cfg(feature = "lang-fortran")]
     ("f90", "fortran"),
+    #[cfg(feature = "lang-fortran")]
     ("f95", "fortran"),
+    #[cfg(feature = "lang-fortran")]
     ("for", "fortran"),
+    #[cfg(feature = "lang-fortran")]
     ("ftn", "fortran"),
+    #[cfg(feature = "lang-go")]
     ("go", "go"),
+    #[cfg(feature = "lang-java")]
     ("java", "java"),
+    #[cfg(feature = "lang-python")]
     ("py", "python"),
+    #[cfg(feature = "lang-rust")]
     ("rs", "rust"),
+    #[cfg(feature = "lang-typescript")]
     ("ts", "typescript"),
+    #[cfg(feature = "lang-tsx")]
     ("tsx", "tsx"),
 ];
 

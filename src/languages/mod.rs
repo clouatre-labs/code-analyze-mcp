@@ -3,11 +3,17 @@
 //! Provides query strings and extraction handlers for supported languages:
 //! Rust, Go, Java, Python, TypeScript, TSX, and Fortran.
 
+#[cfg(feature = "lang-fortran")]
 pub mod fortran;
+#[cfg(feature = "lang-go")]
 pub mod go;
+#[cfg(feature = "lang-java")]
 pub mod java;
+#[cfg(feature = "lang-python")]
 pub mod python;
+#[cfg(feature = "lang-rust")]
 pub mod rust;
+#[cfg(any(feature = "lang-typescript", feature = "lang-tsx"))]
 pub mod typescript;
 
 use tree_sitter::{Language, Node};
@@ -44,6 +50,7 @@ pub struct LanguageInfo {
 #[allow(clippy::too_many_lines)] // exhaustive match over all supported languages; splitting harms readability
 pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
     match lang_name {
+        #[cfg(feature = "lang-rust")]
         "rust" => Some(LanguageInfo {
             name: "rust",
             language: tree_sitter_rust::LANGUAGE.into(),
@@ -58,6 +65,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: Some(rust::find_receiver_type),
             extract_inheritance: Some(rust::extract_inheritance),
         }),
+        #[cfg(feature = "lang-python")]
         "python" => Some(LanguageInfo {
             name: "python",
             language: tree_sitter_python::LANGUAGE.into(),
@@ -72,6 +80,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(python::extract_inheritance),
         }),
+        #[cfg(feature = "lang-typescript")]
         "typescript" => Some(LanguageInfo {
             name: "typescript",
             language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
@@ -86,6 +95,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(typescript::extract_inheritance),
         }),
+        #[cfg(feature = "lang-tsx")]
         "tsx" => Some(LanguageInfo {
             name: "tsx",
             language: tree_sitter_typescript::LANGUAGE_TSX.into(),
@@ -100,6 +110,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(typescript::extract_inheritance),
         }),
+        #[cfg(feature = "lang-go")]
         "go" => Some(LanguageInfo {
             name: "go",
             language: tree_sitter_go::LANGUAGE.into(),
@@ -114,6 +125,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(go::extract_inheritance),
         }),
+        #[cfg(feature = "lang-java")]
         "java" => Some(LanguageInfo {
             name: "java",
             language: tree_sitter_java::LANGUAGE.into(),
@@ -128,6 +140,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(java::extract_inheritance),
         }),
+        #[cfg(feature = "lang-fortran")]
         "fortran" => Some(LanguageInfo {
             name: "fortran",
             language: tree_sitter_fortran::LANGUAGE.into(),
