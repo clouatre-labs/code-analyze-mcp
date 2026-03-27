@@ -436,6 +436,7 @@ fn test_semantic_analysis_empty_file() {
     assert!(!output.formatted.contains("R:"));
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_parse_and_extract() {
     let temp_dir = TempDir::new().unwrap();
@@ -468,6 +469,7 @@ class MyClass:
     assert_eq!(output.semantic.classes[0].name, "MyClass");
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_edge_case_empty_file() {
     let temp_dir = TempDir::new().unwrap();
@@ -481,6 +483,7 @@ fn test_python_edge_case_empty_file() {
     assert_eq!(output.semantic.classes.len(), 0);
 }
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn test_typescript_parse_and_extract() {
     let temp_dir = TempDir::new().unwrap();
@@ -537,6 +540,7 @@ class MyClass {
     assert!(class_names.contains(&"MyClass"));
 }
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn test_typescript_edge_case_empty_file() {
     let temp_dir = TempDir::new().unwrap();
@@ -550,6 +554,7 @@ fn test_typescript_edge_case_empty_file() {
     assert_eq!(output.semantic.classes.len(), 0);
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn test_go_parse_and_extract() {
     let temp_dir = TempDir::new().unwrap();
@@ -590,6 +595,7 @@ type MyInterface interface {
     assert!(class_names.contains(&"MyInterface"));
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn test_go_edge_case_empty_file() {
     let temp_dir = TempDir::new().unwrap();
@@ -603,6 +609,7 @@ fn test_go_edge_case_empty_file() {
     assert_eq!(output.semantic.classes.len(), 0);
 }
 
+#[cfg(feature = "lang-java")]
 #[test]
 fn test_java_parse_and_extract() {
     let temp_dir = TempDir::new().unwrap();
@@ -644,6 +651,7 @@ enum MyEnum {
     assert!(class_names.contains(&"MyEnum"));
 }
 
+#[cfg(feature = "lang-java")]
 #[test]
 fn test_java_edge_case_empty_file() {
     let temp_dir = TempDir::new().unwrap();
@@ -1543,6 +1551,7 @@ fn test_format_summary_sibling_dir_prefix() {
 
 // Reference extraction tests for Python, Java, and TypeScript
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_reference_extraction_happy_path() {
     let temp_dir = TempDir::new().unwrap();
@@ -1594,6 +1603,7 @@ def process(items: list[User]) -> None:
     }
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_reference_extraction_edge_case() {
     let temp_dir = TempDir::new().unwrap();
@@ -1652,6 +1662,12 @@ struct ImportTestCase {
     expected_modules: Vec<&'static str>,
 }
 
+#[cfg(any(
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-typescript"
+))]
 #[test]
 fn test_import_extraction_happy_path() {
     let test_cases = vec![
@@ -1752,6 +1768,12 @@ export function hello(): void {
     }
 }
 
+#[cfg(any(
+    feature = "lang-python",
+    feature = "lang-go",
+    feature = "lang-java",
+    feature = "lang-typescript"
+))]
 #[test]
 fn test_import_extraction_no_imports() {
     let test_cases = vec![
@@ -2008,6 +2030,7 @@ fn test_single_page_no_cursor() {
 
 // Inheritance extraction tests
 
+#[cfg(feature = "lang-java")]
 #[test]
 fn test_java_inheritance_extraction() {
     let temp_dir = TempDir::new().unwrap();
@@ -2060,6 +2083,7 @@ public class Dog extends Animal implements Comparable {
     );
 }
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn test_typescript_inheritance_extraction() {
     let temp_dir = TempDir::new().unwrap();
@@ -2111,6 +2135,7 @@ class Dog extends Animal implements Movable {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_inheritance_extraction() {
     let temp_dir = TempDir::new().unwrap();
@@ -2146,6 +2171,7 @@ class Dog(Animal):
     );
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn test_go_inheritance_extraction() {
     let temp_dir = TempDir::new().unwrap();
@@ -3558,6 +3584,7 @@ fn test_overview_force_true_with_cursor_no_guard() {
 
 // Python wildcard import resolution tests
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_wildcard_import_parser_clean_module_field() {
     let temp_dir = TempDir::new().unwrap();
@@ -3581,6 +3608,7 @@ fn test_python_wildcard_import_parser_clean_module_field() {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_wildcard_import_relative_resolution() {
     let temp_dir = TempDir::new().unwrap();
@@ -3619,6 +3647,7 @@ fn test_python_wildcard_import_relative_resolution() {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_wildcard_import_with_all() {
     let temp_dir = TempDir::new().unwrap();
@@ -3667,6 +3696,7 @@ fn test_python_wildcard_import_with_all() {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_wildcard_import_target_not_found() {
     let temp_dir = TempDir::new().unwrap();
@@ -3694,6 +3724,7 @@ fn test_python_wildcard_import_target_not_found() {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_named_import_from_statement() {
     let temp_dir = TempDir::new().unwrap();
@@ -3758,6 +3789,7 @@ fn test_analyze_module_dir_guard_rejects_symlink_to_directory() {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_python_aliased_import_from_statement() {
     let temp_dir = TempDir::new().unwrap();
@@ -3853,6 +3885,7 @@ fn test_analyze_directory_verbose_no_summary() {
     );
 }
 
+#[cfg(feature = "lang-fortran")]
 #[test]
 fn test_fortran_parse_and_extract() {
     let temp_dir = TempDir::new().unwrap();
@@ -3903,6 +3936,7 @@ END MODULE math_utils
     );
 }
 
+#[cfg(feature = "lang-fortran")]
 #[test]
 fn test_fortran_edge_case_fixed_form() {
     // Fixed-form layout with columns 1-5 blank, statement starting col 7.
@@ -4032,6 +4066,7 @@ fn test_format_summary_max_depth_zero_unchanged() {
     );
 }
 
+#[cfg(feature = "lang-python")]
 #[test]
 fn test_analyze_symbol_python_callees() {
     let dir = TempDir::new().unwrap();
@@ -4050,6 +4085,7 @@ fn test_analyze_symbol_python_callees() {
     );
 }
 
+#[cfg(feature = "lang-go")]
 #[test]
 fn test_analyze_symbol_go_callees() {
     let dir = TempDir::new().unwrap();
@@ -4067,6 +4103,7 @@ fn test_analyze_symbol_go_callees() {
     );
 }
 
+#[cfg(feature = "lang-typescript")]
 #[test]
 fn test_analyze_symbol_typescript_callees() {
     let dir = TempDir::new().unwrap();
@@ -4084,6 +4121,7 @@ fn test_analyze_symbol_typescript_callees() {
     );
 }
 
+#[cfg(feature = "lang-fortran")]
 #[test]
 fn test_analyze_symbol_fortran_callees() {
     let dir = TempDir::new().unwrap();
@@ -4118,6 +4156,7 @@ fn test_analyze_symbol_rust_method_item_callees() {
     );
 }
 
+#[cfg(feature = "lang-java")]
 #[test]
 fn test_analyze_symbol_java_callees() {
     let dir = TempDir::new().unwrap();
