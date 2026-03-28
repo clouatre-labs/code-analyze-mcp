@@ -226,9 +226,10 @@ fn date_to_days_since_epoch(y: u32, m: u32, d: u32) -> u32 {
     let yoe = y - era * 400;
     let doy = (153 * m + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097
-        + doe // this is the Proleptic Gregorian day number
-            .saturating_sub(719_468) // subtract the epoch offset to get days since 1970-01-01
+    // Compute the proleptic Gregorian day number, then subtract the Unix epoch offset.
+    // The subtraction must wrap the full expression; applying .saturating_sub to `doe`
+    // alone would underflow for recent dates where doe < 719_468.
+    (era * 146_097 + doe).saturating_sub(719_468)
 }
 
 /// Returns the current UTC date as a string in YYYY-MM-DD format.
@@ -251,6 +252,100 @@ pub fn current_date_str() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- date math tests ---
+
+    #[test]
+    fn test_date_to_days_since_epoch_known_dates() {
+        // Unix epoch: 1970-01-01 = day 0
+        assert_eq!(date_to_days_since_epoch(1970, 1, 1), 0);
+        // 2020-01-01: known value 18262 (50 years, accounting for leap years)
+        assert_eq!(date_to_days_since_epoch(2020, 1, 1), 18_262);
+        // Leap day 2000-02-29: 2000-02-29 is day 11_016
+        assert_eq!(date_to_days_since_epoch(2000, 2, 29), 11_016);
+    }
+
+    #[test]
+    fn test_current_date_str_format() {
+        let s = current_date_str();
+        assert_eq!(s.len(), 10, "date string must be 10 chars: {s}");
+        assert_eq!(s.as_bytes()[4], b'-', "char at index 4 must be '-': {s}");
+        assert_eq!(s.as_bytes()[7], b'-', "char at index 7 must be '-': {s}");
+        // Sanity: year must parse and be in reasonable range
+        let year: u32 = s[0..4].parse().expect("year must be numeric");
+        assert!(year >= 2020 && year <= 2100, "unexpected year {year}");
+    }
+
+    #[tokio::test]
+    async fn test_metrics_writer_batching() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<MetricEvent>();
+        let writer = MetricsWriter::new(rx, Some(dir.path().to_path_buf()));
+
+        let make_event = || MetricEvent {
+            ts: unix_ms(),
+            tool: "analyze_directory",
+            duration_ms: 1,
+            output_chars: 10,
+            param_path_depth: 1,
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: None,
+            seq: None,
+        };
+
+        tx.send(make_event()).unwrap();
+        tx.send(make_event()).unwrap();
+        tx.send(make_event()).unwrap();
+        // Drop sender so run() exits after draining
+        drop(tx);
+
+        writer.run().await;
+
+        // Exactly 1 .jsonl file must exist with exactly 3 lines
+        let entries: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(|x| x.eq_ignore_ascii_case("jsonl"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(entries.len(), 1, "expected exactly 1 .jsonl file");
+        let content = std::fs::read_to_string(entries[0].path()).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 3, "expected exactly 3 lines; got: {content}");
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_old_files_deletes_old_keeps_recent() {
+        use tempfile::TempDir;
+
+        // Today = 2026-03-28 (hard-coded to match plan; adjust if re-run later)
+        // 31 days ago = 2026-02-25; 29 days ago = 2026-02-27
+        let dir = TempDir::new().unwrap();
+        let old_file = dir.path().join("metrics-2026-02-25.jsonl");
+        let recent_file = dir.path().join("metrics-2026-02-27.jsonl");
+        std::fs::write(&old_file, "old\n").unwrap();
+        std::fs::write(&recent_file, "recent\n").unwrap();
+
+        cleanup_old_files(dir.path()).await;
+
+        assert!(
+            !old_file.exists(),
+            "31-day-old file should have been deleted"
+        );
+        assert!(
+            recent_file.exists(),
+            "29-day-old file should have been kept"
+        );
+    }
 
     #[test]
     fn test_metric_event_serialization() {
