@@ -47,6 +47,5 @@ schemars = { workspace = true, optional = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
 tracing-subscriber = { workspace = true }
 schemars = { workspace = true }
