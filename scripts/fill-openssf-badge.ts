@@ -613,6 +613,18 @@ const ANSWERS: Answer[] = [
       "The `tests/` directory contains integration tests that exercise all four MCP tools end-to-end with real source files, covering acceptance criteria, idempotency, pagination, and MCP protocol smoke tests. URL: https://github.com/clouatre-labs/code-analyze-mcp/tree/main/tests",
   },
   {
+    id: "regression_tests_added50",
+    status: "Met",
+    justification:
+      "Bug-fix commits in the last six months consistently include regression tests. Examples: fix(parser) #416 added 103 lines of integration tests, fix(pagination) #419 rewrote cursor-transition tests, fix(verbose) #366 added 30 lines, fix(metrics) #361 added 37 lines, fix(parser) #330 added 189 lines, fix(analyze_directory) #327 added 128 lines. Well above 50% of recent bug fixes include automated regression tests. URL: https://github.com/clouatre-labs/code-analyze-mcp/commits/main",
+  },
+  {
+    id: "test_statement_coverage80",
+    status: "Met",
+    justification:
+      "CI enforces `cargo llvm-cov report --fail-under-lines 80`. The most recent main-branch coverage run reports 80.70% line coverage (6015 lines, 1161 missed). The coverage job is a required check for all PRs. URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/.github/workflows/ci.yml",
+  },
+  {
     id: "test_policy_mandated",
     status: "Met",
     justification:
@@ -639,6 +651,11 @@ const ANSWERS: Answer[] = [
     id: "crypto_used_network",
     status: "N/A",
     justification: "Not applicable -- the project makes no network connections.",
+  },
+  {
+    id: "crypto_tls12",
+    status: "N/A",
+    justification: "Not applicable -- the project makes no network connections and uses no TLS.",
   },
   {
     id: "crypto_certificate_verification",
@@ -683,59 +700,156 @@ const ANSWERS: Answer[] = [
   },
 ];
 
-// Criteria to skip from each section (computed fields and unknown criteria).
+// Criteria to skip from each section (computed fields).
 // achieve_passing_status and achieve_silver_status are computed by the server.
 const SKIP_IDS = new Set([
   "achieve_passing_status",
   "achieve_silver_status",
-  // Silver criteria missing from the documentation (leave as-is):
-  "crypto_tls12",
-  "regression_tests_added50",
-  "test_statement_coverage80",
   "hardened_site",
 ]);
 
-// Answers for the passing section (level 0 criteria only).
-const PASSING_IDS = new Set([
-  "description_good", "interact", "contribution", "contribution_requirements",
+// Passing-ONLY criterion IDs (level 0 only -- NOT re-presented on the silver form).
+// Criteria that appear on BOTH forms (e.g. contribution_requirements, report_tracker)
+// are intentionally excluded here so silverAnswers() picks them up.
+const PASSING_ONLY_IDS = new Set([
+  "description_good", "interact", "contribution",
   "floss_license", "floss_license_osi", "license_location",
   "documentation_basics", "documentation_interface", "sites_https",
   "discussion", "english", "maintained", "repo_public", "repo_track",
   "repo_interim", "repo_distributed", "version_unique", "version_semver",
   "version_tags", "release_notes", "release_notes_vulns",
-  "report_process", "report_tracker", "report_responses",
+  "report_process", "report_responses",
   "enhancement_responses", "report_archive",
   "vulnerability_report_process", "vulnerability_report_private",
   "vulnerability_report_response",
   "build", "build_common_tools", "build_floss_tools",
   "test", "test_invocation", "test_most", "test_continuous_integration",
-  "test_policy", "tests_are_added", "tests_documented_added",
-  "warnings", "warnings_fixed", "warnings_strict",
+  "test_policy", "tests_are_added",
+  "warnings", "warnings_fixed",
   "know_secure_design", "know_common_errors",
   "crypto_published", "crypto_call", "crypto_floss", "crypto_keylength",
-  "crypto_working", "crypto_weaknesses", "crypto_pfs",
+  "crypto_working", "crypto_pfs",
   "crypto_password_storage", "crypto_random",
   "delivery_mitm", "delivery_unsigned",
   "vulnerabilities_critical_fixed", "vulnerabilities_critical_fixed_rapid",
   "vulnerabilities_fixed_60_days",
   "no_leaked_credentials",
-  "static_analysis", "static_analysis_common_vulnerabilities",
-  "static_analysis_fixed", "static_analysis_often",
-  "dynamic_analysis", "dynamic_analysis_unsafe",
-  "dynamic_analysis_enable_assertions", "dynamic_analysis_fixed",
+  "static_analysis", "static_analysis_fixed", "static_analysis_often",
+  "dynamic_analysis", "dynamic_analysis_enable_assertions", "dynamic_analysis_fixed",
+]);
+
+// The 7 criteria that appear on BOTH passing and silver forms -- they go into silverAnswers()
+// so the silver form fills them (the passing form would already have them from a prior run).
+// If you need to re-fill passing, they are also in ANSWERS so passingAnswers includes them.
+const DUAL_IDS = new Set([
+  "contribution_requirements",
+  "report_tracker",
+  "tests_documented_added",
+  "warnings_strict",
+  "static_analysis_common_vulnerabilities",
+  "dynamic_analysis_unsafe",
+  "crypto_weaknesses",
 ]);
 
 function passingAnswers(): Answer[] {
   return ANSWERS.filter(
-    (a) => PASSING_IDS.has(a.id) && !SKIP_IDS.has(a.id) && a.status !== "?"
+    (a) => (PASSING_ONLY_IDS.has(a.id) || DUAL_IDS.has(a.id)) && !SKIP_IDS.has(a.id) && a.status !== "?"
   );
 }
 
 function silverAnswers(): Answer[] {
   return ANSWERS.filter(
-    (a) => !PASSING_IDS.has(a.id) && !SKIP_IDS.has(a.id) && a.status !== "?"
+    (a) => (!PASSING_ONLY_IDS.has(a.id)) && !SKIP_IDS.has(a.id) && a.status !== "?"
   );
 }
+
+// Silver form section structure (matches _form_1.html.erb accordion order).
+// Each section is collapsed until "Save and continue" opens the next one.
+// Criteria IDs are the official level-1 IDs from criteria.yml, in presentation order.
+const SILVER_SECTIONS: Array<{ name: string; continueValue: string; ids: string[] }> = [
+  {
+    name: "Basics",
+    continueValue: "changecontrol",
+    ids: [
+      "achieve_passing",
+      "contribution_requirements",
+      "dco",
+      "governance",
+      "code_of_conduct",
+      "roles_responsibilities",
+      "access_continuity",
+      "bus_factor",
+      "documentation_roadmap",
+      "documentation_architecture",
+      "documentation_security",
+      "documentation_quick_start",
+      "documentation_current",
+      "documentation_achievements",
+      "accessibility_best_practices",
+      "internationalization",
+      "sites_password_security",
+    ],
+  },
+  {
+    name: "Change Control",
+    continueValue: "reporting",
+    ids: ["maintenance_or_update"],
+  },
+  {
+    name: "Reporting",
+    continueValue: "quality",
+    ids: ["report_tracker", "vulnerability_report_credit", "vulnerability_response_process"],
+  },
+  {
+    name: "Quality",
+    continueValue: "security",
+    ids: [
+      "coding_standards",
+      "coding_standards_enforced",
+      "build_standard_variables",
+      "build_preserve_debug",
+      "build_non_recursive",
+      "build_repeatable",
+      "installation_common",
+      "installation_standard_variables",
+      "installation_development_quick",
+      "external_dependencies",
+      "dependency_monitoring",
+      "updateable_reused_components",
+      "interfaces_current",
+      "automated_integration_testing",
+      "regression_tests_added50",
+      "test_statement_coverage80",
+      "test_policy_mandated",
+      "tests_documented_added",
+      "warnings_strict",
+    ],
+  },
+  {
+    name: "Security",
+    continueValue: "analysis",
+    ids: [
+      "implement_secure_design",
+      "crypto_weaknesses",
+      "crypto_algorithm_agility",
+      "crypto_credential_agility",
+      "crypto_used_network",
+      "crypto_tls12",
+      "crypto_certificate_verification",
+      "crypto_verification_private",
+      "signed_releases",
+      "version_tags_signed",
+      "input_validation",
+      "hardening",
+      "assurance_case",
+    ],
+  },
+  {
+    name: "Analysis",
+    continueValue: "future",
+    ids: ["static_analysis_common_vulnerabilities", "dynamic_analysis_unsafe"],
+  },
+];
 
 async function waitForEnter(prompt: string): Promise<void> {
   const rl = readline.createInterface({
@@ -763,7 +877,18 @@ async function fillSection(page: Page, answers: Answer[]): Promise<void> {
       console.warn(`  WARN: radio not found for ${answer.id} (${answer.status}) -- skipping`);
       continue;
     }
-    await radio.click();
+
+    // Skip radios that are already checked (nothing to do) or disabled (read-only by the server).
+    const isChecked = await radio.isChecked().catch(() => false);
+    const isDisabled = await radio.isDisabled().catch(() => false);
+    if (isChecked || isDisabled) {
+      console.log(`  SKIP: ${answer.id} (${isDisabled ? "disabled" : "already checked"})`);
+      // Still fill the justification textarea even if the radio is pre-set.
+    } else {
+      // Scroll into view, then force-click to handle hidden-but-present radios.
+      await radio.scrollIntoViewIfNeeded().catch(() => {});
+      await radio.click({ force: true });
+    }
 
     // Textarea for justification (some criteria suppress it -- catch and ignore).
     if (answer.justification) {
@@ -781,6 +906,50 @@ async function fillSection(page: Page, answers: Answer[]): Promise<void> {
 
     // Brief pause to avoid triggering bot detection.
     await page.waitForTimeout(80);
+  }
+}
+
+async function saveAndContinue(page: Page, continueValue: string): Promise<void> {
+  // Click the "Save and continue" button whose value matches the next section name.
+  const btn = page.locator(`button[name="continue"][value="${continueValue}"]`).first();
+  const count = await btn.count();
+  if (count === 0) {
+    console.warn(`  WARN: Save and continue button not found for value="${continueValue}", falling back to first continue button`);
+    await page.locator('button[name="continue"]').first().click();
+  } else {
+    await btn.click();
+  }
+  await page.waitForLoadState("networkidle");
+  // After save-and-continue the page reloads and the next section panel opens.
+  await page.waitForTimeout(600);
+}
+
+async function fillSilverBySection(page: Page, allAnswers: Answer[]): Promise<void> {
+  const answerMap = new Map<string, Answer>(allAnswers.map((a) => [a.id, a]));
+
+  for (let i = 0; i < SILVER_SECTIONS.length; i++) {
+    const section = SILVER_SECTIONS[i];
+    console.log(`\n  Section [${i + 1}/${SILVER_SECTIONS.length}]: ${section.name}`);
+
+    // Build the answer list for this section (skip IDs not in our answer map or in SKIP_IDS).
+    const sectionAnswers = section.ids
+      .filter((id) => !SKIP_IDS.has(id))
+      .map((id) => answerMap.get(id))
+      .filter((a): a is Answer => a !== undefined && a.status !== "?");
+
+    console.log(`    ${sectionAnswers.length} answers to fill`);
+    await fillSection(page, sectionAnswers);
+
+    const isLast = i === SILVER_SECTIONS.length - 1;
+    if (isLast) {
+      // Last section: click final "Save and continue" (value="Save") then "Submit and exit".
+      console.log(`    Saving final section...`);
+      await saveAndContinue(page, "Save");
+    } else {
+      console.log(`    Save and continue -> ${section.continueValue}...`);
+      await saveAndContinue(page, section.continueValue);
+    }
+    console.log(`    URL after save: ${page.url()}`);
   }
 }
 
@@ -805,14 +974,23 @@ async function main(): Promise<void> {
   const SILVER_EDIT_URL =
     "https://www.bestpractices.dev/en/projects/12275/silver/edit";
 
+  const args = process.argv.slice(2);
+  const silverOnly = args.includes("--silver-only");
+  const passingOnly = args.includes("--passing-only");
+  if (silverOnly) console.log("Mode: silver section only (skipping passing)");
+  if (passingOnly) console.log("Mode: passing section only (skipping silver)");
+
+  // Choose the first URL to navigate to for login detection.
+  const firstUrl = silverOnly ? SILVER_EDIT_URL : PASSING_EDIT_URL;
+
   console.log("Launching headed Chromium...");
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  // --- Navigate to the passing edit page to trigger login if needed ---
-  console.log(`Navigating to ${PASSING_EDIT_URL}`);
-  await page.goto(PASSING_EDIT_URL);
+  // --- Navigate to first URL to trigger login if needed ---
+  console.log(`Navigating to ${firstUrl}`);
+  await page.goto(firstUrl);
   await page.waitForLoadState("networkidle");
 
   const currentUrl = page.url();
@@ -823,9 +1001,8 @@ async function main(): Promise<void> {
     );
     await waitForEnter("> ");
 
-    // After login, re-navigate to the passing edit URL (login may redirect elsewhere).
-    console.log(`Re-navigating to ${PASSING_EDIT_URL}`);
-    await page.goto(PASSING_EDIT_URL);
+    console.log(`Re-navigating to ${firstUrl}`);
+    await page.goto(firstUrl);
     await page.waitForLoadState("networkidle");
 
     const afterLoginUrl = page.url();
@@ -839,14 +1016,22 @@ async function main(): Promise<void> {
   }
 
   // --- Fill passing section ---
-  console.log("\nFilling passing-level criteria...");
-  const pAnswers = passingAnswers();
-  console.log(`  ${pAnswers.length} criteria to fill`);
-  await fillSection(page, pAnswers);
+  if (!silverOnly) {
+    console.log("\nFilling passing-level criteria...");
+    const pAnswers = passingAnswers();
+    console.log(`  ${pAnswers.length} criteria to fill`);
+    await fillSection(page, pAnswers);
 
-  console.log("Submitting passing section...");
-  await submitAndExit(page);
-  console.log(`  After submit, URL: ${page.url()}`);
+    console.log("Submitting passing section...");
+    await submitAndExit(page);
+    console.log(`  After submit, URL: ${page.url()}`);
+
+    if (passingOnly) {
+      console.log("\nDone (passing only). Check https://www.bestpractices.dev/en/projects/12275");
+      await browser.close();
+      return;
+    }
+  }
 
   // --- Navigate to silver edit page ---
   console.log(`\nNavigating to ${SILVER_EDIT_URL}`);
@@ -863,13 +1048,13 @@ async function main(): Promise<void> {
     await page.waitForLoadState("networkidle");
   }
 
-  // --- Fill silver section ---
-  console.log("Filling silver-level criteria...");
+  // --- Fill silver section-by-section ---
+  console.log("Filling silver-level criteria (section by section)...");
   const sAnswers = silverAnswers();
-  console.log(`  ${sAnswers.length} criteria to fill`);
-  await fillSection(page, sAnswers);
+  console.log(`  ${sAnswers.length} total silver criteria`);
+  await fillSilverBySection(page, sAnswers);
 
-  console.log("Submitting silver section...");
+  console.log("\nSubmitting silver form...");
   await submitAndExit(page);
   console.log(`  After submit, URL: ${page.url()}`);
 
