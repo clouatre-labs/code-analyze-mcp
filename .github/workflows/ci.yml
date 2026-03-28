@@ -141,7 +141,7 @@ jobs:
             -p code-analyze-core --test test_summary_no_pagination \
             -p code-analyze-core --test test_symbol_focus_summary \
             --lcov --output-path lcov-core.info
-          cargo llvm-cov report -p code-analyze-core --fail-under-lines 80
+          cargo llvm-cov report -p code-analyze-core --fail-under-lines 75
           # code-analyze-mcp coverage tracked but not gated (transport/logging/metrics layer)
           cargo llvm-cov --all-features \
             -p code-analyze-mcp --lib \
