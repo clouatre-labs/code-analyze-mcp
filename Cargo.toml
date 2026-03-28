@@ -35,3 +35,23 @@ tree-sitter-java = "0.23.5"
 tree-sitter-python = "0.25.0"
 tree-sitter-typescript = "0.23.2"
 tree-sitter-fortran = "0.5.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.ci]
+inherits = "release"
+lto = false
+codegen-units = 16
+panic = "unwind"
+strip = false
+
+[profile.fuzz]
+inherits = "dev"
+opt-level = 1
+debug-assertions = true
+incremental = false

@@ -131,7 +131,7 @@ jobs:
           tool: cargo-llvm-cov
       - name: Coverage
         run: |
-          cargo llvm-cov --all-features --workspace \
+          cargo llvm-cov --all-features --package code-analyze-core \
             --lib \
             --test acceptance_tests \
             --test annotations \
