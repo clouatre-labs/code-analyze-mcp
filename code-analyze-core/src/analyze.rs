@@ -7,7 +7,7 @@ use crate::formatter::{
     format_file_details, format_focused_internal, format_focused_summary_internal, format_structure,
 };
 use crate::graph::{CallGraph, InternalCallChain};
-use crate::lang::language_from_extension;
+use crate::lang::language_for_extension;
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
@@ -15,6 +15,7 @@ use crate::types::{
     AnalysisMode, FileInfo, ImplTraitInfo, ImportInfo, SemanticAnalysis, SymbolMatchMode,
 };
 use rayon::prelude::*;
+#[cfg(feature = "schemars")]
 use schemars::JsonSchema;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -40,40 +41,66 @@ pub enum AnalyzeError {
 }
 
 /// Result of directory analysis containing both formatted output and file data.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalysisOutput {
-    #[schemars(description = "Formatted text representation of the analysis")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "Formatted text representation of the analysis")
+    )]
     pub formatted: String,
-    #[schemars(description = "List of files analyzed in the directory")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "List of files analyzed in the directory")
+    )]
     pub files: Vec<FileInfo>,
     /// Walk entries used internally for summary generation; not serialized.
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub entries: Vec<WalkEntry>,
     /// Subtree file counts computed from an unbounded walk; used by `format_summary`; not serialized.
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub subtree_counts: Option<Vec<(std::path::PathBuf, usize)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(
-        description = "Opaque cursor token for the next page of results (absent when no more results)"
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            description = "Opaque cursor token for the next page of results (absent when no more results)"
+        )
     )]
     pub next_cursor: Option<String>,
 }
 
 /// Result of file-level semantic analysis.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FileAnalysisOutput {
-    #[schemars(description = "Formatted text representation of the analysis")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "Formatted text representation of the analysis")
+    )]
     pub formatted: String,
-    #[schemars(description = "Semantic analysis data including functions, classes, and imports")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "Semantic analysis data including functions, classes, and imports")
+    )]
     pub semantic: SemanticAnalysis,
-    #[schemars(description = "Total line count of the analyzed file")]
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "Total line count of the analyzed file")
+    )]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(
-        description = "Opaque cursor token for the next page of results (absent when no more results)"
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            description = "Opaque cursor token for the next page of results (absent when no more results)"
+        )
     )]
     pub next_cursor: Option<String>,
 }
@@ -124,7 +151,7 @@ pub fn analyze_directory_with_progress(
 
             // Detect language and extract counts
             let (language, function_count, class_count) = if let Some(ext_str) = ext {
-                if let Some(lang) = language_from_extension(ext_str) {
+                if let Some(lang) = language_for_extension(ext_str) {
                     let lang_str = lang.to_string();
                     match ElementExtractor::extract_with_depth(&source, &lang_str) {
                         Ok((func_count, class_count)) => (lang_str, func_count, class_count),
@@ -218,7 +245,7 @@ pub fn analyze_file(
     let ext = Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
-        .and_then(language_from_extension)
+        .and_then(language_for_extension)
         .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
 
     // Extract semantic information
@@ -254,46 +281,53 @@ pub fn analyze_file(
 }
 
 /// Result of focused symbol analysis.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FocusedAnalysisOutput {
-    #[schemars(description = "Formatted text representation of the call graph analysis")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "Formatted text representation of the call graph analysis")
+    )]
     pub formatted: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(
-        description = "Opaque cursor token for the next page of results (absent when no more results)"
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            description = "Opaque cursor token for the next page of results (absent when no more results)"
+        )
     )]
     pub next_cursor: Option<String>,
     /// Production caller chains (partitioned from incoming chains, excluding test callers).
     /// Not serialized; used for pagination in lib.rs.
     #[serde(skip)]
-    #[schemars(skip)]
-    pub(crate) prod_chains: Vec<InternalCallChain>,
+    #[cfg_attr(feature = "schemars", schemars(skip))]
+    pub prod_chains: Vec<InternalCallChain>,
     /// Test caller chains. Not serialized; used for pagination summary in lib.rs.
     #[serde(skip)]
-    #[schemars(skip)]
-    pub(crate) test_chains: Vec<InternalCallChain>,
+    #[cfg_attr(feature = "schemars", schemars(skip))]
+    pub test_chains: Vec<InternalCallChain>,
     /// Outgoing (callee) chains. Not serialized; used for pagination in lib.rs.
     #[serde(skip)]
-    #[schemars(skip)]
-    pub(crate) outgoing_chains: Vec<InternalCallChain>,
+    #[cfg_attr(feature = "schemars", schemars(skip))]
+    pub outgoing_chains: Vec<InternalCallChain>,
     /// Number of definitions for the symbol. Not serialized; used for pagination headers.
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub def_count: usize,
     /// Total unique callers before `impl_only` filter. Not serialized; used for FILTER header.
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub unfiltered_caller_count: usize,
     /// Unique callers after `impl_only` filter. Not serialized; used for FILTER header.
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub impl_trait_caller_count: usize,
 }
 
 /// Parameters for focused symbol analysis. Groups high-arity parameters to keep
 /// function signatures under clippy's default 7-argument threshold.
 #[derive(Clone)]
-pub struct AnalyzeSymbolParams {
+pub struct FocusedAnalysisConfig {
     pub focus: String,
     pub match_mode: SymbolMatchMode,
     pub follow_depth: u32,
@@ -351,7 +385,7 @@ fn collect_file_analysis(
 
             // Detect language and extract semantic information
             let language = if let Some(ext_str) = ext {
-                language_from_extension(ext_str)
+                language_for_extension(ext_str)
                     .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string)
             } else {
                 "unknown".to_string()
@@ -540,7 +574,7 @@ fn compute_chains(
 #[allow(clippy::needless_pass_by_value)]
 pub fn analyze_focused_with_progress(
     root: &Path,
-    params: &AnalyzeSymbolParams,
+    params: &FocusedAnalysisConfig,
     progress: Arc<AtomicUsize>,
     ct: CancellationToken,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
@@ -644,9 +678,9 @@ fn analyze_focused_with_progress_with_entries_internal(
 }
 
 /// Analyze a symbol's call graph using pre-walked directory entries.
-pub(crate) fn analyze_focused_with_progress_with_entries(
+pub fn analyze_focused_with_progress_with_entries(
     root: &Path,
-    params: &AnalyzeSymbolParams,
+    params: &FocusedAnalysisConfig,
     progress: &Arc<AtomicUsize>,
     ct: &CancellationToken,
     entries: &[WalkEntry],
@@ -680,7 +714,7 @@ pub fn analyze_focused(
     let entries = walk_directory(root, max_depth)?;
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    let params = AnalyzeSymbolParams {
+    let params = FocusedAnalysisConfig {
         focus: focus.to_string(),
         match_mode: SymbolMatchMode::Exact,
         follow_depth,
@@ -711,7 +745,7 @@ pub fn analyze_module_file(path: &str) -> Result<crate::types::ModuleInfo, Analy
     let language = file_path
         .extension()
         .and_then(|e| e.to_str())
-        .and_then(language_from_extension)
+        .and_then(language_for_extension)
         .ok_or_else(|| {
             AnalyzeError::Parser(crate::parser::ParserError::ParseError(
                 "unsupported or missing file extension".to_string(),
@@ -952,7 +986,7 @@ fn extract_string_list_from_list_node(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "lang-rust"))]
 mod tests {
     use super::*;
     use crate::formatter::format_focused_paginated;
@@ -1153,7 +1187,7 @@ fn regular_caller() {
         fs::write(temp_dir.path().join("lib.rs"), code).unwrap();
 
         // Call analyze_focused with impl_only=Some(true)
-        let params = AnalyzeSymbolParams {
+        let params = FocusedAnalysisConfig {
             focus: "focus_symbol".to_string(),
             match_mode: SymbolMatchMode::Insensitive,
             follow_depth: 1,

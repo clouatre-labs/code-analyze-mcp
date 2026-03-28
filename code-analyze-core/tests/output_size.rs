@@ -1,4 +1,4 @@
-use code_analyze_mcp::analyze;
+use code_analyze_core::analyze;
 use std::path::Path;
 
 #[test]
@@ -16,7 +16,9 @@ fn test_overview_output_size() {
 
 #[test]
 fn test_file_details_output_size() {
-    let output = analyze::analyze_file("src/lib.rs", None).unwrap();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let file_path = format!("{}/src/formatter.rs", manifest_dir);
+    let output = analyze::analyze_file(&file_path, None).unwrap();
     let char_count = output.formatted.len();
 
     println!("File details output size: {} chars", char_count);
@@ -43,7 +45,7 @@ fn test_symbol_focus_output_size() {
 
 #[test]
 fn test_summary_mode_produces_smaller_output() {
-    use code_analyze_mcp::formatter::format_summary;
+    use code_analyze_core::formatter::format_summary;
 
     let output = analyze::analyze_directory(Path::new("."), None).unwrap();
     let full_len = output.formatted.len();

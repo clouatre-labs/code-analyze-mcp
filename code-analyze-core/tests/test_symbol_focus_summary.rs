@@ -1,6 +1,6 @@
-use code_analyze_mcp::analyze::analyze_focused;
-use code_analyze_mcp::formatter::format_focused_summary;
-use code_analyze_mcp::graph::CallGraph;
+use code_analyze_core::analyze::analyze_focused;
+use code_analyze_core::formatter::format_focused_summary;
+use code_analyze_core::graph::CallGraph;
 use std::fs;
 use tempfile::TempDir;
 
@@ -61,13 +61,13 @@ fn test_symbol_focus_summary_format() {
     graph.callers.insert(
         "my_func".to_string(),
         vec![
-            code_analyze_mcp::types::CallEdge {
+            code_analyze_core::types::CallEdge {
                 path: root.join("caller1.rs"),
                 line: 20,
                 neighbor_name: "caller_a".to_string(),
                 is_impl_trait: false,
             },
-            code_analyze_mcp::types::CallEdge {
+            code_analyze_core::types::CallEdge {
                 path: root.join("caller2.rs"),
                 line: 30,
                 neighbor_name: "caller_b".to_string(),
@@ -80,13 +80,13 @@ fn test_symbol_focus_summary_format() {
     graph.callees.insert(
         "my_func".to_string(),
         vec![
-            code_analyze_mcp::types::CallEdge {
+            code_analyze_core::types::CallEdge {
                 path: root.join("lib.rs"),
                 line: 40,
                 neighbor_name: "std::println".to_string(),
                 is_impl_trait: false,
             },
-            code_analyze_mcp::types::CallEdge {
+            code_analyze_core::types::CallEdge {
                 path: root.join("lib.rs"),
                 line: 50,
                 neighbor_name: "helper".to_string(),
@@ -220,16 +220,16 @@ pub fn another_caller() {
     .unwrap();
 
     // Act: Call analyze_focused_with_progress with use_summary=true
-    use code_analyze_mcp::analyze::analyze_focused_with_progress;
+    use code_analyze_core::analyze::analyze_focused_with_progress;
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use tokio_util::sync::CancellationToken;
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    use code_analyze_mcp::analyze::AnalyzeSymbolParams;
-    use code_analyze_mcp::types::SymbolMatchMode;
-    let params = AnalyzeSymbolParams {
+    use code_analyze_core::analyze::FocusedAnalysisConfig;
+    use code_analyze_core::types::SymbolMatchMode;
+    let params = FocusedAnalysisConfig {
         focus: "target_fn".to_string(),
         match_mode: SymbolMatchMode::Exact,
         follow_depth: 1,
@@ -285,16 +285,16 @@ pub fn another_caller() {
     .unwrap();
 
     // Act: Call analyze_focused_with_progress with use_summary=false
-    use code_analyze_mcp::analyze::analyze_focused_with_progress;
+    use code_analyze_core::analyze::analyze_focused_with_progress;
     use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use tokio_util::sync::CancellationToken;
 
     let counter = Arc::new(AtomicUsize::new(0));
     let ct = CancellationToken::new();
-    use code_analyze_mcp::analyze::AnalyzeSymbolParams;
-    use code_analyze_mcp::types::SymbolMatchMode;
-    let params = AnalyzeSymbolParams {
+    use code_analyze_core::analyze::FocusedAnalysisConfig;
+    use code_analyze_core::types::SymbolMatchMode;
+    let params = FocusedAnalysisConfig {
         focus: "target_fn".to_string(),
         match_mode: SymbolMatchMode::Exact,
         follow_depth: 1,
