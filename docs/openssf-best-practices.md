@@ -54,7 +54,7 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 | `sites_https` | **MUST** -- Project sites support HTTPS. | **Met** | GitHub (https://github.com/clouatre-labs/code-analyze-mcp), crates.io (https://crates.io/crates/code-analyze-mcp), Homebrew tap all use HTTPS. URL: https://github.com/clouatre-labs/code-analyze-mcp |
 | `discussion` | **MUST** -- Project has searchable discussion mechanisms with URL-addressable topics that do not require proprietary client software. | **Met** | GitHub Issues are searchable, URL-addressable, and publicly accessible without proprietary software. URL: https://github.com/clouatre-labs/code-analyze-mcp/issues |
 | `english` | **SHOULD** -- Documentation is in English and the project can accept bug reports in English. | **Met** | All documentation is in English; issue tracker accepts reports in English. URL: https://github.com/clouatre-labs/code-analyze-mcp#readme |
-| `maintained` | **MUST** -- Project is maintained. | **Met** | Active development: v0.1.10 released 2026-03-26, dozens of issues closed in March 2026, Renovate bot running weekly. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.1.10 |
+| `maintained` | **MUST** -- Project is maintained. | **Met** | Active development: v0.1.11 released 2026-03-27, dozens of issues closed in March 2026, Renovate bot running weekly. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.1.11 |
 
 ---
 
@@ -73,15 +73,15 @@ strength indicator in brackets -- **MUST** (required), **SHOULD** (recommended),
 
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
-| `version_unique` | **MUST** -- Project results have a unique version identifier for each release. | **Met** | Versions follow 0.1.0 through 0.1.10; Cargo.toml version must match release tag (enforced in release workflow). URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/Cargo.toml |
+| `version_unique` | **MUST** -- Project results have a unique version identifier for each release. | **Met** | Versions follow 0.1.0 through 0.1.11; Cargo.toml version must match release tag (enforced in release workflow). URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/Cargo.toml |
 | `version_semver` | **SUGGESTED** -- SemVer or CalVer format is used. | **Met** | CONTRIBUTING.md explicitly states "We follow SemVer: MAJOR (breaking), MINOR (features), PATCH (fixes)." URL: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/CONTRIBUTING.md |
-| `version_tags` | **SUGGESTED** -- Releases are identified within the version control system (e.g., git tags). | **Met** | Every release has a GPG-signed annotated git tag (e.g., `v0.1.10`); the release workflow verifies the tag signature before building. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.1.10 |
+| `version_tags` | **SUGGESTED** -- Releases are identified within the version control system (e.g., git tags). | **Met** | Every release has a GPG-signed annotated git tag (e.g., `v0.1.11`); the release workflow verifies the tag signature before building. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.1.11 |
 
 ### 2.3 Release notes
 
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
-| `release_notes` | **MUST** -- Each release provides human-readable release notes summarizing major changes. | **Met** | Every GitHub release has curated release notes (e.g., v0.1.10) with categorized sections (New Features, Performance, Fixes, CI/Chore). URL: https://github.com/clouatre-labs/code-analyze-mcp/releases |
+| `release_notes` | **MUST** -- Each release provides human-readable release notes summarizing major changes. | **Met** | Every GitHub release has curated release notes (e.g., v0.1.11) with categorized sections (New Features, Performance, Fixes, CI/Chore). URL: https://github.com/clouatre-labs/code-analyze-mcp/releases |
 | `release_notes_vulns` | **MUST** -- Release notes identify every publicly known run-time vulnerability fixed in that release that had a CVE assignment. | **Met** | No CVE-assigned vulnerabilities have been fixed to date. The criterion is satisfied when there is nothing to report; if a CVE is fixed in a future release, it must be listed explicitly. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases |
 
 ---
@@ -175,7 +175,7 @@ The software produced by this project (a code analysis MCP server) does not impl
 | ID | Requirement | Status | Evidence / Action |
 |----|-------------|--------|-------------------|
 | `delivery_mitm` | **MUST** -- Project uses a delivery mechanism that counters MITM attacks. | **Met** | All distribution channels use HTTPS: GitHub Releases (HTTPS), crates.io (HTTPS), Homebrew tap (HTTPS). Binaries are additionally signed with cosign and have GitHub SLSA provenance attestations. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases |
-| `delivery_unsigned` | **MUST** -- Cryptographic hashes must not be retrieved over HTTP and used without signature verification. | **Met** | All download URLs use HTTPS. Per-binary `.sha256` files are published alongside release tarballs on the same HTTPS-protected GitHub Releases page. cosign `.bundle` signatures enable independent verification. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.1.10 |
+| `delivery_unsigned` | **MUST** -- Cryptographic hashes must not be retrieved over HTTP and used without signature verification. | **Met** | All download URLs use HTTPS. Per-binary `.sha256` files are published alongside release tarballs on the same HTTPS-protected GitHub Releases page. cosign `.bundle` signatures enable independent verification. URL: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.1.11 |
 
 ### 5.4 Publicly known vulnerabilities fixed
 
