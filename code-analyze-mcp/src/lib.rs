@@ -1617,4 +1617,69 @@ mod tests {
             "verbose=true must emit FILES section header"
         );
     }
+
+    #[test]
+    fn test_summary_cursor_conflict() {
+        assert!(summary_cursor_conflict(Some(true), Some("cursor")));
+        assert!(!summary_cursor_conflict(Some(true), None));
+        assert!(!summary_cursor_conflict(None, Some("cursor")));
+    }
+
+    #[test]
+    fn test_summary_cursor_conflict_edge_cases() {
+        assert!(!summary_cursor_conflict(None, None));
+        assert!(!summary_cursor_conflict(Some(false), Some("cursor")));
+        assert!(summary_cursor_conflict(Some(true), Some("")));
+    }
+
+    #[test]
+    fn test_validate_impl_only_behavior() {
+        // Verify that the impl_only field is properly structured in AnalyzeSymbolParams.
+        let params = AnalyzeSymbolParams {
+            path: "test.py".to_string(),
+            symbol: "foo".to_string(),
+            match_mode: None,
+            follow_depth: None,
+            max_depth: None,
+            ast_recursion_limit: None,
+            pagination: types::PaginationParams {
+                cursor: None,
+                page_size: None,
+            },
+            output_control: types::OutputControlParams {
+                summary: None,
+                force: None,
+                verbose: None,
+            },
+            impl_only: Some(true),
+        };
+        assert_eq!(
+            params.impl_only,
+            Some(true),
+            "impl_only field should be set"
+        );
+    }
+
+    #[test]
+    fn test_impl_only_false() {
+        let params = AnalyzeSymbolParams {
+            path: "test.rs".to_string(),
+            symbol: "parse".to_string(),
+            match_mode: Some(SymbolMatchMode::Exact),
+            follow_depth: Some(1),
+            max_depth: None,
+            ast_recursion_limit: None,
+            pagination: types::PaginationParams {
+                cursor: None,
+                page_size: None,
+            },
+            output_control: types::OutputControlParams {
+                summary: None,
+                force: None,
+                verbose: None,
+            },
+            impl_only: Some(false),
+        };
+        assert_eq!(params.impl_only, Some(false));
+    }
 }

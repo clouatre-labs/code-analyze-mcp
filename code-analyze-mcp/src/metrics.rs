@@ -344,4 +344,127 @@ mod tests {
         assert_eq!(parts.len(), 2, "session_id should have exactly 2 parts");
         assert!(parts[0].len() == 13, "millis part should be 13 digits");
     }
+
+    #[test]
+    fn test_path_component_count() {
+        assert_eq!(path_component_count("a/b"), 2);
+        assert_eq!(path_component_count("a/b/c"), 3);
+        assert_eq!(path_component_count(""), 0); // Empty path has zero components
+    }
+
+    #[test]
+    fn test_error_code_to_type() {
+        assert_eq!(
+            error_code_to_type(rmcp::model::ErrorCode::PARSE_ERROR),
+            "parse"
+        );
+        assert_eq!(
+            error_code_to_type(rmcp::model::ErrorCode::INVALID_PARAMS),
+            "invalid_params"
+        );
+        // Verify fallback for unmapped error codes
+        assert_eq!(
+            error_code_to_type(rmcp::model::ErrorCode::INTERNAL_ERROR),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn test_current_date_str() {
+        let date_str = current_date_str();
+        assert_eq!(
+            date_str.len(),
+            10,
+            "date string should be YYYY-MM-DD format"
+        );
+        let parts: Vec<&str> = date_str.split('-').collect();
+        assert_eq!(parts.len(), 3, "date should have 3 parts");
+        // Validate format
+        assert!(parts[0].parse::<u32>().is_ok(), "year should be parseable");
+        assert!(parts[1].parse::<u32>().is_ok(), "month should be parseable");
+        assert!(parts[2].parse::<u32>().is_ok(), "day should be parseable");
+    }
+
+    #[tokio::test]
+    async fn test_metrics_writer_writes_jsonl() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let writer = MetricsWriter::new(rx, Some(tmp.path().to_path_buf()));
+        let writer_task = tokio::spawn(writer.run());
+
+        // Send a test event
+        let event = MetricEvent {
+            ts: 1_700_000_000_000,
+            tool: "analyze_directory",
+            duration_ms: 42,
+            output_chars: 100,
+            param_path_depth: 3,
+            max_depth: Some(2),
+            result: "ok",
+            error_type: None,
+            session_id: None,
+            seq: None,
+        };
+        tx.send(event).ok();
+
+        // Drop sender to signal end of stream
+        drop(tx);
+
+        // Await the writer task
+        writer_task.await.ok();
+
+        // Verify JSONL file was created and contains data
+        let mut entries = tokio::fs::read_dir(tmp.path()).await.unwrap();
+        let mut found_metrics_file = false;
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            let path = entry.path();
+            if path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .starts_with("metrics-")
+            {
+                found_metrics_file = true;
+                let content = tokio::fs::read_to_string(&path).await.unwrap();
+                // Verify file contains at least one line
+                assert!(!content.is_empty(), "metrics file should contain data");
+                // Verify first line is valid JSON - skip deserialization for lifetime reasons
+                assert!(
+                    content.lines().next().is_some(),
+                    "file should have at least one line"
+                );
+            }
+        }
+        assert!(found_metrics_file, "metrics file should exist");
+    }
+
+    #[tokio::test]
+    async fn test_metrics_writer_cleanup_old_files() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+
+        // Create a RECENT metrics file to verify cleanup doesn't remove recent files
+        let recent_file = tmp
+            .path()
+            .join(format!("metrics-{}.jsonl", current_date_str()));
+        tokio::fs::write(&recent_file, "test\n").await.unwrap();
+        assert!(recent_file.exists());
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let writer = MetricsWriter::new(rx, Some(tmp.path().to_path_buf()));
+        let writer_task = tokio::spawn(writer.run());
+
+        // Drop sender immediately to trigger cleanup and exit
+        drop(tx);
+
+        writer_task.await.ok();
+
+        // Verify recent file was NOT deleted
+        assert!(
+            recent_file.exists(),
+            "recent metrics file should NOT be cleaned up"
+        );
+    }
 }

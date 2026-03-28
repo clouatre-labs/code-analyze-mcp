@@ -141,3 +141,56 @@ impl tracing::field::Visit for MessageVisitor<'_> {
         self.0.insert(field.name().to_string(), Value::Bool(value));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_logging_layer_level_filter() {
+        // Create a level filter Arc set to INFO
+        let filter = Arc::new(Mutex::new(LevelFilter::INFO));
+
+        // Create an unbounded channel for events
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel::<LogEvent>();
+
+        // Construct the logging layer
+        let layer = McpLoggingLayer::new(tx, filter.clone());
+
+        // Verify the layer's filter is INFO
+        let stored_filter = *layer.log_level_filter.lock().unwrap();
+        assert_eq!(stored_filter, LevelFilter::INFO);
+    }
+
+    #[test]
+    fn test_logging_layer_runtime_level_update() {
+        // Create a level filter Arc set to WARN
+        let filter = Arc::new(Mutex::new(LevelFilter::WARN));
+
+        // Create an unbounded channel for events
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel::<LogEvent>();
+
+        // Construct the logging layer
+        let layer = McpLoggingLayer::new(tx, filter.clone());
+
+        // Verify initial filter is WARN
+        let initial_filter = *layer.log_level_filter.lock().unwrap();
+        assert_eq!(initial_filter, LevelFilter::WARN);
+
+        // Update the shared Arc<Mutex<LevelFilter>> to TRACE
+        *filter.lock().unwrap() = LevelFilter::TRACE;
+
+        // Verify the layer's filter now reads TRACE (shared mutation)
+        let updated_filter = *layer.log_level_filter.lock().unwrap();
+        assert_eq!(updated_filter, LevelFilter::TRACE);
+    }
+
+    #[test]
+    fn test_level_to_mcp() {
+        assert_eq!(level_to_mcp(&Level::TRACE), LoggingLevel::Debug);
+        assert_eq!(level_to_mcp(&Level::DEBUG), LoggingLevel::Debug);
+        assert_eq!(level_to_mcp(&Level::INFO), LoggingLevel::Info);
+        assert_eq!(level_to_mcp(&Level::WARN), LoggingLevel::Warning);
+        assert_eq!(level_to_mcp(&Level::ERROR), LoggingLevel::Error);
+    }
+}
