@@ -20,7 +20,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-code-analyze-core = { path = "../code-analyze-core", features = ["schemars", "lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-fortran"] }
+code-analyze-core = { path = "../code-analyze-core", version = "0.2", features = ["schemars", "lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-fortran"] }
 rmcp = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
