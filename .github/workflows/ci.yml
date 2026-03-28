@@ -132,7 +132,7 @@ jobs:
       - name: Coverage
         run: |
           cargo llvm-cov --all-features --workspace \
-            --exclude-from-report code-analyze-mcp \
+            --ignore-filename-regex 'code-analyze-mcp/src' \
             --lib \
             --test acceptance_tests \
             --test annotations \
