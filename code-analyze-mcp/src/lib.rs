@@ -14,21 +14,10 @@
 //!
 //! Languages supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran.
 
-pub mod analyze;
-pub mod cache;
-pub mod completion;
-pub mod formatter;
-pub mod graph;
-pub mod lang;
-pub mod languages;
 pub mod logging;
 pub mod metrics;
-pub mod pagination;
-pub mod parser;
-pub(crate) mod schema_helpers;
-pub mod test_detection;
-pub mod traversal;
-pub mod types;
+
+use code_analyze_core::{analyze, cache, completion, graph, traversal, types};
 
 pub(crate) const EXCLUDED_DIRS: &[&str] = &[
     "node_modules",
@@ -41,15 +30,20 @@ pub(crate) const EXCLUDED_DIRS: &[&str] = &[
     ".venv",
 ];
 
-use cache::AnalysisCache;
-use formatter::{
+use code_analyze_core::cache::AnalysisCache;
+use code_analyze_core::formatter::{
     format_file_details_paginated, format_file_details_summary, format_focused_paginated,
     format_module_info, format_structure_paginated, format_summary,
 };
-use logging::LogEvent;
-use pagination::{
+use code_analyze_core::pagination::{
     CursorData, DEFAULT_PAGE_SIZE, PaginationMode, decode_cursor, encode_cursor, paginate_slice,
 };
+use code_analyze_core::traversal::{WalkEntry, walk_directory};
+use code_analyze_core::types::{
+    AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
+    AnalyzeSymbolParams, SymbolMatchMode,
+};
+use logging::LogEvent;
 use rmcp::handler::server::tool::{ToolRouter, schema_for_type};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -66,11 +60,6 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
 use tracing_subscriber::filter::LevelFilter;
-use traversal::{WalkEntry, walk_directory};
-use types::{
-    AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
-    AnalyzeSymbolParams, SymbolMatchMode,
-};
 
 static GLOBAL_SESSION_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -465,7 +454,7 @@ impl CodeAnalyzer {
         let use_summary = analysis_params.use_summary;
         let impl_only = analysis_params.impl_only;
         let handle = tokio::task::spawn_blocking(move || {
-            let params = analyze::AnalyzeSymbolParams {
+            let params = analyze::FocusedAnalysisConfig {
                 focus: symbol_owned,
                 match_mode: match_mode_owned,
                 follow_depth,
@@ -1559,8 +1548,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_overview_mode_verbose_no_summary_block() {
-        use crate::pagination::{PaginationMode, paginate_slice};
-        use crate::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+        use code_analyze_core::pagination::{PaginationMode, paginate_slice};
+        use code_analyze_core::types::{
+            AnalyzeDirectoryParams, OutputControlParams, PaginationParams,
+        };
         use tempfile::TempDir;
 
         let tmp = TempDir::new().unwrap();

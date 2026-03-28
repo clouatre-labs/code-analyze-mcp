@@ -197,7 +197,7 @@ fn strip_scope_prefix(name: &str) -> &str {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct InternalCallChain {
+pub struct InternalCallChain {
     pub chain: Vec<(String, PathBuf, usize)>,
 }
 

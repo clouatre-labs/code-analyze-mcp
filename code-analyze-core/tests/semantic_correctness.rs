@@ -1,4 +1,4 @@
-use code_analyze_mcp::analyze;
+use code_analyze_core::analyze;
 use tempfile::TempDir;
 
 #[test]

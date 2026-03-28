@@ -160,3 +160,27 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
         _ => None,
     }
 }
+
+/// Get the tree-sitter Language object for a given language name.
+///
+/// Returns `None` if the language is not supported or not compiled in.
+#[must_use]
+pub fn get_ts_language(lang_name: &str) -> Option<Language> {
+    match lang_name {
+        #[cfg(feature = "lang-rust")]
+        "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
+        #[cfg(feature = "lang-python")]
+        "python" => Some(tree_sitter_python::LANGUAGE.into()),
+        #[cfg(feature = "lang-typescript")]
+        "typescript" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
+        #[cfg(feature = "lang-tsx")]
+        "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
+        #[cfg(feature = "lang-go")]
+        "go" => Some(tree_sitter_go::LANGUAGE.into()),
+        #[cfg(feature = "lang-java")]
+        "java" => Some(tree_sitter_java::LANGUAGE.into()),
+        #[cfg(feature = "lang-fortran")]
+        "fortran" => Some(tree_sitter_fortran::LANGUAGE.into()),
+        _ => None,
+    }
+}

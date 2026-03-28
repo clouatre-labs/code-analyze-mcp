@@ -1281,7 +1281,7 @@ pub fn format_file_details_paginated(
 #[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::similar_names)] // domain-appropriate pairs (callers_count/callees_count); renaming harms clarity
-pub(crate) fn format_focused_paginated(
+pub fn format_focused_paginated(
     paginated_chains: &[InternalCallChain],
     total: usize,
     mode: PaginationMode,
