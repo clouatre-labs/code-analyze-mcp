@@ -1,16 +1,17 @@
-<div align="center">
+<p align="center">
 
-# code-analyze-mcp
+<h1 align="center">code-analyze-mcp</h1>
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org)
-[![crates.io](https://img.shields.io/crates/v/code-analyze-mcp.svg)](https://crates.io/crates/code-analyze-mcp)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12275/badge)](https://www.bestpractices.dev/projects/12275)
-[![OpenSSF Silver](https://www.bestpractices.dev/projects/12275/badge?level=silver)](https://www.bestpractices.dev/projects/12275/silver)
+<p align="center">
+  <a href="https://crates.io/crates/code-analyze-mcp"><img alt="crates.io" src="https://img.shields.io/crates/v/code-analyze-mcp.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20"></a>
+  <a href="https://api.reuse.software/info/github.com/clouatre-labs/code-analyze-mcp"><img alt="REUSE" src="https://api.reuse.software/badge/github.com/clouatre-labs/code-analyze-mcp" height="20"></a>
+  <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://slsa.dev/images/gh-badge-level3.svg" height="20"></a>
+  <a href="https://www.bestpractices.dev/projects/12275"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/12275/badge" height="20"></a>
+  <a href="https://www.bestpractices.dev/projects/12275/silver"><img alt="OpenSSF Silver" src="https://www.bestpractices.dev/projects/12275/badge?level=silver" height="20"></a>
+</p>
 
-Standalone MCP server for code structure analysis using tree-sitter.
+<p align="center">Standalone MCP server for code structure analysis using tree-sitter.</p>
 
-</div>
 <!-- mcp-name: io.github.clouatre-labs/code-analyze-mcp -->
 
 > [!NOTE]
