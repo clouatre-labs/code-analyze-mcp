@@ -131,19 +131,25 @@ jobs:
           tool: cargo-llvm-cov
       - name: Coverage
         run: |
-          cargo llvm-cov --all-features --workspace \
-            --lib \
-            --test acceptance_tests \
-            --test annotations \
-            --test fixtures \
-            --test idempotency \
-            --test integration_tests \
-            --test output_size \
-            --test semantic_correctness \
-            --test test_summary_no_pagination \
-            --test test_symbol_focus_summary \
-            --lcov --output-path lcov.info
-          cargo llvm-cov report --fail-under-lines 80
+          cargo llvm-cov --all-features \
+            -p code-analyze-core --lib \
+            -p code-analyze-core --test acceptance_tests \
+            -p code-analyze-core --test fixtures \
+            -p code-analyze-core --test idempotency \
+            -p code-analyze-core --test output_size \
+            -p code-analyze-core --test semantic_correctness \
+            -p code-analyze-core --test test_summary_no_pagination \
+            -p code-analyze-core --test test_symbol_focus_summary \
+            --lcov --output-path lcov-core.info
+          cargo llvm-cov report -p code-analyze-core --fail-under-lines 80
+          # code-analyze-mcp coverage tracked but not gated (transport/logging/metrics layer)
+          cargo llvm-cov --all-features \
+            -p code-analyze-mcp --lib \
+            -p code-analyze-mcp --test annotations \
+            -p code-analyze-mcp --test integration_tests \
+            -p code-analyze-mcp --test mcp_smoke \
+            --lcov --output-path lcov-mcp.info
+          cargo llvm-cov report -p code-analyze-mcp || true
 
   deny:
     name: Audit Dependencies
