@@ -233,9 +233,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [lint]
     if: github.event_name == 'pull_request'
-    # continue-on-error: remove after code-analyze-core 0.2.0 is published to crates.io;
-    # cargo-semver-checks requires a published baseline and cannot run pre-publication.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -243,7 +240,6 @@ jobs:
       - uses: obi1kenobi/cargo-semver-checks-action@5b298c9520f7096a4683c0bd981a7ac5a7e249ae # v2.8
         with:
           package: code-analyze-core
-          baseline-rev: 52302cb7ac5417ab3b59bf4b5b394c5c16e9a4aa
 
   ci-result:
     name: CI Result
