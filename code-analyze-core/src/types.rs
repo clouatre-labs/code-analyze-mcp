@@ -460,8 +460,9 @@ pub struct ImportInfo {
     pub line: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
+#[non_exhaustive]
 pub struct SemanticAnalysis {
     pub functions: Vec<FunctionInfo>,
     pub classes: Vec<ClassInfo>,
@@ -480,7 +481,30 @@ pub struct SemanticAnalysis {
     pub impl_traits: Vec<ImplTraitInfo>,
 }
 
-/// Minimal function info for `analyze_module`: name and line only.
+impl SemanticAnalysis {
+    /// Create a new `SemanticAnalysis` with all fields specified.
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        functions: Vec<crate::types::FunctionInfo>,
+        classes: Vec<crate::types::ClassInfo>,
+        imports: Vec<crate::types::ImportInfo>,
+        references: Vec<crate::types::ReferenceInfo>,
+        call_frequency: HashMap<String, usize>,
+        calls: Vec<crate::types::CallInfo>,
+        impl_traits: Vec<ImplTraitInfo>,
+    ) -> Self {
+        Self {
+            functions,
+            classes,
+            imports,
+            references,
+            call_frequency,
+            calls,
+            impl_traits,
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ModuleFunctionInfo {

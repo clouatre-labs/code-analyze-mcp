@@ -112,3 +112,13 @@ Adding a language requires: a tree-sitter grammar crate, a language module with 
 BFS from the target symbol outward, tracking callers and callees at each depth level. Visited symbols are memoized to avoid cycles. Call frequency is counted across the walk; symbols exceeding the threshold are annotated in output. Sentinel values (`<module>`, `<reference>`) represent call sites that have no enclosing function or are type-level references rather than call expressions.
 
 Symbol resolution uses SymbolMatchMode to locate the target symbol: Exact (case-sensitive, default), Insensitive (case-insensitive exact), Prefix (case-insensitive prefix match), and Contains (case-insensitive substring match). When multiple candidates match, resolve_symbol() returns an error listing candidates; clients must refine the query or use a stricter match_mode.
+
+## AnalysisConfig
+
+`AnalysisConfig` provides resource limits for library consumers (exported from `code_analyze_core`):
+
+- `max_file_bytes`: Skip files exceeding this size in bytes during analysis. `None` = no limit.
+- `parse_timeout_micros`: Reserved for future parse timeout enforcement. `None` = no timeout (no-op in current version).
+- `cache_capacity`: Override the default LRU cache capacity. `None` = use default.
+
+Use `AnalysisConfig::default()` for standard behavior with no limits applied.

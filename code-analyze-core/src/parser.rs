@@ -21,6 +21,7 @@ use tracing::instrument;
 use tree_sitter::{Node, Parser, Query, QueryCursor, StreamingIterator};
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ParserError {
     #[error("Unsupported language: {0}")]
     UnsupportedLanguage(String),

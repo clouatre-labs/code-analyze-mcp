@@ -1015,12 +1015,12 @@ impl CodeAnalyzer {
         }
 
         // Build the response output, sharing SemanticAnalysis from the Arc to avoid cloning it.
-        let response_output = analyze::FileAnalysisOutput {
+        let response_output = analyze::FileAnalysisOutput::new(
             formatted,
-            semantic: arc_output.semantic.clone(),
+            arc_output.semantic.clone(),
             line_count,
             next_cursor,
-        };
+        );
 
         let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
             .with_meta(Some(no_cache_meta()));

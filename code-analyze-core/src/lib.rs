@@ -27,6 +27,7 @@
 pub mod analyze;
 pub mod cache;
 pub mod completion;
+mod config;
 pub mod formatter;
 pub mod graph;
 pub mod lang;
@@ -57,6 +58,7 @@ pub use analyze::{
     analyze_directory, analyze_directory_with_progress, analyze_file, analyze_focused,
     analyze_focused_with_progress, analyze_focused_with_progress_with_entries, analyze_module_file,
 };
+pub use config::AnalysisConfig;
 pub use lang::{language_for_extension, supported_languages};
 pub use parser::ParserError;
 pub use types::*;
