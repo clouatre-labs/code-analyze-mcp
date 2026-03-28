@@ -9,7 +9,6 @@ Core library for code structure analysis using tree-sitter.
 [![MCP server](https://img.shields.io/badge/MCP-code--analyze--mcp-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/code-analyze-mcp)
 [![REUSE](https://api.reuse.software/badge/github.com/clouatre-labs/code-analyze-mcp)](https://api.reuse.software/info/github.com/clouatre-labs/code-analyze-mcp)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12275/badge)](https://www.bestpractices.dev/projects/12275)
-[![OpenSSF Silver](https://www.bestpractices.dev/projects/12275/badge?level=silver)](https://www.bestpractices.dev/projects/12275/silver)
 
 ## Features
 
