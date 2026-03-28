@@ -8,6 +8,7 @@ license = { workspace = true }
 repository = { workspace = true }
 homepage = { workspace = true }
 description = "MCP server for multi-language code structure analysis"
+readme = "../../README.md"
 publish = true
 
 [[bin]]
