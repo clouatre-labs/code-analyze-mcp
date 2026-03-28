@@ -2756,32 +2756,24 @@ pub fn world() {}
     // Since we don't have direct call_tool access in tests, verify the underlying function
     use code_analyze_core::formatter::format_file_details_summary;
     use code_analyze_core::types::SemanticAnalysis;
-    use std::collections::HashMap;
 
-    let semantic = SemanticAnalysis {
-        functions: vec![
-            code_analyze_core::types::FunctionInfo {
-                name: "hello".to_string(),
-                line: 2,
-                end_line: 2,
-                parameters: vec![],
-                return_type: None,
-            },
-            code_analyze_core::types::FunctionInfo {
-                name: "world".to_string(),
-                line: 4,
-                end_line: 4,
-                parameters: vec![],
-                return_type: None,
-            },
-        ],
-        classes: vec![],
-        imports: vec![],
-        references: vec![],
-        call_frequency: HashMap::new(),
-        calls: vec![],
-        impl_traits: vec![],
-    };
+    let mut semantic = SemanticAnalysis::default();
+    semantic.functions = vec![
+        code_analyze_core::types::FunctionInfo {
+            name: "hello".to_string(),
+            line: 2,
+            end_line: 2,
+            parameters: vec![],
+            return_type: None,
+        },
+        code_analyze_core::types::FunctionInfo {
+            name: "world".to_string(),
+            line: 4,
+            end_line: 4,
+            parameters: vec![],
+            return_type: None,
+        },
+    ];
 
     let summary = format_file_details_summary(&semantic, "src/lib.rs", 5);
 
@@ -2800,7 +2792,6 @@ fn test_file_details_force_bypasses_summary() {
     // Arrange: Create semantic data with many functions that would normally trigger summary
     use code_analyze_core::formatter::format_file_details_summary;
     use code_analyze_core::types::{FunctionInfo, SemanticAnalysis};
-    use std::collections::HashMap;
 
     let mut functions = Vec::new();
     for i in 0..50 {
@@ -2813,15 +2804,8 @@ fn test_file_details_force_bypasses_summary() {
         });
     }
 
-    let semantic = SemanticAnalysis {
-        functions,
-        classes: vec![],
-        imports: vec![],
-        references: vec![],
-        call_frequency: HashMap::new(),
-        calls: vec![],
-        impl_traits: vec![],
-    };
+    let mut semantic = SemanticAnalysis::default();
+    semantic.functions = functions;
 
     let summary = format_file_details_summary(&semantic, "src/lib.rs", 5000);
 
@@ -2844,7 +2828,6 @@ fn test_format_file_details_summary_many_classes() {
     // Arrange: 15 classes to trigger multiline "... and N more" path
     use code_analyze_core::formatter::format_file_details_summary;
     use code_analyze_core::types::{ClassInfo, SemanticAnalysis};
-    use std::collections::HashMap;
 
     let classes: Vec<ClassInfo> = (0..15)
         .map(|i| ClassInfo {
@@ -2857,15 +2840,8 @@ fn test_format_file_details_summary_many_classes() {
         })
         .collect();
 
-    let semantic = SemanticAnalysis {
-        functions: vec![],
-        classes,
-        imports: vec![],
-        references: vec![],
-        call_frequency: HashMap::new(),
-        calls: vec![],
-        impl_traits: vec![],
-    };
+    let mut semantic = SemanticAnalysis::default();
+    semantic.classes = classes;
 
     // Act
     let summary = format_file_details_summary(&semantic, "src/lib.rs", 150);
@@ -2889,7 +2865,6 @@ fn test_file_details_pagination_first_page() {
     use code_analyze_core::formatter::format_file_details_paginated;
     use code_analyze_core::pagination::{PaginationMode, decode_cursor, paginate_slice};
     use code_analyze_core::types::{FunctionInfo, SemanticAnalysis};
-    use std::collections::HashMap;
 
     // Arrange: 25 functions, page_size=10
     let functions: Vec<FunctionInfo> = (0..25)
@@ -2902,15 +2877,8 @@ fn test_file_details_pagination_first_page() {
         })
         .collect();
 
-    let semantic = SemanticAnalysis {
-        functions: functions.clone(),
-        classes: vec![],
-        imports: vec![],
-        references: vec![],
-        call_frequency: HashMap::new(),
-        calls: vec![],
-        impl_traits: vec![],
-    };
+    let mut semantic = SemanticAnalysis::default();
+    semantic.functions = functions.clone();
 
     // Act: paginate first page
     let paginated =
@@ -2953,7 +2921,6 @@ fn test_file_details_pagination_last_page() {
     use code_analyze_core::formatter::format_file_details_paginated;
     use code_analyze_core::pagination::{PaginationMode, paginate_slice};
     use code_analyze_core::types::{FunctionInfo, SemanticAnalysis};
-    use std::collections::HashMap;
 
     // Arrange: 25 functions, page 2 starts at offset 10 with page_size 20 -> 15 items remaining
     let functions: Vec<FunctionInfo> = (0..25)
@@ -2966,15 +2933,8 @@ fn test_file_details_pagination_last_page() {
         })
         .collect();
 
-    let semantic = SemanticAnalysis {
-        functions: functions.clone(),
-        classes: vec![],
-        imports: vec![],
-        references: vec![],
-        call_frequency: HashMap::new(),
-        calls: vec![],
-        impl_traits: vec![],
-    };
+    let mut semantic = SemanticAnalysis::default();
+    semantic.functions = functions.clone();
 
     // Act: paginate last page (offset=10, page_size=20 -> items 10..25)
     let paginated =
@@ -3058,7 +3018,6 @@ fn test_file_details_invalid_cursor() {
 fn test_format_file_details_paginated_unit() {
     use code_analyze_core::formatter::format_file_details_paginated;
     use code_analyze_core::types::{ClassInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
-    use std::collections::HashMap;
 
     // Arrange: simulate page 2 of 3 (functions 11-20 of 30)
     let all_functions: Vec<FunctionInfo> = (0..30)
@@ -3073,26 +3032,21 @@ fn test_format_file_details_paginated_unit() {
 
     let page_functions = all_functions[10..20].to_vec();
 
-    let semantic = SemanticAnalysis {
-        functions: all_functions,
-        classes: vec![ClassInfo {
-            name: "MyClass".to_string(),
-            line: 100,
-            end_line: 150,
-            methods: vec![],
-            fields: vec![],
-            inherits: vec![],
-        }],
-        imports: vec![ImportInfo {
-            module: "std".to_string(),
-            items: vec![],
-            line: 1,
-        }],
-        references: vec![],
-        call_frequency: HashMap::new(),
-        calls: vec![],
-        impl_traits: vec![],
-    };
+    let mut semantic = SemanticAnalysis::default();
+    semantic.functions = all_functions;
+    semantic.classes = vec![ClassInfo {
+        name: "MyClass".to_string(),
+        line: 100,
+        end_line: 150,
+        methods: vec![],
+        fields: vec![],
+        inherits: vec![],
+    }];
+    semantic.imports = vec![ImportInfo {
+        module: "std".to_string(),
+        items: vec![],
+        line: 1,
+    }];
 
     // Act: format page 2 (offset=10)
     let formatted = format_file_details_paginated(

@@ -21,6 +21,7 @@ pub struct WalkEntry {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TraversalError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -72,7 +73,11 @@ pub fn walk_directory(
                     is_symlink,
                     symlink_target,
                 };
-                entries.lock().unwrap().push(walk_entry);
+                let Ok(mut guard) = entries.lock() else {
+                    tracing::debug!("mutex poisoned in parallel walker, skipping entry");
+                    return ignore::WalkState::Skip;
+                };
+                guard.push(walk_entry);
                 ignore::WalkState::Continue
             }
             Err(e) => {

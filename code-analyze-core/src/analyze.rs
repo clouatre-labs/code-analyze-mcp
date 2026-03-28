@@ -27,6 +27,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum AnalyzeError {
     #[error("Traversal error: {0}")]
     Traversal(#[from] crate::traversal::TraversalError),
@@ -43,6 +44,7 @@ pub enum AnalyzeError {
 /// Result of directory analysis containing both formatted output and file data.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
+#[non_exhaustive]
 pub struct AnalysisOutput {
     #[cfg_attr(
         feature = "schemars",
@@ -75,6 +77,7 @@ pub struct AnalysisOutput {
 /// Result of file-level semantic analysis.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
+#[non_exhaustive]
 pub struct FileAnalysisOutput {
     #[cfg_attr(
         feature = "schemars",
@@ -105,7 +108,23 @@ pub struct FileAnalysisOutput {
     pub next_cursor: Option<String>,
 }
 
-/// Analyze a directory structure with progress tracking.
+impl FileAnalysisOutput {
+    /// Create a new `FileAnalysisOutput`.
+    #[must_use]
+    pub fn new(
+        formatted: String,
+        semantic: SemanticAnalysis,
+        line_count: usize,
+        next_cursor: Option<String>,
+    ) -> Self {
+        Self {
+            formatted,
+            semantic,
+            line_count,
+            next_cursor,
+        }
+    }
+}
 #[instrument(skip_all, fields(path = %root.display()))]
 // public API; callers expect owned semantics
 #[allow(clippy::needless_pass_by_value)]
@@ -272,17 +291,15 @@ pub fn analyze_file(
 
     tracing::debug!(path = %path, language = %ext, functions = semantic.functions.len(), classes = semantic.classes.len(), imports = semantic.imports.len(), duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX), "file analysis complete");
 
-    Ok(FileAnalysisOutput {
-        formatted,
-        semantic,
-        line_count,
-        next_cursor: None,
-    })
+    Ok(FileAnalysisOutput::new(
+        formatted, semantic, line_count, None,
+    ))
 }
 
 /// Result of focused symbol analysis.
 #[derive(Debug, Serialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
+#[non_exhaustive]
 pub struct FocusedAnalysisOutput {
     #[cfg_attr(
         feature = "schemars",

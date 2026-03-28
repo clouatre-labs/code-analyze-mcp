@@ -27,6 +27,7 @@ fn format_candidates(candidates: &[String]) -> String {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum GraphError {
     #[error("Symbol not found: '{symbol}'. {hint}")]
     SymbolNotFound { symbol: String, hint: String },
@@ -203,6 +204,7 @@ pub struct InternalCallChain {
 
 /// Call graph storing callers, callees, and function definitions.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct CallGraph {
     /// Callers map: `function_name` -> vec of `CallEdge` (one per call site).
     pub callers: HashMap<String, Vec<CallEdge>>,
