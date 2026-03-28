@@ -8,6 +8,7 @@ license = { workspace = true }
 repository = { workspace = true }
 homepage = { workspace = true }
 description = "Multi-language AST analysis library using tree-sitter"
+readme = "README.md"
 publish = true
 
 [package.metadata.docs.rs]
