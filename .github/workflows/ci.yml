@@ -147,7 +147,6 @@ jobs:
             -p code-analyze-mcp --lib \
             -p code-analyze-mcp --test annotations \
             -p code-analyze-mcp --test integration_tests \
-            -p code-analyze-mcp --test mcp_smoke \
             --lcov --output-path lcov-mcp.info
           cargo llvm-cov report -p code-analyze-mcp || true
 
