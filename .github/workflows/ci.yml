@@ -129,22 +129,26 @@ jobs:
         uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
         with:
           tool: cargo-llvm-cov
-      - name: Coverage
+      - name: Coverage (core)
         run: |
-          cargo llvm-cov --all-features --workspace \
-            --ignore-filename-regex 'code-analyze-mcp/src' \
+          cargo llvm-cov --all-features --package code-analyze-core \
             --lib \
             --test acceptance_tests \
-            --test annotations \
             --test fixtures \
             --test idempotency \
-            --test integration_tests \
             --test output_size \
             --test semantic_correctness \
             --test test_summary_no_pagination \
             --test test_symbol_focus_summary \
             --lcov --output-path lcov.info
           cargo llvm-cov report --fail-under-lines 80
+      - name: Coverage (mcp)
+        run: |
+          cargo llvm-cov --all-features --package code-analyze-mcp \
+            --lib \
+            --test annotations \
+            --test integration_tests \
+            --test mcp_smoke
 
   deny:
     name: Audit Dependencies
