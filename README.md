@@ -4,7 +4,6 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org)
-[![MCP](https://img.shields.io/badge/protocol-MCP-purple.svg)](https://modelcontextprotocol.io)
 [![crates.io](https://img.shields.io/crates/v/code-analyze-mcp.svg)](https://crates.io/crates/code-analyze-mcp)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12275/badge)](https://www.bestpractices.dev/projects/12275)
 [![OpenSSF Silver](https://www.bestpractices.dev/projects/12275/badge?level=silver)](https://www.bestpractices.dev/projects/12275/silver)
