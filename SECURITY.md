@@ -16,3 +16,30 @@ The `main` branch is protected by GitHub rulesets with the following rules:
 - **Signed Commits**: All commits must be signed (GPG or S/MIME)
 - **No Force Push**: History cannot be rewritten on main
 - **No Deletion**: The main branch cannot be deleted
+
+## Reporter credit
+
+Reporters who disclose vulnerabilities responsibly will be credited in the release notes for the fixing release, unless they request anonymity.
+
+## Response SLA
+
+| Severity | Acknowledgement | Remediation target |
+|---|---|---|
+| Critical / High | Within 72 hours | Within 14 days |
+| Medium / Low | Within 72 hours | Next regular release cycle |
+
+## Verifying release signatures
+
+Release artifacts are signed with [cosign](https://docs.sigstore.dev/cosign/overview/) using keyless signing. A `.bundle` file is published alongside each release tarball on the [releases page](https://github.com/clouatre-labs/code-analyze-mcp/releases).
+
+To verify a release artifact:
+
+```bash
+cosign verify-blob \
+  --bundle code-analyze-mcp-<version>-<target>.tar.gz.bundle \
+  --certificate-identity-regexp 'https://github.com/clouatre-labs/code-analyze-mcp/.github/workflows/release.yml' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  code-analyze-mcp-<version>-<target>.tar.gz
+```
+
+Replace `<version>` with the release version and `<target>` with the target triple (e.g., `x86_64-unknown-linux-gnu`).

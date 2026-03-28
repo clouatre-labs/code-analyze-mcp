@@ -244,3 +244,21 @@ All SUGGESTED criteria are now met. No recommended actions remain.
 
 The project is registered at https://www.bestpractices.dev/projects/12275.
 The badge is displayed in README.md and SECURITY.md.
+
+---
+
+## Silver Level Assessment
+
+The project meets the following OpenSSF Best Practices Silver criteria:
+
+| Criterion ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| governance | Project governance documented | Met | [GOVERNANCE.md](../GOVERNANCE.md) |
+| roles_responsibilities | Roles and responsibilities documented | Met | [GOVERNANCE.md](../GOVERNANCE.md) |
+| access_continuity | Access continuity plan documented | Met | [GOVERNANCE.md](../GOVERNANCE.md) |
+| code_of_conduct | Code of conduct exists | Met | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) |
+| assurance_case | Security assurance case documented | Met | [docs/ASSURANCE.md](ASSURANCE.md) |
+| signed_releases | Release verification instructions published | Met | [SECURITY.md](../SECURITY.md#verifying-release-signatures) |
+| vulnerability_report_credit | Reporter credit policy documented | Met | [SECURITY.md](../SECURITY.md#reporter-credit) |
+| vulnerability_response_process | Response SLA documented | Met | [SECURITY.md](../SECURITY.md#response-sla) |
+| test_statement_coverage80 | >= 80% statement coverage gate in CI | Met | [ci.yml](../.github/workflows/ci.yml) |
