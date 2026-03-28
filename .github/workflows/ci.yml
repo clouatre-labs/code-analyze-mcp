@@ -171,7 +171,18 @@ jobs:
           tool: cargo-llvm-cov
       - name: Coverage
         run: |
-          cargo llvm-cov --all-features --workspace --exclude-from-test mcp_smoke --lcov --output-path lcov.info
+          cargo llvm-cov --all-features --workspace \
+            --lib \
+            --test acceptance_tests \
+            --test annotations \
+            --test fixtures \
+            --test idempotency \
+            --test integration_tests \
+            --test output_size \
+            --test semantic_correctness \
+            --test test_summary_no_pagination \
+            --test test_symbol_focus_summary \
+            --lcov --output-path lcov.info
           cargo llvm-cov report --fail-under-lines 80
 
   deny:
