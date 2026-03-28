@@ -1625,13 +1625,14 @@ mod tests {
     fn test_complete_path_completions_returns_suggestions() {
         // Test the underlying completion function (same code path as complete()) directly
         // to avoid needing a constructed RequestContext<RoleServer>.
-        let worktree = std::path::Path::new(
-            "/Users/hugues.clouatre/git/clouatre-labs/code-analyze-mcp/.worktrees/20260328_164539",
-        );
-        let suggestions = completion::path_completions(worktree, "code-");
+        // CARGO_MANIFEST_DIR is <workspace>/code-analyze-mcp; parent is the workspace root,
+        // which contains code-analyze-core/ and code-analyze-mcp/ matching the "code-" prefix.
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir.parent().expect("manifest dir has parent");
+        let suggestions = completion::path_completions(workspace_root, "code-");
         assert!(
             !suggestions.is_empty(),
-            "expected completions for prefix 'code-' in worktree"
+            "expected completions for prefix 'code-' in workspace root"
         );
     }
 
