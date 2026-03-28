@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -45,6 +46,8 @@ jobs:
               - 'clippy.toml'
               - '.github/workflows/**'
               - 'tests/**'
+            workflows:
+              - '.github/workflows/**'
 
   commitlint:
     name: Lint Commits
@@ -207,7 +210,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: changes
     timeout-minutes: 10
-    if: needs.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+    if: needs.changes.outputs.workflows == 'true' || github.event_name != 'pull_request'
     permissions:
       contents: read
     steps:
