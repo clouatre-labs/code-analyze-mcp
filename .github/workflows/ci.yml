@@ -19,6 +19,7 @@ on:
       - '.github/workflows/**'
       - 'tests/**'
       - 'server.json'
+      - '.commitlintrc.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -11,9 +11,7 @@ rules:
   body-leading-blank:
     - 2
     - always
-  footer-leading-blank:
-    - 2
-    - always
+  footer-leading-blank: [0] # wagoid reads stale PR commit messages via GitHub API after force-pushes, causing false positives
   subject-case: [0] # not in the Conventional Commits spec; breaks all bots (dependabot, renovate, etc.)
   body-max-line-length: [0] # cosmetic; dependabot bodies always exceed 100 chars
 
