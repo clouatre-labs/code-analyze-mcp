@@ -7,7 +7,6 @@
   <a href="https://api.reuse.software/info/github.com/clouatre-labs/code-analyze-mcp"><img alt="REUSE" src="https://api.reuse.software/badge/github.com/clouatre-labs/code-analyze-mcp" height="20"></a>
   <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://slsa.dev/images/gh-badge-level3.svg" height="20"></a>
   <a href="https://www.bestpractices.dev/projects/12275"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/12275/badge" height="20"></a>
-  <a href="https://www.bestpractices.dev/projects/12275/silver"><img alt="OpenSSF Silver" src="https://www.bestpractices.dev/projects/12275/badge?level=silver" height="20"></a>
 </p>
 
 <p align="center">Standalone MCP server for code structure analysis using tree-sitter.</p>
