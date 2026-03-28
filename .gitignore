@@ -37,3 +37,6 @@ Thumbs.db
 !AGENTS.md
 __pycache__/
 *.pyc
+
+# Scripts tooling
+scripts/node_modules/
