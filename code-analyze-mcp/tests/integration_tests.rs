@@ -1,8 +1,6 @@
 use code_analyze_mcp::logging::{LogEvent, McpLoggingLayer, level_to_mcp};
 use rmcp::model::{CallToolResult, Content, LoggingLevel, Meta};
 use std::sync::{Arc, Mutex};
-use tokio_util::sync::CancellationToken;
-
 #[test]
 fn test_logging_level_to_mcp_mapping() {
     use tracing::Level;
