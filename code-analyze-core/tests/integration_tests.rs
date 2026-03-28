@@ -1,13 +1,13 @@
 mod fixtures;
 
-use code_analyze_mcp::analyze::{
+use code_analyze_core::analyze::{
     AnalyzeError, analyze_directory, analyze_directory_with_progress, analyze_file,
     analyze_focused, determine_mode,
 };
-use code_analyze_mcp::cache::{AnalysisCache, CacheKey};
-use code_analyze_mcp::completion::{path_completions, symbol_completions};
-use code_analyze_mcp::traversal::walk_directory;
-use code_analyze_mcp::types::AnalysisMode;
+use code_analyze_core::cache::{AnalysisCache, CacheKey};
+use code_analyze_core::completion::{path_completions, symbol_completions};
+use code_analyze_core::traversal::walk_directory;
+use code_analyze_core::types::AnalysisMode;
 use std::fs;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -821,7 +821,7 @@ fn test_directory_cache_hit_on_identical_call() {
 
     // First analysis
     let entries1 = walk_directory(root, None).unwrap();
-    let key1 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+    let key1 = code_analyze_core::cache::DirectoryCacheKey::from_entries(
         &entries1,
         None,
         AnalysisMode::Overview,
@@ -832,7 +832,7 @@ fn test_directory_cache_hit_on_identical_call() {
 
     // Second call with identical parameters should hit cache
     let entries2 = walk_directory(root, None).unwrap();
-    let key2 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+    let key2 = code_analyze_core::cache::DirectoryCacheKey::from_entries(
         &entries2,
         None,
         AnalysisMode::Overview,
@@ -858,7 +858,7 @@ fn test_directory_cache_miss_on_mtime_change() {
 
     // First analysis
     let entries1 = walk_directory(root, None).unwrap();
-    let key1 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+    let key1 = code_analyze_core::cache::DirectoryCacheKey::from_entries(
         &entries1,
         None,
         AnalysisMode::Overview,
@@ -873,7 +873,7 @@ fn test_directory_cache_miss_on_mtime_change() {
 
     // Second call should miss cache due to mtime change
     let entries2 = walk_directory(root, None).unwrap();
-    let key2 = code_analyze_mcp::cache::DirectoryCacheKey::from_entries(
+    let key2 = code_analyze_core::cache::DirectoryCacheKey::from_entries(
         &entries2,
         None,
         AnalysisMode::Overview,
@@ -1206,69 +1206,6 @@ fn test_symbol_completions_truncates_at_100() {
     );
 }
 
-// Logging tests
-#[test]
-fn test_logging_level_to_mcp_mapping() {
-    use code_analyze_mcp::logging::level_to_mcp;
-    use rmcp::model::LoggingLevel;
-    use tracing::Level;
-
-    // Test TRACE and DEBUG map to Debug
-    assert_eq!(level_to_mcp(&Level::TRACE), LoggingLevel::Debug);
-    assert_eq!(level_to_mcp(&Level::DEBUG), LoggingLevel::Debug);
-
-    // Test INFO maps to Info
-    assert_eq!(level_to_mcp(&Level::INFO), LoggingLevel::Info);
-
-    // Test WARN maps to Warning
-    assert_eq!(level_to_mcp(&Level::WARN), LoggingLevel::Warning);
-
-    // Test ERROR maps to Error
-    assert_eq!(level_to_mcp(&Level::ERROR), LoggingLevel::Error);
-}
-
-#[test]
-fn test_logging_level_filter_update() {
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-    use tracing_subscriber::filter::LevelFilter;
-
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        let log_level_filter = Arc::new(Mutex::new(LevelFilter::WARN));
-
-        // Initial level should be WARN
-        {
-            let filter = log_level_filter.lock().await;
-            assert_eq!(*filter, LevelFilter::WARN);
-        }
-
-        // Update to INFO
-        {
-            let mut filter = log_level_filter.lock().await;
-            *filter = LevelFilter::INFO;
-        }
-
-        // Verify update
-        {
-            let filter = log_level_filter.lock().await;
-            assert_eq!(*filter, LevelFilter::INFO);
-        }
-
-        // Update to ERROR
-        {
-            let mut filter = log_level_filter.lock().await;
-            *filter = LevelFilter::ERROR;
-        }
-
-        // Verify final state
-        {
-            let filter = log_level_filter.lock().await;
-            assert_eq!(*filter, LevelFilter::ERROR);
-        }
-    });
-}
-
 // Cancellation tests
 
 #[test]
@@ -1316,94 +1253,6 @@ fn test_cancellation_noop_after_completion() {
     assert_eq!(output.files.len(), 1);
 }
 
-// Logging channel tests
-
-#[tokio::test]
-async fn test_log_event_sent_to_channel() {
-    use code_analyze_mcp::logging::{LogEvent, McpLoggingLayer};
-    use rmcp::model::LoggingLevel;
-    use serde_json::json;
-    use std::sync::Mutex;
-    use tokio::sync::mpsc;
-    use tracing_subscriber::filter::LevelFilter;
-
-    // Arrange: Create unbounded channel
-    let (event_tx, _event_rx) = mpsc::unbounded_channel();
-    let log_level_filter = Arc::new(Mutex::new(LevelFilter::WARN));
-
-    // Create logging layer
-    let _layer = McpLoggingLayer::new(event_tx, log_level_filter);
-
-    // Act: Manually create and send a LogEvent (simulating on_event behavior)
-    let log_event = LogEvent {
-        level: LoggingLevel::Warning,
-        logger: "test_logger".to_string(),
-        data: json!({"message": "test event"}),
-    };
-
-    // Send event via the layer's sender (we'll test the channel directly)
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let _ = tx.send(log_event.clone());
-
-    // Assert: Receive event from channel
-    let received = rx.recv().await;
-    assert!(received.is_some());
-    let event = received.unwrap();
-    assert_eq!(event.level, LoggingLevel::Warning);
-    assert_eq!(event.logger, "test_logger");
-    assert_eq!(event.data, json!({"message": "test event"}));
-}
-
-#[tokio::test]
-async fn test_batch_draining_with_multiple_events() {
-    use code_analyze_mcp::logging::LogEvent;
-    use rmcp::model::LoggingLevel;
-    use serde_json::json;
-    use tokio::sync::mpsc;
-
-    // Arrange: Create unbounded channel and send multiple events
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-
-    // Send 5 events
-    for i in 0..5 {
-        let log_event = LogEvent {
-            level: LoggingLevel::Info,
-            logger: format!("logger_{}", i),
-            data: json!({"index": i}),
-        };
-        let _ = event_tx.send(log_event);
-    }
-
-    // Act: Drain events using recv_many with buffer size 64
-    let mut buffer = Vec::with_capacity(64);
-    event_rx.recv_many(&mut buffer, 64).await;
-
-    // Assert: All 5 events received in batch
-    assert_eq!(buffer.len(), 5);
-    for (i, event) in buffer.iter().enumerate() {
-        assert_eq!(event.logger, format!("logger_{}", i));
-        assert_eq!(event.data, json!({"index": i}));
-    }
-}
-
-#[tokio::test]
-async fn test_channel_closed_exits_consumer() {
-    use code_analyze_mcp::logging::LogEvent;
-    use tokio::sync::mpsc;
-
-    // Arrange: Create channel and drop sender
-    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<LogEvent>();
-    drop(event_tx);
-
-    // Act: Try to receive from closed channel
-    let mut buffer = Vec::with_capacity(64);
-    let received = event_rx.recv_many(&mut buffer, 64).await;
-
-    // Assert: recv_many returns 0 when channel is closed
-    assert_eq!(received, 0);
-    assert!(buffer.is_empty());
-}
-
 #[test]
 fn test_summary_auto_detect_large_directory() {
     let temp_dir = TempDir::new().unwrap();
@@ -1420,7 +1269,7 @@ fn test_summary_auto_detect_large_directory() {
 
     // Generate summary
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));
@@ -1455,7 +1304,7 @@ fn test_summary_explicit_on_small_directory() {
 
     // Generate summary
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert summary contains expected sections
     assert!(summary.contains("SUMMARY:"));
@@ -1486,7 +1335,7 @@ fn test_summary_top_hint_shown() {
 
     let output = analyze_directory(root, None).unwrap();
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
 
     assert!(summary.contains("top:"), "summary should contain top hint");
     assert!(
@@ -1505,7 +1354,7 @@ fn test_summary_top_hint_omitted_for_single_file() {
 
     let output = analyze_directory(root, None).unwrap();
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
 
     assert!(
         !summary.contains("top:"),
@@ -1527,7 +1376,7 @@ fn test_format_summary_sibling_dir_prefix() {
 
     let output = analyze_directory(root, None).unwrap();
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // src/ should show exactly 1 file, not 2
     let src_line = summary
@@ -1978,7 +1827,7 @@ struct Point {
 
 #[test]
 fn test_overview_pagination_multi_page() {
-    use code_analyze_mcp::pagination::{PaginationMode, decode_cursor, paginate_slice};
+    use code_analyze_core::pagination::{PaginationMode, decode_cursor, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
@@ -2011,7 +1860,7 @@ fn test_overview_pagination_multi_page() {
 
 #[test]
 fn test_single_page_no_cursor() {
-    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
+    use code_analyze_core::pagination::{PaginationMode, paginate_slice};
 
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
@@ -2680,7 +2529,7 @@ pub fn prod_caller_b() {
     fs::write(
         root.join("tests/test_module.rs"),
         r#"
-use code_analyze_mcp::*;
+use code_analyze_core::*;
 
 #[test]
 fn test_target() {
@@ -2742,7 +2591,7 @@ pub fn target() {}
     fs::write(
         root.join("tests/test_all.rs"),
         r#"
-use code_analyze_mcp::*;
+use code_analyze_core::*;
 
 #[test]
 fn test_target_a() {
@@ -2905,20 +2754,20 @@ pub fn world() {}
 
     // Act: Analyze with summary=true
     // Since we don't have direct call_tool access in tests, verify the underlying function
-    use code_analyze_mcp::formatter::format_file_details_summary;
-    use code_analyze_mcp::types::SemanticAnalysis;
+    use code_analyze_core::formatter::format_file_details_summary;
+    use code_analyze_core::types::SemanticAnalysis;
     use std::collections::HashMap;
 
     let semantic = SemanticAnalysis {
         functions: vec![
-            code_analyze_mcp::types::FunctionInfo {
+            code_analyze_core::types::FunctionInfo {
                 name: "hello".to_string(),
                 line: 2,
                 end_line: 2,
                 parameters: vec![],
                 return_type: None,
             },
-            code_analyze_mcp::types::FunctionInfo {
+            code_analyze_core::types::FunctionInfo {
                 name: "world".to_string(),
                 line: 4,
                 end_line: 4,
@@ -2949,8 +2798,8 @@ pub fn world() {}
 #[test]
 fn test_file_details_force_bypasses_summary() {
     // Arrange: Create semantic data with many functions that would normally trigger summary
-    use code_analyze_mcp::formatter::format_file_details_summary;
-    use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
+    use code_analyze_core::formatter::format_file_details_summary;
+    use code_analyze_core::types::{FunctionInfo, SemanticAnalysis};
     use std::collections::HashMap;
 
     let mut functions = Vec::new();
@@ -2993,8 +2842,8 @@ fn test_file_details_force_bypasses_summary() {
 #[test]
 fn test_format_file_details_summary_many_classes() {
     // Arrange: 15 classes to trigger multiline "... and N more" path
-    use code_analyze_mcp::formatter::format_file_details_summary;
-    use code_analyze_mcp::types::{ClassInfo, SemanticAnalysis};
+    use code_analyze_core::formatter::format_file_details_summary;
+    use code_analyze_core::types::{ClassInfo, SemanticAnalysis};
     use std::collections::HashMap;
 
     let classes: Vec<ClassInfo> = (0..15)
@@ -3037,9 +2886,9 @@ fn test_format_file_details_summary_many_classes() {
 
 #[test]
 fn test_file_details_pagination_first_page() {
-    use code_analyze_mcp::formatter::format_file_details_paginated;
-    use code_analyze_mcp::pagination::{PaginationMode, decode_cursor, paginate_slice};
-    use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
+    use code_analyze_core::formatter::format_file_details_paginated;
+    use code_analyze_core::pagination::{PaginationMode, decode_cursor, paginate_slice};
+    use code_analyze_core::types::{FunctionInfo, SemanticAnalysis};
     use std::collections::HashMap;
 
     // Arrange: 25 functions, page_size=10
@@ -3101,9 +2950,9 @@ fn test_file_details_pagination_first_page() {
 
 #[test]
 fn test_file_details_pagination_last_page() {
-    use code_analyze_mcp::formatter::format_file_details_paginated;
-    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
-    use code_analyze_mcp::types::{FunctionInfo, SemanticAnalysis};
+    use code_analyze_core::formatter::format_file_details_paginated;
+    use code_analyze_core::pagination::{PaginationMode, paginate_slice};
+    use code_analyze_core::types::{FunctionInfo, SemanticAnalysis};
     use std::collections::HashMap;
 
     // Arrange: 25 functions, page 2 starts at offset 10 with page_size 20 -> 15 items remaining
@@ -3165,8 +3014,8 @@ fn test_file_details_pagination_last_page() {
 
 #[test]
 fn test_file_details_single_page_no_cursor() {
-    use code_analyze_mcp::pagination::{PaginationMode, paginate_slice};
-    use code_analyze_mcp::types::FunctionInfo;
+    use code_analyze_core::pagination::{PaginationMode, paginate_slice};
+    use code_analyze_core::types::FunctionInfo;
 
     // Arrange: 5 functions, page_size=100
     let functions: Vec<FunctionInfo> = (0..5)
@@ -3194,7 +3043,7 @@ fn test_file_details_single_page_no_cursor() {
 
 #[test]
 fn test_file_details_invalid_cursor() {
-    use code_analyze_mcp::pagination::decode_cursor;
+    use code_analyze_core::pagination::decode_cursor;
 
     // Act
     let result = decode_cursor("this-is-not-valid-base64!!!");
@@ -3207,8 +3056,8 @@ fn test_file_details_invalid_cursor() {
 
 #[test]
 fn test_format_file_details_paginated_unit() {
-    use code_analyze_mcp::formatter::format_file_details_paginated;
-    use code_analyze_mcp::types::{ClassInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
+    use code_analyze_core::formatter::format_file_details_paginated;
+    use code_analyze_core::types::{ClassInfo, FunctionInfo, ImportInfo, SemanticAnalysis};
     use std::collections::HashMap;
 
     // Arrange: simulate page 2 of 3 (functions 11-20 of 30)
@@ -3286,38 +3135,8 @@ fn test_format_file_details_paginated_unit() {
 }
 
 #[test]
-fn test_call_tool_result_cache_hint_metadata() {
-    use rmcp::model::{CallToolResult, Content, Meta};
-
-    // Construct Meta with cache_hint
-    let mut meta = serde_json::Map::new();
-    meta.insert(
-        "cache_hint".to_string(),
-        serde_json::Value::String("no-cache".to_string()),
-    );
-
-    // Create CallToolResult with metadata
-    let result =
-        CallToolResult::success(vec![Content::text("test output")]).with_meta(Some(Meta(meta)));
-
-    // Serialize to JSON
-    let json_val = serde_json::to_value(&result).expect("should serialize");
-
-    // Assert _meta.cache_hint == "no-cache"
-    assert_eq!(
-        json_val
-            .get("_meta")
-            .and_then(|m| m.get("cache_hint"))
-            .and_then(|v| v.as_str()),
-        Some("no-cache"),
-        "Expected _meta.cache_hint to be 'no-cache' in serialized JSON: {}",
-        json_val
-    );
-}
-
-#[test]
 fn test_analyze_module_rust_happy_path() {
-    use code_analyze_mcp::analyze::analyze_module_file;
+    use code_analyze_core::analyze::analyze_module_file;
     use std::io::Write;
 
     let rust_code = r#"use std::collections::HashMap;
@@ -3356,7 +3175,7 @@ fn main() {
 
 #[test]
 fn test_analyze_module_empty_file() {
-    use code_analyze_mcp::analyze::analyze_module_file;
+    use code_analyze_core::analyze::analyze_module_file;
     use std::io::Write;
 
     let mut tmp = tempfile::Builder::new()
@@ -3375,7 +3194,7 @@ fn test_analyze_module_empty_file() {
 
 #[test]
 fn test_analyze_module_functions_only() {
-    use code_analyze_mcp::analyze::analyze_module_file;
+    use code_analyze_core::analyze::analyze_module_file;
     use std::io::Write;
 
     let code = b"fn add(a: i32, b: i32) -> i32 { a + b }
@@ -3400,7 +3219,7 @@ fn subtract(a: i32, b: i32) -> i32 { a - b }
 
 #[test]
 fn test_analyze_module_imports_only() {
-    use code_analyze_mcp::analyze::analyze_module_file;
+    use code_analyze_core::analyze::analyze_module_file;
     use std::io::Write;
 
     let code = b"use std::collections::HashMap;
@@ -3424,7 +3243,7 @@ use std::fs::File;
 
 #[test]
 fn test_analyze_module_unsupported_extension() {
-    use code_analyze_mcp::analyze::analyze_module_file;
+    use code_analyze_core::analyze::analyze_module_file;
     use std::io::Write;
 
     let mut tmp = tempfile::Builder::new()
@@ -3438,9 +3257,10 @@ fn test_analyze_module_unsupported_extension() {
     assert!(result.is_err(), "expected error for unsupported extension");
 }
 
+#[cfg(feature = "schemars")]
 #[test]
 fn test_no_uint_format_in_schemas() {
-    use code_analyze_mcp::types::{
+    use code_analyze_core::types::{
         AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeSymbolParams, FileInfo,
     };
 
@@ -3490,7 +3310,7 @@ fn test_summary_true_produces_summary_output_no_next_cursor() {
     }
     let output = analyze_directory(root, None).unwrap();
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
     assert!(
         summary.contains("SUMMARY:"),
         "expected SUMMARY: in output but got:\n{summary}"
@@ -3511,7 +3331,7 @@ fn test_summary_sub_annotation_present_for_nested_dirs() {
     std::fs::write(root.join("core/management/cmd.rs"), "fn f() {}").unwrap();
     let output = analyze_directory(root, None).unwrap();
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
     let core_line = summary
         .lines()
         .find(|l| l.contains("core/"))
@@ -3523,37 +3343,9 @@ fn test_summary_sub_annotation_present_for_nested_dirs() {
 }
 
 #[test]
-fn test_summary_true_with_cursor_triggers_guard() {
-    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
-
-    let cursor_str = encode_cursor(&CursorData {
-        mode: PaginationMode::Default,
-        offset: 10,
-    })
-    .expect("encode should succeed");
-
-    assert!(
-        code_analyze_mcp::summary_cursor_conflict(Some(true), Some(&cursor_str)),
-        "guard must fire when summary=Some(true) and cursor is present"
-    );
-    assert!(
-        !code_analyze_mcp::summary_cursor_conflict(None, Some(&cursor_str)),
-        "guard must NOT fire when summary=None (auto-mode) and cursor is present"
-    );
-    assert!(
-        !code_analyze_mcp::summary_cursor_conflict(Some(false), Some(&cursor_str)),
-        "guard must NOT fire when summary=Some(false) and cursor is present"
-    );
-    assert!(
-        !code_analyze_mcp::summary_cursor_conflict(Some(true), None),
-        "guard must NOT fire when summary=Some(true) but no cursor"
-    );
-}
-
-#[test]
 fn test_overview_force_true_with_cursor_no_guard() {
-    use code_analyze_mcp::pagination::{CursorData, PaginationMode, encode_cursor};
-    use code_analyze_mcp::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+    use code_analyze_core::pagination::{CursorData, PaginationMode, encode_cursor};
+    use code_analyze_core::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
 
     let cursor_data = CursorData {
         mode: PaginationMode::Default,
@@ -3764,7 +3556,7 @@ fn test_analyze_module_dir_guard_rejects_directory() {
     );
     // Also confirm analyze_module_file on a directory produces an error (not a panic),
     // demonstrating the guard in the handler prevents that path.
-    let result = code_analyze_mcp::analyze::analyze_module_file(dir.to_str().unwrap());
+    let result = code_analyze_core::analyze::analyze_module_file(dir.to_str().unwrap());
     assert!(
         result.is_err(),
         "analyze_module_file on a directory should return an error"
@@ -3816,49 +3608,10 @@ fn test_python_aliased_import_from_statement() {
     );
 }
 
-#[tokio::test]
-async fn test_metrics_writer_produces_jsonl_line() {
-    let tmp = tempfile::TempDir::new().unwrap();
-
-    let (metrics_tx, metrics_rx) = tokio::sync::mpsc::unbounded_channel();
-    let writer =
-        code_analyze_mcp::metrics::MetricsWriter::new(metrics_rx, Some(tmp.path().to_path_buf()));
-    let writer_handle = tokio::spawn(writer.run());
-
-    let ev = code_analyze_mcp::metrics::MetricEvent {
-        ts: code_analyze_mcp::metrics::unix_ms(),
-        tool: "analyze_module",
-        duration_ms: 10,
-        output_chars: 42,
-        param_path_depth: 3,
-        max_depth: None,
-        result: "ok",
-        error_type: None,
-        session_id: None,
-        seq: None,
-    };
-    metrics_tx.send(ev).unwrap();
-    drop(metrics_tx);
-    writer_handle.await.unwrap();
-
-    let files: Vec<_> = std::fs::read_dir(tmp.path())
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .collect();
-    assert_eq!(files.len(), 1);
-    let content = std::fs::read_to_string(files[0].path()).unwrap();
-    let lines: Vec<&str> = content.lines().collect();
-    assert_eq!(lines.len(), 1);
-    let v: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-    assert_eq!(v["tool"], "analyze_module");
-    assert_eq!(v["result"], "ok");
-    assert_eq!(v["output_chars"], 42);
-}
-
 #[test]
 fn test_analyze_directory_verbose_no_summary() {
-    use code_analyze_mcp::formatter::format_structure_paginated;
-    use code_analyze_mcp::types::FileInfo;
+    use code_analyze_core::formatter::format_structure_paginated;
+    use code_analyze_core::types::FileInfo;
 
     let files = vec![FileInfo {
         path: "src/main.rs".to_string(),
@@ -3981,10 +3734,10 @@ fn test_format_summary_with_max_depth_annotation() {
     std::fs::write(root.join("subdir/nested/b.rs"), "fn b() {}").unwrap();
 
     // Act: unbounded walk for counts, bounded walk for analysis (mirrors new single-walk approach)
-    let all_entries = code_analyze_mcp::traversal::walk_directory(root, None).unwrap();
-    let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(root, &all_entries);
+    let all_entries = code_analyze_core::traversal::walk_directory(root, None).unwrap();
+    let counts = code_analyze_core::traversal::subtree_counts_from_entries(root, &all_entries);
     let output = analyze_directory(root, Some(1)).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
+    let summary = code_analyze_core::formatter::format_summary(
         &output.entries,
         &output.files,
         Some(1),
@@ -4009,10 +3762,10 @@ fn test_format_summary_suggestion_uses_true_count() {
     }
 
     // Act: unbounded walk for counts, bounded walk for analysis (mirrors new single-walk approach)
-    let all_entries = code_analyze_mcp::traversal::walk_directory(root, None).unwrap();
-    let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(root, &all_entries);
+    let all_entries = code_analyze_core::traversal::walk_directory(root, None).unwrap();
+    let counts = code_analyze_core::traversal::subtree_counts_from_entries(root, &all_entries);
     let output = analyze_directory(root, Some(1)).unwrap();
-    let summary = code_analyze_mcp::formatter::format_summary(
+    let summary = code_analyze_core::formatter::format_summary(
         &output.entries,
         &output.files,
         Some(1),
@@ -4037,7 +3790,7 @@ fn test_format_summary_max_depth_none_unchanged() {
     // Act: pass subtree_counts=None
     let output = analyze_directory(root, None).unwrap();
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, None, None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, None, None);
 
     // Assert: no annotated format
     assert!(
@@ -4057,7 +3810,7 @@ fn test_format_summary_max_depth_zero_unchanged() {
     // Act: max_depth=Some(0) with subtree_counts=None (zero is the unlimited sentinel)
     let output = analyze_directory(root, Some(0)).unwrap();
     let summary =
-        code_analyze_mcp::formatter::format_summary(&output.entries, &output.files, Some(0), None);
+        code_analyze_core::formatter::format_summary(&output.entries, &output.files, Some(0), None);
 
     // Assert: no annotated format
     assert!(
@@ -4176,7 +3929,7 @@ fn test_analyze_symbol_java_callees() {
 
 #[tokio::test]
 async fn test_analyze_symbol_callers_to_callees_cursor_transition() {
-    use code_analyze_mcp::pagination::{CursorData, PaginationMode, decode_cursor, encode_cursor};
+    use code_analyze_core::pagination::{CursorData, PaginationMode, decode_cursor, encode_cursor};
 
     // Verify the cursor encoding/decoding round-trips correctly for the
     // Callees transition cursor that the handler emits.

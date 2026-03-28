@@ -38,11 +38,35 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
 /// The lookup is case-insensitive. Supported extensions include `rs`, `py`, `go`, `java`,
 /// `ts`, `tsx`, `f90`, `f95`, `for`, `ftn`, and other Fortran variants.
 #[must_use]
-pub fn language_from_extension(ext: &str) -> Option<&'static str> {
+pub fn language_for_extension(ext: &str) -> Option<&'static str> {
     EXTENSION_MAP
         .iter()
         .find(|(e, _)| e.eq_ignore_ascii_case(ext))
         .map(|(_, lang)| *lang)
+}
+
+/// Returns a static slice of all supported language names based on compiled features.
+///
+/// The returned slice contains language identifiers like `"rust"`, `"python"`, `"go"`, etc.,
+/// depending on which language features are enabled at compile time.
+#[must_use]
+pub fn supported_languages() -> &'static [&'static str] {
+    &[
+        #[cfg(feature = "lang-rust")]
+        "rust",
+        #[cfg(feature = "lang-go")]
+        "go",
+        #[cfg(feature = "lang-java")]
+        "java",
+        #[cfg(feature = "lang-python")]
+        "python",
+        #[cfg(feature = "lang-typescript")]
+        "typescript",
+        #[cfg(feature = "lang-tsx")]
+        "tsx",
+        #[cfg(feature = "lang-fortran")]
+        "fortran",
+    ]
 }
 
 #[cfg(test)]
@@ -50,37 +74,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_language_from_extension_happy_path() {
+    fn test_language_for_extension_happy_path() {
         #[cfg(feature = "lang-rust")]
-        assert_eq!(language_from_extension("rs"), Some("rust"));
+        assert_eq!(language_for_extension("rs"), Some("rust"));
         #[cfg(feature = "lang-python")]
-        assert_eq!(language_from_extension("py"), Some("python"));
+        assert_eq!(language_for_extension("py"), Some("python"));
         #[cfg(feature = "lang-go")]
-        assert_eq!(language_from_extension("go"), Some("go"));
+        assert_eq!(language_for_extension("go"), Some("go"));
         #[cfg(feature = "lang-java")]
-        assert_eq!(language_from_extension("java"), Some("java"));
+        assert_eq!(language_for_extension("java"), Some("java"));
         #[cfg(feature = "lang-typescript")]
-        assert_eq!(language_from_extension("ts"), Some("typescript"));
+        assert_eq!(language_for_extension("ts"), Some("typescript"));
         #[cfg(feature = "lang-tsx")]
-        assert_eq!(language_from_extension("tsx"), Some("tsx"));
+        assert_eq!(language_for_extension("tsx"), Some("tsx"));
         #[cfg(feature = "lang-fortran")]
-        assert_eq!(language_from_extension("f90"), Some("fortran"));
+        assert_eq!(language_for_extension("f90"), Some("fortran"));
         #[cfg(feature = "lang-fortran")]
-        assert_eq!(language_from_extension("for"), Some("fortran"));
+        assert_eq!(language_for_extension("for"), Some("fortran"));
         #[cfg(feature = "lang-fortran")]
-        assert_eq!(language_from_extension("ftn"), Some("fortran"));
+        assert_eq!(language_for_extension("ftn"), Some("fortran"));
     }
 
     #[test]
-    fn test_language_from_extension_edge_case() {
-        assert_eq!(language_from_extension("unknown"), None);
-        assert_eq!(language_from_extension(""), None);
+    fn test_language_for_extension_edge_case() {
+        assert_eq!(language_for_extension("unknown"), None);
+        assert_eq!(language_for_extension(""), None);
         #[cfg(feature = "lang-rust")]
-        assert_eq!(language_from_extension("RS"), Some("rust"));
+        assert_eq!(language_for_extension("RS"), Some("rust"));
         // Uppercase Fortran extensions resolved via eq_ignore_ascii_case
         #[cfg(feature = "lang-fortran")]
-        assert_eq!(language_from_extension("F90"), Some("fortran"));
+        assert_eq!(language_for_extension("F90"), Some("fortran"));
         #[cfg(feature = "lang-fortran")]
-        assert_eq!(language_from_extension("FOR"), Some("fortran"));
+        assert_eq!(language_for_extension("FOR"), Some("fortran"));
     }
 }

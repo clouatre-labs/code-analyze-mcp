@@ -5,8 +5,17 @@ use std::time::Duration;
 
 #[test]
 fn test_mcp_server_responds_to_tools_call() {
-    let bin = std::env::var("CARGO_BIN_EXE_code_analyze_mcp")
-        .unwrap_or_else(|_| "target/debug/code-analyze-mcp".to_string());
+    let bin = std::env::var("CARGO_BIN_EXE_code_analyze_mcp").unwrap_or_else(|_| {
+        // Fallback: construct path relative to workspace root
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let workspace_root = std::path::Path::new(manifest_dir)
+            .parent()
+            .expect("manifest dir has parent");
+        workspace_root
+            .join("target/debug/code-analyze-mcp")
+            .to_string_lossy()
+            .to_string()
+    });
 
     let mut child = std::process::Command::new(&bin)
         .stdin(Stdio::piped())
@@ -89,8 +98,17 @@ fn test_mcp_server_responds_to_tools_call() {
 
 #[test]
 fn test_mcp_server_recovers_after_tool_error() {
-    let bin = std::env::var("CARGO_BIN_EXE_code_analyze_mcp")
-        .unwrap_or_else(|_| "target/debug/code-analyze-mcp".to_string());
+    let bin = std::env::var("CARGO_BIN_EXE_code_analyze_mcp").unwrap_or_else(|_| {
+        // Fallback: construct path relative to workspace root
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let workspace_root = std::path::Path::new(manifest_dir)
+            .parent()
+            .expect("manifest dir has parent");
+        workspace_root
+            .join("target/debug/code-analyze-mcp")
+            .to_string_lossy()
+            .to_string()
+    });
 
     let mut child = std::process::Command::new(&bin)
         .stdin(Stdio::piped())

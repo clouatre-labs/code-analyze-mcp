@@ -1,3 +1,5 @@
+#![cfg(feature = "schemars")]
+
 use schemars::Schema;
 use serde_json::json;
 

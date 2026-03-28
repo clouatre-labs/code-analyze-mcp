@@ -53,17 +53,21 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
             let progress = Arc::new(AtomicUsize::new(0));
             let ct = CancellationToken::new();
 
-            code_analyze_mcp::analyze::analyze_focused_with_progress(
-                path,
+            let params = code_analyze_mcp::analyze::FocusedAnalysisConfig {
                 focus,
-                SymbolMatchMode::Exact,
+                match_mode: SymbolMatchMode::Exact,
                 follow_depth,
                 max_depth,
                 ast_recursion_limit,
+                use_summary: false,
+                impl_only: None,
+            };
+
+            code_analyze_mcp::analyze::analyze_focused_with_progress(
+                path,
+                &params,
                 progress,
                 ct,
-                false,
-                None,
             )
         });
     });

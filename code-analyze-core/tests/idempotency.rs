@@ -1,4 +1,4 @@
-use code_analyze_mcp::analyze::{analyze_directory, analyze_file, analyze_module_file};
+use code_analyze_core::analyze::{analyze_directory, analyze_file, analyze_module_file};
 use std::path::Path;
 
 #[tokio::test]

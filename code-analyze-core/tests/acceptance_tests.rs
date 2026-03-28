@@ -1,4 +1,4 @@
-use code_analyze_mcp::analyze::{analyze_directory, analyze_file, analyze_focused};
+use code_analyze_core::analyze::{analyze_directory, analyze_file, analyze_focused};
 use tempfile::TempDir;
 
 #[test]

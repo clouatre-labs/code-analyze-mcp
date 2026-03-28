@@ -1,7 +1,7 @@
 version = 1
 
 [[annotations]]
-path = ["src/**/*.rs", "src/**/*.toml"]
+path = ["code-analyze-core/src/**/*.rs", "code-analyze-mcp/src/**/*.rs", "code-analyze-core/Cargo.toml", "code-analyze-mcp/Cargo.toml"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"
@@ -19,7 +19,7 @@ SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["tests/**/*"]
+path = ["code-analyze-core/tests/**/*", "code-analyze-mcp/tests/**/*"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"

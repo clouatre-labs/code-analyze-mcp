@@ -1,4 +1,4 @@
-use code_analyze_mcp::types::{AnalysisMode, AnalysisResult, FileInfo};
+use code_analyze_core::types::{AnalysisMode, AnalysisResult, FileInfo};
 
 /// Create a basic test result for structure mode analysis.
 #[allow(dead_code)]

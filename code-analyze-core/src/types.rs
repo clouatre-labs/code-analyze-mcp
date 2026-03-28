@@ -1,3 +1,4 @@
+#[cfg(feature = "schemars")]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,17 +28,22 @@ pub struct ImplTraitInfo {
 }
 
 /// Pagination parameters shared across all tools.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct PaginationParams {
     /// Pagination cursor from a previous response's `next_cursor` field. Pass unchanged to retrieve the next page. Omit on the first call.
     pub cursor: Option<String>,
     /// Files per page for pagination (default: 100). Reduce below 100 to limit response size; increase above 100 to reduce round trips.
-    #[schemars(schema_with = "crate::schema_helpers::option_page_size_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_page_size_schema")
+    )]
     pub page_size: Option<usize>,
 }
 
 /// Output control parameters shared across all tools.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct OutputControlParams {
     /// Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses.
     pub force: Option<bool>,
@@ -47,13 +53,17 @@ pub struct OutputControlParams {
     pub verbose: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeDirectoryParams {
     /// Directory path to analyze
     pub path: String,
 
     /// Maximum directory traversal depth for overview mode only. 0 or unset = unlimited depth. Use 1-3 for large monorepos to manage output size. Ignored in other modes.
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_integer_schema")
+    )]
     pub max_depth: Option<u32>,
 
     #[serde(flatten)]
@@ -64,7 +74,8 @@ pub struct AnalyzeDirectoryParams {
 }
 
 /// Output section selector for `analyze_file` fields projection.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AnalyzeFileField {
     /// Include function definitions with signatures, types, and line ranges.
@@ -75,13 +86,17 @@ pub enum AnalyzeFileField {
     Imports,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeFileParams {
     /// File path to analyze
     pub path: String,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code. Minimum value is 1; passing 0 is treated as unlimited (same as unset).
-    #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")
+    )]
     pub ast_recursion_limit: Option<usize>,
 
     /// Limit output to specific sections. Valid values: "functions", "classes", "imports".
@@ -98,14 +113,16 @@ pub struct AnalyzeFileParams {
     pub output_control: OutputControlParams,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeModuleParams {
     /// File path to analyze
     pub path: String,
 }
 
 /// Symbol name matching strategy for `analyze_symbol`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SymbolMatchMode {
     /// Case-sensitive exact match (default). Preserves all existing behaviour.
@@ -119,7 +136,8 @@ pub enum SymbolMatchMode {
     Contains,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeSymbolParams {
     /// Directory path to search for the symbol
     pub path: String,
@@ -131,15 +149,24 @@ pub struct AnalyzeSymbolParams {
     pub match_mode: Option<SymbolMatchMode>,
 
     /// Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2.
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_integer_schema")
+    )]
     pub follow_depth: Option<u32>,
 
     /// Maximum directory traversal depth. Unset means unlimited. Use 2-3 for large monorepos.
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_integer_schema")
+    )]
     pub max_depth: Option<u32>,
 
     /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code. Minimum value is 1; passing 0 is treated as unlimited (same as unset).
-    #[schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")
+    )]
     pub ast_recursion_limit: Option<usize>,
 
     #[serde(flatten)]
@@ -154,13 +181,20 @@ pub struct AnalyzeSymbolParams {
     pub impl_only: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalysisResult {
     pub path: String,
     pub mode: AnalysisMode,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub import_count: usize,
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_integer_schema")
+    )]
     pub main_line: Option<usize>,
     pub files: Vec<FileInfo>,
     pub functions: Vec<FunctionInfo>,
@@ -168,26 +202,43 @@ pub struct AnalysisResult {
     pub references: Vec<ReferenceInfo>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FileInfo {
     pub path: String,
     pub language: String,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line_count: usize,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub function_count: usize,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub class_count: usize,
     /// Whether this file is a test file.
     pub is_test: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FunctionInfo {
     pub name: String,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub end_line: usize,
     /// Parameter list as string representations (e.g., `["x: i32", "y: String"]`).
     pub parameters: Vec<String>,
@@ -233,70 +284,103 @@ impl FunctionInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ClassInfo {
     pub name: String,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub end_line: usize,
     pub methods: Vec<FunctionInfo>,
     pub fields: Vec<String>,
     /// Inherited types (parent classes, interfaces, trait bounds).
-    #[schemars(description = "Inherited types (parent classes, interfaces, trait bounds)")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "Inherited types (parent classes, interfaces, trait bounds)")
+    )]
     pub inherits: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct CallInfo {
     pub caller: String,
     pub callee: String,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub column: usize,
     /// Number of arguments passed at the call site.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(schema_with = "crate::schema_helpers::option_integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::option_integer_schema")
+    )]
     pub arg_count: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AssignmentInfo {
     /// Variable name being assigned
     pub variable: String,
     /// Value expression being assigned
     pub value: String,
     /// Line number where assignment occurs
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
     /// Enclosing function scope or 'global'
     pub scope: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FieldAccessInfo {
     /// Object expression being accessed
     pub object: String,
     /// Field name being accessed
     pub field: String,
     /// Line number where field access occurs
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
     /// Enclosing function scope or 'global'
     pub scope: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ReferenceInfo {
     pub symbol: String,
     pub reference_type: ReferenceType,
     pub location: String,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum ReferenceType {
     Definition,
@@ -305,7 +389,8 @@ pub enum ReferenceType {
     Export,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum EntryType {
     File,
@@ -316,7 +401,8 @@ pub enum EntryType {
 }
 
 /// Analysis mode for generating output.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisMode {
     /// High-level directory structure and file counts.
@@ -327,14 +413,19 @@ pub enum AnalysisMode {
     SymbolFocus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct CallChain {
     pub chain: Vec<CallInfo>,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub depth: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FocusedAnalysisData {
     pub symbol: String,
     pub definition: Option<FunctionInfo>,
@@ -342,26 +433,35 @@ pub struct FocusedAnalysisData {
     pub references: Vec<ReferenceInfo>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ElementQueryResult {
     pub query: String,
     pub results: Vec<String>,
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub count: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ImportInfo {
     /// Full module path excluding the imported symbol (e.g., `std::collections` for `use std::collections::HashMap`).
     pub module: String,
     /// Imported symbols (e.g., `[HashMap]` for `use std::collections::HashMap`).
     pub items: Vec<String>,
     /// Line number where import appears.
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct SemanticAnalysis {
     pub functions: Vec<FunctionInfo>,
     pub classes: Vec<ClassInfo>,
@@ -370,28 +470,33 @@ pub struct SemanticAnalysis {
     pub references: Vec<ReferenceInfo>,
     /// Call frequency map (function name -> count).
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub call_frequency: HashMap<String, usize>,
     /// Caller-callee pairs extracted from call expressions.
     pub calls: Vec<CallInfo>,
     /// `impl Trait for Type` blocks found in this file (Rust only).
     #[serde(skip)]
-    #[schemars(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
     pub impl_traits: Vec<ImplTraitInfo>,
 }
 
 /// Minimal function info for `analyze_module`: name and line only.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ModuleFunctionInfo {
     /// Function name
     pub name: String,
     /// Line number where function is defined
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line: usize,
 }
 
 /// Minimal import info for `analyze_module`: module and items only.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ModuleImportInfo {
     /// Full module path (e.g., `std::collections` for `use std::collections::HashMap`)
     pub module: String,
@@ -400,12 +505,16 @@ pub struct ModuleImportInfo {
 }
 
 /// Minimal fixed schema for `analyze_module`: lightweight code understanding.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ModuleInfo {
     /// File name (basename only, e.g., 'lib.rs')
     pub name: String,
     /// Total line count in file
-    #[schemars(schema_with = "crate::schema_helpers::integer_schema")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(schema_with = "crate::schema_helpers::integer_schema")
+    )]
     pub line_count: usize,
     /// Programming language (e.g., 'rust', 'python', 'go')
     pub language: String,
@@ -468,6 +577,7 @@ mod tests {
         assert_eq!(sig, "main() :1-5");
     }
 
+    #[cfg(feature = "schemars")]
     #[test]
     fn schema_flatten_inline() {
         use schemars::schema_for;

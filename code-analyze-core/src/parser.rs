@@ -979,7 +979,54 @@ pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
     results
 }
 
-#[cfg(test)]
+/// Execute a custom tree-sitter query against source code.
+///
+/// This is the internal implementation of the public `execute_query` function.
+pub fn execute_query_impl(
+    language: &str,
+    source: &str,
+    query_str: &str,
+) -> Result<Vec<crate::QueryCapture>, ParserError> {
+    // Get the tree-sitter language from the language name
+    let ts_language = crate::languages::get_ts_language(language)
+        .ok_or_else(|| ParserError::UnsupportedLanguage(language.to_string()))?;
+
+    let mut parser = Parser::new();
+    parser
+        .set_language(&ts_language)
+        .map_err(|e| ParserError::QueryError(e.to_string()))?;
+
+    let tree = parser
+        .parse(source.as_bytes(), None)
+        .ok_or_else(|| ParserError::QueryError("failed to parse source".to_string()))?;
+
+    let query =
+        Query::new(&ts_language, query_str).map_err(|e| ParserError::QueryError(e.to_string()))?;
+
+    let mut cursor = QueryCursor::new();
+    let source_bytes = source.as_bytes();
+
+    let mut captures = Vec::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+    while let Some(m) = matches.next() {
+        for cap in m.captures {
+            let node = cap.node;
+            let capture_name = query.capture_names()[cap.index as usize].to_string();
+            let text = node.utf8_text(source_bytes).unwrap_or("").to_string();
+            captures.push(crate::QueryCapture {
+                capture_name,
+                text,
+                start_line: node.start_position().row,
+                end_line: node.end_position().row,
+                start_byte: node.start_byte(),
+                end_byte: node.end_byte(),
+            });
+        }
+    }
+    Ok(captures)
+}
+
+#[cfg(all(test, feature = "lang-rust"))]
 mod tests {
     use super::*;
 
