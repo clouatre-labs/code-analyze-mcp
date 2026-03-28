@@ -537,13 +537,27 @@ jobs:
         id: auth
         uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
 
-      - name: Publish to crates.io
+      - name: Publish code-analyze-core to crates.io
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          if curl -sf -A "code-analyze-mcp-release/1.0" "https://crates.io/api/v1/crates/code-analyze-core/${VERSION}" > /dev/null; then
+            echo "code-analyze-core ${VERSION} already published to crates.io, skipping"
+          else
+            cargo publish -p code-analyze-core
+          fi
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Wait for index propagation
+        run: sleep 30
+
+      - name: Publish code-analyze-mcp to crates.io
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
           if curl -sf -A "code-analyze-mcp-release/1.0" "https://crates.io/api/v1/crates/code-analyze-mcp/${VERSION}" > /dev/null; then
             echo "code-analyze-mcp ${VERSION} already published to crates.io, skipping"
-            exit 0
+          else
+            cargo publish -p code-analyze-mcp
           fi
-          cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
