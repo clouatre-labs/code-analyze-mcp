@@ -11,24 +11,24 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.1.11/code-analyze-mcp-0.1.11-aarch64-apple-darwin.mcpb",
-      "fileSha256": "5310c8a194b770fac8067a64cd3c57f0bb1aff4c16655f55289fa85a3b39f7f9",
+      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.2.0/code-analyze-mcp-0.2.0-aarch64-apple-darwin.mcpb",
+      "fileSha256": "92c4994071032793f354a6dab84d8f63ddf0cf0ce268bfbca90b82a19c1dbfef",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.1.11/code-analyze-mcp-0.1.11-aarch64-unknown-linux-musl.mcpb",
-      "fileSha256": "6479a6ccf7fe4e8227b5c47a10335d648a5193d1535bd9c915eef5f17da0df36",
+      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.2.0/code-analyze-mcp-0.2.0-aarch64-unknown-linux-musl.mcpb",
+      "fileSha256": "ad1da063d928c64879d7b9e9611c2e299a5a6277e469c13e693c6a06895b7fae",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.1.11/code-analyze-mcp-0.1.11-x86_64-unknown-linux-musl.mcpb",
-      "fileSha256": "804b605e3d837134b04b0917c8d8ed205a5f49ca4e03ee4944016e8b8ed76960",
+      "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v0.2.0/code-analyze-mcp-0.2.0-x86_64-unknown-linux-musl.mcpb",
+      "fileSha256": "f52dd27feef774e5f7cc1b24db5a81fbb8e34c8394df6b75ff2f28b0286d3614",
       "transport": {
         "type": "stdio"
       }
