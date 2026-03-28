@@ -147,6 +147,33 @@ jobs:
       - name: Run tests
         run: cargo test
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
+        with:
+          tool: cargo-llvm-cov
+      - name: Coverage
+        run: |
+          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+          cargo llvm-cov report --fail-under-lines 80
+
   deny:
     name: Audit Dependencies
     runs-on: ubuntu-24.04
@@ -227,7 +254,7 @@ jobs:
     name: CI Result
     runs-on: ubuntu-24.04
     if: always()
-    needs: [changes, commitlint, check-base, format, lint, test, deny, msrv, renovate-check, zizmor]
+    needs: [changes, commitlint, check-base, format, lint, test, coverage, deny, msrv, renovate-check, zizmor]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
