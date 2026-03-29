@@ -317,123 +317,6 @@ jobs:
             gh release upload "${RELEASE_TAG}" "/tmp/${MCPB_NAME}" --clobber
           done
 
-  update-server-json:
-    name: Update server.json
-    needs: [create-release, generate-mcpb]
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      pull-requests: write
-    outputs:
-      pr_branch: ${{ steps.push.outputs.pr_branch }}
-    steps:
-      - name: Checkout repository at main
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download MCPB files and compute SHA256
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          
-          RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
-          VERSION="${{ needs.create-release.outputs.version }}"
-          
-          declare -a targets=("aarch64-apple-darwin" "aarch64-unknown-linux-musl" "x86_64-unknown-linux-musl")
-          declare -A shas
-          
-          for target in "${targets[@]}"; do
-            MCPB_NAME="code-analyze-mcp-${VERSION}-${target}.mcpb"
-            DOWNLOAD_URL="https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/${MCPB_NAME}"
-            
-            curl -fsSL "$DOWNLOAD_URL" -o "/tmp/${MCPB_NAME}"
-            
-            sha=$(sha256sum "/tmp/${MCPB_NAME}" | cut -d' ' -f1)
-            shas["${target}"]="$sha"
-          done
-          
-          # Write to environment for next step
-          echo "SHA_AARCH64_APPLE_DARWIN=${shas[aarch64-apple-darwin]}" >> "$GITHUB_ENV"
-          echo "SHA_AARCH64_LINUX_MUSL=${shas[aarch64-unknown-linux-musl]}" >> "$GITHUB_ENV"
-          echo "SHA_X86_64_LINUX_MUSL=${shas[x86_64-unknown-linux-musl]}" >> "$GITHUB_ENV"
-
-      - name: Update server.json with new SHAs and version
-        run: |
-          set -euo pipefail
-          
-          VERSION="${{ needs.create-release.outputs.version }}"
-          
-          jq \
-            --arg version "$VERSION" \
-            --arg sha_darwin "${{ env.SHA_AARCH64_APPLE_DARWIN }}" \
-            --arg sha_linux_arm "${{ env.SHA_AARCH64_LINUX_MUSL }}" \
-            --arg sha_linux_x86 "${{ env.SHA_X86_64_LINUX_MUSL }}" \
-            '.packages[0].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-apple-darwin.mcpb" |
-             .packages[0].fileSha256 = $sha_darwin |
-             .packages[1].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-unknown-linux-musl.mcpb" |
-             .packages[1].fileSha256 = $sha_linux_arm |
-             .packages[2].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-x86_64-unknown-linux-musl.mcpb" |
-             .packages[2].fileSha256 = $sha_linux_x86' \
-            server.json > server.json.tmp && mv server.json.tmp server.json
-
-      - name: Create feature branch and commit server.json
-        id: push
-        run: |
-          set -euo pipefail
-
-          VERSION="${{ needs.create-release.outputs.version }}"
-          BRANCH_NAME="chore/registry-update-v${VERSION}"
-
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-
-          # Only commit and push if server.json has changed
-          if git diff --quiet -- server.json; then
-            echo "server.json unchanged; skipping PR creation"
-            echo "pr_branch=main" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch origin
-          if git ls-remote --exit-code origin "$BRANCH_NAME" 2>/dev/null; then
-            echo "Stale branch $BRANCH_NAME exists, deleting..."
-            git push origin --delete "$BRANCH_NAME"
-          fi
-
-          git checkout -b "$BRANCH_NAME"
-          git add server.json
-          git commit --signoff -m "chore(registry): update server.json for v${VERSION}"
-          git push origin "$BRANCH_NAME"
-          echo "pr_branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-
-      - name: Create pull request with auto-merge
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          VERSION="${{ needs.create-release.outputs.version }}"
-          BRANCH_NAME="chore/registry-update-v${VERSION}"
-
-          # Only create PR if server.json was changed
-          if [ "${{ steps.push.outputs.pr_branch }}" = "main" ]; then
-            echo "server.json unchanged; skipping PR creation"
-            exit 0
-          fi
-
-          gh pr create \
-            --title "chore(registry): update server.json for v${VERSION}" \
-            --body "Automated server.json update with MCPB checksums for release v${VERSION}" \
-            --head "$BRANCH_NAME" \
-            --base main
-
-          # Merge immediately (single-file bot commit, no code to test)
-          gh pr merge "$BRANCH_NAME" --squash --delete-branch
-
   publish-registry:
     name: Publish to MCP Registry
     needs: [create-release, generate-mcpb]
@@ -446,10 +329,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      # Generate server.json in-place from MCPB SHAs. Intentionally duplicates
-      # the logic from update-server-json so publish-registry does not need to
-      # wait for that job's PR to merge. update-server-json still persists the
-      # file to the repo as a fire-and-forget follow-up.
       - name: Download MCPB files and compute SHA256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -477,23 +356,38 @@ jobs:
           echo "SHA_AARCH64_LINUX_MUSL=${shas[aarch64-unknown-linux-musl]}" >> "$GITHUB_ENV"
           echo "SHA_X86_64_LINUX_MUSL=${shas[x86_64-unknown-linux-musl]}" >> "$GITHUB_ENV"
 
-      - name: Update server.json with new SHAs and version
+      - name: Build server.json from template
         run: |
           set -euo pipefail
-          
+
           VERSION="${{ needs.create-release.outputs.version }}"
-          
+
           jq \
             --arg version "$VERSION" \
-            --arg sha_darwin "${{ env.SHA_AARCH64_APPLE_DARWIN }}" \
-            --arg sha_linux_arm "${{ env.SHA_AARCH64_LINUX_MUSL }}" \
-            --arg sha_linux_x86 "${{ env.SHA_X86_64_LINUX_MUSL }}" \
-            '.packages[0].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-apple-darwin.mcpb" |
-             .packages[0].fileSha256 = $sha_darwin |
-             .packages[1].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-unknown-linux-musl.mcpb" |
-             .packages[1].fileSha256 = $sha_linux_arm |
-             .packages[2].identifier = "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-x86_64-unknown-linux-musl.mcpb" |
-             .packages[2].fileSha256 = $sha_linux_x86' \
+            --arg sha_darwin "$SHA_AARCH64_APPLE_DARWIN" \
+            --arg sha_linux_arm "$SHA_AARCH64_LINUX_MUSL" \
+            --arg sha_linux_x86 "$SHA_X86_64_LINUX_MUSL" \
+            '.version = $version |
+             .packages = [
+               {
+                 "registryType": "mcpb",
+                 "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-apple-darwin.mcpb",
+                 "fileSha256": $sha_darwin,
+                 "transport": {"type": "stdio"}
+               },
+               {
+                 "registryType": "mcpb",
+                 "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-unknown-linux-musl.mcpb",
+                 "fileSha256": $sha_linux_arm,
+                 "transport": {"type": "stdio"}
+               },
+               {
+                 "registryType": "mcpb",
+                 "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-x86_64-unknown-linux-musl.mcpb",
+                 "fileSha256": $sha_linux_x86,
+                 "transport": {"type": "stdio"}
+               }
+             ]' \
             server.json > server.json.tmp && mv server.json.tmp server.json
 
       - name: Install mcp-publisher
