@@ -112,7 +112,11 @@ jobs:
         run: |
           rg --files crates/ | rg '\.rs$' | while read -r f; do
             if ! rg -q 'SPDX-FileCopyrightText:' "$f"; then
-              echo "::error file=$f::Missing SPDX header in $f"
+              echo "::error file=$f::Missing SPDX-FileCopyrightText header in $f"
+              exit 1
+            fi
+            if ! rg -q 'SPDX-License-Identifier: Apache-2.0' "$f"; then
+              echo "::error file=$f::Missing SPDX-License-Identifier header in $f"
               exit 1
             fi
           done

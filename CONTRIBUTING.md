@@ -89,6 +89,11 @@ All changes go through a pull request; no direct pushes to main are permitted.
 - Ensure CI passes: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
 - Confirm no `.unwrap()` in production code paths
 - Confirm DCO sign-off is present on all commits (`git commit --signoff`)
+- New `.rs` files must include the two-line SPDX header at line 1:
+  ```
+  // SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+  // SPDX-License-Identifier: Apache-2.0
+  ```
 
 **Review process:**
 - Request the Copilot automated reviewer on every PR; for this solo-maintained project it substitutes for a human second reviewer
