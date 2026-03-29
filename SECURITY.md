@@ -1,6 +1,6 @@
 # Security Policy
 
-This project has earned the [OpenSSF Best Practices passing badge](https://www.bestpractices.dev/projects/12275).
+This project has earned the [OpenSSF Best Practices silver badge](https://www.bestpractices.dev/projects/12275/silver).
 
 ## Reporting
 
