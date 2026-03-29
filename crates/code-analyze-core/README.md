@@ -5,10 +5,12 @@
 
 Core library for code structure analysis using tree-sitter.
 
-[![docs.rs](https://img.shields.io/badge/docs.rs-code--analyze--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs)](https://docs.rs/code-analyze-core)
-[![MCP server](https://img.shields.io/badge/MCP-code--analyze--mcp-fc8d62?style=flat-square&labelColor=555555&logo=rust)](https://crates.io/crates/code-analyze-mcp)
-[![REUSE](https://api.reuse.software/badge/github.com/clouatre-labs/code-analyze-mcp)](https://api.reuse.software/info/github.com/clouatre-labs/code-analyze-mcp)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12275/badge)](https://www.bestpractices.dev/projects/12275)
+<p align="center">
+  <a href="https://docs.rs/code-analyze-core"><img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-code--analyze--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs" height="20"></a>
+  <a href="https://crates.io/crates/code-analyze-mcp"><img alt="MCP server" src="https://img.shields.io/badge/MCP-code--analyze--mcp-fc8d62?style=flat-square&labelColor=555555&logo=rust" height="20"></a>
+  <a href="https://api.reuse.software/info/github.com/clouatre-labs/code-analyze-mcp"><img alt="REUSE" src="https://api.reuse.software/badge/github.com/clouatre-labs/code-analyze-mcp" height="20"></a>
+  <a href="https://www.bestpractices.dev/projects/12275"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/12275/badge" height="20"></a>
+</p>
 
 ## Features
 
