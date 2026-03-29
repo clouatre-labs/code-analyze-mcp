@@ -475,7 +475,7 @@ fn resolve_symbol(
         } else {
             return Err(crate::graph::GraphError::SymbolNotFound {
                 symbol: params.focus.clone(),
-                hint: "Try match_mode=insensitive for a case-insensitive search.".to_string(),
+                hint: "Try match_mode=insensitive for a case-insensitive search, or match_mode=prefix to list symbols starting with this name.".to_string(),
             }
             .into());
         }
