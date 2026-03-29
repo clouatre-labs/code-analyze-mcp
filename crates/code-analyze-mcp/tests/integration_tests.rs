@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
 // SPDX-License-Identifier: Apache-2.0
-use code_analyze_mcp::logging::{LogEvent, McpLoggingLayer, level_to_mcp};
+use code_analyze_mcp::logging::{LogEvent, level_to_mcp};
 use rmcp::model::{CallToolResult, Content, LoggingLevel, Meta};
-use std::sync::{Arc, Mutex};
 #[test]
 fn test_logging_level_to_mcp_mapping() {
     use tracing::Level;
@@ -12,32 +11,6 @@ fn test_logging_level_to_mcp_mapping() {
     assert_eq!(level_to_mcp(&Level::INFO), LoggingLevel::Info);
     assert_eq!(level_to_mcp(&Level::WARN), LoggingLevel::Warning);
     assert_eq!(level_to_mcp(&Level::ERROR), LoggingLevel::Error);
-}
-
-#[tokio::test]
-async fn test_log_event_sent_to_channel() {
-    use serde_json::json;
-    use tracing_subscriber::filter::LevelFilter;
-
-    let (event_tx, _event_rx) = tokio::sync::mpsc::unbounded_channel();
-    let log_level_filter = Arc::new(Mutex::new(LevelFilter::WARN));
-    let _layer = McpLoggingLayer::new(event_tx, log_level_filter);
-
-    let log_event = LogEvent {
-        level: LoggingLevel::Warning,
-        logger: "test_logger".to_string(),
-        data: json!({"message": "test event"}),
-    };
-
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    let _ = tx.send(log_event.clone());
-
-    let received = rx.recv().await;
-    assert!(received.is_some());
-    let event = received.unwrap();
-    assert_eq!(event.level, LoggingLevel::Warning);
-    assert_eq!(event.logger, "test_logger");
-    assert_eq!(event.data, json!({"message": "test event"}));
 }
 
 #[tokio::test]

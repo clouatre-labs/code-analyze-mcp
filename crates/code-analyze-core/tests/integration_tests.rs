@@ -1,7 +1,5 @@
 // SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
 // SPDX-License-Identifier: Apache-2.0
-mod fixtures;
-
 use code_analyze_core::analyze::{
     AnalyzeError, analyze_directory, analyze_directory_with_progress, analyze_file,
     analyze_focused, determine_mode,

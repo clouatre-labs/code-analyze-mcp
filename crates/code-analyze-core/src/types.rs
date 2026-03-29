@@ -7,9 +7,6 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-#[allow(unused_imports)]
-use crate::analyze::{AnalysisOutput, FileAnalysisOutput, FocusedAnalysisOutput};
-
 /// A single edge in the call graph with impl-trait metadata.
 /// `neighbor_name` holds the caller name in `callers` maps and the callee name in `callees` maps.
 #[derive(Debug, Clone, PartialEq)]

@@ -4,7 +4,6 @@ use code_analyze_core::analyze::{analyze_directory, analyze_file, analyze_focuse
 use tempfile::TempDir;
 
 #[test]
-#[ignore] // Requires external repo access
 fn test_acceptance_overview_mode() {
     // This test requires the aptu repo to be cloned
     // For now, we test with a local temp directory
