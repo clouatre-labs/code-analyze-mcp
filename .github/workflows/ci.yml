@@ -151,7 +151,6 @@ jobs:
         run: |
           cargo llvm-cov nextest --no-report --all-features \
             --workspace \
-            --branch \
             -E 'not binary(mcp_smoke)'
           cargo llvm-cov report -p code-analyze-core \
             --fail-under-lines 90 \
