@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 use code_analyze_mcp::logging::{LogEvent, McpLoggingLayer};
 use rmcp::model::LoggingLevel;
 use std::sync::{Arc, Mutex};

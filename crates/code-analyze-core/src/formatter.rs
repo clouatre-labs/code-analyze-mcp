@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Output formatting for analysis results across different modes.
 //!
 //! Formats semantic analysis, call graphs, and directory structures into human-readable text.

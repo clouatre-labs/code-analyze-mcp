@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 use std::io::{BufRead, BufReader, Write};
 use std::process::Stdio;
 use std::thread;

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 /// Tree-sitter query for extracting Fortran elements (functions and subroutines).
 ///
 /// Module constructs are omitted: `module_statement` has no `name` field in

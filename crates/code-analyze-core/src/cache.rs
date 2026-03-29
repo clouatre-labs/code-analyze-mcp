@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! LRU cache for analysis results indexed by path, modification time, and mode.
 //!
 //! Provides thread-safe, capacity-bounded caching of file analysis outputs using LRU eviction.

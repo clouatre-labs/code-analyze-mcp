@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! MCP logging integration via tracing.
 //!
 //! Provides a custom tracing subscriber that forwards log events to MCP clients.

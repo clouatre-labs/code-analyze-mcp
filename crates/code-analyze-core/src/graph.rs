@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Call graph construction and analysis.
 //!
 //! Builds caller and callee relationships from semantic analysis results.

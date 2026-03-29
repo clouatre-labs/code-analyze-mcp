@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Test file detection using path heuristics.
 //!
 //! Identifies test files based on directory and filename patterns.

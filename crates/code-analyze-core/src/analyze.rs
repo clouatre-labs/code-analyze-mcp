@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Main analysis engine for extracting code structure from files and directories.
 //!
 //! Implements the four MCP tools: `analyze_directory` (Overview), `analyze_file` (`FileDetails`),

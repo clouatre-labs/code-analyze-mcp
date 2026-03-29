@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 use code_analyze_core::analyze::analyze_focused;
 use code_analyze_core::formatter::format_focused_summary;
 use code_analyze_core::graph::CallGraph;

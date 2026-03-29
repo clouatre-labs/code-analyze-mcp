@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 /// Tree-sitter query for extracting TypeScript elements (functions, classes, and TS-specific types).
 pub const ELEMENT_QUERY: &str = r"
 (function_declaration) @function

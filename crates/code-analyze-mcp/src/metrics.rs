@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Metrics collection and daily-rotating JSONL emission.
 //!
 //! Provides a channel-based pipeline: callers emit [`MetricEvent`] values via [`MetricsSender`],

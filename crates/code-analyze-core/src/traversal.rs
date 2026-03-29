@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Directory traversal with .gitignore support.
 //!
 //! Provides recursive directory walking with automatic filtering based on `.gitignore` and `.ignore` files.

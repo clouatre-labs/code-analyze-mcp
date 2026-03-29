@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Path completion support for file and directory paths.
 //!
 //! Provides completion suggestions for partial paths within a directory tree,
