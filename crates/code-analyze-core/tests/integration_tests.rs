@@ -3941,3 +3941,53 @@ fn test_analyze_symbol_no_callees_no_transition_cursor() {
         result.formatted
     );
 }
+
+#[cfg(feature = "lang-rust")]
+#[test]
+fn test_execute_query_valid_rust() {
+    // Arrange: source with a function
+    let source = "fn foo() {}";
+    let query_str = "(function_item name: (identifier) @name)";
+    // Act
+    let result = code_analyze_core::execute_query("rust", source, query_str);
+    // Assert
+    let captures = result.expect("execute_query should succeed for valid Rust query");
+    assert!(
+        captures
+            .iter()
+            .any(|c| c.capture_name == "name" && c.text == "foo"),
+        "expected capture with name='name' and text='foo', got {:?}",
+        captures
+    );
+}
+
+#[test]
+fn test_execute_query_unsupported_language() {
+    // Arrange + Act
+    let result = code_analyze_core::execute_query("cobol", "x = 1", "(identifier) @id");
+    // Assert: should be UnsupportedLanguage error
+    assert!(
+        matches!(
+            result,
+            Err(code_analyze_core::ParserError::UnsupportedLanguage(ref lang)) if lang == "cobol"
+        ),
+        "expected UnsupportedLanguage error, got {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_execute_query_malformed_query() {
+    // Arrange + Act: valid language, invalid tree-sitter query syntax
+    let result = code_analyze_core::execute_query(
+        "rust",
+        "fn foo() {}",
+        "this is not valid query syntax !!!",
+    );
+    // Assert: should be a QueryError
+    assert!(
+        matches!(result, Err(code_analyze_core::ParserError::QueryError(_))),
+        "expected QueryError for malformed query, got {:?}",
+        result
+    );
+}

@@ -186,3 +186,49 @@ pub fn get_ts_language(lang_name: &str) -> Option<Language> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_language_info_known() {
+        // Happy path: known languages return Some
+        assert!(
+            get_language_info("rust").is_some(),
+            "expected Some for 'rust'"
+        );
+        assert!(get_language_info("go").is_some(), "expected Some for 'go'");
+        assert!(
+            get_language_info("python").is_some(),
+            "expected Some for 'python'"
+        );
+    }
+
+    #[test]
+    fn test_get_language_info_unknown() {
+        // Edge case: unknown language returns None
+        assert!(
+            get_language_info("cobol").is_none(),
+            "expected None for 'cobol'"
+        );
+    }
+
+    #[test]
+    fn test_get_ts_language_known() {
+        // Happy path: known language returns Some
+        assert!(
+            get_ts_language("rust").is_some(),
+            "expected Some for 'rust'"
+        );
+    }
+
+    #[test]
+    fn test_get_ts_language_unknown() {
+        // Edge case: unknown language returns None
+        assert!(
+            get_ts_language("cobol").is_none(),
+            "expected None for 'cobol'"
+        );
+    }
+}
