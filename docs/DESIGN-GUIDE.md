@@ -3,7 +3,7 @@
 ## See Also
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - module map and data flow
-- [anthropic-mcp-agents-orchestration.md](anthropic-mcp-agents-orchestration.md) - MCP tool design principles and annotation semantics
+- [MCP-BEST-PRACTICES.md](MCP-BEST-PRACTICES.md) - MCP tool design principles and annotation semantics
 - [OBSERVABILITY.md](OBSERVABILITY.md) - metrics schema and channel pattern implementation
 - [ROADMAP.md](ROADMAP.md) - wave history, benchmark results, and small-model-first constraint
 
@@ -13,13 +13,13 @@
 
 **How to read this document:** Principles are normative. Examples are illustrative; they show how the principle was applied in this server but the specific technology is replaceable. Each example is labeled *Example:* or indented below the principle.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the module map, [anthropic-mcp-agents-orchestration.md](anthropic-mcp-agents-orchestration.md) for MCP protocol background, and [ROADMAP.md](ROADMAP.md) for benchmark history.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the module map, [MCP-BEST-PRACTICES.md](MCP-BEST-PRACTICES.md) for MCP protocol background, and [ROADMAP.md](ROADMAP.md) for benchmark history.
 
 ## 2. Tool Architecture Decisions
 
 ### Why Four Tools Instead of One
 
-**Principle:** Each tool does one thing well. Non-overlapping interfaces eliminate ambiguous routing. When two tools can satisfy the same request, the model must guess; that is a reliability failure, not a model failure. (See [anthropic-mcp-agents-orchestration.md](anthropic-mcp-agents-orchestration.md), section 3.2.)
+**Principle:** Each tool does one thing well. Non-overlapping interfaces eliminate ambiguous routing. When two tools can satisfy the same request, the model must guess; that is a reliability failure, not a model failure. (See [MCP-BEST-PRACTICES.md](MCP-BEST-PRACTICES.md), section 3.2.)
 
 *Example: This server has four tools — `analyze_directory`, `analyze_file`, `analyze_module`, and `analyze_symbol` — each with a distinct, non-overlapping responsibility. A single auto-detecting tool was rejected because it required the model to infer the correct mode from context, which failed under small models.*
 
