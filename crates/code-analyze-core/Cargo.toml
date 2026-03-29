@@ -11,6 +11,9 @@ description = "Multi-language AST analysis library using tree-sitter"
 readme = "README.md"
 publish = true
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)", "cfg(coverage_nightly)"] }
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

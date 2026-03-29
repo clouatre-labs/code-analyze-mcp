@@ -47,6 +47,10 @@ struct CompiledQueries {
 }
 
 /// Build compiled queries for a given language.
+///
+/// The `map_err` closures inside are only reachable if a hardcoded query string is
+/// invalid, which cannot happen at runtime -- exclude them from coverage instrumentation.
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn build_compiled_queries(
     lang_info: &crate::languages::LanguageInfo,
 ) -> Result<CompiledQueries, ParserError> {
@@ -125,6 +129,10 @@ fn build_compiled_queries(
 }
 
 /// Initialize the query cache with compiled queries for all supported languages.
+///
+/// Excluded from coverage: the `Err` arm is unreachable because `build_compiled_queries`
+/// only fails on invalid hardcoded query strings.
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn init_query_cache() -> HashMap<&'static str, CompiledQueries> {
     let supported_languages = [
         "rust",
@@ -1073,6 +1081,44 @@ mod tests {
     }
 
     #[test]
+    fn test_rust_use_as_clause_plain_identifier() {
+        // Arrange: use_as_clause with plain identifier (no scoped_identifier)
+        // exercises the _ => prefix.to_string() arm
+        let source = "use io as stdio;";
+        // Act
+        let result = SemanticExtractor::extract(source, "rust", None).unwrap();
+        // Assert: alias "stdio" is captured as an import item
+        assert!(
+            result
+                .imports
+                .iter()
+                .any(|imp| imp.items.iter().any(|i| i == "stdio")),
+            "expected import alias 'stdio' from plain identifier in {:?}",
+            result.imports
+        );
+    }
+
+    #[test]
+    fn test_rust_scoped_use_with_prefix() {
+        // Arrange: scoped_use_list with non-empty prefix
+        let source = "use std::{io::Read, io::Write};";
+        // Act
+        let result = SemanticExtractor::extract(source, "rust", None).unwrap();
+        // Assert: both Read and Write appear as items with std::io module
+        let items: Vec<String> = result
+            .imports
+            .iter()
+            .filter(|imp| imp.module.starts_with("std::io"))
+            .flat_map(|imp| imp.items.clone())
+            .collect();
+        assert!(
+            items.contains(&"Read".to_string()) && items.contains(&"Write".to_string()),
+            "expected 'Read' and 'Write' items under module with std::io, got {:?}",
+            result.imports
+        );
+    }
+
+    #[test]
     fn test_rust_scoped_use_imports() {
         // Arrange
         let source = "use std::{fs, io};";
@@ -1144,6 +1190,61 @@ impl Display for Foo {}
             matches!(result, Err(ParserError::ParseError(_))),
             "expected ParseError for oversized limit, got {:?}",
             result
+        );
+    }
+
+    #[test]
+    fn test_ast_recursion_limit_some() {
+        // Arrange: ast_recursion_limit with Some(depth) to exercise max_depth Some branch
+        let source = r#"fn hello() -> u32 { 42 }"#;
+        // Act
+        let result = SemanticExtractor::extract(source, "rust", Some(5));
+        // Assert: should succeed without error and extract functions
+        assert!(result.is_ok(), "extract with Some(5) failed: {:?}", result);
+        let analysis = result.unwrap();
+        assert!(
+            analysis.functions.len() >= 1,
+            "expected at least one function with depth limit 5"
+        );
+    }
+}
+
+// Language-feature-gated tests for Python
+#[cfg(all(test, feature = "lang-python"))]
+mod tests_python {
+    use super::*;
+
+    #[test]
+    fn test_python_relative_import() {
+        // Arrange: relative import (from . import foo)
+        let source = "from . import foo\n";
+        // Act
+        let result = SemanticExtractor::extract(source, "python", None).unwrap();
+        // Assert: relative import should be captured
+        let relative = result.imports.iter().find(|imp| imp.module.contains("."));
+        assert!(
+            relative.is_some(),
+            "expected relative import in {:?}",
+            result.imports
+        );
+    }
+
+    #[test]
+    fn test_python_aliased_import() {
+        // Arrange: aliased import (from os import path as p)
+        // Note: tree-sitter-python extracts "path" (the original name), not the alias "p"
+        let source = "from os import path as p\n";
+        // Act
+        let result = SemanticExtractor::extract(source, "python", None).unwrap();
+        // Assert: "path" should be in items (alias is captured separately by aliased_import node)
+        let path_import = result
+            .imports
+            .iter()
+            .find(|imp| imp.module == "os" && imp.items.iter().any(|i| i == "path"));
+        assert!(
+            path_import.is_some(),
+            "expected import 'path' from module 'os' in {:?}",
+            result.imports
         );
     }
 }
