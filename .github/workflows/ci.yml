@@ -151,9 +151,11 @@ jobs:
         run: |
           cargo llvm-cov nextest --no-report --all-features \
             --workspace \
+            --branch \
             -E 'not binary(mcp_smoke)'
           cargo llvm-cov report -p code-analyze-core \
-            --fail-under-lines 75 \
+            --fail-under-lines 90 \
+            --fail-under-regions 80 \
             --lcov --output-path lcov-core.info
           # code-analyze-mcp coverage tracked but not gated (transport/logging/metrics layer)
           cargo llvm-cov report -p code-analyze-mcp \
