@@ -149,16 +149,15 @@ jobs:
           tool: cargo-nextest
       - name: Coverage
         run: |
-          cargo llvm-cov nextest --all-features \
-            -p code-analyze-core \
+          cargo llvm-cov nextest --no-report --all-features \
+            --workspace \
+            -E 'not binary(mcp_smoke)'
+          cargo llvm-cov report -p code-analyze-core \
+            --fail-under-lines 75 \
             --lcov --output-path lcov-core.info
-          cargo llvm-cov report -p code-analyze-core --fail-under-lines 75  # preserved from pre-nextest migration
           # code-analyze-mcp coverage tracked but not gated (transport/logging/metrics layer)
-          cargo llvm-cov nextest --all-features \
-            -p code-analyze-mcp \
-            -E 'not binary(mcp_smoke)' \
-            --lcov --output-path lcov-mcp.info
-          cargo llvm-cov report -p code-analyze-mcp || true
+          cargo llvm-cov report -p code-analyze-mcp \
+            --lcov --output-path lcov-mcp.info || true
 
   deny:
     name: Audit Dependencies
