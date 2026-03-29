@@ -50,3 +50,10 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 tracing-subscriber = { workspace = true }
 schemars = { workspace = true }
+criterion = { workspace = true, features = ["html_reports"] }
+tokio-util = { workspace = true }
+
+[[bench]]
+name = "analysis"
+harness = false
+path = "benches/analysis.rs"

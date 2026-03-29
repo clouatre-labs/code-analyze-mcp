@@ -1,4 +1,7 @@
-use code_analyze_mcp::types::SymbolMatchMode;
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use code_analyze_core::types::SymbolMatchMode;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::path::Path;
 use std::sync::Arc;
@@ -12,11 +15,11 @@ fn overview_benchmark(c: &mut Criterion) {
     group.bench_function("analyze_directory_src", |b| {
         b.iter(|| {
             let path = std::hint::black_box(Path::new("src"));
-            let entries = code_analyze_mcp::traversal::walk_directory(path, None).unwrap();
+            let entries = code_analyze_core::traversal::walk_directory(path, None).unwrap();
             let progress = Arc::new(AtomicUsize::new(0));
             let ct = CancellationToken::new();
 
-            code_analyze_mcp::analyze::analyze_directory_with_progress(path, entries, progress, ct)
+            code_analyze_core::analyze::analyze_directory_with_progress(path, entries, progress, ct)
         });
     });
 
@@ -32,7 +35,7 @@ fn file_details_benchmark(c: &mut Criterion) {
             let path = std::hint::black_box("src/lib.rs");
             let ast_recursion_limit = std::hint::black_box(None);
 
-            code_analyze_mcp::analyze::analyze_file(path, ast_recursion_limit)
+            code_analyze_core::analyze::analyze_file(path, ast_recursion_limit)
         });
     });
 
@@ -46,14 +49,14 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
     group.bench_function("analyze_focused_src", |b| {
         b.iter(|| {
             let path = std::hint::black_box(Path::new("src"));
-            let focus = std::hint::black_box("analyze_directory");
+            let focus = std::hint::black_box("analyze_directory".to_string());
             let follow_depth = std::hint::black_box(2);
             let max_depth = std::hint::black_box(None);
             let ast_recursion_limit = std::hint::black_box(None);
             let progress = Arc::new(AtomicUsize::new(0));
             let ct = CancellationToken::new();
 
-            let params = code_analyze_mcp::analyze::FocusedAnalysisConfig {
+            let params = code_analyze_core::analyze::FocusedAnalysisConfig {
                 focus,
                 match_mode: SymbolMatchMode::Exact,
                 follow_depth,
@@ -63,12 +66,7 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
                 impl_only: None,
             };
 
-            code_analyze_mcp::analyze::analyze_focused_with_progress(
-                path,
-                &params,
-                progress,
-                ct,
-            )
+            code_analyze_core::analyze::analyze_focused_with_progress(path, &params, progress, ct)
         });
     });
 
@@ -97,7 +95,7 @@ fn subtree_count_overhead(c: &mut Criterion) {
 
     group.bench_function("baseline_walk_only", |b| {
         b.iter(|| {
-            let entries = code_analyze_mcp::traversal::walk_directory(
+            let entries = code_analyze_core::traversal::walk_directory(
                 std::hint::black_box(root),
                 std::hint::black_box(None),
             )
@@ -109,12 +107,12 @@ fn subtree_count_overhead(c: &mut Criterion) {
     group.bench_function("with_single_walk_and_count", |b| {
         b.iter(|| {
             // Single unbounded walk; compute counts in-memory; filter for bounded subset.
-            let all_entries = code_analyze_mcp::traversal::walk_directory(
+            let all_entries = code_analyze_core::traversal::walk_directory(
                 std::hint::black_box(root),
                 std::hint::black_box(None),
             )
             .unwrap();
-            let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(
+            let counts = code_analyze_core::traversal::subtree_counts_from_entries(
                 std::hint::black_box(root),
                 &all_entries,
             );
@@ -156,7 +154,7 @@ fn subtree_count_overhead_500(c: &mut Criterion) {
 
     group.bench_function("baseline_walk_only", |b| {
         b.iter(|| {
-            let entries = code_analyze_mcp::traversal::walk_directory(
+            let entries = code_analyze_core::traversal::walk_directory(
                 std::hint::black_box(root),
                 std::hint::black_box(None),
             )
@@ -169,12 +167,12 @@ fn subtree_count_overhead_500(c: &mut Criterion) {
         b.iter(|| {
             // Single unbounded walk; compute counts in-memory.
             // Both this and baseline_walk_only do an unbounded walk; the only difference is the counting step.
-            let all_entries = code_analyze_mcp::traversal::walk_directory(
+            let all_entries = code_analyze_core::traversal::walk_directory(
                 std::hint::black_box(root),
                 std::hint::black_box(None),
             )
             .unwrap();
-            let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(
+            let counts = code_analyze_core::traversal::subtree_counts_from_entries(
                 std::hint::black_box(root),
                 &all_entries,
             );
@@ -215,7 +213,7 @@ fn subtree_count_overhead_1000(c: &mut Criterion) {
 
     group.bench_function("baseline_walk_only_1000", |b| {
         b.iter(|| {
-            let entries = code_analyze_mcp::traversal::walk_directory(
+            let entries = code_analyze_core::traversal::walk_directory(
                 std::hint::black_box(root),
                 std::hint::black_box(None),
             )
@@ -227,12 +225,12 @@ fn subtree_count_overhead_1000(c: &mut Criterion) {
     group.bench_function("with_single_walk_and_count_1000", |b| {
         b.iter(|| {
             // Single unbounded walk; compute counts in-memory.
-            let all_entries = code_analyze_mcp::traversal::walk_directory(
+            let all_entries = code_analyze_core::traversal::walk_directory(
                 std::hint::black_box(root),
                 std::hint::black_box(None),
             )
             .unwrap();
-            let counts = code_analyze_mcp::traversal::subtree_counts_from_entries(
+            let counts = code_analyze_core::traversal::subtree_counts_from_entries(
                 std::hint::black_box(root),
                 &all_entries,
             );
