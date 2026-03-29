@@ -131,24 +131,20 @@ jobs:
         uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
         with:
           tool: cargo-llvm-cov
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
+        with:
+          tool: cargo-nextest
       - name: Coverage
         run: |
-          cargo llvm-cov --all-features \
-            -p code-analyze-core --lib \
-            -p code-analyze-core --test acceptance_tests \
-            -p code-analyze-core --test fixtures \
-            -p code-analyze-core --test idempotency \
-            -p code-analyze-core --test output_size \
-            -p code-analyze-core --test semantic_correctness \
-            -p code-analyze-core --test test_summary_no_pagination \
-            -p code-analyze-core --test test_symbol_focus_summary \
+          cargo llvm-cov nextest --all-features \
+            -p code-analyze-core \
             --lcov --output-path lcov-core.info
-          cargo llvm-cov report -p code-analyze-core --fail-under-lines 75
+          cargo llvm-cov report -p code-analyze-core --fail-under-lines 75  # preserved from pre-nextest migration
           # code-analyze-mcp coverage tracked but not gated (transport/logging/metrics layer)
-          cargo llvm-cov --all-features \
-            -p code-analyze-mcp --lib \
-            -p code-analyze-mcp --test annotations \
-            -p code-analyze-mcp --test integration_tests \
+          cargo llvm-cov nextest --all-features \
+            -p code-analyze-mcp \
+            -E 'not binary(mcp_smoke)' \
             --lcov --output-path lcov-mcp.info
           cargo llvm-cov report -p code-analyze-mcp || true
 
@@ -156,7 +152,7 @@ jobs:
     name: Audit Dependencies
     runs-on: ubuntu-24.04
     needs: changes
-    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request') && github.actor != 'renovate[bot]'
+    if: (needs.changes.outputs.code == 'true' || github.event_name != 'pull_request')
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -186,30 +182,6 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check MSRV
-        run: cargo check
-
-  renovate-check:
-    name: Dependency Check (Renovate)
-    runs-on: ubuntu-24.04
-    needs: changes
-    timeout-minutes: 10
-    if: github.event.pull_request.user.login == 'renovate[bot]'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
-        with:
-          toolchain: stable
-      - name: Cache Cargo registry
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
-        with:
-          tool: cargo-deny
-      - name: Check advisories and licenses
-        run: cargo deny check advisories licenses
-      - name: Compile check
         run: cargo check
 
   zizmor:
@@ -245,7 +217,7 @@ jobs:
     name: CI Result
     runs-on: ubuntu-24.04
     if: always()
-    needs: [changes, commitlint, check-base, lint, coverage, deny, msrv, renovate-check, zizmor, semver-checks]
+    needs: [changes, commitlint, check-base, lint, coverage, deny, msrv, zizmor, semver-checks]
     steps:
       - name: Verify all jobs passed or were skipped
         run: |
