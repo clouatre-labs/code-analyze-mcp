@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 use code_analyze_core::types::{AnalysisMode, AnalysisResult, FileInfo};
 
 /// Create a basic test result for structure mode analysis.

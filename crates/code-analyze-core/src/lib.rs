@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Multi-language code structure analysis library using tree-sitter.
 //!
 //! This crate provides core analysis functionality for extracting code structure

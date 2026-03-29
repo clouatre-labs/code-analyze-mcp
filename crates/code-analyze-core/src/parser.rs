@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Tree-sitter-based parser for extracting semantic structure from source code.
 //!
 //! This module provides language-agnostic parsing using tree-sitter queries to extract

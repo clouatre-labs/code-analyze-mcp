@@ -40,3 +40,21 @@ Existing mechanisms (not duplicated here):
 - SLSA provenance: build provenance attestations published alongside each release
 - cosign: release artifacts are signed with keyless signing; see [SECURITY.md](../SECURITY.md) for verification instructions
 - GPG-signed commits: all commits to main are GPG-signed
+
+## Site hardening
+
+The project website and repository are hosted on GitHub (https://github.com/clouatre-labs/code-analyze-mcp). GitHub enforces the following hardening headers by default, verified with `curl -sI`:
+
+- `strict-transport-security: max-age=31536000; includeSubdomains; preload`
+- `x-frame-options: deny`
+- `x-content-type-options: nosniff`
+- `content-security-policy: default-src 'none'` (comprehensive policy)
+
+The project distribution channels (crates.io, Homebrew tap) are third-party platforms with established security postures; the project has no control over their headers.
+
+## Security review
+
+- **Review date:** 2026-03-29
+- **Scope:** Full codebase, trust boundaries, attack surface, and supply chain (as documented in this file)
+- **Conclusion:** No exploitable vulnerabilities identified; residual risks documented above
+- **Reviewer:** Project maintainer (self-review; acceptable for solo projects under OpenSSF criteria)

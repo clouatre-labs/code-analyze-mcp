@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Language detection by file extension.
 //!
 //! Maps file extensions to supported language identifiers.

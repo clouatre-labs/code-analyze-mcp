@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 use code_analyze_core::analyze::{analyze_directory, analyze_file, analyze_module_file};
 use std::path::Path;
 

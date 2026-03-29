@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 /// Tree-sitter query for extracting Python elements (functions and classes).
 pub const ELEMENT_QUERY: &str = r"
 (function_definition

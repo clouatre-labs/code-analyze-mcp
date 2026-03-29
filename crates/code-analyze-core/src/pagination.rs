@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Cursor-based pagination for large result sets.
 //!
 //! Provides encoding and decoding of pagination cursors to track position within result sets,

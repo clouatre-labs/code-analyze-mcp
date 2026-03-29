@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 use tree_sitter::Node;
 
 /// Tree-sitter query for extracting Go elements (functions, methods, and types).

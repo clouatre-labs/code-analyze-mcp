@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 /// Resource limits and configuration for analysis operations.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]

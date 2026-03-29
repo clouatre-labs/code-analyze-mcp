@@ -80,6 +80,30 @@ The `-S` flag GPG-signs the commit (required by branch protection).
 - [ ] Commits GPG-signed and signed off (`git commit -S --signoff`)
 - [ ] Clear PR description
 
+## Code review
+
+All changes go through a pull request; no direct pushes to main are permitted.
+
+**Before requesting review:**
+- Self-review the diff for correctness, test coverage, and adherence to coding standards
+- Ensure CI passes: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`
+- Confirm no `.unwrap()` in production code paths
+- Confirm DCO sign-off is present on all commits (`git commit --signoff`)
+- New `.rs` files must include the two-line SPDX header at line 1:
+  ```
+  // SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+  // SPDX-License-Identifier: Apache-2.0
+  ```
+
+**Review process:**
+- Request the Copilot automated reviewer on every PR; for this solo-maintained project it substitutes for a human second reviewer
+- Address all review comments before merging; unresolved comments block merge
+
+**Acceptance criteria:**
+- All CI jobs pass
+- No unresolved review comments
+- Reviewer approves or all raised issues are addressed
+
 ## Branch Protection
 
 See [docs/REPO-STANDARDS.md](docs/REPO-STANDARDS.md) for ruleset configuration, required status checks, signed-commit enforcement, branch protection rationale, and the repo merge strategy.

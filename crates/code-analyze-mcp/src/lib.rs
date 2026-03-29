@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Rust MCP server for code structure analysis using tree-sitter.
 //!
 //! This crate exposes four MCP tools for multiple programming languages:

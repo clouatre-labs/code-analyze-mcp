@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
 //! Language-specific handlers and query definitions for tree-sitter parsing.
 //!
 //! Provides query strings and extraction handlers for supported languages.
