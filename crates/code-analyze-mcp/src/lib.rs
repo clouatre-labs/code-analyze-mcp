@@ -17,7 +17,8 @@
 pub mod logging;
 pub mod metrics;
 
-use code_analyze_core::{analyze, cache, completion, graph, traversal, types};
+pub use code_analyze_core::analyze;
+use code_analyze_core::{cache, completion, graph, traversal, types};
 
 pub(crate) const EXCLUDED_DIRS: &[&str] = &[
     "node_modules",

@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 libfuzzer-sys = "0.4"
-code-analyze-mcp = { path = ".." }
+code-analyze-mcp = { path = "../crates/code-analyze-mcp" }
 tempfile = "3"
 
 [[bin]]

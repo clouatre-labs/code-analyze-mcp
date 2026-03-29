@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'code-analyze-core/**'
-      - 'code-analyze-mcp/**'
+      - 'crates/code-analyze-core/**'
+      - 'crates/code-analyze-mcp/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'clippy.toml'
@@ -41,8 +41,8 @@ jobs:
         with:
           filters: |
             code:
-              - 'code-analyze-core/**'
-              - 'code-analyze-mcp/**'
+              - 'crates/code-analyze-core/**'
+              - 'crates/code-analyze-mcp/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'clippy.toml'

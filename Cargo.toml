@@ -1,5 +1,6 @@
 [workspace]
-members = ["code-analyze-core", "code-analyze-mcp"]
+members = ["crates/code-analyze-core", "crates/code-analyze-mcp"]
+exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]
