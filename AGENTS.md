@@ -1,12 +1,15 @@
 # AGENTS.md
 
-## Project overview
+## Project structure
 
-- Rust MCP server for code structure analysis using tree-sitter
-- Four MCP tools: `analyze_directory`, `analyze_file`, `analyze_symbol`, `analyze_module`
-- Languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran
-- Rust edition 2024, async with tokio, MCP protocol via `rmcp`
-- Single crate, Apache-2.0 licensed
+Rust workspace with two crates:
+
+- `crates/code-analyze-core` -- parsing, analysis, formatting, graph, pagination, types
+- `crates/code-analyze-mcp` -- MCP server, tool handlers, logging, metrics
+
+Four MCP tools: `analyze_directory`, `analyze_file`, `analyze_symbol`, `analyze_module`.
+Languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran.
+Rust edition 2024, async with tokio, MCP protocol via `rmcp`.
 
 ## Commands
 
@@ -17,12 +20,27 @@ cargo clippy -- -D warnings
 cargo fmt --check
 cargo deny check advisories licenses
 cargo bench
-cargo install --path . --profile release
+cargo install --path crates/code-analyze-mcp --profile release
 ```
 
 ## API verification (critical)
 
-Do not rely on training data for `rmcp`, `schemars`, or `thiserror` APIs. Verify against `Cargo.lock` and installed crates. **The codebase is the most reliable reference** -- read `src/lib.rs` before adding any tool.
+Do not rely on training data for `rmcp`, `schemars`, or `thiserror` APIs. **Read `crates/code-analyze-mcp/src/lib.rs` before adding or modifying any tool** -- it is the authoritative reference for tool handler patterns.
+
+## rmcp footguns
+
+Patterns contributors consistently get wrong:
+
+- Use `Content`, not `RawContent` (does not exist)
+- Every `#[tool(...)]` requires `output_schema = schema_for_type::<T>()` and `title = "..."`
+- Tool methods take `_context: RequestContext<RoleServer>` as second parameter
+- `#[tool_router]` goes on `impl CodeAnalyzer`; `#[tool_handler]` goes on `impl ServerHandler for CodeAnalyzer` -- they are separate impls
+- Apply `.with_meta(Some(no_cache_meta()))` on every `CallToolResult::success(...)` response
+- Transport entry point: `let (stdin, stdout) = stdio(); let service = serve_server(analyzer, (stdin, stdout)).await?; service.waiting().await?`
+
+## Adding a language
+
+Follow an existing handler in `crates/code-analyze-core/src/languages/`. The extension map is in `crates/code-analyze-core/src/lang.rs`; the `LanguageInfo` registry with queries is in `crates/code-analyze-core/src/languages/mod.rs`.
 
 ## Tool parameters (quick reference)
 
@@ -34,33 +52,6 @@ Do not rely on training data for `rmcp`, `schemars`, or `thiserror` APIs. Verify
 `summary=true` and `cursor` are mutually exclusive; passing both returns INVALID_PARAMS.
 
 `impl_only=true` restricts `analyze_symbol` callers to `impl Trait for Type` blocks; returns INVALID_PARAMS for non-Rust directories.
-
-## rmcp footguns
-
-These are the patterns contributors consistently get wrong:
-
-- Use `Content`, not `RawContent` (does not exist)
-- Every `#[tool(...)]` requires `output_schema = schema_for_type::<T>()` and `title = "..."`
-- Tool methods take `_context: RequestContext<RoleServer>` as second parameter
-- `#[tool_handler]` goes on `impl ServerHandler`, separate from `#[tool_router]` on the tool impl
-- Apply `.with_meta(Some(no_cache_meta()))` on every `CallToolResult::success(...)` response
-- Transport entry point: `let (stdin, stdout) = stdio(); serve_server(analyzer, (stdin, stdout)).await?`
-
-## Adding a language
-
-Follow an existing handler in `src/languages/`. The extension map is in `src/lang.rs`; the `LanguageInfo` registry with queries is in `src/languages/mod.rs`.
-
-## Non-interactive workflows
-
-Set `DISABLE_PROMPT_CACHING=1` for subagent pipelines.
-
-## Design references
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - module map, data flow, language handler system
-- [OBSERVABILITY.md](docs/OBSERVABILITY.md) - metrics schema, rotation, testability
-- [anthropic-mcp-agents-orchestration.md](docs/anthropic-mcp-agents-orchestration.md) - MCP tool design principles (sections 3.2-3.3)
-- rmcp: https://docs.rs/rmcp/latest/rmcp/
-- tree-sitter: https://tree-sitter.github.io/tree-sitter/
 
 ## Do not
 
