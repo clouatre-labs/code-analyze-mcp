@@ -10,7 +10,8 @@ fn test_mcp_server_responds_to_tools_call() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let workspace_root = std::path::Path::new(manifest_dir)
             .parent()
-            .expect("manifest dir has parent");
+            .and_then(|p| p.parent())
+            .expect("manifest dir has grandparent (crates/<name>)");
         workspace_root
             .join("target/debug/code-analyze-mcp")
             .to_string_lossy()
@@ -103,7 +104,8 @@ fn test_mcp_server_recovers_after_tool_error() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let workspace_root = std::path::Path::new(manifest_dir)
             .parent()
-            .expect("manifest dir has parent");
+            .and_then(|p| p.parent())
+            .expect("manifest dir has grandparent (crates/<name>)");
         workspace_root
             .join("target/debug/code-analyze-mcp")
             .to_string_lossy()

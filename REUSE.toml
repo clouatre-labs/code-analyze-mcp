@@ -1,7 +1,7 @@
 version = 1
 
 [[annotations]]
-path = ["code-analyze-core/src/**/*.rs", "code-analyze-mcp/src/**/*.rs", "code-analyze-core/Cargo.toml", "code-analyze-mcp/Cargo.toml"]
+path = ["crates/code-analyze-core/src/**/*.rs", "crates/code-analyze-mcp/src/**/*.rs", "crates/code-analyze-core/Cargo.toml", "crates/code-analyze-mcp/Cargo.toml"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"
@@ -19,13 +19,13 @@ SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["code-analyze-core/tests/**/*", "code-analyze-mcp/tests/**/*"]
+path = ["crates/code-analyze-core/tests/**/*", "crates/code-analyze-mcp/tests/**/*"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["benches/**/*"]
+path = ["crates/code-analyze-core/benches/**/*"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
 SPDX-License-Identifier = "Apache-2.0"
