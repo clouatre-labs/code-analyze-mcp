@@ -9,7 +9,7 @@
   <a href="https://www.bestpractices.dev/projects/12275/silver"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/12275/silver/badge" height="20"></a>
 </p>
 
-<p align="center">Standalone MCP server for code structure analysis using tree-sitter.</p>
+<p align="center">Standalone MCP server for code structure analysis using tree-sitter. OpenSSF silver certified: fewer than 1% of open source projects reach this level.</p>
 
 <!-- mcp-name: io.github.clouatre-labs/code-analyze-mcp -->
 
