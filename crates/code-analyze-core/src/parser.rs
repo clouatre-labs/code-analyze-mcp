@@ -1029,9 +1029,11 @@ pub fn execute_query_impl(
     Ok(captures)
 }
 
+// Language-feature-gated tests (require lang-rust); see also tests_unsupported below
 #[cfg(all(test, feature = "lang-rust"))]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_ast_recursion_limit_zero_is_unlimited() {
@@ -1050,6 +1052,128 @@ mod tests {
             analysis_none.functions.len(),
             analysis_zero.functions.len(),
             "ast_recursion_limit=0 should behave identically to unset (unlimited)"
+        );
+    }
+
+    #[test]
+    fn test_rust_use_as_imports() {
+        // Arrange
+        let source = "use std::io as stdio;";
+        // Act
+        let result = SemanticExtractor::extract(source, "rust", None).unwrap();
+        // Assert: alias "stdio" is captured as an import item
+        assert!(
+            result
+                .imports
+                .iter()
+                .any(|imp| imp.items.iter().any(|i| i == "stdio")),
+            "expected import alias 'stdio' in {:?}",
+            result.imports
+        );
+    }
+
+    #[test]
+    fn test_rust_scoped_use_imports() {
+        // Arrange
+        let source = "use std::{fs, io};";
+        // Act
+        let result = SemanticExtractor::extract(source, "rust", None).unwrap();
+        // Assert: both "fs" and "io" appear as import items under module "std"
+        let items: Vec<&str> = result
+            .imports
+            .iter()
+            .filter(|imp| imp.module == "std")
+            .flat_map(|imp| imp.items.iter().map(|s| s.as_str()))
+            .collect();
+        assert!(
+            items.contains(&"fs") && items.contains(&"io"),
+            "expected 'fs' and 'io' items under module 'std', got {:?}",
+            items
+        );
+    }
+
+    #[test]
+    fn test_rust_wildcard_imports() {
+        // Arrange
+        let source = "use std::io::*;";
+        // Act
+        let result = SemanticExtractor::extract(source, "rust", None).unwrap();
+        // Assert: wildcard import with module "std::io"
+        let wildcard = result
+            .imports
+            .iter()
+            .find(|imp| imp.module == "std::io" && imp.items == vec!["*"]);
+        assert!(
+            wildcard.is_some(),
+            "expected wildcard import with module 'std::io', got {:?}",
+            result.imports
+        );
+    }
+
+    #[test]
+    fn test_extract_impl_traits_standalone() {
+        // Arrange: source with a simple impl Trait for Type
+        let source = r#"
+struct Foo;
+trait Display {}
+impl Display for Foo {}
+"#;
+        // Act
+        let results = extract_impl_traits(source, Path::new("test.rs"));
+        // Assert
+        assert_eq!(
+            results.len(),
+            1,
+            "expected one impl trait, got {:?}",
+            results
+        );
+        assert_eq!(results[0].trait_name, "Display");
+        assert_eq!(results[0].impl_type, "Foo");
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn test_ast_recursion_limit_overflow() {
+        // Arrange: limit larger than u32::MAX triggers a ParseError on 64-bit targets
+        let source = "fn foo() {}";
+        let big_limit = usize::try_from(u32::MAX).unwrap() + 1;
+        // Act
+        let result = SemanticExtractor::extract(source, "rust", Some(big_limit));
+        // Assert
+        assert!(
+            matches!(result, Err(ParserError::ParseError(_))),
+            "expected ParseError for oversized limit, got {:?}",
+            result
+        );
+    }
+}
+
+// Tests that do not require any language feature gate
+#[cfg(test)]
+mod tests_unsupported {
+    use super::*;
+
+    #[test]
+    fn test_element_extractor_unsupported_language() {
+        // Arrange + Act
+        let result = ElementExtractor::extract_with_depth("x = 1", "cobol");
+        // Assert
+        assert!(
+            matches!(result, Err(ParserError::UnsupportedLanguage(ref lang)) if lang == "cobol"),
+            "expected UnsupportedLanguage error, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_semantic_extractor_unsupported_language() {
+        // Arrange + Act
+        let result = SemanticExtractor::extract("x = 1", "cobol", None);
+        // Assert
+        assert!(
+            matches!(result, Err(ParserError::UnsupportedLanguage(ref lang)) if lang == "cobol"),
+            "expected UnsupportedLanguage error, got {:?}",
+            result
         );
     }
 }

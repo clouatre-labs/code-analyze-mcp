@@ -42,3 +42,29 @@ use tree_sitter::Node;
 pub fn extract_inheritance(_node: &Node, _source: &str) -> Vec<String> {
     Vec::new()
 }
+
+#[cfg(all(test, feature = "lang-fortran"))]
+mod tests {
+    use super::*;
+    use tree_sitter::Parser;
+
+    #[test]
+    fn test_extract_inheritance_returns_empty() {
+        // Arrange: parse any valid Fortran source
+        let source = "PROGRAM test\nEND PROGRAM test";
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_fortran::LANGUAGE.into())
+            .expect("failed to set Fortran language");
+        let tree = parser.parse(source, None).expect("failed to parse source");
+        let root = tree.root_node();
+        // Act
+        let result = extract_inheritance(&root, source);
+        // Assert
+        assert!(
+            result.is_empty(),
+            "Fortran has no inheritance, got {:?}",
+            result
+        );
+    }
+}

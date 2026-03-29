@@ -120,3 +120,40 @@ pub fn symbol_completions(cache: &AnalysisCache, path: &Path, prefix: &str) -> V
 
     results
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_path_completions_slash_prefix() {
+        // Arrange: create temp dir with src/main.rs
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        fs::create_dir(root.join("src")).unwrap();
+        fs::write(root.join("src/main.rs"), "fn main() {}").unwrap();
+        // Act: search with slash-separated prefix
+        let results = path_completions(root, "src/ma");
+        // Assert: result contains the relative path
+        assert!(
+            results.iter().any(|r| r.contains("main.rs")),
+            "expected 'main.rs' in completions, got {:?}",
+            results
+        );
+    }
+
+    #[test]
+    // Distinct from test_path_completions_slash_prefix: exercises the early-return branch
+    // in path_completions when prefix is "" (no directory component to search).
+    fn test_path_completions_empty_prefix() {
+        // Edge case: empty prefix returns empty vec
+        let temp = TempDir::new().unwrap();
+        let results = path_completions(temp.path(), "");
+        assert!(
+            results.is_empty(),
+            "expected empty results for empty prefix"
+        );
+    }
+}

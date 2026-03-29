@@ -111,3 +111,102 @@ pub fn find_receiver_type(node: &Node, source: &str) -> Option<String> {
 pub fn extract_inheritance(_node: &Node, _source: &str) -> Vec<String> {
     Vec::new()
 }
+
+#[cfg(all(test, feature = "lang-rust"))]
+mod tests {
+    use super::*;
+    use tree_sitter::Parser;
+
+    fn parse_rust(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .expect("failed to set Rust language");
+        parser.parse(source, None).expect("failed to parse source")
+    }
+
+    #[test]
+    fn test_extract_function_name_happy_path() {
+        // Arrange
+        let source = "fn foo() {}";
+        let tree = parse_rust(source);
+        let root = tree.root_node();
+        // find the function_item node
+        let func_node = root.named_child(0).expect("expected child");
+        assert_eq!(func_node.kind(), "function_item");
+        // Act
+        let result = extract_function_name(&func_node, source, "function");
+        // Assert
+        assert_eq!(result, Some("foo".to_string()));
+    }
+
+    #[test]
+    fn test_extract_function_name_wrong_kind() {
+        // Arrange: parse a struct_item; not a function_item
+        let source = "struct Bar {}";
+        let tree = parse_rust(source);
+        let root = tree.root_node();
+        let node = root.named_child(0).expect("expected child");
+        assert_eq!(node.kind(), "struct_item");
+        // Act
+        let result = extract_function_name(&node, source, "class");
+        // Assert
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_method_for_receiver_happy_path() {
+        // Arrange: function_item works for find_method_for_receiver
+        let source = "fn bar() {}";
+        let tree = parse_rust(source);
+        let root = tree.root_node();
+        let node = root.named_child(0).expect("expected child");
+        // Act
+        let result = find_method_for_receiver(&node, source, None);
+        // Assert
+        assert_eq!(result, Some("bar".to_string()));
+    }
+
+    #[test]
+    fn test_find_method_for_receiver_wrong_kind() {
+        // Arrange: struct_item is not method_item or function_item
+        let source = "struct Baz {}";
+        let tree = parse_rust(source);
+        let root = tree.root_node();
+        let node = root.named_child(0).expect("expected child");
+        // Act
+        let result = find_method_for_receiver(&node, source, None);
+        // Assert
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_receiver_type_happy_path() {
+        // Arrange: impl block is an impl_item
+        let source = "struct Foo; impl Foo { fn x() {} }";
+        let tree = parse_rust(source);
+        let root = tree.root_node();
+        // find impl_item node
+        let impl_node = (0..root.named_child_count())
+            .filter_map(|i| root.named_child(i as u32))
+            .find(|n| n.kind() == "impl_item")
+            .expect("expected impl_item node");
+        // Act
+        let result = find_receiver_type(&impl_node, source);
+        // Assert
+        assert_eq!(result, Some("Foo".to_string()));
+    }
+
+    #[test]
+    fn test_find_receiver_type_wrong_kind() {
+        // Arrange: function_item is not impl_item
+        let source = "fn qux() {}";
+        let tree = parse_rust(source);
+        let root = tree.root_node();
+        let node = root.named_child(0).expect("expected child");
+        // Act
+        let result = find_receiver_type(&node, source);
+        // Assert
+        assert_eq!(result, None);
+    }
+}

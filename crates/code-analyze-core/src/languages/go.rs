@@ -105,3 +105,59 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
 
     inherits
 }
+
+#[cfg(all(test, feature = "lang-go"))]
+mod tests {
+    use super::*;
+    use tree_sitter::Parser;
+
+    fn parse_go(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_go::LANGUAGE.into())
+            .expect("failed to set Go language");
+        parser.parse(source, None).expect("failed to parse source")
+    }
+
+    #[test]
+    fn test_extract_inheritance_struct_no_embeds() {
+        // Arrange: struct with no embedded types
+        let source = "package p\ntype Foo struct { x int }";
+        let tree = parse_go(source);
+        let root = tree.root_node();
+        // find the type_spec node
+        let type_spec = (0..root.named_child_count())
+            .filter_map(|i| root.named_child(i as u32))
+            .find_map(|n| {
+                if n.kind() == "type_declaration" {
+                    (0..n.named_child_count())
+                        .filter_map(|j| n.named_child(j as u32))
+                        .find(|c| c.kind() == "type_spec")
+                } else {
+                    None
+                }
+            })
+            .expect("expected type_spec node");
+        // Act
+        let result = extract_inheritance(&type_spec, source);
+        // Assert
+        assert!(
+            result.is_empty(),
+            "expected no inherited types, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_find_method_for_receiver_wrong_kind() {
+        // Arrange: use a struct node (not a method or function declaration)
+        let source = "package p\ntype Bar struct {}";
+        let tree = parse_go(source);
+        let root = tree.root_node();
+        let node = root.named_child(0).expect("expected child");
+        // Act
+        let result = find_method_for_receiver(&node, source, None);
+        // Assert
+        assert_eq!(result, None);
+    }
+}
