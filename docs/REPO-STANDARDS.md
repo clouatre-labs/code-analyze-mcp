@@ -1,6 +1,6 @@
 # Repository Standards
 
-This document maps every repo-level artifact to its purpose and the rationale behind non-obvious decisions. It is the checklist for replicating these standards in a sibling repo. For component design see [ARCHITECTURE.md](ARCHITECTURE.md); for MCP tool design principles see the [MCP agents orchestration guide](https://github.com/clouatre-labs/code-analyze-mcp/blob/main/docs/anthropic-mcp-agents-orchestration.md).
+This document maps every repo-level artifact to its purpose and the rationale behind non-obvious decisions. It is the checklist for replicating these standards in a sibling repo. For component design see [ARCHITECTURE.md](ARCHITECTURE.md); for MCP tool design principles see [MCP-BEST-PRACTICES.md](MCP-BEST-PRACTICES.md).
 
 ## Artifact Map
 
