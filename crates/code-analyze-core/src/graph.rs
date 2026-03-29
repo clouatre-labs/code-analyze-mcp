@@ -32,7 +32,7 @@ pub enum GraphError {
     #[error("Symbol not found: '{symbol}'. {hint}")]
     SymbolNotFound { symbol: String, hint: String },
     #[error(
-        "Multiple candidates matched '{query}': {candidates_display}. Refine the symbol name or use a stricter match_mode.",
+        "Multiple candidates matched '{query}': {candidates_display}. Use match_mode=exact to target one of the candidates listed above, or refine the symbol name.",
         candidates_display = format_candidates(.candidates)
     )]
     MultipleCandidates {
@@ -83,7 +83,7 @@ pub fn resolve_symbol<'a>(
         0 => {
             let hint = match mode {
                 SymbolMatchMode::Exact => {
-                    "Try match_mode=insensitive for a case-insensitive search.".to_string()
+                    "Try match_mode=insensitive for a case-insensitive search, or match_mode=prefix to list symbols starting with this name.".to_string()
                 }
                 _ => "No symbols matched; try a shorter query or match_mode=contains.".to_string(),
             };
@@ -118,7 +118,7 @@ impl CallGraph {
             }
             return Err(GraphError::SymbolNotFound {
                 symbol: query.to_string(),
-                hint: "Try match_mode=insensitive for a case-insensitive search.".to_string(),
+                hint: "Try match_mode=insensitive for a case-insensitive search, or match_mode=prefix to list symbols starting with this name.".to_string(),
             });
         }
 
