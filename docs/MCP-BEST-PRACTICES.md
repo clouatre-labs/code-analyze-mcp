@@ -227,6 +227,12 @@ MCP tool definitions support annotations that communicate the behavioral charact
 
 Annotate every tool. An unannotated tool is treated as potentially destructive by cautious clients. Marking a read-only search tool as `readOnlyHint: true` allows clients to call it autonomously without a confirmation step, reducing latency and friction.
 
+### 3.3.1 Annotation Quality Enforcement
+
+MCP provides no official linting or static analysis for annotation quality, description completeness, or token efficiency. The only official tooling is MCP Inspector (`@modelcontextprotocol/inspector`), which validates protocol compliance (JSON-RPC structure, schema presence, invocation correctness) but does not evaluate description text or parameter documentation. Community security tools (mcp-scan by Invariant Labs) scan for prompt injection but are not annotation quality linters.
+
+The absence of ecosystem tooling means annotation quality must be enforced at the server level. The minimum viable enforcement is a Rust test that calls `list_tools()` and asserts two properties for every registered tool: the tool description is non-empty, and every `inputSchema.properties` entry has a non-empty `description` field. This catches the two most common regressions: a tool added without a description string, and a parameter added without a doc comment. See `crates/code-analyze-mcp/tests/annotations.rs` for the implementation.
+
 ### 3.4 Transport Types
 
 MCP supports three transport mechanisms (MCP specification, basic/transports):
@@ -368,6 +374,17 @@ The MCP specification extends this with an optional `outputSchema` field that do
 ```
 
 *Code Snippet 6: Tool result with `structuredContent` alongside the human-readable `content` fallback.*
+
+### 4.1.1 Description Scope: Selection vs. Usage
+
+Tool descriptions and parameter descriptions serve distinct purposes and should carry distinct content:
+
+- **Tool description** (`description` field on the tool): consumed by the model during tool selection. It must answer "what does this tool do and when should I call it?" Cross-tool routing guidance ("use `analyze_file` for single files; use `analyze_directory` for directories") belongs here.
+- **Parameter descriptions** (`description` on each `inputSchema` property): consumed by the model after tool selection, when constructing the call. They must answer "what value is valid here?" Valid ranges, defaults, enums, and edge cases belong here, not in the tool description.
+
+Duplicating parameter detail in the tool description burns tokens on every tool-listing request without improving selection accuracy. In a server with 50 tools, tool descriptions that each inline their own parameter documentation can consume 10,000 to 20,000 context tokens before any user request is read.
+
+The corrective principle: keep the tool description as short as possible while remaining unambiguous for selection; rely on parameter descriptions and JSON Schema constraints to carry usage detail.
 
 ### 4.2 Specificity and Naming
 
@@ -569,6 +586,10 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 
 **Sequential processing of independent batches.** Calling the API once per item for a batch of 100 items is slower and more expensive than using the Message Batches API. Use batch processing for workloads where items are independent and latency is not time-critical.
 
+**Duplicating parameter detail in the tool description.** The tool description is a selection signal. Parameter-level detail (valid ranges, defaults, edge cases) placed in the tool description is consumed on every tool-listing call and adds no selection value. Put parameter detail in the parameter's own `description` field in `inputSchema.properties`. See section 4.1.1.
+
+**Relying on prose to signal required vs. optional.** If a required field is not listed in the `required` array of the input schema, the model may treat it as optional regardless of what the description says. The `required` array is enforced by JSON Schema validators; description prose is not. Always keep `required` accurate.
+
 ---
 
 ## 9. Quick Reference
@@ -592,6 +613,8 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 | Batch Processing | Large independent item sets, non-real-time | Use Message Batches API; handle per-item errors independently |
 | Input Validation | Any user-supplied input or external data | Sanitize before LLM processing; separate from system instructions |
 | Privilege Minimization | All agent and tool permission grants | Grant minimum permissions required for the specific function |
+| Description Scope | Any MCP tool definition | Tool description = selection signal; parameter description = usage detail; do not duplicate |
+| Annotation Quality | All rmcp/Rust MCP servers | Add a `list_tools()` test asserting non-empty description on every tool and every parameter |
 
 *Table 4: Quick reference: pattern, when to use, and key rule.*
 
@@ -601,25 +624,27 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 
 ### Official
 
-- MCP Specification 2025-11-25, Server/Tools: https://modelcontextprotocol.io/specification/2025-11-25/server/tools
+- Anthropic Courses, Tool Use Chatbot: https://github.com/anthropics/courses/blob/master/tool_use/06_chatbot_with_multiple_tools.ipynb
+- Anthropic SDK (Python), Tool Use Format: https://github.com/anthropics/anthropic-sdk-python
+- MCP GitHub Documentation: https://github.com/modelcontextprotocol/docs
+- MCP Inspector (protocol compliance, not annotation quality): https://github.com/modelcontextprotocol/inspector
+- MCP Prompts Concept: https://modelcontextprotocol.info/docs/concepts/prompts/
+- MCP Python SDK: https://github.com/modelcontextprotocol/python-sdk
 - MCP Specification, Server/Resources: https://modelcontextprotocol.io/specification/2025-11-25/server/resources
+- MCP Specification, Server/Tools: https://modelcontextprotocol.io/specification/2025-11-25/server/tools
 - MCP Specification, Transports (draft): https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/draft/basic/transports.mdx
 - MCP Specification, Transports (legacy): https://github.com/modelcontextprotocol/specification/blob/main/docs/legacy/concepts/transports.mdx
-- MCP Prompts Concept: https://modelcontextprotocol.info/docs/concepts/prompts/
-- MCP GitHub Documentation: https://github.com/modelcontextprotocol/docs
-- MCP Python SDK: https://github.com/modelcontextprotocol/python-sdk
 - MCP TypeScript SDK: https://github.com/modelcontextprotocol/typescript-sdk
-- Anthropic SDK (Python), Tool Use Format: https://github.com/anthropics/anthropic-sdk-python
-- Anthropic Courses, Tool Use Chatbot: https://github.com/anthropics/courses/blob/master/tool_use/06_chatbot_with_multiple_tools.ipynb
 - OWASP, LLM Prompt Injection Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
 
 ### Background Reading
 
-- MongoDB, Agent Memory Types: https://www.mongodb.com/resources/basics/artificial-intelligence/agent-memory
-- LangChain, Memory Concepts: https://docs.langchain.com/oss/python/concepts/memory
+- Galileo, Agent Oversight and Confidence Routing: https://galileo.ai/blog/human-in-the-loop-agent-oversight
 - Human-in-the-Loop, Agentic AI Trust: https://beetroot.co/ai-ml/human-in-the-loop-meets-agentic-ai-building-trust-and-control-in-automated-workflows/
 - Human-in-the-Loop, Approval Workflows: https://zapier.com/blog/human-in-the-loop/
-- Galileo, Agent Oversight and Confidence Routing: https://galileo.ai/blog/human-in-the-loop-agent-oversight
-- Palo Alto Networks, Prompt Injection Attacks: https://www.paloaltonetworks.com/cyberpedia/what-is-a-prompt-injection-attack
-- Obsidian Security, Prompt Injection Defenses: https://www.obsidiansecurity.com/blog/prompt-injection
+- LangChain, Memory Concepts: https://docs.langchain.com/oss/python/concepts/memory
+- mcp-scan (security scanner, not annotation linter): https://github.com/invariantlabs-ai/mcp-scan
 - Medium, Memory Types in Agentic AI: https://medium.com/@gokcerbelgusen/memory-types-in-agentic-ai-a-breakdown-523c980921ec
+- MongoDB, Agent Memory Types: https://www.mongodb.com/resources/basics/artificial-intelligence/agent-memory
+- Obsidian Security, Prompt Injection Defenses: https://www.obsidiansecurity.com/blog/prompt-injection
+- Palo Alto Networks, Prompt Injection Attacks: https://www.paloaltonetworks.com/cyberpedia/what-is-a-prompt-injection-attack
