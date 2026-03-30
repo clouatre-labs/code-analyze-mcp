@@ -229,38 +229,9 @@ Annotate every tool. An unannotated tool is treated as potentially destructive b
 
 ### 3.3.1 Annotation Quality Enforcement
 
-MCP provides no official linting or static analysis for annotation quality, description completeness, or token efficiency. As of 2026-03-30, the only official tooling is MCP Inspector (`@modelcontextprotocol/inspector`), which validates protocol compliance (JSON-RPC structure, schema presence, invocation correctness) but does not evaluate description text or parameter documentation. Community security tools (mcp-scan by Invariant Labs) scan for prompt injection but are not annotation quality linters.
+MCP provides no official linting or static analysis for annotation quality, description completeness, or token efficiency. The only official tooling is MCP Inspector (`@modelcontextprotocol/inspector`), which validates protocol compliance (JSON-RPC structure, schema presence, invocation correctness) but does not evaluate description text or parameter documentation. Community security tools (mcp-scan by Invariant Labs) scan for prompt injection but are not annotation quality linters.
 
-The absence of ecosystem tooling means annotation quality must be enforced at the server level. The minimum viable enforcement is a Rust test that calls `list_tools()` and asserts two properties for every registered tool: the tool description is non-empty, and every `inputSchema.properties` entry has a non-empty `description` field. This catches the two most common regressions: a tool added without a description string, and a parameter added without a doc comment.
-
-```rust
-#[test]
-fn test_all_tool_parameters_have_descriptions() {
-    let tools = CodeAnalyzer::list_tools();
-    for tool in &tools {
-        let tool_name = tool.name.as_ref();
-        let properties = tool
-            .input_schema
-            .get("properties")
-            .and_then(serde_json::Value::as_object);
-        if let Some(props) = properties {
-            for (param_name, param_schema) in props {
-                let desc = param_schema
-                    .get("description")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("");
-                assert!(
-                    !desc.is_empty(),
-                    "tool '{}' parameter '{}' has no description",
-                    tool_name, param_name
-                );
-            }
-        }
-    }
-}
-```
-
-*Code Snippet 8: Annotation quality guard. Runs inside `cargo test` with no new dependencies.*
+The absence of ecosystem tooling means annotation quality must be enforced at the server level. The minimum viable enforcement is a Rust test that calls `list_tools()` and asserts two properties for every registered tool: the tool description is non-empty, and every `inputSchema.properties` entry has a non-empty `description` field. This catches the two most common regressions: a tool added without a description string, and a parameter added without a doc comment. See `crates/code-analyze-mcp/tests/annotations.rs` for the implementation.
 
 ### 3.4 Transport Types
 
@@ -653,27 +624,27 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 
 ### Official
 
-- MCP Specification 2025-11-25, Server/Tools: https://modelcontextprotocol.io/specification/2025-11-25/server/tools
+- Anthropic Courses, Tool Use Chatbot: https://github.com/anthropics/courses/blob/master/tool_use/06_chatbot_with_multiple_tools.ipynb
+- Anthropic SDK (Python), Tool Use Format: https://github.com/anthropics/anthropic-sdk-python
+- MCP GitHub Documentation: https://github.com/modelcontextprotocol/docs
+- MCP Inspector (protocol compliance, not annotation quality): https://github.com/modelcontextprotocol/inspector
+- MCP Prompts Concept: https://modelcontextprotocol.info/docs/concepts/prompts/
+- MCP Python SDK: https://github.com/modelcontextprotocol/python-sdk
 - MCP Specification, Server/Resources: https://modelcontextprotocol.io/specification/2025-11-25/server/resources
+- MCP Specification, Server/Tools: https://modelcontextprotocol.io/specification/2025-11-25/server/tools
 - MCP Specification, Transports (draft): https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/draft/basic/transports.mdx
 - MCP Specification, Transports (legacy): https://github.com/modelcontextprotocol/specification/blob/main/docs/legacy/concepts/transports.mdx
-- MCP Prompts Concept: https://modelcontextprotocol.info/docs/concepts/prompts/
-- MCP GitHub Documentation: https://github.com/modelcontextprotocol/docs
-- MCP Python SDK: https://github.com/modelcontextprotocol/python-sdk
 - MCP TypeScript SDK: https://github.com/modelcontextprotocol/typescript-sdk
-- MCP Inspector (protocol compliance, not annotation quality): https://github.com/modelcontextprotocol/inspector
-- mcp-scan (security scanner, not annotation linter): https://github.com/invariantlabs-ai/mcp-scan
-- Anthropic SDK (Python), Tool Use Format: https://github.com/anthropics/anthropic-sdk-python
-- Anthropic Courses, Tool Use Chatbot: https://github.com/anthropics/courses/blob/master/tool_use/06_chatbot_with_multiple_tools.ipynb
 - OWASP, LLM Prompt Injection Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
 
 ### Background Reading
 
-- MongoDB, Agent Memory Types: https://www.mongodb.com/resources/basics/artificial-intelligence/agent-memory
-- LangChain, Memory Concepts: https://docs.langchain.com/oss/python/concepts/memory
+- Galileo, Agent Oversight and Confidence Routing: https://galileo.ai/blog/human-in-the-loop-agent-oversight
 - Human-in-the-Loop, Agentic AI Trust: https://beetroot.co/ai-ml/human-in-the-loop-meets-agentic-ai-building-trust-and-control-in-automated-workflows/
 - Human-in-the-Loop, Approval Workflows: https://zapier.com/blog/human-in-the-loop/
-- Galileo, Agent Oversight and Confidence Routing: https://galileo.ai/blog/human-in-the-loop-agent-oversight
-- Palo Alto Networks, Prompt Injection Attacks: https://www.paloaltonetworks.com/cyberpedia/what-is-a-prompt-injection-attack
-- Obsidian Security, Prompt Injection Defenses: https://www.obsidiansecurity.com/blog/prompt-injection
+- LangChain, Memory Concepts: https://docs.langchain.com/oss/python/concepts/memory
+- mcp-scan (security scanner, not annotation linter): https://github.com/invariantlabs-ai/mcp-scan
 - Medium, Memory Types in Agentic AI: https://medium.com/@gokcerbelgusen/memory-types-in-agentic-ai-a-breakdown-523c980921ec
+- MongoDB, Agent Memory Types: https://www.mongodb.com/resources/basics/artificial-intelligence/agent-memory
+- Obsidian Security, Prompt Injection Defenses: https://www.obsidiansecurity.com/blog/prompt-injection
+- Palo Alto Networks, Prompt Injection Attacks: https://www.paloaltonetworks.com/cyberpedia/what-is-a-prompt-injection-attack
