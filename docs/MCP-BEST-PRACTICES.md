@@ -386,6 +386,15 @@ Duplicating parameter detail in the tool description burns tokens on every tool-
 
 The corrective principle: keep the tool description as short as possible while remaining unambiguous for selection; rely on parameter descriptions and JSON Schema constraints to carry usage detail.
 
+**Empirical basis and known limits.** This principle is grounded in provider guidance, not MCP spec text. The MCP specification defines `inputSchema` structure but provides no guidance on content or what clients must forward to models (SEP-1382, currently dormant). What is confirmed by provider documentation:
+
+- Anthropic/Claude: the full `inputSchema` including `properties[*].description` is injected verbatim into the model's system prompt as tokens. Both Anthropic's tool use docs and the official MCP building-a-client tutorial confirm this. Source: [docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use](https://docs.anthropic.com/en/docs/build-with-claude/tool-use/implement-tool-use)
+- OpenAI: same pattern -- functions are injected into the system message, property descriptions included. Source: [platform.openai.com/docs/guides/function-calling](https://platform.openai.com/docs/guides/function-calling)
+- Azure OpenAI: hard 1024-character limit on tool descriptions. Property descriptions are not subject to this limit. Source: [learn.microsoft.com/azure/foundry/openai/how-to/function-calling](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/function-calling)
+- Cursor: unknown. Cursor wraps MCP tools in a `CallMcpTool` meta-tool. Whether `properties[*].description` reaches the underlying model is undocumented and subject to a known schema-handling bug. Do not assume forwarding.
+
+No published ablation study exists that isolates `inputSchema.properties[*].description` vs. the top-level tool `description` for parameter-filling accuracy. The separation principle is supported by Anthropic's documented observation that small models (Haiku) are more likely to infer or hallucinate missing parameters than large models -- which implies clear param descriptions matter more at the small end, not less.
+
 ### 4.2 Specificity and Naming
 
 Tool names must be unique within a server and should be action-oriented verb phrases that communicate intent without ambiguity. Names like `process`, `handle`, or `run` are disqualifying because they provide no disambiguation signal. Prefer names like `extract_invoice_fields`, `search_knowledge_base`, or `validate_address_format`.
