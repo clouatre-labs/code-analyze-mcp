@@ -205,6 +205,31 @@ The annotation posture for this server is stable and locked until new MCP SEPs l
 
 `readOnlyHint: true` allows clients to call all four tools autonomously without a confirmation step, which is the correct behavior for a passive code analysis server. `openWorldHint: false` signals that results are deterministic given the input path, not dependent on external network state.
 
+### 7.1 rmcp Compile-Time Limitations
+
+rmcp's `#[tool(...)]` macro enforces type correctness at compile time: parameter types must implement `JsonSchema + Deserialize + Default`, and `schema_for_type::<T>()` in `output_schema` is evaluated at macro-expansion time. These checks catch type mismatches early.
+
+They do not catch annotation quality issues. An empty description string, a missing `///` doc comment on a parameter field, or a semantically incorrect annotation (e.g., `read_only_hint = false` on a read-only tool) all compile without warning. The annotation tests in `crates/code-analyze-mcp/tests/annotations.rs` fill this gap at the test layer.
+
+### 7.2 schemars Attributes for Schema Quality
+
+Parameter documentation flows through schemars: `///` doc comments on struct fields become JSON Schema `description` properties. The following attributes are used in this codebase and are worth knowing when adding parameters:
+
+| Attribute | Effect on emitted schema |
+|---|---|
+| `/// doc comment` | Becomes `"description"` on the property |
+| `/// # Title` (first line) | First heading becomes `"title"`, rest becomes `"description"` |
+| `#[schemars(schema_with = "fn")]` | Delegates to a custom function (used in `schema_helpers` for non-standard numeric types) |
+| `#[schemars(range(min=N, max=M))]` | Adds `"minimum"` / `"maximum"` constraints |
+| `#[schemars(extend("examples" = [...]))]` | Adds a JSON Schema `"examples"` array; use on `Vec<enum>` and multi-variant enum fields |
+| `#[schemars(deny_unknown_fields)]` | Sets `"additionalProperties": false` |
+
+*Table 6: schemars attributes used in this server and their effect on emitted JSON Schema.*
+
+**`#[serde(flatten)]` caveat:** Fields from flattened structs (`PaginationParams`, `OutputControlParams`) inherit their descriptions from the original struct's field doc comments. schemars version bumps can silently drop flatten propagation. The `test_flatten_fields_have_descriptions` test in `annotations.rs` catches this.
+
+**`format:uint` footgun:** schemars emits `"format": "uint"` or `"format": "uint32"` for unsigned integers by default. These formats are non-standard JSON Schema and are ignored or flagged by strict validators. Override them via `schema_with` (see `crates/code-analyze-core/src/schema_helpers.rs`) for any numeric field where validator compatibility matters.
+
 ## 8. Anti-Patterns
 
 The following anti-patterns were identified across benchmark waves and wave post-mortems.
@@ -217,6 +242,7 @@ The following anti-patterns were identified across benchmark waves and wave post
 | Structured output enforcement inside the tool | Tool becomes runner-dependent; non-portable | Enforce at client/runner layer; tool always returns structured data |
 | Synchronous metrics/logging on the hot path | Observability adds latency to every tool call | Channel pattern: fire-and-forget into unbounded channel; writer task runs independently |
 | Optimizing only for large models | Small-model users experience regressions | Small-model-first constraint: validate against Haiku before Sonnet |
+| Missing `///` doc comments on parameter fields | Parameter appears in `inputSchema.properties` with an empty `description`; model must infer meaning from name alone | Add `///` doc comment to every parameter field; enforced by `test_all_tool_parameters_have_descriptions` in `annotations.rs` |
 
 *Table 5: Anti-patterns, consequences, and corrective patterns.*
 
@@ -235,3 +261,4 @@ Ordered checklist for building a new MCP server applying the principles in this 
 9. **Set annotation posture.** Set `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` on every tool before shipping.
 10. **Add observability.** Instrument each tool handler with a fire-and-forget channel metric. Do not block the hot path.
 11. **Benchmark before shipping.** Define a condition matrix (model × tool set), run blind scoring, report rank-biserial effect sizes. A wave that improves large models but regresses small models does not ship.
+12. **Add annotation quality tests.** Add a `list_tools()` test asserting non-empty description on every tool and every `inputSchema` property. Add a flatten propagation test for any parameter struct using `#[serde(flatten)]`. These run inside `cargo test` with no additional CI overhead and catch regressions the compiler cannot detect.
