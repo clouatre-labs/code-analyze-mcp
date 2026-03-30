@@ -47,6 +47,7 @@ pub struct OutputControlParams {
     /// Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses.
     pub force: Option<bool>,
     /// true = compact summary (totals plus directory tree, no per-file function lists); false = full output; unset = auto-summarize when output exceeds 50K chars.
+    /// Mutually exclusive with cursor; passing both returns INVALID_PARAMS.
     pub summary: Option<bool>,
     /// true = full output with section headers and imports (Markdown-style); false or unset = compact one-line-per-item format (default).
     pub verbose: Option<bool>,
@@ -178,6 +179,7 @@ pub struct AnalyzeSymbolParams {
 
     /// When true, filter callers to only those originating from an `impl Trait for Type` block.
     /// Only valid for Rust source directories; returns an error for other languages.
+    /// Emits a FILTER header showing how many callers were retained.
     #[serde(default)]
     pub impl_only: Option<bool>,
 }
