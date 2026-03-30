@@ -329,24 +329,19 @@ mod tests {
     async fn test_cleanup_old_files_deletes_old_keeps_recent() {
         use tempfile::TempDir;
 
-        // Today = 2026-03-28 (hard-coded to match plan; adjust if re-run later)
-        // 31 days ago = 2026-02-25; 29 days ago = 2026-02-27
+        // Create a file with a date far in the past (1970-01-01) which should be deleted,
+        // and a file with today's date which should be kept.
         let dir = TempDir::new().unwrap();
-        let old_file = dir.path().join("metrics-2026-02-25.jsonl");
-        let recent_file = dir.path().join("metrics-2026-02-27.jsonl");
+        let old_file = dir.path().join("metrics-1970-01-01.jsonl");
+        let today = current_date_str();
+        let recent_file = dir.path().join(format!("metrics-{}.jsonl", today));
         std::fs::write(&old_file, "old\n").unwrap();
         std::fs::write(&recent_file, "recent\n").unwrap();
 
         cleanup_old_files(dir.path()).await;
 
-        assert!(
-            !old_file.exists(),
-            "31-day-old file should have been deleted"
-        );
-        assert!(
-            recent_file.exists(),
-            "29-day-old file should have been kept"
-        );
+        assert!(!old_file.exists(), "old file should have been deleted");
+        assert!(recent_file.exists(), "today's file should have been kept");
     }
 
     #[test]

@@ -103,6 +103,7 @@ pub struct AnalyzeFileParams {
     /// Omitting this field returns all sections (current behavior).
     /// Ignored when summary=true (summary takes precedence).
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("examples" = [["functions", "classes"], ["functions"], ["imports"]]))]
     pub fields: Option<Vec<AnalyzeFileField>>,
 
     #[serde(flatten)]
@@ -145,6 +146,7 @@ pub struct AnalyzeSymbolParams {
     pub symbol: String,
 
     /// Symbol matching mode (default: exact). exact: case-sensitive exact match. insensitive: case-insensitive exact match. prefix: case-insensitive prefix match. contains: case-insensitive substring match. When exact match fails, retry with insensitive. When prefix or contains returns multiple candidates, the response lists them so you can refine.
+    #[schemars(extend("examples" = ["exact", "insensitive", "prefix", "contains"]))]
     pub match_mode: Option<SymbolMatchMode>,
 
     /// Call graph traversal depth for this tool (default 1). Level 1 = direct callers and callees; level 2 = one more hop, etc. Output size grows exponentially with graph branching. Warn user on levels above 2.
