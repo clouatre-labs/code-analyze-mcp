@@ -96,7 +96,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: stable
           components: rustfmt, clippy
@@ -131,7 +131,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: stable
           components: llvm-tools-preview
@@ -140,11 +140,11 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
+        uses: taiki-e/install-action@80a23c5ba9e1100fd8b777106e810018ed662a7b # v2.69.12
         with:
           tool: cargo-llvm-cov
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
+        uses: taiki-e/install-action@80a23c5ba9e1100fd8b777106e810018ed662a7b # v2.69.12
         with:
           tool: cargo-nextest
       - name: Coverage
@@ -170,7 +170,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install cargo-deny
-        uses: taiki-e/install-action@06203676c62f0d3c765be3f2fcfbebbcb02d09f5 # v2.69.6
+        uses: taiki-e/install-action@80a23c5ba9e1100fd8b777106e810018ed662a7b # v2.69.12
         with:
           tool: cargo-deny
       - name: Check advisories and licenses
@@ -186,7 +186,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: "1.94.1"
       - name: Setup Rust cache
