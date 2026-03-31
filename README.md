@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://crates.io/crates/code-analyze-mcp"><img alt="crates.io" src="https://img.shields.io/crates/v/code-analyze-mcp.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20"></a>
   <a href="https://api.reuse.software/info/github.com/clouatre-labs/code-analyze-mcp"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/code-analyze-mcp?style=for-the-badge" height="20"></a>
-  <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://slsa.dev/images/gh-badge-level3.svg" height="20"></a>
+  <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://img.shields.io/badge/SLSA-Level%203-green?style=for-the-badge" height="20"></a>
   <a href="https://www.bestpractices.dev/projects/12275"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/12275?style=for-the-badge" height="20"></a>
 </p>
 
