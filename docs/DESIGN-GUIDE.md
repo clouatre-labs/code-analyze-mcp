@@ -154,12 +154,13 @@ The writer task is isolated from the tool execution path. If disk I/O is slow or
 
 ### Rubric
 
-Four dimensions, scored 0–3 each (maximum 12 per run):
+Three dimensions, scored 0–3 each (maximum 9 per run):
 
 - **Structural Accuracy:** Module identification, type accuracy, boundary clarity
 - **Cross-Module Tracing:** End-to-end pipeline trace, intermediate types, data flow
 - **Approach Quality:** Proposal correctness, pattern adherence, risk analysis
-- **Tool Efficiency:** Research tool call count (≤5 = 3 pts, 6–10 = 2, 11–20 = 1, >20 = 0)
+
+Benchmarks v3–v10 used four dimensions including tool_efficiency (max 12); see ROADMAP.md for the full history.
 
 ### Condition Matrix
 

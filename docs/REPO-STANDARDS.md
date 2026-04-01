@@ -13,7 +13,7 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `.github/copilot-instructions.md` | Repo context for Copilot agents |
 | `.github/workflows/ci.yml` | Lint, test, audit; path-filtered; aggregate `CI Result` job; pass `--profile ci` explicitly on `cargo clippy` (not `cargo test`: profile.ci inherits `panic=abort` which aborts the test harness) |
 | `.github/workflows/build-and-attest.yml` | Reusable multi-platform build with cosign signing and provenance attestation |
-| `.github/workflows/release.yml` | GPG tag verification, SBOM, Homebrew + cargo-binstall + crates.io distribution |
+| `.github/workflows/release.yml` | GPG tag verification, Homebrew + cargo-binstall + crates.io distribution |
 | `.commitlintrc.yml` | Enforces Conventional Commits for automated changelog and searchable history |
 | `clippy.toml` | Clippy configuration; lints enforced with `-D warnings` in CI |
 | `deny.toml` | `cargo deny` configuration for advisory and license checks |
@@ -52,7 +52,7 @@ ci-result:
 
 **Path-based change detection.** Format, lint, and test jobs run only when `src/**`, `Cargo.*`, `tests/**`, or workflow files change. Documentation-only pushes skip expensive jobs and give faster feedback.
 
-**Provenance attestation.** `build-and-attest.yml` generates a signed attestation via `actions/attest-build-provenance`. Consumers can verify with `gh attestation verify` before installing. Combined with cosign signing and an SBOM, this covers the supply chain end to end.
+**Provenance attestation.** `build-and-attest.yml` generates a signed attestation via `actions/attest-build-provenance`. Consumers can verify with `gh attestation verify` before installing. `Cargo.lock` is committed and `cargo deny` enforces license and advisory checks in CI. Build provenance is covered by cosign signing and `actions/attest-build-provenance` (SLSA Build L3).
 
 **Runner pinning to ubuntu-24.04.** `ubuntu-latest` is a moving alias; GitHub advances it to the next LTS image with short notice. Pinning to a specific image (`ubuntu-24.04`) makes toolchain changes explicit and reviewable rather than silent. Renovate keeps the pin current via automated PRs.
 

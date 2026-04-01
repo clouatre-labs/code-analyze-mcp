@@ -30,6 +30,14 @@ Key changes:
 - #356: Idempotency audit and cross-client compatibility verification
 - #357: ROADMAP.md and OBSERVABILITY.md documentation
 
+### [Benchmarking] Wave 7: OpenFAST Fortran Analysis (v13)
+
+2x2 factorial design (model x tool_set) on Fortran scientific HPC code (OpenFAST). See [v13 methodology](docs/benchmarks/v13/methodology.md).
+
+### [Benchmarking] Wave 8: Rust Trait Dispatch Analysis (v14)
+
+2x2 factorial design (model x tool_set) on Rust trait implementations (ripgrep). See [v14 methodology](docs/benchmarks/v14/methodology.md).
+
 ---
 
 ## Benchmark-Driven Development
