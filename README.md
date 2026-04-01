@@ -121,85 +121,7 @@ Walks a directory tree, counts lines of code, functions, and classes per file. R
 
 **Additional optional:** `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
 
-**Example output (default):**
 
-```
-PAGINATED: showing 16 of 16 files (max_depth=1)
-
-analyze.rs [737L, 13F, 4C]
-cache.rs [105L, 5F, 2C]
-completion.rs [129L, 2F]
-formatter.rs [1876L, 32F, 2C]
-graph.rs [926L, 34F, 3C]
-lang.rs [41L, 3F]
-lib.rs [1335L, 22F, 1C]
-logging.rs [136L, 11F, 3C]
-main.rs [50L, 1F]
-metrics.rs [254L, 13F, 3C]
-pagination.rs [198L, 11F, 4C]
-parser.rs [990L, 19F, 4C]
-schema_helpers.rs [56L, 4F]
-traversal.rs [90L, 1F, 2C]
-types.rs [575L, 8F, 27C]
-
-test_detection.rs [100L, 5F]
-```
-
-**Example output (`verbose=true`):**
-
-```
-PAGINATED: showing 16 of 16 files (max_depth=1)
-
-FILES [LOC, FUNCTIONS, CLASSES]
-analyze.rs [737L, 13F, 4C]
-cache.rs [105L, 5F, 2C]
-completion.rs [129L, 2F]
-formatter.rs [1876L, 32F, 2C]
-graph.rs [926L, 34F, 3C]
-lang.rs [41L, 3F]
-lib.rs [1335L, 22F, 1C]
-logging.rs [136L, 11F, 3C]
-main.rs [50L, 1F]
-metrics.rs [254L, 13F, 3C]
-pagination.rs [198L, 11F, 4C]
-parser.rs [990L, 19F, 4C]
-schema_helpers.rs [56L, 4F]
-traversal.rs [90L, 1F, 2C]
-types.rs [575L, 8F, 27C]
-
-TEST FILES [LOC, FUNCTIONS, CLASSES]
-test_detection.rs [100L, 5F]
-```
-
-**Example output (`summary=true`):**
-
-```
-SUMMARY:
-16 files (15 prod, 1 test), 7598L, 184F, 55C (max_depth=1)
-Languages: rust (100%)
-
-STRUCTURE (depth 1):
-  analyze.rs [737L, 13F, 4C]
-  cache.rs [105L, 5F, 2C]
-  completion.rs [129L, 2F]
-  formatter.rs [1876L, 32F, 2C]
-  graph.rs [926L, 34F, 3C]
-  lang.rs [41L, 3F]
-  languages/
-  lib.rs [1335L, 22F, 1C]
-  logging.rs [136L, 11F, 3C]
-  main.rs [50L, 1F]
-  metrics.rs [254L, 13F, 3C]
-  pagination.rs [198L, 11F, 4C]
-  parser.rs [990L, 19F, 4C]
-  schema_helpers.rs [56L, 4F]
-  test_detection.rs [100L, 5F]
-  traversal.rs [90L, 1F, 2C]
-  types.rs [575L, 8F, 27C]
-
-SUGGESTION:
-Use a narrower path for details (e.g., analyze src/core/)
-```
 
 ```bash
 analyze_directory path: /path/to/project
@@ -218,42 +140,7 @@ Extracts functions, classes, and imports from a single file.
 - `ast_recursion_limit` *(integer, optional)* -- tree-sitter AST traversal depth cap; leave unset for unlimited depth. Minimum value is 1; 0 is treated as unset.
 - `fields` *(array of strings, optional)* -- limit output to specific sections. Valid values: `"functions"`, `"classes"`, `"imports"`. Omit to return all sections. The FILE header (path, line count, section counts) is always emitted regardless. Ignored when `summary=true`. When `"imports"` is listed explicitly, the `I:` section is rendered regardless of the `verbose` flag.
 
-**Example output (default, page 1 of 2):**
 
-```
-FILE: src/lib.rs (1335L, 1-10/22F, 1C, 66I)
-C:
-  CodeAnalyzer:143
-F:
-  summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
-  no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
-  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303
-
-NEXT_CURSOR: eyJtb2RlIjoiZGVmYXVsdCIsIm9mZnNldCI6MTB9
-```
-
-**Example output (`verbose=true`, adds `I:` section before `F:`):**
-
-```
-FILE: src/lib.rs (1335L, 1-10/22F, 1C, 66I)
-C:
-  CodeAnalyzer:143
-I:
-  cache(1)
-  crate::pagination(2)
-  crate::types(3)
-  formatter(6)
-  pagination(6)
-  rmcp(6)
-  rmcp::model(19)
-  types(5)
-F:
-  summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
-  no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
-  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303
-
-NEXT_CURSOR: eyJtb2RlIjoiZGVmYXVsdCIsIm9mZnNldCI6MTB9
-```
 
 ```bash
 analyze_file path: /path/to/file.rs
@@ -267,22 +154,7 @@ Extracts a minimal function/import index from a single file. ~75% smaller output
 
 **Required:** `path` *(string)* -- file to analyze
 
-**Example output:**
 
-```
-FILE: lib.rs (1335L, 22F, 66I)
-F:
-  summary_cursor_conflict:65, error_meta:69, err_to_tool_result:81,
-  no_cache_meta:85, paginate_focus_chains:96, list_tools:154, new:158,
-  emit_progress:175, handle_overview_mode:202, handle_file_details_mode:303,
-  handle_focused_mode:344, analyze_directory:553, analyze_file:691,
-  analyze_symbol:846, analyze_module:998, get_info:1079, on_initialized:1106,
-  on_cancelled:1154, complete:1167, set_level:1221
-I:
-  cache:AnalysisCache; formatter:format_structure_paginated;
-  pagination:paginate_slice; rmcp::model:CallToolResult;
-  types:AnalyzeDirectoryParams
-```
 
 ```bash
 analyze_module path: /path/to/file.rs

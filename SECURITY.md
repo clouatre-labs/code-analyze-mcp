@@ -42,4 +42,4 @@ cosign verify-blob \
   code-analyze-mcp-<version>-<target>.tar.gz
 ```
 
-Replace `<version>` with the release version and `<target>` with the target triple (e.g., `x86_64-unknown-linux-gnu`).
+Replace `<version>` with the release version and `<target>` with the target triple (e.g., `x86_64-unknown-linux-musl`).

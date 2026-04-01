@@ -96,7 +96,6 @@ All changes go through a pull request; no direct pushes to main are permitted.
   ```
 
 **Review process:**
-- Request the Copilot automated reviewer on every PR; for this solo-maintained project it substitutes for a human second reviewer
 - Address all review comments before merging; unresolved comments block merge
 
 **Acceptance criteria:**
@@ -164,10 +163,6 @@ Note: `act` can also run Linux jobs locally, but `aarch64-apple-darwin` builds a
 We follow [SemVer](https://semver.org/): MAJOR (breaking), MINOR (features), PATCH (fixes).
 
 ## Planned enhancements
-
-### MCP resources
-
-Resource endpoints (`list_resources`, `read_resource`) are designed but not yet implemented. See the [MCP Resources design in ARCHITECTURE.md](docs/ARCHITECTURE.md#mcp-resources-planned) for the URI scheme, content catalog, and implementation path before starting work on this feature.
 
 ## AI Agent Contributions
 
