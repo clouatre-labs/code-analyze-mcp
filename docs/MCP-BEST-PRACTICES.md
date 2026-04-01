@@ -235,19 +235,19 @@ The absence of ecosystem tooling means annotation quality must be enforced at th
 
 ### 3.4 Transport Types
 
-MCP supports three transport mechanisms (MCP specification, basic/transports):
+MCP supports three transport mechanisms. HTTP/SSE is deprecated since 2025-03-26 and must not be used for new implementations, but remains in the spec with a backwards-compatibility guide and is still shipped by the Python SDK (MCP specification, basic/transports):
 
-| Transport | Use Case | Protocol |
-|---|---|---|
-| STDIO | Local integrations, CLI tools, same-host servers | Standard input/output streams, bidirectional |
-| HTTP/SSE | Distributed systems, remote servers (legacy, pre-2025-03-26) | HTTP POST for requests, persistent SSE stream for responses |
-| Streamable HTTP | Distributed systems, remote servers (preferred since 2025-03-26) | HTTP POST to single `/mcp` endpoint; inline response (stateless) or streaming session (stateful) |
+| Transport | Status | Use Case | Protocol |
+|---|---|---|---|
+| STDIO | Active | Local integrations, CLI tools, same-host servers | Standard input/output streams, bidirectional |
+| Streamable HTTP | Active (preferred since 2025-03-26) | Distributed systems, remote servers | HTTP POST to single `/mcp` endpoint; inline response (stateless) or streaming session (stateful) |
+| HTTP/SSE | **Deprecated since 2025-03-26** | Legacy remote servers only | HTTP POST for requests, persistent SSE stream for responses |
 
 *Table 2: MCP transport types, use cases, and protocols.*
 
-For **HTTP/SSE** (legacy, deprecated since 2025-03-26): the client sends requests via HTTP POST and receives responses via a persistent Server-Sent Events stream. New server implementations should prefer Streamable HTTP.
+For **Streamable HTTP** (preferred): the client POSTs JSON-RPC messages to a single `/mcp` endpoint. The server responds inline in the HTTP response body (stateless mode) or upgrades to a streaming session by returning a stream ID and subsequent events on the same endpoint (stateful mode). Proxy- and load-balancer-friendly because it does not require persistent SSE connections. Use this for all new remote server implementations.
 
-For **Streamable HTTP** (preferred since 2025-03-26): the client POSTs JSON-RPC messages to a single `/mcp` endpoint. The server responds inline in the HTTP response body (stateless mode) or upgrades to a streaming session by returning a stream ID and subsequent events on the same endpoint (stateful mode). Proxy- and load-balancer-friendly because it does not require persistent SSE connections.
+For **HTTP/SSE** (deprecated since 2025-03-26): the client sends requests via HTTP POST and receives responses via a persistent Server-Sent Events stream. Do not use for new implementations. No removal deadline has been stated; the Python SDK (`SseServerTransport`) still ships it for existing deployments. If you maintain an HTTP/SSE server, migrate to Streamable HTTP. Migration reference: MCP Specification, Transports (legacy).
 
 ---
 
@@ -403,6 +403,31 @@ Write descriptions that differentiate tools from their nearest neighbors. If you
 
 Test tool selection reliability by constructing requests that could plausibly route to multiple tools and verifying which tool the model selects. Edge cases and ambiguous phrasing are the highest-value test scenarios.
 
+### 4.2.1 Tool Name Format and the Dot-Notation Question
+
+The MCP specification (2025-11-25) constrains tool names to alphanumeric characters, underscores, hyphens, and dots, with a maximum length of 64 characters. Spaces are explicitly disallowed. Within those constraints, the spec prescribes no naming style: it is silent on whether to use snake_case, camelCase, or dot-notation.
+
+**Prefer flat snake_case.** The recommended style for MCP tool names is flat, underscore-separated verb phrases: `extract_invoice_fields`, `search_knowledge_base`, `matrix_multiply`. This style is used by most production MCP servers and by FastMCP's own namespace separator when mounting sub-servers (FastMCP `mount()` produces `prefix_toolname`, not `prefix.toolname`). The `searchFlights` example in Code Snippet 5 uses camelCase for illustration; in a production server, prefer `search_flights` for consistency.
+
+**Dot-notation breaks direct OpenAI tool mappings.** OpenAI's function-calling API enforces the regex `^[a-zA-Z0-9_-]{1,64}$` at the HTTP layer. A tool named `admin.tools.list` produces an HTTP 400 error when mapped directly to an OpenAI function name. Note that some MCP clients (including Cursor) wrap MCP tools in a `CallMcpTool` meta-tool, meaning the MCP tool name becomes a parameter rather than an OpenAI function name -- in that case dots may not cause an immediate error. However, any layer that maps MCP tool names directly to OpenAI tool or function names (Azure OpenAI integrations, custom OpenAI bridges) will reject dotted names. The safe, universally compatible choice is flat snake_case.
+
+**The Smithery "hierarchy score" is a third-party metric, not an MCP standard.** Smithery's quality scoring rewards tool names that form a dot-delimited navigable tree and penalizes flat lists. This heuristic is proprietary to Smithery's platform and has no basis in the MCP specification or in any provider guidance (Anthropic, OpenAI, Google). Optimizing tool names for this score produces names that fail in the majority of real-world MCP client deployments.
+
+**LLM naturalness.** No controlled ablation study isolates separator style for tool-selection accuracy. The practitioner consensus, grounded in the observation that LLMs are trained heavily on snake_case function-call corpora, is that dots pattern-match to module paths or JSON property accessors rather than callable tool names, which can degrade selection reliability on smaller models.
+
+**Summary of constraints by client:**
+
+| Client | Dots in tool names | Notes |
+|---|---|---|
+| Claude Desktop | Allowed | No known restriction |
+| Cursor / VS Code Copilot | Context-dependent | MCP tools are typically wrapped in a `CallMcpTool` meta-tool; dots are fine there, but any layer mapping MCP names directly to OpenAI function names must satisfy `^[a-zA-Z0-9_-]{1,64}$` |
+| Azure OpenAI | Rejected when mapped directly | When MCP tool names are surfaced as OpenAI function names the regex rejects dots; also enforces a 1024-char description limit |
+| FastMCP mount | Produces `_` | `mount(server, prefix="weather")` yields `weather_get_data` |
+
+*Table 3: MCP client compatibility with dot-notation tool names.*
+
+**Empirical basis and known limits.** The OpenAI regex is documented at [platform.openai.com/docs/guides/function-calling](https://platform.openai.com/docs/guides/function-calling). FastMCP separator behavior is documented in the FastMCP mounting guide. The MCP 2025-11-25 spec name constraint is at [modelcontextprotocol.io/specification/2025-11-25/server/tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). No MCP specification proposal (SEP) that mandates dot-notation has reached normative status as of 2026-04-01.
+
 ### 4.3 Error Responses
 
 Structured error responses are required for reliable agentic behavior. A bare exception message or an HTTP 500 response gives the orchestrator no information about whether to retry, escalate, or take an alternative action.
@@ -456,7 +481,7 @@ Agent memory spans five types, each with distinct persistence and access charact
 | Semantic | Persistent | Knowledge graph, structured DB | Query |
 | Procedural | Permanent | Model weights, execution patterns | Implicit |
 
-*Table 3: Agent memory types, persistence characteristics, and access mechanisms.*
+*Table 4: Agent memory types, persistence characteristics, and access mechanisms.*
 
 **In-context memory** is transient working memory. It disappears when the session ends or when older tokens are pushed out of the window. This is where the current conversation, tool results, and intermediate state live.
 
@@ -597,6 +622,8 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 
 **Duplicating parameter detail in the tool description.** The tool description is a selection signal. Parameter-level detail (valid ranges, defaults, edge cases) placed in the tool description is consumed on every tool-listing call and adds no selection value. Put parameter detail in the parameter's own `description` field in `inputSchema.properties`. See section 4.1.1.
 
+**Using dot-notation tool names.** The MCP spec permits dots in tool names, but OpenAI's function-calling API enforces `^[a-zA-Z0-9_-]{1,64}$` and rejects dots with HTTP 400. Any MCP client that routes through an OpenAI-compatible backend (Cursor, VS Code Copilot, Azure OpenAI) will silently break on dotted names. Use flat snake_case throughout. Third-party scoring tools (e.g., Smithery's hierarchy metric) that reward dot-notation are applying a proprietary heuristic, not an MCP standard. See section 4.2.1.
+
 **Relying on prose to signal required vs. optional.** If a required field is not listed in the `required` array of the input schema, the model may treat it as optional regardless of what the description says. The `required` array is enforced by JSON Schema validators; description prose is not. Always keep `required` accurate.
 
 ---
@@ -623,9 +650,10 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 | Input Validation | Any user-supplied input or external data | Sanitize before LLM processing; separate from system instructions |
 | Privilege Minimization | All agent and tool permission grants | Grant minimum permissions required for the specific function |
 | Description Scope | Any MCP tool definition | Tool description = selection signal; parameter description = usage detail; do not duplicate |
+| Tool Name Format | Any MCP tool definition | Use flat snake_case; dot-notation breaks OpenAI-bridged clients (HTTP 400); ignore third-party hierarchy scores |
 | Annotation Quality | All rmcp/Rust MCP servers | Add a `list_tools()` test asserting non-empty description on every tool and every parameter |
 
-*Table 4: Quick reference: pattern, when to use, and key rule.*
+*Table 5: Quick reference: pattern, when to use, and key rule.*
 
 ---
 
@@ -644,6 +672,7 @@ The following patterns produce unreliable, fragile, or unsafe agent systems.
 - MCP Specification, Transports (draft): https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/draft/basic/transports.mdx
 - MCP Specification, Transports (legacy): https://github.com/modelcontextprotocol/specification/blob/main/docs/legacy/concepts/transports.mdx
 - MCP TypeScript SDK: https://github.com/modelcontextprotocol/typescript-sdk
+- OpenAI Function Calling, Tool Name Constraints: https://platform.openai.com/docs/guides/function-calling
 - OWASP, LLM Prompt Injection Prevention Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html
 
 ### Background Reading
