@@ -194,7 +194,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "code-analyze-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "base64",
  "criterion",
@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "code-analyze-mcp"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "async-trait",
  "code-analyze-core",
