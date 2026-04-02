@@ -141,6 +141,7 @@ fn init_query_cache() -> HashMap<&'static str, CompiledQueries> {
         "tsx",
         "go",
         "java",
+        "javascript",
         "fortran",
     ];
     let mut cache = HashMap::new();

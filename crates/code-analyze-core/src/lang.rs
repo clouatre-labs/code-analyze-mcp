@@ -33,6 +33,12 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
     ("ts", "typescript"),
     #[cfg(feature = "lang-tsx")]
     ("tsx", "tsx"),
+    #[cfg(feature = "lang-javascript")]
+    ("js", "javascript"),
+    #[cfg(feature = "lang-javascript")]
+    ("mjs", "javascript"),
+    #[cfg(feature = "lang-javascript")]
+    ("cjs", "javascript"),
 ];
 
 /// Returns the language identifier for the given file extension, or `None` if unsupported.
@@ -66,6 +72,8 @@ pub fn supported_languages() -> &'static [&'static str] {
         "typescript",
         #[cfg(feature = "lang-tsx")]
         "tsx",
+        #[cfg(feature = "lang-javascript")]
+        "javascript",
         #[cfg(feature = "lang-fortran")]
         "fortran",
     ]

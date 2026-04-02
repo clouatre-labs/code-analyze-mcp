@@ -483,6 +483,71 @@ fn test_python_edge_case_empty_file() {
     assert_eq!(output.semantic.classes.len(), 0);
 }
 
+#[cfg(feature = "lang-javascript")]
+#[test]
+fn test_javascript_parse_and_extract() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.js");
+    let js_code = r#"
+function hello() {
+    console.log("Hello");
+}
+
+class MyClass {
+    method() {
+        return "test";
+    }
+}
+
+import {x} from 'module';
+"#;
+    fs::write(&file_path, js_code).unwrap();
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    // Verify functions and classes are extracted
+    assert!(
+        output.semantic.functions.iter().any(|f| f.name == "hello"),
+        "expected hello function"
+    );
+    assert_eq!(output.semantic.classes.len(), 1);
+    // Verify ES imports are captured
+    assert!(output.semantic.imports.len() >= 1);
+}
+
+#[cfg(feature = "lang-javascript")]
+#[test]
+fn test_javascript_commonjs_require() {
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("test.js");
+    let js_code = r#"
+const lib = require('./lib');
+const path = require('path');
+"#;
+    fs::write(&file_path, js_code).unwrap();
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    // Verify that at least one require import is captured
+    assert!(
+        !output.semantic.imports.is_empty(),
+        "expected at least one import from require"
+    );
+    // Debug print imports
+    println!("imports: {:?}", output.semantic.imports);
+    // Optionally check for specific paths
+    let has_lib = output
+        .semantic
+        .imports
+        .iter()
+        .any(|i| i.module.contains("./lib"));
+    let has_path = output
+        .semantic
+        .imports
+        .iter()
+        .any(|i| i.module.contains("path"));
+    assert!(
+        has_lib || has_path,
+        "expected './lib' or 'path' import captured"
+    );
+}
+
 #[cfg(feature = "lang-typescript")]
 #[test]
 fn test_typescript_parse_and_extract() {
