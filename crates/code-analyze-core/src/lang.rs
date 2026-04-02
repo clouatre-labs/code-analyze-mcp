@@ -5,6 +5,16 @@
 //! Maps file extensions to supported language identifiers.
 
 const EXTENSION_MAP: &[(&str, &str)] = &[
+    #[cfg(feature = "lang-cpp")]
+    ("c", "c"),
+    #[cfg(feature = "lang-cpp")]
+    ("cc", "cpp"),
+    #[cfg(feature = "lang-javascript")]
+    ("cjs", "javascript"),
+    #[cfg(feature = "lang-cpp")]
+    ("cpp", "cpp"),
+    #[cfg(feature = "lang-cpp")]
+    ("cxx", "cpp"),
     #[cfg(feature = "lang-fortran")]
     ("f", "fortran"),
     #[cfg(feature = "lang-fortran")]
@@ -21,6 +31,16 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
     ("for", "fortran"),
     #[cfg(feature = "lang-fortran")]
     ("ftn", "fortran"),
+    #[cfg(feature = "lang-cpp")]
+    ("h", "cpp"),
+    #[cfg(feature = "lang-cpp")]
+    ("hpp", "cpp"),
+    #[cfg(feature = "lang-cpp")]
+    ("hxx", "cpp"),
+    #[cfg(feature = "lang-javascript")]
+    ("js", "javascript"),
+    #[cfg(feature = "lang-javascript")]
+    ("mjs", "javascript"),
     #[cfg(feature = "lang-go")]
     ("go", "go"),
     #[cfg(feature = "lang-java")]
@@ -33,12 +53,6 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
     ("ts", "typescript"),
     #[cfg(feature = "lang-tsx")]
     ("tsx", "tsx"),
-    #[cfg(feature = "lang-javascript")]
-    ("js", "javascript"),
-    #[cfg(feature = "lang-javascript")]
-    ("mjs", "javascript"),
-    #[cfg(feature = "lang-javascript")]
-    ("cjs", "javascript"),
 ];
 
 /// Returns the language identifier for the given file extension, or `None` if unsupported.
@@ -76,6 +90,10 @@ pub fn supported_languages() -> &'static [&'static str] {
         "javascript",
         #[cfg(feature = "lang-fortran")]
         "fortran",
+        #[cfg(feature = "lang-cpp")]
+        "c",
+        #[cfg(feature = "lang-cpp")]
+        "cpp",
     ]
 }
 
@@ -103,6 +121,16 @@ mod tests {
         assert_eq!(language_for_extension("for"), Some("fortran"));
         #[cfg(feature = "lang-fortran")]
         assert_eq!(language_for_extension("ftn"), Some("fortran"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("c"), Some("c"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("cpp"), Some("cpp"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("h"), Some("cpp"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("hpp"), Some("cpp"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("cc"), Some("cpp"));
     }
 
     #[test]

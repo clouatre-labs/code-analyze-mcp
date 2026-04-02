@@ -134,19 +134,9 @@ fn build_compiled_queries(
 /// only fails on invalid hardcoded query strings.
 #[cfg_attr(coverage_nightly, coverage(off))]
 fn init_query_cache() -> HashMap<&'static str, CompiledQueries> {
-    let supported_languages = [
-        "rust",
-        "python",
-        "typescript",
-        "tsx",
-        "go",
-        "java",
-        "javascript",
-        "fortran",
-    ];
     let mut cache = HashMap::new();
 
-    for lang_name in &supported_languages {
+    for lang_name in crate::lang::supported_languages() {
         if let Some(lang_info) = get_language_info(lang_name) {
             match build_compiled_queries(&lang_info) {
                 Ok(compiled) => {
