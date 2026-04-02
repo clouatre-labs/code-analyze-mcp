@@ -32,7 +32,7 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
     #[cfg(feature = "lang-fortran")]
     ("ftn", "fortran"),
     #[cfg(feature = "lang-cpp")]
-    ("h", "c"),
+    ("h", "cpp"),
     #[cfg(feature = "lang-cpp")]
     ("hpp", "cpp"),
     #[cfg(feature = "lang-cpp")]

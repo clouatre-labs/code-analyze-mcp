@@ -5,7 +5,7 @@
 //! Provides query strings and extraction handlers for supported languages.
 //! Language support is controlled by Cargo `lang-*` features (by default all
 //! available language handlers are enabled): Rust, Go, Java, JavaScript, Python,
-//! TypeScript, TSX, and Fortran.
+//! TypeScript, TSX, Fortran, and C/C++.
 
 #[cfg(feature = "lang-cpp")]
 pub mod cpp;
@@ -143,7 +143,7 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             import_query: Some(cpp::IMPORT_QUERY),
             impl_query: None,
             impl_trait_query: None,
-            extract_function_name: None,
+            extract_function_name: Some(cpp::extract_function_name),
             find_method_for_receiver: Some(cpp::find_method_for_receiver),
             find_receiver_type: None,
             extract_inheritance: Some(cpp::extract_inheritance),
