@@ -4,7 +4,7 @@
 //!
 //! Provides query strings and extraction handlers for supported languages.
 //! Language support is controlled by Cargo `lang-*` features (by default all
-//! available language handlers are enabled): Rust, Go, Java, Python,
+//! available language handlers are enabled): Rust, Go, Java, JavaScript, Python,
 //! TypeScript, TSX, and Fortran.
 
 #[cfg(feature = "lang-fortran")]
@@ -13,6 +13,8 @@ pub mod fortran;
 pub mod go;
 #[cfg(feature = "lang-java")]
 pub mod java;
+#[cfg(feature = "lang-javascript")]
+pub mod javascript;
 #[cfg(feature = "lang-python")]
 pub mod python;
 #[cfg(feature = "lang-rust")]
@@ -159,6 +161,21 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(fortran::extract_inheritance),
         }),
+        #[cfg(feature = "lang-javascript")]
+        "javascript" => Some(LanguageInfo {
+            name: "javascript",
+            language: tree_sitter_javascript::LANGUAGE.into(),
+            element_query: javascript::ELEMENT_QUERY,
+            call_query: javascript::CALL_QUERY,
+            reference_query: None,
+            import_query: Some(javascript::IMPORT_QUERY),
+            impl_query: None,
+            impl_trait_query: None,
+            extract_function_name: None,
+            find_method_for_receiver: None,
+            find_receiver_type: None,
+            extract_inheritance: Some(javascript::extract_inheritance),
+        }),
         _ => None,
     }
 }
@@ -183,6 +200,8 @@ pub fn get_ts_language(lang_name: &str) -> Option<Language> {
         "java" => Some(tree_sitter_java::LANGUAGE.into()),
         #[cfg(feature = "lang-fortran")]
         "fortran" => Some(tree_sitter_fortran::LANGUAGE.into()),
+        #[cfg(feature = "lang-javascript")]
+        "javascript" => Some(tree_sitter_javascript::LANGUAGE.into()),
         _ => None,
     }
 }
