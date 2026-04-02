@@ -46,7 +46,7 @@ tokio-util = { workspace = true }
 tree-sitter-rust = { workspace = true, optional = true }
 tree-sitter-go = { workspace = true, optional = true }
 tree-sitter-cpp = { workspace = true, optional = true }
-    tree-sitter-c-sharp = { workspace = true, optional = true }
+tree-sitter-c-sharp = { workspace = true, optional = true }
 tree-sitter-java = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }

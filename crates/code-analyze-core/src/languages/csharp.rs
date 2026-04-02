@@ -30,6 +30,11 @@ pub const REFERENCE_QUERY: &str = r"
 ";
 
 /// Tree-sitter query for extracting C# `using` directives.
+///
+/// In tree-sitter-c-sharp 0.23.1 all `using` forms (namespace, `using static`,
+/// and `using alias = ...`) are represented by a single `using_directive` node
+/// kind.  There are no separate `using_static_directive` or
+/// `using_alias_directive` node kinds, so one pattern captures everything.
 pub const IMPORT_QUERY: &str = r"
 (using_directive) @import_path
 ";
@@ -87,29 +92,35 @@ fn extract_base_list(node: &Node, source: &str) -> Vec<String> {
     bases
 }
 
-/// Walk the parent chain of `node` to find the name of the enclosing C# type
-/// (class, interface, or record).
+/// Return the method or constructor name when `node` is a `method_declaration`
+/// or `constructor_declaration` that is nested inside a class, interface, or
+/// record body.
 ///
-/// Returns `Some(type_name)` when a wrapping type is found, `None` otherwise.
+/// This follows the same contract as the Rust, Go, and C++ handlers: return
+/// the **method name** (the `name` field of the declaration node), or `None`
+/// when the node is not a class-level method.
 #[must_use]
 pub fn find_method_for_receiver(
     node: &Node,
     source: &str,
     _depth: Option<usize>,
 ) -> Option<String> {
-    let src = source.as_bytes();
-    let mut current = *node;
+    if node.kind() != "method_declaration" && node.kind() != "constructor_declaration" {
+        return None;
+    }
 
+    // Only return a name when the node is nested inside a type body.
+    let mut current = *node;
+    let mut in_type_body = false;
     while let Some(parent) = current.parent() {
         match parent.kind() {
-            "class_declaration" | "interface_declaration" | "record_declaration" => {
-                if let Some(name_node) = parent.child_by_field_name("name") {
-                    let end = name_node.end_byte();
-                    if end <= src.len() {
-                        return Some(source[name_node.start_byte()..end].to_string());
-                    }
-                }
-                return None;
+            "class_declaration"
+            | "interface_declaration"
+            | "record_declaration"
+            | "struct_declaration"
+            | "enum_declaration" => {
+                in_type_body = true;
+                break;
             }
             _ => {
                 current = parent;
@@ -117,7 +128,18 @@ pub fn find_method_for_receiver(
         }
     }
 
-    None
+    if !in_type_body {
+        return None;
+    }
+
+    node.child_by_field_name("name").and_then(|n| {
+        let end = n.end_byte();
+        if end <= source.len() {
+            Some(source[n.start_byte()..end].to_string())
+        } else {
+            None
+        }
+    })
 }
 
 #[cfg(all(test, feature = "lang-csharp"))]
@@ -140,9 +162,9 @@ mod tests {
         let tree = parse_csharp(src);
         let root = tree.root_node();
 
-        // Act -- collect method names via find_method_for_receiver on method nodes
+        // Act -- collect method names by reading the `name` field of each
+        // `method_declaration` node directly (testing name field extraction).
         let mut methods: Vec<String> = Vec::new();
-        let mut cursor = root.walk();
         let mut stack = vec![root];
         while let Some(node) = stack.pop() {
             if node.kind() == "method_declaration" {
@@ -155,7 +177,6 @@ mod tests {
                     stack.push(child);
                 }
             }
-            let _ = &mut cursor;
         }
         methods.sort();
 
@@ -347,7 +368,7 @@ mod tests {
         let tree = parse_csharp(src);
         let root = tree.root_node();
 
-        // Act -- find method_declaration node
+        // Act -- find method_declaration node and check it returns the method name
         let mut method_node: Option<Node> = None;
         let mut stack = vec![root];
         while let Some(node) = stack.pop() {
@@ -363,9 +384,9 @@ mod tests {
         }
 
         let method = method_node.expect("method_declaration not found");
-        let receiver = find_method_for_receiver(&method, src, None);
+        let name = find_method_for_receiver(&method, src, None);
 
-        // Assert
-        assert_eq!(receiver, Some("MyClass".to_string()));
+        // Assert -- returns the method name, not the enclosing type name
+        assert_eq!(name, Some("MyMethod".to_string()));
     }
 }
