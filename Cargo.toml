@@ -33,6 +33,7 @@ criterion = { version = "=0.8.2", features = ["html_reports"] }
 tree-sitter-rust = "0.24.0"
 tree-sitter-go = "0.25.0"
 tree-sitter-cpp = "0.23.4"
+    tree-sitter-c-sharp = "0.23.1"
 tree-sitter-java = "0.23.5"
 tree-sitter-python = "0.25.0"
 tree-sitter-typescript = "0.23.2"

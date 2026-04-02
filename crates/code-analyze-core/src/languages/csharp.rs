@@ -1,0 +1,371 @@
+// SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use tree_sitter::Node;
+
+/// Tree-sitter query for extracting C# elements (methods, constructors, classes,
+/// interfaces, and records).
+pub const ELEMENT_QUERY: &str = r"
+(method_declaration name: (identifier) @method_name) @function
+(constructor_declaration name: (identifier) @ctor_name) @function
+(class_declaration name: (identifier) @class_name) @class
+(interface_declaration name: (identifier) @interface_name) @class
+(record_declaration name: (identifier) @record_name) @class
+";
+
+/// Tree-sitter query for extracting C# method invocations.
+pub const CALL_QUERY: &str = r"
+(invocation_expression
+  function: (member_access_expression name: (identifier) @call))
+(invocation_expression
+  function: (identifier) @call)
+";
+
+/// Tree-sitter query for extracting C# type references (base types, generic args).
+pub const REFERENCE_QUERY: &str = r"
+(base_list (identifier) @type_ref)
+(base_list (generic_name (identifier) @type_ref))
+(type_argument_list (identifier) @type_ref)
+(type_parameter_list (type_parameter (identifier) @type_ref))
+";
+
+/// Tree-sitter query for extracting C# `using` directives.
+pub const IMPORT_QUERY: &str = r"
+(using_directive) @import_path
+";
+
+/// Extract base class and interface names from a C# class, interface, or record node.
+///
+/// The parser calls this with the class/interface/record declaration node itself.
+/// We locate the `base_list` child and extract each base type name.
+#[must_use]
+pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
+    let mut bases = Vec::new();
+
+    // base_list is an unnamed child of class_declaration/interface_declaration/record_declaration
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX))
+            && child.kind() == "base_list"
+        {
+            bases.extend(extract_base_list(&child, source));
+            break;
+        }
+    }
+
+    bases
+}
+
+/// Extract base type names from a `base_list` node.
+fn extract_base_list(node: &Node, source: &str) -> Vec<String> {
+    let mut bases = Vec::new();
+
+    for i in 0..node.named_child_count() {
+        if let Some(child) = node.named_child(u32::try_from(i).unwrap_or(u32::MAX)) {
+            match child.kind() {
+                "identifier" => {
+                    let end = child.end_byte();
+                    if end <= source.len() {
+                        bases.push(source[child.start_byte()..end].to_string());
+                    }
+                }
+                "generic_name" => {
+                    // First named child of generic_name is the identifier.
+                    if let Some(id) = child.named_child(0)
+                        && id.kind() == "identifier"
+                    {
+                        let end = id.end_byte();
+                        if end <= source.len() {
+                            bases.push(source[id.start_byte()..end].to_string());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    bases
+}
+
+/// Walk the parent chain of `node` to find the name of the enclosing C# type
+/// (class, interface, or record).
+///
+/// Returns `Some(type_name)` when a wrapping type is found, `None` otherwise.
+#[must_use]
+pub fn find_method_for_receiver(
+    node: &Node,
+    source: &str,
+    _depth: Option<usize>,
+) -> Option<String> {
+    let src = source.as_bytes();
+    let mut current = *node;
+
+    while let Some(parent) = current.parent() {
+        match parent.kind() {
+            "class_declaration" | "interface_declaration" | "record_declaration" => {
+                if let Some(name_node) = parent.child_by_field_name("name") {
+                    let end = name_node.end_byte();
+                    if end <= src.len() {
+                        return Some(source[name_node.start_byte()..end].to_string());
+                    }
+                }
+                return None;
+            }
+            _ => {
+                current = parent;
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(all(test, feature = "lang-csharp"))]
+mod tests {
+    use super::*;
+    use tree_sitter::Parser;
+
+    fn parse_csharp(src: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_c_sharp::LANGUAGE.into())
+            .expect("Error loading C# language");
+        parser.parse(src, None).expect("Failed to parse C#")
+    }
+
+    #[test]
+    fn test_csharp_method_in_class() {
+        // Arrange
+        let src = "class Foo { void Bar() { Baz(); } void Baz() {} }";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act -- collect method names via find_method_for_receiver on method nodes
+        let mut methods: Vec<String> = Vec::new();
+        let mut cursor = root.walk();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "method_declaration" {
+                if let Some(name_node) = node.child_by_field_name("name") {
+                    methods.push(src[name_node.start_byte()..name_node.end_byte()].to_string());
+                }
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+            let _ = &mut cursor;
+        }
+        methods.sort();
+
+        // Assert
+        assert_eq!(methods, vec!["Bar", "Baz"]);
+    }
+
+    #[test]
+    fn test_csharp_constructor() {
+        // Arrange
+        let src = "class Foo { public Foo() {} }";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act
+        let mut ctors: Vec<String> = Vec::new();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "constructor_declaration" {
+                if let Some(name_node) = node.child_by_field_name("name") {
+                    ctors.push(src[name_node.start_byte()..name_node.end_byte()].to_string());
+                }
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+
+        // Assert
+        assert_eq!(ctors, vec!["Foo"]);
+    }
+
+    #[test]
+    fn test_csharp_interface() {
+        // Arrange
+        let src = "interface IBar { void Do(); }";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act
+        let mut interfaces: Vec<String> = Vec::new();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "interface_declaration" {
+                if let Some(name_node) = node.child_by_field_name("name") {
+                    interfaces.push(src[name_node.start_byte()..name_node.end_byte()].to_string());
+                }
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+
+        // Assert
+        assert_eq!(interfaces, vec!["IBar"]);
+    }
+
+    #[test]
+    fn test_csharp_using_directive() {
+        // Arrange
+        let src = "using System;";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act
+        let mut imports: Vec<String> = Vec::new();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "using_directive" {
+                imports.push(src[node.start_byte()..node.end_byte()].to_string());
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+
+        // Assert
+        assert_eq!(imports, vec!["using System;"]);
+    }
+
+    #[test]
+    fn test_csharp_async_method() {
+        // Arrange -- async modifier is a sibling of the return type; name field unchanged
+        let src = "class C { async Task Foo() { await Bar(); } Task Bar() { return Task.CompletedTask; } }";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act
+        let mut methods: Vec<String> = Vec::new();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "method_declaration" {
+                if let Some(name_node) = node.child_by_field_name("name") {
+                    methods.push(src[name_node.start_byte()..name_node.end_byte()].to_string());
+                }
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+
+        // Assert -- Foo must be extracted even with async modifier
+        assert!(methods.contains(&"Foo".to_string()));
+    }
+
+    #[test]
+    fn test_csharp_generic_class() {
+        // Arrange -- type_parameter_list is a child of class_declaration; class name unchanged
+        let src = "class Generic<T> { T value; }";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act
+        let mut classes: Vec<String> = Vec::new();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "class_declaration" {
+                if let Some(name_node) = node.child_by_field_name("name") {
+                    classes.push(src[name_node.start_byte()..name_node.end_byte()].to_string());
+                }
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+
+        // Assert -- generic name captured without type parameters, consistent with Go
+        assert_eq!(classes, vec!["Generic"]);
+    }
+
+    #[test]
+    fn test_csharp_inheritance_extraction() {
+        // Arrange
+        let src = "class Dog : Animal, ICanRun {}";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act -- find base_list node under class_declaration
+        let mut base_list_node: Option<Node> = None;
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "base_list" {
+                base_list_node = Some(node);
+                break;
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+
+        // The parser passes the class_declaration node, not the base_list
+        let mut class_node: Option<Node> = None;
+        let mut stack2 = vec![root];
+        while let Some(node) = stack2.pop() {
+            if node.kind() == "class_declaration" {
+                class_node = Some(node);
+                break;
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack2.push(child);
+                }
+            }
+        }
+        let class = class_node.expect("class_declaration not found");
+        let _ = base_list_node; // retained for context clarity
+        let bases = extract_inheritance(&class, src);
+
+        // Assert
+        assert_eq!(bases, vec!["Animal", "ICanRun"]);
+    }
+
+    #[test]
+    fn test_csharp_find_method_for_receiver() {
+        // Arrange
+        let src = "class MyClass { void MyMethod() {} }";
+        let tree = parse_csharp(src);
+        let root = tree.root_node();
+
+        // Act -- find method_declaration node
+        let mut method_node: Option<Node> = None;
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "method_declaration" {
+                method_node = Some(node);
+                break;
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+
+        let method = method_node.expect("method_declaration not found");
+        let receiver = find_method_for_receiver(&method, src, None);
+
+        // Assert
+        assert_eq!(receiver, Some("MyClass".to_string()));
+    }
+}

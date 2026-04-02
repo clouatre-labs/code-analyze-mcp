@@ -4054,3 +4054,102 @@ fn test_execute_query_malformed_query() {
         result
     );
 }
+
+#[cfg(feature = "lang-csharp")]
+#[test]
+fn test_csharp_parse_and_extract() {
+    // Arrange
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("example.cs");
+    let src = r#"
+using System;
+
+namespace Demo {
+    class Foo {
+        public Foo() {}
+        public void Bar() { Baz(); }
+        private void Baz() {}
+    }
+}
+"#;
+    fs::write(&file_path, src).unwrap();
+
+    // Act
+    let output = analyze_directory(temp_dir.path(), None).unwrap();
+    let fa = output
+        .files
+        .iter()
+        .find(|f| f.path.ends_with("example.cs"))
+        .expect("example.cs not found");
+
+    // Assert
+    assert_eq!(fa.language, "csharp");
+    assert_eq!(fa.class_count, 1);
+    assert_eq!(fa.function_count, 3);
+}
+
+#[cfg(feature = "lang-csharp")]
+#[test]
+fn test_csharp_inheritance_extraction() {
+    // Arrange
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("sample.cs");
+    let src = r#"
+using System;
+
+class Base {}
+interface IRun {}
+class Dog : Base, IRun {
+    void Bark() { System.Console.WriteLine("woof"); }
+    void Run() { Bark(); }
+}
+"#;
+    fs::write(&file_path, src).unwrap();
+
+    // Act
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Assert -- Dog class should carry its base types
+    let dog_class = output
+        .semantic
+        .classes
+        .iter()
+        .find(|c| c.name == "Dog")
+        .expect("Dog class should be extracted");
+
+    assert!(
+        !dog_class.inherits.is_empty(),
+        "Dog should have inheritance info"
+    );
+    assert!(
+        dog_class.inherits.iter().any(|i| i.contains("Base")),
+        "Dog should inherit from Base"
+    );
+    assert!(
+        dog_class.inherits.iter().any(|i| i.contains("IRun")),
+        "Dog should implement IRun"
+    );
+}
+
+#[cfg(feature = "lang-csharp")]
+#[test]
+fn test_analyze_symbol_csharp_callees() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("sample.cs");
+    fs::write(
+        &src,
+        "class C { void Inner() {} void Outer() { Inner(); } }",
+    )
+    .unwrap();
+
+    // Act
+    let result = analyze_focused(dir.path(), "Outer", 1, None, None).unwrap();
+    let output = result.formatted;
+
+    // Assert
+    assert!(
+        output.contains("CALLEES:") && output.contains("-> Inner"),
+        "expected CALLEES section with callee 'Inner', got:\n{output}"
+    );
+}

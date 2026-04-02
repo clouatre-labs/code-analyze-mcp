@@ -33,6 +33,8 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
     ("ftn", "fortran"),
     #[cfg(feature = "lang-cpp")]
     ("h", "cpp"),
+    #[cfg(feature = "lang-csharp")]
+    ("cs", "csharp"),
     #[cfg(feature = "lang-cpp")]
     ("hpp", "cpp"),
     #[cfg(feature = "lang-cpp")]
@@ -94,6 +96,8 @@ pub fn supported_languages() -> &'static [&'static str] {
         "c",
         #[cfg(feature = "lang-cpp")]
         "cpp",
+        #[cfg(feature = "lang-csharp")]
+        "csharp",
     ]
 }
 

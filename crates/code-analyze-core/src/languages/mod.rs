@@ -9,6 +9,8 @@
 
 #[cfg(feature = "lang-cpp")]
 pub mod cpp;
+#[cfg(feature = "lang-csharp")]
+pub mod csharp;
 #[cfg(feature = "lang-fortran")]
 pub mod fortran;
 #[cfg(feature = "lang-go")]
@@ -178,6 +180,21 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(fortran::extract_inheritance),
         }),
+        #[cfg(feature = "lang-csharp")]
+        "csharp" => Some(LanguageInfo {
+            name: "csharp",
+            language: tree_sitter_c_sharp::LANGUAGE.into(),
+            element_query: csharp::ELEMENT_QUERY,
+            call_query: csharp::CALL_QUERY,
+            reference_query: Some(csharp::REFERENCE_QUERY),
+            import_query: Some(csharp::IMPORT_QUERY),
+            impl_query: None,
+            impl_trait_query: None,
+            extract_function_name: None,
+            find_method_for_receiver: Some(csharp::find_method_for_receiver),
+            find_receiver_type: None,
+            extract_inheritance: Some(csharp::extract_inheritance),
+        }),
         #[cfg(feature = "lang-javascript")]
         "javascript" => Some(LanguageInfo {
             name: "javascript",
@@ -219,6 +236,8 @@ pub fn get_ts_language(lang_name: &str) -> Option<Language> {
         "java" => Some(tree_sitter_java::LANGUAGE.into()),
         #[cfg(feature = "lang-fortran")]
         "fortran" => Some(tree_sitter_fortran::LANGUAGE.into()),
+        #[cfg(feature = "lang-csharp")]
+        "csharp" => Some(tree_sitter_c_sharp::LANGUAGE.into()),
         #[cfg(feature = "lang-javascript")]
         "javascript" => Some(tree_sitter_javascript::LANGUAGE.into()),
         _ => None,
