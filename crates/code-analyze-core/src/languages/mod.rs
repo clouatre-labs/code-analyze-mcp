@@ -7,6 +7,8 @@
 //! available language handlers are enabled): Rust, Go, Java, JavaScript, Python,
 //! TypeScript, TSX, and Fortran.
 
+#[cfg(feature = "lang-cpp")]
+pub mod cpp;
 #[cfg(feature = "lang-fortran")]
 pub mod fortran;
 #[cfg(feature = "lang-go")]
@@ -131,6 +133,21 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             find_receiver_type: None,
             extract_inheritance: Some(go::extract_inheritance),
         }),
+        #[cfg(feature = "lang-cpp")]
+        "c" | "cpp" => Some(LanguageInfo {
+            name: if lang_name == "c" { "c" } else { "cpp" },
+            language: tree_sitter_cpp::LANGUAGE.into(),
+            element_query: cpp::ELEMENT_QUERY,
+            call_query: cpp::CALL_QUERY,
+            reference_query: Some(cpp::REFERENCE_QUERY),
+            import_query: Some(cpp::IMPORT_QUERY),
+            impl_query: None,
+            impl_trait_query: None,
+            extract_function_name: None,
+            find_method_for_receiver: Some(cpp::find_method_for_receiver),
+            find_receiver_type: None,
+            extract_inheritance: Some(cpp::extract_inheritance),
+        }),
         #[cfg(feature = "lang-java")]
         "java" => Some(LanguageInfo {
             name: "java",
@@ -196,6 +213,8 @@ pub fn get_ts_language(lang_name: &str) -> Option<Language> {
         "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
         #[cfg(feature = "lang-go")]
         "go" => Some(tree_sitter_go::LANGUAGE.into()),
+        #[cfg(feature = "lang-cpp")]
+        "c" | "cpp" => Some(tree_sitter_cpp::LANGUAGE.into()),
         #[cfg(feature = "lang-java")]
         "java" => Some(tree_sitter_java::LANGUAGE.into()),
         #[cfg(feature = "lang-fortran")]
