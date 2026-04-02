@@ -12,13 +12,13 @@ pub const ELEMENT_QUERY: &str = r"
     declarator: (qualified_identifier
       name: (identifier) @method_name))) @function
 (class_specifier
-  name: (type_identifier) @type_name) @class
+  name: (type_identifier) @class_name) @class
 (struct_specifier
-  name: (type_identifier) @type_name) @class
+  name: (type_identifier) @class_name) @class
 (template_declaration
   (function_definition
     declarator: (function_declarator
-      declarator: (identifier) @template_func))) @function
+      declarator: (identifier) @func_name))) @function
 ";
 
 /// Tree-sitter query for extracting function calls.
@@ -37,9 +37,9 @@ pub const REFERENCE_QUERY: &str = r"
 /// Tree-sitter query for extracting C/C++ preprocessor directives (#include).
 pub const IMPORT_QUERY: &str = r"
 (preproc_include
-  path: (string_literal) @include)
+  path: (string_literal) @import_path)
 (preproc_include
-  path: (system_lib_string) @include)
+  path: (system_lib_string) @import_path)
 ";
 
 /// Find method name for a receiver type (class/struct context).
