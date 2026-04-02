@@ -188,42 +188,84 @@ mod tests {
 
     #[test]
     fn test_struct() {
-        // Arrange: struct with simple field
+        // Arrange: struct with no base class
         let source = "struct Point { int x; int y; };";
         let tree = parse_cpp(source);
         let root = tree.root_node();
-        let struct_node = root
-            .named_child(0)
-            .expect("expected struct_specifier or declaration");
-        // Act
+        let struct_node =
+            find_node_by_kind(root, "struct_specifier").expect("expected struct_specifier");
+        // Assert: node kind is correct
+        assert_eq!(struct_node.kind(), "struct_specifier");
+        // Act + Assert: struct with no inheritance returns empty
         let result = extract_inheritance(&struct_node, source);
-        // Assert: struct with no inheritance should return empty
-        assert!(result.is_empty());
+        assert!(
+            result.is_empty(),
+            "expected no inheritance, got: {result:?}"
+        );
     }
 
     #[test]
     fn test_include_directive() {
-        // Arrange: include directive
-        let source = "#include <stdio.h>\nint main() { return 0; }";
+        use tree_sitter::StreamingIterator;
+        // Arrange
+        let source = "#include <stdio.h>\n#include \"myfile.h\"\n";
         let tree = parse_cpp(source);
-        let root = tree.root_node();
-        // Find preproc_include node
-        let include_node = find_node_by_kind(root, "preproc_include").expect("expected include");
-        // Act: preproc_include node should exist
-        // Assert
-        assert_eq!(include_node.kind(), "preproc_include");
+        // Act: run IMPORT_QUERY
+        let lang: tree_sitter::Language = tree_sitter_cpp::LANGUAGE.into();
+        let query = tree_sitter::Query::new(&lang, super::IMPORT_QUERY)
+            .expect("IMPORT_QUERY must be valid");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut iter = cursor.captures(&query, tree.root_node(), source.as_bytes());
+        let mut captures: Vec<String> = Vec::new();
+        while let Some((m, _)) = iter.next() {
+            for c in m.captures {
+                let text = c
+                    .node
+                    .utf8_text(source.as_bytes())
+                    .unwrap_or("")
+                    .to_string();
+                captures.push(text);
+            }
+        }
+        // Assert: both includes captured
+        assert!(
+            captures.iter().any(|s| s.contains("stdio.h")),
+            "expected stdio.h in captures: {captures:?}"
+        );
+        assert!(
+            captures.iter().any(|s| s.contains("myfile.h")),
+            "expected myfile.h in captures: {captures:?}"
+        );
     }
 
     #[test]
     fn test_template_function() {
-        // Arrange: template function
+        use tree_sitter::StreamingIterator;
+        // Arrange: template function definition
         let source = "template<typename T> T max(T a, T b) { return a > b ? a : b; }";
         let tree = parse_cpp(source);
-        let root = tree.root_node();
-        let template_node = root.named_child(0).expect("expected template_declaration");
-        // Act
-        // Assert: template_declaration should exist
-        assert_eq!(template_node.kind(), "template_declaration");
+        // Act: run ELEMENT_QUERY
+        let lang: tree_sitter::Language = tree_sitter_cpp::LANGUAGE.into();
+        let query = tree_sitter::Query::new(&lang, super::ELEMENT_QUERY)
+            .expect("ELEMENT_QUERY must be valid");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut iter = cursor.captures(&query, tree.root_node(), source.as_bytes());
+        let mut func_names: Vec<String> = Vec::new();
+        while let Some((m, _)) = iter.next() {
+            for c in m.captures {
+                let name = query.capture_names()[c.index as usize];
+                if name == "func_name" {
+                    if let Ok(text) = c.node.utf8_text(source.as_bytes()) {
+                        func_names.push(text.to_string());
+                    }
+                }
+            }
+        }
+        // Assert: "max" captured as func_name
+        assert!(
+            func_names.iter().any(|s| s == "max"),
+            "expected 'max' in func_names: {func_names:?}"
+        );
     }
 
     #[test]

@@ -121,6 +121,16 @@ mod tests {
         assert_eq!(language_for_extension("for"), Some("fortran"));
         #[cfg(feature = "lang-fortran")]
         assert_eq!(language_for_extension("ftn"), Some("fortran"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("c"), Some("c"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("cpp"), Some("cpp"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("h"), Some("cpp"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("hpp"), Some("cpp"));
+        #[cfg(feature = "lang-cpp")]
+        assert_eq!(language_for_extension("cc"), Some("cpp"));
     }
 
     #[test]
