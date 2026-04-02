@@ -216,3 +216,69 @@ public class Test {
         "Expected 3 imports (ArrayList, List, Math)"
     );
 }
+
+#[cfg(feature = "lang-csharp")]
+#[test]
+fn test_csharp_semantic_correctness() {
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
+    let cs_file = temp_dir.path().join("Sample.cs");
+    std::fs::write(
+        &cs_file,
+        r#"using System;
+using System.Collections.Generic;
+
+namespace Demo {
+    public interface IAnimal {
+        void Speak();
+    }
+
+    public class Animal : IAnimal {
+        public void Speak() {
+            Console.WriteLine("...");
+        }
+    }
+
+    public class Dog : Animal {
+        public Dog() {}
+        public override void Speak() {
+            Console.WriteLine("Woof");
+        }
+        public async Task FetchAsync() {
+            await Task.Delay(1);
+        }
+    }
+}
+"#,
+    )
+    .expect("failed to write C# file");
+
+    let output = analyze::analyze_file(cs_file.to_str().unwrap(), None).expect("analysis failed");
+
+    assert!(
+        output.semantic.functions.len() >= 3,
+        "Expected at least 3 functions (constructor + Speak overrides + FetchAsync), got {}",
+        output.semantic.functions.len()
+    );
+    assert!(
+        output.semantic.classes.len() >= 3,
+        "Expected at least 3 types (IAnimal, Animal, Dog), got {}",
+        output.semantic.classes.len()
+    );
+    assert_eq!(
+        output.semantic.imports.len(),
+        2,
+        "Expected 2 using directives"
+    );
+
+    // Dog should carry its base type
+    let dog = output
+        .semantic
+        .classes
+        .iter()
+        .find(|c| c.name == "Dog")
+        .expect("Dog class not found");
+    assert!(
+        dog.inherits.iter().any(|i| i.contains("Animal")),
+        "Dog should inherit from Animal"
+    );
+}
