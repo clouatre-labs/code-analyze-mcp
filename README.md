@@ -236,32 +236,20 @@ All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code
 
 ## Supported Languages
 
-| Language | Extensions | Status |
-|----------|-----------|--------|
-| Rust | `.rs` | Implemented |
-| Python | `.py` | Implemented |
-| TypeScript | `.ts`, `.tsx` | Implemented |
-| Go | `.go` | Implemented |
-| Java | `.java` | Implemented |
-| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | Implemented |
-| JavaScript | `.js`, `.mjs`, `.cjs` | Implemented |
-| C/C++ | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | Implemented |
-| C# | `.cs` | Implemented |
+All languages are enabled by default. Disable individual languages at compile time via Cargo feature flags.
 
-All languages are enabled by default. Each can be disabled individually at compile time via Cargo feature flags:
-
-| Feature flag | Language | Default |
-|---|---|---|
-| `lang-rust` | Rust | enabled |
-| `lang-go` | Go | enabled |
-| `lang-java` | Java | enabled |
-| `lang-python` | Python | enabled |
-| `lang-typescript` | TypeScript, TSX | enabled |
-| `lang-tsx` | TSX (alias, shares typescript grammar) | enabled |
-| `lang-fortran` | Fortran | enabled |
-| `lang-javascript` | JavaScript | enabled |
-| `lang-cpp` | C, C++ | enabled |
-| `lang-csharp` | C# | enabled |
+| Language | Extensions | Feature flag |
+|----------|------------|--------------|
+| Rust | `.rs` | `lang-rust` |
+| Python | `.py` | `lang-python` |
+| TypeScript | `.ts` | `lang-typescript` |
+| TSX | `.tsx` | `lang-tsx` |
+| Go | `.go` | `lang-go` |
+| Java | `.java` | `lang-java` |
+| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | `lang-fortran` |
+| JavaScript | `.js`, `.mjs`, `.cjs` | `lang-javascript` |
+| C/C++ | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | `lang-cpp` |
+| C# | `.cs` | `lang-csharp` |
 
 To build with a subset of languages, disable default features and opt in:
 
