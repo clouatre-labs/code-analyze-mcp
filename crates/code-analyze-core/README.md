@@ -54,14 +54,18 @@ async fn main() -> Result<()> {
 
 ## Supported Languages
 
-| Language | Extensions |
-|----------|-----------|
-| Rust | `.rs` |
-| Python | `.py` |
-| TypeScript | `.ts`, `.tsx` |
-| Go | `.go` |
-| Java | `.java` |
-| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` |
+| Language | Extensions | Feature flag |
+|----------|------------|--------------|
+| Rust | `.rs` | `lang-rust` |
+| Python | `.py` | `lang-python` |
+| TypeScript | `.ts` | `lang-typescript` |
+| TSX | `.tsx` | `lang-tsx` |
+| Go | `.go` | `lang-go` |
+| Java | `.java` | `lang-java` |
+| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | `lang-fortran` |
+| JavaScript | `.js`, `.mjs`, `.cjs` | `lang-javascript` |
+| C/C++ | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | `lang-cpp` |
+| C# | `.cs` | `lang-csharp` |
 
 ## Configuration
 
