@@ -248,7 +248,8 @@ All languages are enabled by default. Disable individual languages at compile ti
 | Java | `.java` | `lang-java` |
 | Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | `lang-fortran` |
 | JavaScript | `.js`, `.mjs`, `.cjs` | `lang-javascript` |
-| C/C++ | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | `lang-cpp` |
+| C | `.c` | `lang-cpp` |
+| C++ | `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | `lang-cpp` |
 | C# | `.cs` | `lang-csharp` |
 
 To build with a subset of languages, disable default features and opt in:
