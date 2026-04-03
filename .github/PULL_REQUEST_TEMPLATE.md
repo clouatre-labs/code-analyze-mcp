@@ -37,3 +37,4 @@ Example: "Add Python language support to the analyzer. Implements Overview and F
 - [ ] DCO signed-off: `git commit --signoff`
 - [ ] No scope creep (changes match assigned issue)
 - [ ] No secrets, API keys, or credentials in diff
+- [ ] I have reviewed every line in this PR and can explain it

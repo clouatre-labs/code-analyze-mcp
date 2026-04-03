@@ -1,0 +1,4 @@
+# All paths require review from the maintainer.
+# Renovate bot is exempt via ruleset bypass actor (app ID 2740).
+# GitHub Copilot reviews do not satisfy this requirement.
+* @clouatre
