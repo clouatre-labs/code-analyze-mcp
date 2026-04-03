@@ -18,7 +18,7 @@ Core library for code structure analysis using tree-sitter.
 - **File analysis** - Functions, classes, and imports with signatures and line ranges
 - **Symbol call graphs** - Callers and callees across a directory with configurable depth
 - **Module index** - Lightweight function and import index (~75% smaller than full file analysis)
-- **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Fortran
+- **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Fortran, JavaScript, C/C++, C#
 - **Pagination** - Cursor-based pagination for large outputs
 - **Caching** - LRU cache for parsed results with mtime-based invalidation
 - **Parallel** - Rayon-based parallel file analysis

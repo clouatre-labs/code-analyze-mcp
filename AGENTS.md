@@ -8,7 +8,7 @@ Rust workspace with two crates:
 - `crates/code-analyze-mcp` -- MCP server, tool handlers, logging, metrics
 
 Four MCP tools: `analyze_directory`, `analyze_file`, `analyze_symbol`, `analyze_module`.
-Languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran.
+Languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#.
 Rust edition 2024, async with tokio, MCP protocol via `rmcp`.
 
 ## Commands
