@@ -18,7 +18,7 @@ Core library for code structure analysis using tree-sitter.
 - **File analysis** - Functions, classes, and imports with signatures and line ranges
 - **Symbol call graphs** - Callers and callees across a directory with configurable depth
 - **Module index** - Lightweight function and import index (~75% smaller than full file analysis)
-- **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Fortran
+- **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Fortran, JavaScript, C/C++, C#
 - **Pagination** - Cursor-based pagination for large outputs
 - **Caching** - LRU cache for parsed results with mtime-based invalidation
 - **Parallel** - Rayon-based parallel file analysis
@@ -54,14 +54,18 @@ async fn main() -> Result<()> {
 
 ## Supported Languages
 
-| Language | Extensions |
-|----------|-----------|
-| Rust | `.rs` |
-| Python | `.py` |
-| TypeScript | `.ts`, `.tsx` |
-| Go | `.go` |
-| Java | `.java` |
-| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` |
+| Language | Extensions | Feature flag |
+|----------|------------|--------------|
+| Rust | `.rs` | `lang-rust` |
+| Python | `.py` | `lang-python` |
+| TypeScript | `.ts` | `lang-typescript` |
+| TSX | `.tsx` | `lang-tsx` |
+| Go | `.go` | `lang-go` |
+| Java | `.java` | `lang-java` |
+| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | `lang-fortran` |
+| JavaScript | `.js`, `.mjs`, `.cjs` | `lang-javascript` |
+| C/C++ | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | `lang-cpp` |
+| C# | `.cs` | `lang-csharp` |
 
 ## Configuration
 

@@ -36,7 +36,7 @@ AeroDyn integration audit task on Claude Code against [OpenFAST](https://github.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, TSX, and Fortran, and integrates with any MCP-compatible orchestrator (Claude Code, Kiro, Fast-Agent, MCP-Agent, and others).
+code-analyze-mcp is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, TSX, Fortran, JavaScript, C/C++, and C#, and integrates with any MCP-compatible orchestrator.
 
 ## Installation
 
@@ -236,14 +236,27 @@ All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code
 
 ## Supported Languages
 
-| Language | Extensions | Status |
-|----------|-----------|--------|
-| Rust | `.rs` | Implemented |
-| Python | `.py` | Implemented |
-| TypeScript | `.ts`, `.tsx` | Implemented |
-| Go | `.go` | Implemented |
-| Java | `.java` | Implemented |
-| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | Implemented |
+All languages are enabled by default. Disable individual languages at compile time via Cargo feature flags.
+
+| Language | Extensions | Feature flag |
+|----------|------------|--------------|
+| Rust | `.rs` | `lang-rust` |
+| Python | `.py` | `lang-python` |
+| TypeScript | `.ts` | `lang-typescript` |
+| TSX | `.tsx` | `lang-tsx` |
+| Go | `.go` | `lang-go` |
+| Java | `.java` | `lang-java` |
+| Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | `lang-fortran` |
+| JavaScript | `.js`, `.mjs`, `.cjs` | `lang-javascript` |
+| C/C++ | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | `lang-cpp` |
+| C# | `.cs` | `lang-csharp` |
+
+To build with a subset of languages, disable default features and opt in:
+
+```toml
+[dependencies]
+code-analyze-core = { version = "0.2", default-features = false, features = ["lang-rust", "lang-python"] }
+```
 
 ## Documentation
 
