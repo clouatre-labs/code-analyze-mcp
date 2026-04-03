@@ -4323,6 +4323,10 @@ template<typename T>
 T identity(T val) {
     return val;
 }
+
+int Counter::get() {
+    return count;
+}
 "#;
     fs::write(&file_path, src).unwrap();
 
@@ -4380,5 +4384,11 @@ T identity(T val) {
             .iter()
             .map(|f| &f.name)
             .collect::<Vec<_>>()
+    );
+
+    // Assert -- qualified out-of-class method (Counter::get) is extracted
+    assert!(
+        output.semantic.functions.iter().any(|f| f.name == "get"),
+        "expected qualified method 'get' (Counter::get) to be extracted"
     );
 }

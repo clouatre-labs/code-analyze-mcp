@@ -597,8 +597,9 @@ impl SemanticExtractor {
                     // Resolve template_declaration to its inner function_definition for
                     // declarator/field walks. The captured node may be the template wrapper.
                     let func_def = if func_node.kind() == "template_declaration" {
+                        let mut cursor = func_node.walk();
                         func_node
-                            .children(&mut func_node.walk())
+                            .children(&mut cursor)
                             .find(|n| n.kind() == "function_definition")
                             .unwrap_or(func_node)
                     } else {
@@ -624,8 +625,8 @@ impl SemanticExtractor {
                             .map(|p| source[p.start_byte()..p.end_byte()].to_string())
                             .unwrap_or_default();
 
-                        // For C/C++: return type is the "type" field.
-                        // For other languages: return type is the "return_type" field.
+                        // Try "type" first (C/C++ uses this field for the return type);
+                        // fall back to "return_type" (Rust, Python, TypeScript, etc.).
                         let return_type = func_def
                             .child_by_field_name("type")
                             .or_else(|| func_def.child_by_field_name("return_type"))
