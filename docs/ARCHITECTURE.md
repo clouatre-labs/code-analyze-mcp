@@ -9,7 +9,7 @@
 ## Design Goals
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
-- **Language-agnostic parsing via tree-sitter**: Support 10 languages (Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#) with a unified query-based extraction system; TypeScript and TSX use distinct grammars (`LANGUAGE_TYPESCRIPT` and `LANGUAGE_TSX`) but share the same queries in `crates/code-analyze-core/src/languages/typescript.rs`
+- **Language-agnostic parsing via tree-sitter**: Support 11 languages (Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C, C++, C#) with a unified query-based extraction system; TypeScript and TSX use distinct grammars (`LANGUAGE_TYPESCRIPT` and `LANGUAGE_TSX`) but share the same queries in `crates/code-analyze-core/src/languages/typescript.rs`
 - **Four focused MCP tools**: `analyze_directory`, `analyze_file`, `analyze_module`, and `analyze_symbol` -- each with a clear, explicit interface rather than a single tool with auto-detected modes
 - **Compatible with any MCP orchestrator**: Designed to work with any standards-compliant MCP host
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
@@ -106,6 +106,8 @@ Each language is registered in `languages/mod.rs` as a `LanguageInfo` with tree-
 - Handler functions: `extract_function_name`, `find_method_for_receiver`, `find_receiver_type`, `extract_inheritance` (optional)
 
 Adding a language requires: a tree-sitter grammar crate, a language module with `ELEMENT_QUERY` and `CALL_QUERY`, registration in `languages/mod.rs`, and extension mappings in `lang.rs`. See CONTRIBUTING.md for a step-by-step guide.
+
+JavaScript is the only language registered with `reference_query: None`. JavaScript's dynamic typing makes static type reference extraction low-value: identifiers appear in many non-type contexts, producing excessive false positives with no meaningful signal. All other supported languages provide a `REFERENCE_QUERY`.
 
 ## Call Graph Design
 

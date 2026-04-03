@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
 // SPDX-License-Identifier: Apache-2.0
 /// Tree-sitter query for extracting JavaScript elements (functions, classes, and related).
-#[cfg(feature = "lang-javascript")]
 pub const ELEMENT_QUERY: &str = r"
 (function_declaration) @function
 (class_declaration) @class
@@ -11,7 +10,6 @@ pub const ELEMENT_QUERY: &str = r"
 ";
 
 /// Tree-sitter query for extracting function calls.
-#[cfg(feature = "lang-javascript")]
 pub const CALL_QUERY: &str = r"
 (call_expression
   function: (identifier) @call)
@@ -20,7 +18,6 @@ pub const CALL_QUERY: &str = r"
 ";
 
 /// Tree-sitter query for extracting JavaScript imports (ESM and CommonJS).
-#[cfg(feature = "lang-javascript")]
 pub const IMPORT_QUERY: &str = r#"
 (import_statement) @import_path
 (call_expression
@@ -28,10 +25,15 @@ pub const IMPORT_QUERY: &str = r#"
   arguments: (arguments (string) @import_path))
 "#;
 
+// JavaScript intentionally has no REFERENCE_QUERY. JavaScript's dynamic typing
+// makes static type reference extraction low-value: most "type" references in JS
+// are just identifiers that appear in many non-type contexts, producing excessive
+// false positives with no meaningful signal. The `reference_query` field is set
+// to `None` for the JavaScript handler in `mod.rs`.
+
 use tree_sitter::Node;
 
 /// Extract inheritance information from a JavaScript class node.
-#[cfg(feature = "lang-javascript")]
 #[must_use]
 pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
     let mut inherits = Vec::new();
@@ -55,8 +57,7 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
     inherits
 }
 
-#[cfg(test)]
-#[cfg(feature = "lang-javascript")]
+#[cfg(all(test, feature = "lang-javascript"))]
 mod tests {
     use tree_sitter::Parser;
 

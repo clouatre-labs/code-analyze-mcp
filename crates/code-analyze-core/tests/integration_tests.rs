@@ -4133,6 +4133,38 @@ class Dog : Base, IRun {
 
 #[cfg(feature = "lang-csharp")]
 #[test]
+fn test_csharp_struct_and_enum_extraction() {
+    // Arrange
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("types.cs");
+    let src = r#"
+public struct Point { public int X; public int Y; }
+public enum Direction { North, South, East, West }
+"#;
+    fs::write(&file_path, src).unwrap();
+
+    // Act
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+    let class_names: Vec<&str> = output
+        .semantic
+        .classes
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+
+    // Assert -- struct and enum declarations map to @class captures in ELEMENT_QUERY
+    assert!(
+        class_names.contains(&"Point"),
+        "struct Point should be extracted as a class, got: {class_names:?}"
+    );
+    assert!(
+        class_names.contains(&"Direction"),
+        "enum Direction should be extracted as a class, got: {class_names:?}"
+    );
+}
+
+#[cfg(feature = "lang-csharp")]
+#[test]
 fn test_analyze_symbol_csharp_callees() {
     // Arrange
     let dir = TempDir::new().unwrap();
@@ -4151,5 +4183,160 @@ fn test_analyze_symbol_csharp_callees() {
     assert!(
         output.contains("CALLEES:") && output.contains("-> Inner"),
         "expected CALLEES section with callee 'Inner', got:\n{output}"
+    );
+}
+
+#[cfg(feature = "lang-tsx")]
+#[test]
+fn test_integration_tsx_analyze_file() {
+    // Arrange
+    use code_analyze_core::lang::language_for_extension;
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("Button.tsx");
+    let src = r#"
+import React from 'react';
+
+interface ButtonProps {
+    label: string;
+}
+
+function Button({ label }: ButtonProps): JSX.Element {
+    return <button>{label}</button>;
+}
+
+export default Button;
+"#;
+    fs::write(&file_path, src).unwrap();
+
+    // Verify extension resolves
+    assert_eq!(language_for_extension("tsx"), Some("tsx"));
+
+    // Act
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Assert -- Button function and ButtonProps interface must be extracted
+    assert!(
+        output.semantic.functions.iter().any(|f| f.name == "Button"),
+        "expected Button function, got {:?}",
+        output
+            .semantic
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        output
+            .semantic
+            .classes
+            .iter()
+            .any(|c| c.name == "ButtonProps"),
+        "expected ButtonProps interface, got {:?}",
+        output
+            .semantic
+            .classes
+            .iter()
+            .map(|c| &c.name)
+            .collect::<Vec<_>>()
+    );
+}
+
+// C files share the lang-cpp feature flag; C and C++ use the same tree-sitter grammar
+#[cfg(feature = "lang-cpp")]
+#[test]
+fn test_integration_c_analyze_file() {
+    // Arrange
+    use code_analyze_core::lang::language_for_extension;
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("sample.c");
+    // C/C++ function_definition uses `declarator` not `name`, so functions are not
+    // extracted via child_by_field_name("name") in the main parser path. The key
+    // behaviors tested here are: extension resolves and file parses without error
+    // (no "unsupported extension" failure after the feature flag fix).
+    let src = r#"
+#include <stdio.h>
+
+struct Point {
+    int x;
+    int y;
+};
+
+int add(int a, int b) {
+    return a + b;
+}
+"#;
+    fs::write(&file_path, src).unwrap();
+
+    // Verify extension resolves (primary goal of this test)
+    assert_eq!(language_for_extension("c"), Some("c"));
+
+    // Act -- must not error (no "unsupported extension" panic)
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Assert -- struct is captured as a class via class_specifier with name field
+    assert!(
+        output.semantic.classes.iter().any(|c| c.name == "Point"),
+        "expected Point struct, got {:?}",
+        output
+            .semantic
+            .classes
+            .iter()
+            .map(|c| &c.name)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[cfg(feature = "lang-cpp")]
+#[test]
+fn test_integration_cpp_analyze_file() {
+    // Arrange
+    use code_analyze_core::lang::language_for_extension;
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("sample.cpp");
+    // C/C++ function_definition uses `declarator` not `name`, so functions are not
+    // extracted via child_by_field_name("name") in the main parser path. Classes
+    // (class_specifier) do have a `name` field and are extracted correctly.
+    let src = r#"
+class Counter {
+public:
+    int count;
+    void increment() {
+        count++;
+    }
+};
+
+struct Vec2 {
+    float x;
+    float y;
+};
+"#;
+    fs::write(&file_path, src).unwrap();
+
+    // Verify extension resolves (primary goal of this test)
+    assert_eq!(language_for_extension("cpp"), Some("cpp"));
+
+    // Act -- must not error (no "unsupported extension" panic)
+    let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
+
+    // Assert -- both class_specifier nodes captured with name field
+    assert!(
+        output.semantic.classes.iter().any(|c| c.name == "Counter"),
+        "expected Counter class, got {:?}",
+        output
+            .semantic
+            .classes
+            .iter()
+            .map(|c| &c.name)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        output.semantic.classes.iter().any(|c| c.name == "Vec2"),
+        "expected Vec2 struct, got {:?}",
+        output
+            .semantic
+            .classes
+            .iter()
+            .map(|c| &c.name)
+            .collect::<Vec<_>>()
     );
 }
