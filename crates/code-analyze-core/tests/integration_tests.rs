@@ -4249,10 +4249,6 @@ fn test_integration_c_analyze_file() {
     use code_analyze_core::lang::language_for_extension;
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("sample.c");
-    // C/C++ function_definition uses `declarator` not `name`, so functions are not
-    // extracted via child_by_field_name("name") in the main parser path. The key
-    // behaviors tested here are: extension resolves and file parses without error
-    // (no "unsupported extension" failure after the feature flag fix).
     let src = r#"
 #include <stdio.h>
 
@@ -4267,13 +4263,13 @@ int add(int a, int b) {
 "#;
     fs::write(&file_path, src).unwrap();
 
-    // Verify extension resolves (primary goal of this test)
+    // Verify extension resolves
     assert_eq!(language_for_extension("c"), Some("c"));
 
-    // Act -- must not error (no "unsupported extension" panic)
+    // Act
     let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
 
-    // Assert -- struct is captured as a class via class_specifier with name field
+    // Assert -- struct extracted as class
     assert!(
         output.semantic.classes.iter().any(|c| c.name == "Point"),
         "expected Point struct, got {:?}",
@@ -4282,6 +4278,18 @@ int add(int a, int b) {
             .classes
             .iter()
             .map(|c| &c.name)
+            .collect::<Vec<_>>()
+    );
+
+    // Assert -- free function extracted via func_name capture
+    assert!(
+        output.semantic.functions.iter().any(|f| f.name == "add"),
+        "expected function 'add', got {:?}",
+        output
+            .semantic
+            .functions
+            .iter()
+            .map(|f| &f.name)
             .collect::<Vec<_>>()
     );
 }
@@ -4293,9 +4301,6 @@ fn test_integration_cpp_analyze_file() {
     use code_analyze_core::lang::language_for_extension;
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("sample.cpp");
-    // C/C++ function_definition uses `declarator` not `name`, so functions are not
-    // extracted via child_by_field_name("name") in the main parser path. Classes
-    // (class_specifier) do have a `name` field and are extracted correctly.
     let src = r#"
 class Counter {
 public:
@@ -4309,16 +4314,25 @@ struct Vec2 {
     float x;
     float y;
 };
+
+int dot(int a, int b) {
+    return a * b;
+}
+
+template<typename T>
+T identity(T val) {
+    return val;
+}
 "#;
     fs::write(&file_path, src).unwrap();
 
-    // Verify extension resolves (primary goal of this test)
+    // Verify extension resolves
     assert_eq!(language_for_extension("cpp"), Some("cpp"));
 
-    // Act -- must not error (no "unsupported extension" panic)
+    // Act
     let output = analyze_file(file_path.to_str().unwrap(), None).unwrap();
 
-    // Assert -- both class_specifier nodes captured with name field
+    // Assert -- classes extracted
     assert!(
         output.semantic.classes.iter().any(|c| c.name == "Counter"),
         "expected Counter class, got {:?}",
@@ -4337,6 +4351,34 @@ struct Vec2 {
             .classes
             .iter()
             .map(|c| &c.name)
+            .collect::<Vec<_>>()
+    );
+
+    // Assert -- free function extracted via func_name capture
+    assert!(
+        output.semantic.functions.iter().any(|f| f.name == "dot"),
+        "expected function 'dot', got {:?}",
+        output
+            .semantic
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .collect::<Vec<_>>()
+    );
+
+    // Assert -- template function extracted via template_declaration resolution (edge case)
+    assert!(
+        output
+            .semantic
+            .functions
+            .iter()
+            .any(|f| f.name == "identity"),
+        "expected template function 'identity', got {:?}",
+        output
+            .semantic
+            .functions
+            .iter()
+            .map(|f| &f.name)
             .collect::<Vec<_>>()
     );
 }

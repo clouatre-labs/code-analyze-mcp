@@ -560,58 +560,115 @@ impl SemanticExtractor {
         let mut seen_functions = std::collections::HashSet::new();
 
         while let Some(mat) = matches.next() {
+            let mut func_node: Option<Node> = None;
+            let mut func_name_text: Option<String> = None;
+            let mut class_node: Option<Node> = None;
+            let mut class_name_text: Option<String> = None;
+
             for capture in mat.captures {
                 let capture_name = compiled.element.capture_names()[capture.index as usize];
                 let node = capture.node;
                 match capture_name {
-                    "function" => {
-                        if let Some(name_node) = node.child_by_field_name("name") {
-                            let name =
-                                source[name_node.start_byte()..name_node.end_byte()].to_string();
-                            let func_key = (name.clone(), node.start_position().row);
-                            if !seen_functions.contains(&func_key) {
-                                seen_functions.insert(func_key);
-                                let params = node
-                                    .child_by_field_name("parameters")
-                                    .map(|p| source[p.start_byte()..p.end_byte()].to_string())
-                                    .unwrap_or_default();
-                                let return_type = node
-                                    .child_by_field_name("return_type")
-                                    .map(|r| source[r.start_byte()..r.end_byte()].to_string());
-                                functions.push(FunctionInfo {
-                                    name,
-                                    line: node.start_position().row + 1,
-                                    end_line: node.end_position().row + 1,
-                                    parameters: if params.is_empty() {
-                                        Vec::new()
-                                    } else {
-                                        vec![params]
-                                    },
-                                    return_type,
-                                });
-                            }
-                        }
+                    "function" => func_node = Some(node),
+                    "func_name" | "method_name" => {
+                        func_name_text =
+                            Some(source[node.start_byte()..node.end_byte()].to_string());
                     }
-                    "class" => {
-                        if let Some(name_node) = node.child_by_field_name("name") {
-                            let name =
-                                source[name_node.start_byte()..name_node.end_byte()].to_string();
-                            let inherits = if let Some(handler) = lang_info.extract_inheritance {
-                                handler(&node, source)
-                            } else {
-                                Vec::new()
-                            };
-                            classes.push(ClassInfo {
-                                name,
-                                line: node.start_position().row + 1,
-                                end_line: node.end_position().row + 1,
-                                methods: Vec::new(),
-                                fields: Vec::new(),
-                                inherits,
-                            });
-                        }
+                    "class" => class_node = Some(node),
+                    "class_name" | "type_name" => {
+                        class_name_text =
+                            Some(source[node.start_byte()..node.end_byte()].to_string());
                     }
                     _ => {}
+                }
+            }
+
+            if let Some(func_node) = func_node {
+                // When a plain function_definition is nested inside a template_declaration,
+                // it is also matched by the explicit template_declaration pattern. Skip it
+                // here to avoid duplicates; the template_declaration match will emit it.
+                let parent_is_template = func_node
+                    .parent()
+                    .map(|p| p.kind() == "template_declaration")
+                    .unwrap_or(false);
+                if func_node.kind() == "function_definition" && parent_is_template {
+                    // Handled by the template_declaration @function match instead.
+                } else {
+                    // Resolve template_declaration to its inner function_definition for
+                    // declarator/field walks. The captured node may be the template wrapper.
+                    let func_def = if func_node.kind() == "template_declaration" {
+                        func_node
+                            .children(&mut func_node.walk())
+                            .find(|n| n.kind() == "function_definition")
+                            .unwrap_or(func_node)
+                    } else {
+                        func_node
+                    };
+
+                    let name = func_name_text
+                        .or_else(|| {
+                            func_def
+                                .child_by_field_name("name")
+                                .map(|n| source[n.start_byte()..n.end_byte()].to_string())
+                        })
+                        .unwrap_or_default();
+
+                    let func_key = (name.clone(), func_node.start_position().row);
+                    if !name.is_empty() && seen_functions.insert(func_key) {
+                        // For C/C++: parameters live under declarator -> parameters.
+                        // For other languages: parameters is a direct child field.
+                        let params = func_def
+                            .child_by_field_name("declarator")
+                            .and_then(|d| d.child_by_field_name("parameters"))
+                            .or_else(|| func_def.child_by_field_name("parameters"))
+                            .map(|p| source[p.start_byte()..p.end_byte()].to_string())
+                            .unwrap_or_default();
+
+                        // For C/C++: return type is the "type" field.
+                        // For other languages: return type is the "return_type" field.
+                        let return_type = func_def
+                            .child_by_field_name("type")
+                            .or_else(|| func_def.child_by_field_name("return_type"))
+                            .map(|r| source[r.start_byte()..r.end_byte()].to_string());
+
+                        functions.push(FunctionInfo {
+                            name,
+                            line: func_node.start_position().row + 1,
+                            end_line: func_node.end_position().row + 1,
+                            parameters: if params.is_empty() {
+                                Vec::new()
+                            } else {
+                                vec![params]
+                            },
+                            return_type,
+                        });
+                    }
+                }
+            }
+
+            if let Some(class_node) = class_node {
+                let name = class_name_text
+                    .or_else(|| {
+                        class_node
+                            .child_by_field_name("name")
+                            .map(|n| source[n.start_byte()..n.end_byte()].to_string())
+                    })
+                    .unwrap_or_default();
+
+                if !name.is_empty() {
+                    let inherits = if let Some(handler) = lang_info.extract_inheritance {
+                        handler(&class_node, source)
+                    } else {
+                        Vec::new()
+                    };
+                    classes.push(ClassInfo {
+                        name,
+                        line: class_node.start_position().row + 1,
+                        end_line: class_node.end_position().row + 1,
+                        methods: Vec::new(),
+                        fields: Vec::new(),
+                        inherits,
+                    });
                 }
             }
         }
