@@ -26,7 +26,7 @@ Example: "Add Python language support to the analyzer. Implements Overview and F
 - Manual verification: `cargo run -- --mode overview path/to/python/project`
 
 ## Verification Checklist
-<!-- Checkboxes matching CONTRIBUTING.md PR requirements. -->
+<!-- Key PR verification steps. See CONTRIBUTING.md for the complete PR requirements checklist. Last item is required by AI_POLICY.md. -->
 
 - [ ] Tests pass: `cargo test`
 - [ ] Clippy clean: `cargo clippy -- -D warnings`
