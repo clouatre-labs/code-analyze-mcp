@@ -248,6 +248,28 @@ All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code
 | C/C++ | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | Implemented |
 | C# | `.cs` | Implemented |
 
+All languages are enabled by default. Each can be disabled individually at compile time via Cargo feature flags:
+
+| Feature flag | Language | Default |
+|---|---|---|
+| `lang-rust` | Rust | enabled |
+| `lang-go` | Go | enabled |
+| `lang-java` | Java | enabled |
+| `lang-python` | Python | enabled |
+| `lang-typescript` | TypeScript, TSX | enabled |
+| `lang-tsx` | TSX (alias, shares typescript grammar) | enabled |
+| `lang-fortran` | Fortran | enabled |
+| `lang-javascript` | JavaScript | enabled |
+| `lang-cpp` | C, C++ | enabled |
+| `lang-csharp` | C# | enabled |
+
+To build with a subset of languages, disable default features and opt in:
+
+```toml
+[dependencies]
+code-analyze-core = { version = "*", default-features = false, features = ["lang-rust", "lang-python"] }
+```
+
 ## Documentation
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Design goals, module map, data flow, language handler system, caching strategy
