@@ -4,13 +4,15 @@
 use tree_sitter::Node;
 
 /// Tree-sitter query for extracting C# elements (methods, constructors, classes,
-/// interfaces, and records).
+/// interfaces, records, structs, and enums).
 pub const ELEMENT_QUERY: &str = r"
 (method_declaration name: (identifier) @method_name) @function
 (constructor_declaration name: (identifier) @ctor_name) @function
 (class_declaration name: (identifier) @class_name) @class
 (interface_declaration name: (identifier) @interface_name) @class
 (record_declaration name: (identifier) @record_name) @class
+(struct_declaration name: (identifier) @struct_name) @class
+(enum_declaration name: (identifier) @enum_name) @class
 ";
 
 /// Tree-sitter query for extracting C# method invocations.

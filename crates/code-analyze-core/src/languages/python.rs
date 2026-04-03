@@ -52,3 +52,102 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
 
     inherits
 }
+
+#[cfg(all(test, feature = "lang-python"))]
+mod tests {
+    use super::*;
+    use tree_sitter::{Parser, StreamingIterator};
+
+    fn parse_python(src: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_python::LANGUAGE.into())
+            .expect("Error loading Python language");
+        parser.parse(src, None).expect("Failed to parse Python")
+    }
+
+    #[test]
+    fn test_python_element_query_happy_path() {
+        // Arrange
+        let src = "def greet(name): pass\nclass Greeter:\n    pass\n";
+        let tree = parse_python(src);
+        let root = tree.root_node();
+
+        // Act
+        let query = tree_sitter::Query::new(&tree_sitter_python::LANGUAGE.into(), ELEMENT_QUERY)
+            .expect("ELEMENT_QUERY must be valid");
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut matches = cursor.matches(&query, root, src.as_bytes());
+
+        let mut captured_classes: Vec<String> = Vec::new();
+        let mut captured_functions: Vec<String> = Vec::new();
+        while let Some(mat) = matches.next() {
+            for capture in mat.captures {
+                let name = query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                match name {
+                    "class" => {
+                        if let Some(n) = node.child_by_field_name("name") {
+                            captured_classes.push(src[n.start_byte()..n.end_byte()].to_string());
+                        }
+                    }
+                    "function" => {
+                        if let Some(n) = node.child_by_field_name("name") {
+                            captured_functions.push(src[n.start_byte()..n.end_byte()].to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Assert
+        assert!(
+            captured_classes.contains(&"Greeter".to_string()),
+            "expected Greeter class, got {:?}",
+            captured_classes
+        );
+        assert!(
+            captured_functions.contains(&"greet".to_string()),
+            "expected greet function, got {:?}",
+            captured_functions
+        );
+    }
+
+    #[test]
+    fn test_python_extract_inheritance() {
+        // Arrange
+        let src = "class Cat(Animal, Domestic): pass\n";
+        let tree = parse_python(src);
+        let root = tree.root_node();
+
+        // Act -- find class_definition node
+        let mut class_node: Option<tree_sitter::Node> = None;
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            if node.kind() == "class_definition" {
+                class_node = Some(node);
+                break;
+            }
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX)) {
+                    stack.push(child);
+                }
+            }
+        }
+        let class = class_node.expect("class_definition not found");
+        let bases = extract_inheritance(&class, src);
+
+        // Assert
+        assert!(
+            bases.contains(&"Animal".to_string()),
+            "expected Animal, got {:?}",
+            bases
+        );
+        assert!(
+            bases.contains(&"Domestic".to_string()),
+            "expected Domestic, got {:?}",
+            bases
+        );
+    }
+}
