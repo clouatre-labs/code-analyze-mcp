@@ -9,7 +9,7 @@ use crate::formatter::{
     format_file_details, format_focused_internal, format_focused_summary_internal, format_structure,
 };
 use crate::graph::{CallGraph, InternalCallChain};
-use crate::lang::language_for_extension;
+use crate::lang::{language_for_extension, supported_languages};
 use crate::parser::{ElementExtractor, SemanticExtractor};
 use crate::test_detection::is_test_file;
 use crate::traversal::{WalkEntry, walk_directory};
@@ -302,9 +302,13 @@ pub fn analyze_file(
 
 /// Analyze source code from a string buffer without filesystem access.
 ///
-/// This function analyzes in-memory source code by language identifier. The language parameter
-/// can be either a language name (e.g., `"rust"`, `"python"`, `"go"`) or a file extension
-/// (e.g., `"rs"`, `"py"`). Supported language strings depend on compiled features.
+/// This function analyzes in-memory source code by language identifier. The `language`
+/// parameter can be either a language name (e.g., `"rust"`, `"python"`, `"go"`) or a file
+/// extension (e.g., `"rs"`, `"py"`).
+///
+/// Accepted language identifiers depend on compiled features. Use [`supported_languages()`] to
+/// discover the available language names at runtime, and [`language_for_extension()`] to resolve
+/// a file extension to its supported language identifier.
 ///
 /// # Arguments
 ///
@@ -321,21 +325,31 @@ pub fn analyze_file(
 /// # Notes
 ///
 /// - Python wildcard import resolution is skipped for in-memory analysis (no filesystem path available)
-/// - The formatted output will not include a file path header
+/// - The formatted output uses the standard file-details formatter, so it includes a `FILE:` header with an empty path
 #[inline]
 pub fn analyze_str(
     source: &str,
     language: &str,
     ast_recursion_limit: Option<usize>,
 ) -> Result<FileAnalysisOutput, AnalyzeError> {
-    // Validate language using language_for_extension
-    // This accepts both extensions (e.g. "rs") and language names (e.g. "rust")
-    // because language names are also in the supported_languages list
-    let lang = language_for_extension(language)
-        .ok_or_else(|| AnalyzeError::UnsupportedLanguage(language.to_string()))?;
+    // Resolve language: first try as a file extension, then as a language name
+    // (case-insensitive match against supported_languages()).
+    let lang = language_for_extension(language).or_else(|| {
+        let lower = language.to_ascii_lowercase();
+        supported_languages()
+            .iter()
+            .find(|&&name| name == lower)
+            .copied()
+    });
+    let lang = lang.ok_or_else(|| AnalyzeError::UnsupportedLanguage(language.to_string()))?;
 
     // Extract semantic information
-    let semantic = SemanticExtractor::extract(source, lang, ast_recursion_limit)?;
+    let mut semantic = SemanticExtractor::extract(source, lang, ast_recursion_limit)?;
+
+    // Populate a stable in-memory sentinel on all reference locations
+    for r in &mut semantic.references {
+        r.location = "<memory>".to_string();
+    }
 
     // Count lines in the source
     let line_count = source.lines().count();
@@ -1076,6 +1090,38 @@ mod tests {
     fn analyze_str_python_happy_path() {
         let source = "def greet(name):\n    return f'Hello {name}'";
         let result = analyze_str(source, "py", None);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn analyze_str_rust_by_language_name() {
+        let source = "fn hello() -> i32 { 42 }";
+        let result = analyze_str(source, "rust", None);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "lang-python")]
+    #[test]
+    fn analyze_str_python_by_language_name() {
+        let source = "def greet(name):\n    return f'Hello {name}'";
+        let result = analyze_str(source, "python", None);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn analyze_str_rust_mixed_case() {
+        let source = "fn hello() -> i32 { 42 }";
+        let result = analyze_str(source, "RuSt", None);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "lang-python")]
+    #[test]
+    fn analyze_str_python_mixed_case() {
+        let source = "def greet(name):\n    return f'Hello {name}'";
+        let result = analyze_str(source, "PyThOn", None);
         assert!(result.is_ok());
     }
 
