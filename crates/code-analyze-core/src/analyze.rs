@@ -821,12 +821,40 @@ fn analyze_focused_with_progress_with_entries_internal(
         impl_trait_caller_count,
     )?;
 
+    // Compute depth-1 chains for structured output fields (always direct relationships only,
+    // regardless of `follow_depth` used for the text-formatted output).
+    let (depth1_callers, depth1_test_callers, depth1_callees) = if params.follow_depth <= 1 {
+        // Chains already at depth 1; reuse the partitioned vecs.
+        let callers = chains_to_entries(&prod_chains, Some(root));
+        let test_callers = chains_to_entries(&test_chains, Some(root));
+        let callees = chains_to_entries(&outgoing_chains, Some(root));
+        (callers, test_callers, callees)
+    } else {
+        // follow_depth > 1: re-query at depth 1 to get only direct edges.
+        let incoming1 = graph
+            .find_incoming_chains(&resolved_focus, 1)
+            .unwrap_or_default();
+        let outgoing1 = graph
+            .find_outgoing_chains(&resolved_focus, 1)
+            .unwrap_or_default();
+        let (prod1, test1): (Vec<_>, Vec<_>) = incoming1.into_iter().partition(|chain| {
+            chain
+                .chain
+                .first()
+                .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
+        });
+        let callers = chains_to_entries(&prod1, Some(root));
+        let test_callers = chains_to_entries(&test1, Some(root));
+        let callees = chains_to_entries(&outgoing1, Some(root));
+        (callers, test_callers, callees)
+    };
+
     Ok(FocusedAnalysisOutput {
         formatted,
         next_cursor: None,
-        callers: chains_to_entries(&prod_chains, Some(root)),
-        test_callers: chains_to_entries(&test_chains, Some(root)),
-        callees: chains_to_entries(&outgoing_chains, Some(root)),
+        callers: depth1_callers,
+        test_callers: depth1_test_callers,
+        callees: depth1_callees,
         prod_chains,
         test_chains,
         outgoing_chains,
