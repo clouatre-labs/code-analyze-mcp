@@ -19,7 +19,7 @@ use crate::types::{
 use rayon::prelude::*;
 #[cfg(feature = "schemars")]
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -362,6 +362,30 @@ pub fn analyze_str(
     ))
 }
 
+/// Single entry in a call chain (depth-1 direct caller or callee).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct CallChainEntry {
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "Symbol name of the caller or callee")
+    )]
+    pub symbol: String,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(description = "File path relative to the repository root")
+    )]
+    pub file: String,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            description = "Line number of the definition or call site (1-indexed)",
+            schema_with = "crate::schema_helpers::integer_schema"
+        )
+    )]
+    pub line: usize,
+}
+
 /// Result of focused symbol analysis.
 #[derive(Debug, Serialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
@@ -405,6 +429,15 @@ pub struct FocusedAnalysisOutput {
     #[serde(skip)]
     #[cfg_attr(feature = "schemars", schemars(skip))]
     pub impl_trait_caller_count: usize,
+    /// Direct (depth-1) production callers. `follow_depth` does not affect this field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub callers: Option<Vec<CallChainEntry>>,
+    /// Direct (depth-1) test callers. `follow_depth` does not affect this field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_callers: Option<Vec<CallChainEntry>>,
+    /// Direct (depth-1) callees. `follow_depth` does not affect this field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub callees: Option<Vec<CallChainEntry>>,
 }
 
 /// Parameters for focused symbol analysis. Groups high-arity parameters to keep
@@ -592,6 +625,43 @@ type ChainComputeResult = (
     usize,
 );
 
+/// Helper function to convert InternalCallChain data to CallChainEntry vec.
+/// Takes the first (depth-1) element of each chain and converts it to a CallChainEntry.
+/// Returns None if chains is empty, otherwise returns a vec of up to 10 entries.
+fn chains_to_entries(
+    chains: &[InternalCallChain],
+    root: Option<&std::path::Path>,
+) -> Option<Vec<CallChainEntry>> {
+    if chains.is_empty() {
+        return None;
+    }
+    let entries: Vec<CallChainEntry> = chains
+        .iter()
+        .take(10)
+        .filter_map(|chain| {
+            let (symbol, path, line) = chain.chain.first()?;
+            let file = match root {
+                Some(root) => path
+                    .strip_prefix(root)
+                    .unwrap_or(path.as_path())
+                    .to_string_lossy()
+                    .into_owned(),
+                None => path.to_string_lossy().into_owned(),
+            };
+            Some(CallChainEntry {
+                symbol: symbol.clone(),
+                file,
+                line: *line,
+            })
+        })
+        .collect();
+    if entries.is_empty() {
+        None
+    } else {
+        Some(entries)
+    }
+}
+
 /// Phase 4: Compute chains and format output.
 fn compute_chains(
     graph: &CallGraph,
@@ -709,6 +779,9 @@ fn analyze_focused_with_progress_with_entries_internal(
             def_count: 0,
             unfiltered_caller_count: 0,
             impl_trait_caller_count: 0,
+            callers: None,
+            test_callers: None,
+            callees: None,
         });
     }
 
@@ -748,9 +821,40 @@ fn analyze_focused_with_progress_with_entries_internal(
         impl_trait_caller_count,
     )?;
 
+    // Compute depth-1 chains for structured output fields (always direct relationships only,
+    // regardless of `follow_depth` used for the text-formatted output).
+    let (depth1_callers, depth1_test_callers, depth1_callees) = if params.follow_depth <= 1 {
+        // Chains already at depth 1; reuse the partitioned vecs.
+        let callers = chains_to_entries(&prod_chains, Some(root));
+        let test_callers = chains_to_entries(&test_chains, Some(root));
+        let callees = chains_to_entries(&outgoing_chains, Some(root));
+        (callers, test_callers, callees)
+    } else {
+        // follow_depth > 1: re-query at depth 1 to get only direct edges.
+        let incoming1 = graph
+            .find_incoming_chains(&resolved_focus, 1)
+            .unwrap_or_default();
+        let outgoing1 = graph
+            .find_outgoing_chains(&resolved_focus, 1)
+            .unwrap_or_default();
+        let (prod1, test1): (Vec<_>, Vec<_>) = incoming1.into_iter().partition(|chain| {
+            chain
+                .chain
+                .first()
+                .is_none_or(|(name, path, _)| !is_test_file(path) && !name.starts_with("test_"))
+        });
+        let callers = chains_to_entries(&prod1, Some(root));
+        let test_callers = chains_to_entries(&test1, Some(root));
+        let callees = chains_to_entries(&outgoing1, Some(root));
+        (callers, test_callers, callees)
+    };
+
     Ok(FocusedAnalysisOutput {
         formatted,
         next_cursor: None,
+        callers: depth1_callers,
+        test_callers: depth1_test_callers,
+        callees: depth1_callees,
         prod_chains,
         test_chains,
         outgoing_chains,
@@ -1073,8 +1177,10 @@ fn extract_string_list_from_list_node(
 mod tests {
     use super::*;
     use crate::formatter::format_focused_paginated;
+    use crate::graph::InternalCallChain;
     use crate::pagination::{PaginationMode, decode_cursor, paginate_slice};
     use std::fs;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     #[cfg(feature = "lang-rust")]
@@ -1218,6 +1324,46 @@ mod tests {
                 formatted
             );
         }
+    }
+
+    #[test]
+    fn test_chains_to_entries_empty_returns_none() {
+        // Arrange
+        let chains: Vec<InternalCallChain> = vec![];
+
+        // Act
+        let result = chains_to_entries(&chains, None);
+
+        // Assert
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_chains_to_entries_with_data_returns_entries() {
+        // Arrange
+        let chains = vec![
+            InternalCallChain {
+                chain: vec![("caller1".to_string(), PathBuf::from("/root/lib.rs"), 10)],
+            },
+            InternalCallChain {
+                chain: vec![("caller2".to_string(), PathBuf::from("/root/other.rs"), 20)],
+            },
+        ];
+        let root = PathBuf::from("/root");
+
+        // Act
+        let result = chains_to_entries(&chains, Some(root.as_path()));
+
+        // Assert
+        assert!(result.is_some());
+        let entries = result.unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].symbol, "caller1");
+        assert_eq!(entries[0].file, "lib.rs");
+        assert_eq!(entries[0].line, 10);
+        assert_eq!(entries[1].symbol, "caller2");
+        assert_eq!(entries[1].file, "other.rs");
+        assert_eq!(entries[1].line, 20);
     }
 
     #[test]
