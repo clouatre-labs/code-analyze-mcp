@@ -15,7 +15,7 @@ This document maps every repo-level artifact to its purpose and the rationale be
 | `.github/workflows/build-and-attest.yml` | Reusable multi-platform build with cosign signing and provenance attestation |
 | `.github/workflows/release.yml` | GPG tag verification, Homebrew + cargo-binstall + crates.io distribution |
 | `.commitlintrc.yml` | Enforces Conventional Commits for automated changelog and searchable history |
-| `clippy.toml` | Clippy configuration; lints enforced with `-D warnings` in CI |
+| `clippy.toml` | Clippy configuration; lints enforced with `-D warnings` in CI; cognitive complexity threshold set to 30 |
 | `deny.toml` | `cargo deny` configuration for advisory and license checks |
 | `renovate.json` | Automated dependency updates via Renovate bot |
 | `CONTRIBUTING.md` | Dev setup, commit format, PR process |
@@ -55,6 +55,14 @@ ci-result:
 **Provenance attestation.** `build-and-attest.yml` generates a signed attestation via `actions/attest-build-provenance`. Consumers can verify with `gh attestation verify` before installing. `Cargo.lock` is committed and `cargo deny` enforces license and advisory checks in CI. Build provenance is covered by cosign signing and `actions/attest-build-provenance` (SLSA Build L3).
 
 **Runner pinning to ubuntu-24.04.** `ubuntu-latest` is a moving alias; GitHub advances it to the next LTS image with short notice. Pinning to a specific image (`ubuntu-24.04`) makes toolchain changes explicit and reviewable rather than silent. Renovate keeps the pin current via automated PRs.
+
+**Cognitive complexity threshold.** `clippy::cognitive_complexity` is enforced at a threshold of 30 (set in `clippy.toml`); `-D warnings` promotes violations to hard errors in CI. When a function legitimately exceeds the threshold and splitting it would reduce clarity rather than improve it, suppress with an attribute and a mandatory `reason` field:
+
+```rust
+#[allow(clippy::cognitive_complexity, reason = "<why this function cannot be meaningfully split>")]
+```
+
+Do not raise the global threshold to accommodate a single outlier. The `reason` field is required: it documents intent for reviewers and makes the suppression searchable. Macro-expanded code can inflate scores artificially; this is a known upstream limitation (rust-lang/rust-clippy#14417).
 
 **Permissions-first sequencing.** The org default GITHUB_TOKEN permission was flipped to `read` on 2026-03-25. New repos work without per-workflow blocks, but explicit blocks are still required as defence in depth and should be placed before the first `jobs:` key by convention for readability.
 
