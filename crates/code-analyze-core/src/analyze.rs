@@ -41,6 +41,8 @@ pub enum AnalyzeError {
     Formatter(#[from] crate::formatter::FormatterError),
     #[error("Analysis cancelled")]
     Cancelled,
+    #[error("unsupported language: {0}")]
+    UnsupportedLanguage(String),
 }
 
 /// Result of directory analysis containing both formatted output and file data.
@@ -292,6 +294,54 @@ pub fn analyze_file(
     let formatted = format_file_details(path, &semantic, line_count, is_test, parent_dir);
 
     tracing::debug!(path = %path, language = %ext, functions = semantic.functions.len(), classes = semantic.classes.len(), imports = semantic.imports.len(), duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX), "file analysis complete");
+
+    Ok(FileAnalysisOutput::new(
+        formatted, semantic, line_count, None,
+    ))
+}
+
+/// Analyze source code from a string buffer without filesystem access.
+///
+/// This function analyzes in-memory source code by language identifier. The language parameter
+/// can be either a language name (e.g., `"rust"`, `"python"`, `"go"`) or a file extension
+/// (e.g., `"rs"`, `"py"`). Supported language strings depend on compiled features.
+///
+/// # Arguments
+///
+/// * `source` - The source code to analyze
+/// * `language` - The language identifier (language name or extension)
+/// * `ast_recursion_limit` - Optional limit for AST traversal depth
+///
+/// # Returns
+///
+/// - `Ok(FileAnalysisOutput)` on success
+/// - `Err(AnalyzeError::UnsupportedLanguage)` if the language is not recognized
+/// - `Err(AnalyzeError::Parser)` if parsing fails
+///
+/// # Notes
+///
+/// - Python wildcard import resolution is skipped for in-memory analysis (no filesystem path available)
+/// - The formatted output will not include a file path header
+#[inline]
+pub fn analyze_str(
+    source: &str,
+    language: &str,
+    ast_recursion_limit: Option<usize>,
+) -> Result<FileAnalysisOutput, AnalyzeError> {
+    // Validate language using language_for_extension
+    // This accepts both extensions (e.g. "rs") and language names (e.g. "rust")
+    // because language names are also in the supported_languages list
+    let lang = language_for_extension(language)
+        .ok_or_else(|| AnalyzeError::UnsupportedLanguage(language.to_string()))?;
+
+    // Extract semantic information
+    let semantic = SemanticExtractor::extract(source, lang, ast_recursion_limit)?;
+
+    // Count lines in the source
+    let line_count = source.lines().count();
+
+    // Format output with empty path (no filesystem access)
+    let formatted = format_file_details("", &semantic, line_count, false, None);
 
     Ok(FileAnalysisOutput::new(
         formatted, semantic, line_count, None,
@@ -1005,7 +1055,7 @@ fn extract_string_list_from_list_node(
     }
 }
 
-#[cfg(all(test, feature = "lang-rust"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::formatter::format_focused_paginated;
@@ -1013,6 +1063,31 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    #[cfg(feature = "lang-rust")]
+    #[test]
+    fn analyze_str_rust_happy_path() {
+        let source = "fn hello() -> i32 { 42 }";
+        let result = analyze_str(source, "rs", None);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "lang-python")]
+    #[test]
+    fn analyze_str_python_happy_path() {
+        let source = "def greet(name):\n    return f'Hello {name}'";
+        let result = analyze_str(source, "py", None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn analyze_str_unsupported_language() {
+        let result = analyze_str("code", "brainfuck", None);
+        assert!(
+            matches!(result, Err(AnalyzeError::UnsupportedLanguage(lang)) if lang == "brainfuck")
+        );
+    }
+
+    #[cfg(feature = "lang-rust")]
     #[test]
     fn test_symbol_focus_callers_pagination_first_page() {
         let temp_dir = TempDir::new().unwrap();
