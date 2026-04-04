@@ -56,9 +56,10 @@ pub(crate) const EXCLUDED_DIRS: &[&str] = &[
 
 // Re-exports of key public APIs
 pub use analyze::{
-    AnalysisOutput, FileAnalysisOutput, FocusedAnalysisConfig, FocusedAnalysisOutput,
+    AnalysisOutput, AnalyzeError, FileAnalysisOutput, FocusedAnalysisConfig, FocusedAnalysisOutput,
     analyze_directory, analyze_directory_with_progress, analyze_file, analyze_focused,
     analyze_focused_with_progress, analyze_focused_with_progress_with_entries, analyze_module_file,
+    analyze_str,
 };
 pub use config::AnalysisConfig;
 pub use lang::{language_for_extension, supported_languages};
