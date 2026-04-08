@@ -23,7 +23,7 @@ For the reasoning behind these goals, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md).
 | `main` | `crates/code-analyze-mcp/src/main.rs` | MCP server entry point; initializes tracing and stdio transport |
 | `lib` | `crates/code-analyze-mcp/src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
 | `logging` | `crates/code-analyze-mcp/src/logging.rs` | MCP logging integration via tracing; McpLoggingLayer bridges events to MCP clients |
-| `schema_helpers` | `crates/code-analyze-mcp/src/schema_helpers.rs` | JSON Schema helpers for integer and page_size field validation |
+| `schema_helpers` | `crates/code-analyze-core/src/schema_helpers.rs` | Core JSON Schema helpers for integer and page_size field validation |
 | `metrics` | `crates/code-analyze-mcp/src/metrics.rs` | Metrics collection and daily-rotating JSONL emission; `MetricEvent`, `MetricsSender`, `MetricsWriter` |
 | `analyze` | `crates/code-analyze-core/src/analyze.rs` | High-level analysis orchestration; directory, file, and module analysis |
 | `analyze_str` | `crates/code-analyze-core/src/analyze.rs` | Public in-memory API; parses source text without filesystem access; `AnalyzeError::UnsupportedLanguage` variant |
@@ -92,7 +92,7 @@ graph TD
 
 ### analyze_str (In-Memory Parsing)
 
-1. Accept `source: &str`, `language: &str`, and `ast_recursion_limit: Option<u32>` -- no filesystem I/O
+1. Accept `source: &str`, `language: &str`, and `ast_recursion_limit: Option<usize>` -- no filesystem I/O
 2. Resolve language string to a `LanguageInfo` entry; return `Err(AnalyzeError::UnsupportedLanguage(language.to_string()))` if not found
 3. Run `SemanticExtractor` on the source bytes directly
 4. Return `Ok(FileAnalysisOutput)` on success
@@ -112,7 +112,7 @@ Exported from `code_analyze_core` as a public API for library consumers that hol
 - `test_callers: Option<Vec<CallChainEntry>>` -- depth-1 callers from test files
 - `callees: Option<Vec<CallChainEntry>>` -- depth-1 callees
 
-`CallChainEntry` is a stable public type (exported from `code_analyze_core`) with fields `symbol: String`, `file: String`, `line: u32`. Conversion from the internal `InternalCallChain` (which is non-serializable and stays internal) happens at the output boundary via the private `chains_to_entries` helper. The `follow_depth` parameter does not affect these arrays; they always represent depth-1 relationships.
+`CallChainEntry` is a stable public type (exported from `code_analyze_core`) with fields `symbol: String`, `file: String`, `line: usize`. Conversion from the internal `InternalCallChain` (which is non-serializable and stays internal) happens at the output boundary via the private `chains_to_entries` helper. The `follow_depth` parameter does not affect these arrays; they always represent depth-1 relationships.
 
 ## Language Handler System
 
