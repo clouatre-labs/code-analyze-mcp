@@ -32,9 +32,9 @@ Key changes:
 
 ### [Complete] 0.3.0 Library API
 
-Issues: #623, #624, #625.
+Promotes `code-analyze-core` to a stable public library API and adds structured output fields for programmatic consumption without text parsing.
 
-Extends `code-analyze-core` with a stable public library API and structured output for programmatic consumption.
+Issues: #623, #624, #625.
 
 Key changes:
 - #623: `analyze_str(source, language, ast_recursion_limit)` -- public in-memory parsing API; eliminates TOCTOU race for consumers holding source text without an on-disk path; adds `AnalyzeError::UnsupportedLanguage` variant
