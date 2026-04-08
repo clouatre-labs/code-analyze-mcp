@@ -20,24 +20,25 @@ For the reasoning behind these goals, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md).
 
 | Module | File | Responsibility |
 |--------|------|-----------------|
-| `main` | `src/main.rs` | MCP server entry point; initializes tracing and stdio transport |
-| `lib` | `src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
-| `analyze` | `src/analyze.rs` | High-level analysis orchestration; directory, file, and module analysis |
-| `parser` | `src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
-| `formatter` | `src/formatter.rs` | Output formatting for all four tools |
-| `traversal` | `src/traversal.rs` | Directory walking with .gitignore support via ignore crate |
-| `types` | `src/types.rs` | Shared data structures (`AnalyzeDirectoryParams`, `AnalyzeFileParams`, `AnalyzeModuleParams`, `AnalyzeSymbolParams`, `AnalysisResult`, etc.) |
-| `lang` | `src/lang.rs` | Extension-to-language mapping |
-| `languages/mod` | `src/languages/mod.rs` | LanguageInfo registry and handler function types |
-| `languages/rust` | `src/languages/rust.rs` | Rust-specific queries and semantic handlers |
-| `cache` | `src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
-| `completion` | `src/completion.rs` | Path completion support respecting .gitignore |
-| `logging` | `src/logging.rs` | MCP logging integration via tracing; McpLoggingLayer bridges events to MCP clients |
-| `schema_helpers` | `src/schema_helpers.rs` | JSON Schema helpers for integer and page_size field validation |
-| `test_detection` | `src/test_detection.rs` | Test file detection by path heuristics (directory and filename patterns) |
-| `pagination` | `src/pagination.rs` | Cursor-based pagination with CursorData and PaginationMode (Default, Callers, Callees) |
-| `graph` | `src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
-| `metrics` | `src/metrics.rs` | Metrics collection and daily-rotating JSONL emission; `MetricEvent`, `MetricsSender`, `MetricsWriter` |
+| `main` | `crates/code-analyze-mcp/src/main.rs` | MCP server entry point; initializes tracing and stdio transport |
+| `lib` | `crates/code-analyze-mcp/src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
+| `logging` | `crates/code-analyze-mcp/src/logging.rs` | MCP logging integration via tracing; McpLoggingLayer bridges events to MCP clients |
+| `schema_helpers` | `crates/code-analyze-core/src/schema_helpers.rs` | Core JSON Schema helpers for integer and page_size field validation |
+| `metrics` | `crates/code-analyze-mcp/src/metrics.rs` | Metrics collection and daily-rotating JSONL emission; `MetricEvent`, `MetricsSender`, `MetricsWriter` |
+| `analyze` | `crates/code-analyze-core/src/analyze.rs` | High-level analysis orchestration; directory, file, and module analysis |
+| `analyze_str` | `crates/code-analyze-core/src/analyze.rs` | Public in-memory API; parses source text without filesystem access; `AnalyzeError::UnsupportedLanguage` variant |
+| `parser` | `crates/code-analyze-core/src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
+| `formatter` | `crates/code-analyze-core/src/formatter.rs` | Output formatting for all four tools |
+| `traversal` | `crates/code-analyze-core/src/traversal.rs` | Directory walking with .gitignore support via ignore crate |
+| `types` | `crates/code-analyze-core/src/types.rs` | Shared data structures (`AnalyzeDirectoryParams`, `AnalyzeFileParams`, `AnalyzeModuleParams`, `AnalyzeSymbolParams`, `AnalysisResult`, etc.) |
+| `lang` | `crates/code-analyze-core/src/lang.rs` | Extension-to-language mapping |
+| `languages/mod` | `crates/code-analyze-core/src/languages/mod.rs` | LanguageInfo registry and handler function types |
+| `languages/rust` | `crates/code-analyze-core/src/languages/rust.rs` | Rust-specific queries and semantic handlers |
+| `cache` | `crates/code-analyze-core/src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
+| `completion` | `crates/code-analyze-core/src/completion.rs` | Path completion support respecting .gitignore |
+| `test_detection` | `crates/code-analyze-core/src/test_detection.rs` | Test file detection by path heuristics (directory and filename patterns) |
+| `pagination` | `crates/code-analyze-core/src/pagination.rs` | Cursor-based pagination with CursorData and PaginationMode (Default, Callers, Callees) |
+| `graph` | `crates/code-analyze-core/src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
 
 ## Data Flow
 
@@ -89,6 +90,15 @@ graph TD
 3. Returns a minimal fixed schema: `name`, `line_count`, `language`, `functions[{name, line}]`, `imports[{module, items}]`
 4. No call graph, no type references, no field accesses -- output is ~75% smaller than `analyze_file`
 
+### analyze_str (In-Memory Parsing)
+
+1. Accept `source: &str`, `language: &str`, and `ast_recursion_limit: Option<usize>` -- no filesystem I/O
+2. Resolve language string to a `LanguageInfo` entry; return `Err(AnalyzeError::UnsupportedLanguage(language.to_string()))` if not found
+3. Run `SemanticExtractor` on the source bytes directly
+4. Return `Ok(FileAnalysisOutput)` on success
+
+Exported from `code_analyze_core` as a public API for library consumers that hold source text in memory (e.g. language servers, test harnesses) without a corresponding on-disk path. Eliminates the TOCTOU race and I/O overhead of writing a temp file first.
+
 ### analyze_symbol (Symbol Call Graph)
 
 1. Walk entire directory to build symbol index
@@ -96,6 +106,13 @@ graph TD
 3. Sentinel values: `<module>` for top-level calls, `<reference>` for type references
 4. Symbols called >3x marked with `•N`
 5. Format as FOCUS/DEPTH/DEFINED/CALLERS/CALLEES sections
+
+**Structured output:** In addition to formatted text, `analyze_symbol` populates three fields on `FocusedAnalysisOutput` for programmatic consumption:
+- `callers: Option<Vec<CallChainEntry>>` -- depth-1 production callers
+- `test_callers: Option<Vec<CallChainEntry>>` -- depth-1 callers from test files
+- `callees: Option<Vec<CallChainEntry>>` -- depth-1 callees
+
+`CallChainEntry` is a stable public type (exported from `code_analyze_core`) with fields `symbol: String`, `file: String`, `line: usize`. Conversion from the internal `InternalCallChain` (which is non-serializable and stays internal) happens at the output boundary via the private `chains_to_entries` helper. The `follow_depth` parameter does not affect these arrays; they always represent depth-1 relationships.
 
 ## Language Handler System
 

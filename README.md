@@ -60,7 +60,7 @@ To build with a subset of languages, disable default features and opt in:
 
 ```toml
 [dependencies]
-code-analyze-core = { version = "0.2", default-features = false, features = ["lang-rust", "lang-python"] }
+code-analyze-core = { version = "0.3", default-features = false, features = ["lang-rust", "lang-python"] }
 ```
 
 ## Installation
@@ -204,6 +204,8 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
   - `prefix`: Case-insensitive prefix match; returns an error listing candidates when multiple symbols match
   - `contains`: Case-insensitive substring match; returns an error listing candidates when multiple symbols match
   All non-exact modes return an error with candidate names when the match is ambiguous; use the listed candidates to refine to a unique match.
+
+The tool also returns `structuredContent` with typed arrays for programmatic consumption: `callers` (production callers), `test_callers` (callers from test files), and `callees` (direct callees), each as `Option<Vec<CallChainEntry>>`. A `CallChainEntry` has three fields: `symbol` (string), `file` (string), and `line` (JSON integer; `usize` in the Rust API). These arrays represent depth-1 relationships only; `follow_depth` does not affect them.
 
 **Example output:**
 

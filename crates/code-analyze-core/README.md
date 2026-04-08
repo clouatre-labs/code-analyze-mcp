@@ -18,6 +18,7 @@ Core library for code structure analysis using tree-sitter.
 - **File analysis** - Functions, classes, and imports with signatures and line ranges
 - **Symbol call graphs** - Callers and callees across a directory with configurable depth
 - **Module index** - Lightweight function and import index (~75% smaller than full file analysis)
+- **In-memory analysis** - `analyze_str` parses source text directly without a file path; returns the same `FileAnalysisOutput` as `analyze_file`
 - **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Fortran, JavaScript, C/C++, C#
 - **Pagination** - Cursor-based pagination for large outputs
 - **Caching** - LRU cache for parsed results with mtime-based invalidation
@@ -29,13 +30,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-code-analyze-core = "0.2"
+code-analyze-core = "0.3"
 ```
 
 ## Example
 
 ```rust,no_run
-use code_analyze_core::{analyze_directory, analyze_file, AnalysisConfig};
+use code_analyze_core::{analyze_directory, analyze_file, analyze_str, AnalysisConfig};
 use anyhow::Result;
 
 #[tokio::main]
@@ -46,6 +47,11 @@ async fn main() -> Result<()> {
 
     // Analyze a single file
     let output = analyze_file("src/lib.rs", false, None, None, false, false, None, None).await?;
+    println!("{}", output.formatted);
+
+    // Analyze source text in memory (no file path required)
+    let source = std::fs::read_to_string("src/lib.rs")?;
+    let output = analyze_str(&source, "rs", None).await?;
     println!("{}", output.formatted);
 
     Ok(())
@@ -76,7 +82,7 @@ use code_analyze_core::AnalysisConfig;
 
 let config = AnalysisConfig {
     max_file_bytes: Some(1_000_000), // skip files > 1 MB
-    parse_timeout_micros: None,      // reserved, no-op in 0.2
+    parse_timeout_micros: None,      // reserved, no-op in 0.3
     cache_capacity: None,            // use default LRU capacity
 };
 ```

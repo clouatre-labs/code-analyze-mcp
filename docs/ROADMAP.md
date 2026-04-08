@@ -30,6 +30,17 @@ Key changes:
 - #356: Idempotency audit and cross-client compatibility verification
 - #357: ROADMAP.md and OBSERVABILITY.md documentation
 
+### [Complete] 0.3.0 Library API
+
+Promotes `code-analyze-core` to a stable public library API and adds structured output fields for programmatic consumption without text parsing.
+
+Issues: #623, #624, #625.
+
+Key changes:
+- #623: `analyze_str(source, language, ast_recursion_limit)` -- public in-memory parsing API; eliminates TOCTOU race for consumers holding source text without an on-disk path; adds `AnalyzeError::UnsupportedLanguage` variant
+- #624: `CallChainEntry { symbol, file, line }` public type; `callers`, `test_callers`, `callees` fields on `FocusedAnalysisOutput`; MCP clients can now consume caller/callee relationships from `structuredContent` without text parsing
+- #625: `analyze_symbol` tool description updated to accurately reflect `FocusedAnalysisOutput` schema
+
 ### [Benchmarking] Wave 7: OpenFAST Fortran Analysis (v13)
 
 2x2 factorial design (model x tool_set) on Fortran scientific HPC code (OpenFAST). See [v13 methodology](docs/benchmarks/v13/methodology.md).
