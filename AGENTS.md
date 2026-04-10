@@ -8,8 +8,7 @@ Rust workspace with two crates:
 - `crates/code-analyze-mcp` -- MCP server, tool handlers, logging, metrics
 
 Four MCP tools: `analyze_directory`, `analyze_file`, `analyze_symbol`, `analyze_module`.
-Languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#.
-Rust edition 2024, async with tokio, MCP protocol via `rmcp`.
+Rust edition 2024, async with tokio, MCP protocol via `rmcp`. Supported languages are listed in `crates/code-analyze-core/src/lang.rs`.
 
 ## Commands
 
@@ -20,7 +19,6 @@ cargo clippy -- -D warnings
 cargo fmt --check
 cargo deny check advisories licenses
 cargo bench
-cargo install --path crates/code-analyze-mcp --profile release
 ```
 
 ## API verification (critical)
@@ -42,16 +40,13 @@ Patterns contributors consistently get wrong:
 
 Follow an existing handler in `crates/code-analyze-core/src/languages/`. The extension map is in `crates/code-analyze-core/src/lang.rs`; the `LanguageInfo` registry with queries is in `crates/code-analyze-core/src/languages/mod.rs`.
 
-## Tool parameters (quick reference)
+## Tool parameters
 
-- `analyze_directory`: `path`, `max_depth`, `summary`, `cursor`, `page_size`, `force`, `verbose`
-- `analyze_file`: `path`, `summary`, `cursor`, `page_size`, `force`, `verbose`, `fields` (functions | classes | imports), `ast_recursion_limit`
-- `analyze_symbol`: `path`, `symbol`, `match_mode` (exact | insensitive | prefix | contains), `follow_depth`, `impl_only` (Rust only), `summary`, `cursor`, `page_size`, `force`, `verbose`, `max_depth`, `ast_recursion_limit`
-- `analyze_module`: `path` only -- pagination, summary, force, and verbose are not supported
+Canonical parameter lists live in the `types` module (`crates/code-analyze-core/src/types.rs`). Key non-obvious constraints:
 
-`summary=true` and `cursor` are mutually exclusive; passing both returns INVALID_PARAMS.
-
-`impl_only=true` restricts `analyze_symbol` callers to `impl Trait for Type` blocks; returns INVALID_PARAMS for non-Rust directories.
+- `summary=true` and `cursor` are mutually exclusive; passing both returns INVALID_PARAMS.
+- `impl_only=true` restricts `analyze_symbol` callers to `impl Trait for Type` blocks; returns INVALID_PARAMS for non-Rust directories.
+- `analyze_module` supports `path` only -- pagination, summary, force, and verbose are not supported.
 
 ## Do not
 
@@ -61,4 +56,4 @@ Follow an existing handler in `crates/code-analyze-core/src/languages/`. The ext
 - Modify files outside the scope of the assigned issue
 - Assume any API exists based on training data; verify against installed crate versions
 - Reference host-specific tools or clients in tool descriptions or server instructions (e.g. Claude Code's Grep, Glob, Read)
-- Use `gh release create` to tag releases; always create a GPG-signed annotated tag with `git tag -s vX.Y.Z -m "Release vX.Y.Z"` and push it with `git push origin main --tags` to trigger the release workflow
+- Use `gh release create` to tag releases; always create a GPG-signed annotated tag and push it to trigger the release workflow
