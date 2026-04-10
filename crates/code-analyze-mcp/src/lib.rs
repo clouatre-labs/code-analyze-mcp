@@ -1356,7 +1356,7 @@ impl ServerHandler for CodeAnalyzer {
             3. For key files identified in step 2, prefer analyze_module to get a lightweight function/import index (~75% smaller output) when you only need function names and imports; call analyze_file when you need signatures, types, or class structure.\n\
             4. Use analyze_symbol to trace call graphs for specific functions found in step 3.\n\
             Prefer summary=true on large directories (1000+ files). Set max_depth=2 for the first call; increase only if packages are too large to differentiate. \
-            Paginate with cursor/page_size."
+            Paginate with cursor/page_size. For subagents: DISABLE_PROMPT_CACHING=1."
         );
         let capabilities = ServerCapabilities::builder()
             .enable_logging()
