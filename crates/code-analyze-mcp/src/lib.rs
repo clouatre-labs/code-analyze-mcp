@@ -155,6 +155,9 @@ fn paginate_focus_chains(
 /// log event channel, metrics sender, and per-session sequence tracking.
 #[derive(Clone)]
 pub struct CodeAnalyzer {
+    // Accessed by the `#[tool_handler]` macro-generated dispatch; rustc lint cannot trace
+    // through proc-macro expansions and incorrectly reports this field as never read.
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
     cache: AnalysisCache,
     peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
