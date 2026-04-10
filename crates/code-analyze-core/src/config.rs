@@ -4,7 +4,7 @@
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct AnalysisConfig {
-    /// Maximum file size in bytes to parse. Files exceeding this limit are skipped.
+    /// Maximum file size in bytes to parse. Reserved for future use.
     /// `None` means no limit.
     pub max_file_bytes: Option<u64>,
     /// Parse timeout in microseconds. Reserved for future use.

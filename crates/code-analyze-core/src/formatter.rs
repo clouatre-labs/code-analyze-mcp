@@ -744,17 +744,6 @@ pub(crate) fn format_focused_summary_internal(
     Ok(output)
 }
 
-/// Format focused symbol analysis with call graph.
-/// Public wrapper that computes chains if not provided.
-pub fn format_focused(
-    graph: &CallGraph,
-    symbol: &str,
-    follow_depth: u32,
-    base_path: Option<&Path>,
-) -> Result<String, FormatterError> {
-    format_focused_internal(graph, symbol, follow_depth, base_path, None, None)
-}
-
 /// Format a compact summary of focused symbol analysis.
 /// Public wrapper that computes chains if not provided.
 pub fn format_focused_summary(

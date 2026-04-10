@@ -9,6 +9,8 @@ repository = { workspace = true }
 homepage = { workspace = true }
 description = "MCP server for multi-language code structure analysis"
 readme = "../../README.md"
+keywords = ["mcp", "code-analysis", "tree-sitter", "ast", "static-analysis"]
+categories = ["development-tools", "parser-implementations"]
 publish = true
 
 [[bin]]

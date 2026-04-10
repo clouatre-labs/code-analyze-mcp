@@ -133,16 +133,6 @@ pub fn path_component_count(path: &str) -> usize {
     Path::new(path).components().count()
 }
 
-/// Maps an MCP error code to a short string representation for metrics.
-#[must_use]
-pub fn error_code_to_type(code: rmcp::model::ErrorCode) -> &'static str {
-    match code {
-        rmcp::model::ErrorCode::PARSE_ERROR => "parse",
-        rmcp::model::ErrorCode::INVALID_PARAMS => "invalid_params",
-        _ => "unknown",
-    }
-}
-
 fn xdg_metrics_dir() -> PathBuf {
     if let Ok(xdg_data_home) = std::env::var("XDG_DATA_HOME")
         && !xdg_data_home.is_empty()
