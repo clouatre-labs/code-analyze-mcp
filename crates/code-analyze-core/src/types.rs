@@ -337,40 +337,6 @@ pub struct CallInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct AssignmentInfo {
-    /// Variable name being assigned
-    pub variable: String,
-    /// Value expression being assigned
-    pub value: String,
-    /// Line number where assignment occurs
-    #[cfg_attr(
-        feature = "schemars",
-        schemars(schema_with = "crate::schema_helpers::integer_schema")
-    )]
-    pub line: usize,
-    /// Enclosing function scope or 'global'
-    pub scope: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct FieldAccessInfo {
-    /// Object expression being accessed
-    pub object: String,
-    /// Field name being accessed
-    pub field: String,
-    /// Line number where field access occurs
-    #[cfg_attr(
-        feature = "schemars",
-        schemars(schema_with = "crate::schema_helpers::integer_schema")
-    )]
-    pub line: usize,
-    /// Enclosing function scope or 'global'
-    pub scope: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ReferenceInfo {
     pub symbol: String,
     pub reference_type: ReferenceType,
@@ -390,17 +356,6 @@ pub enum ReferenceType {
     Usage,
     Import,
     Export,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schemars", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum EntryType {
-    File,
-    Directory,
-    Function,
-    Class,
-    Variable,
 }
 
 /// Analysis mode for generating output.
@@ -434,18 +389,6 @@ pub struct FocusedAnalysisData {
     pub definition: Option<FunctionInfo>,
     pub call_chains: Vec<CallChain>,
     pub references: Vec<ReferenceInfo>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct ElementQueryResult {
-    pub query: String,
-    pub results: Vec<String>,
-    #[cfg_attr(
-        feature = "schemars",
-        schemars(schema_with = "crate::schema_helpers::integer_schema")
-    )]
-    pub count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

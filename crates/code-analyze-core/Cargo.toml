@@ -9,6 +9,8 @@ repository = { workspace = true }
 homepage = { workspace = true }
 description = "Multi-language AST analysis library using tree-sitter"
 readme = "README.md"
+keywords = ["tree-sitter", "code-analysis", "ast", "parser", "static-analysis"]
+categories = ["development-tools", "parser-implementations"]
 publish = true
 
 [lints.rust]

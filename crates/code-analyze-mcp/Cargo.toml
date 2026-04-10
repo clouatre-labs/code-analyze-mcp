@@ -9,6 +9,8 @@ repository = { workspace = true }
 homepage = { workspace = true }
 description = "MCP server for multi-language code structure analysis"
 readme = "../../README.md"
+keywords = ["mcp", "code-analysis", "tree-sitter", "ast", "static-analysis"]
+categories = ["development-tools", "parser-implementations"]
 publish = true
 
 [[bin]]
@@ -20,7 +22,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-code-analyze-core = { path = "../code-analyze-core", version = "0.3", features = ["schemars", "lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-tsx", "lang-fortran", "lang-javascript", "lang-cpp", "lang-csharp"] }
+code-analyze-core = { path = "../code-analyze-core", version = "0.4", features = ["schemars", "lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-tsx", "lang-fortran", "lang-javascript", "lang-cpp", "lang-csharp"] }
 rmcp = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

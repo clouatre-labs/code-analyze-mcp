@@ -60,8 +60,8 @@ const EXTENSION_MAP: &[(&str, &str)] = &[
 /// Returns the language identifier for the given file extension, or `None` if unsupported.
 ///
 /// The lookup is case-insensitive. Supported extensions include `rs`, `py`, `go`, `java`,
-/// `ts`, `tsx`, `f90`, `f95`, `for`, `ftn`, and other Fortran variants, as well as
-/// `js`, `mjs`, `cjs`, `c`, `cc`, `cpp`, `cxx`, `h`, `hpp`, `hxx`, and `cs`.
+/// `ts`, `tsx`, `js`, `mjs`, `cjs`, `c`, `cc`, `cpp`, `cxx`, `h`, `hpp`, `hxx`, `cs`,
+/// and Fortran variants `f`, `f77`, `f90`, `f95`, `f03`, `f08`, `for`, `ftn`.
 #[must_use]
 pub fn language_for_extension(ext: &str) -> Option<&'static str> {
     EXTENSION_MAP

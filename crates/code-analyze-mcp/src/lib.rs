@@ -5,14 +5,13 @@
 //! This crate exposes four MCP tools for multiple programming languages:
 //!
 //! - **`analyze_directory`**: Directory tree with file counts and structure
-//! - **`analyze_file`**: Semantic extraction (functions, classes, imports, references)
+//! - **`analyze_file`**: Semantic extraction (functions, classes, imports)
 //! - **`analyze_symbol`**: Call graph analysis (callers and callees)
 //! - **`analyze_module`**: Lightweight function and import index
 //!
 //! Key entry points:
 //! - [`analyze::analyze_directory`]: Analyze entire directory tree
 //! - [`analyze::analyze_file`]: Analyze single file
-//! - [`parser::ElementExtractor`]: Parse language-specific elements
 //!
 //! Languages supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#.
 
@@ -923,9 +922,8 @@ impl CodeAnalyzer {
             let message = format!(
                 "Output exceeds 50K chars ({} chars, ~{} tokens). Use one of:\n\
                  - force=true to return full output\n\
-                 - Narrow your scope (smaller directory, specific file)\n\
-                 - Use analyze_symbol mode for targeted analysis\n\
-                 - Reduce max_depth parameter",
+                 - Use fields to limit output to specific sections (functions, classes, or imports)\n\
+                 - Use summary=true for a compact overview",
                 formatted.len(),
                 estimated_tokens
             );
@@ -935,7 +933,7 @@ impl CodeAnalyzer {
                 Some(error_meta(
                     "validation",
                     false,
-                    "use force=true or narrow scope",
+                    "use force=true, fields, or summary=true",
                 )),
             )));
         }
@@ -1520,7 +1518,10 @@ impl ServerHandler for CodeAnalyzer {
             | LoggingLevel::Emergency => LevelFilter::ERROR,
         };
 
-        let mut filter_lock = self.log_level_filter.lock().unwrap();
+        let mut filter_lock = self
+            .log_level_filter
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *filter_lock = level_filter;
         Ok(())
     }
