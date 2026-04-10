@@ -155,6 +155,9 @@ fn paginate_focus_chains(
 /// log event channel, metrics sender, and per-session sequence tracking.
 #[derive(Clone)]
 pub struct CodeAnalyzer {
+    // Accessed by rmcp macro-generated tool dispatch, but this field still triggers
+    // `dead_code` in this crate, so keep the targeted suppression.
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
     cache: AnalysisCache,
     peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
