@@ -933,7 +933,7 @@ impl CodeAnalyzer {
                 Some(error_meta(
                     "validation",
                     false,
-                    "use force=true or narrow scope",
+                    "use force=true, fields, or summary=true",
                 )),
             )));
         }
