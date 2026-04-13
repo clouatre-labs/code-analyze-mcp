@@ -30,28 +30,27 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-code-analyze-core = "0.3"
+code-analyze-core = "0.4"
 ```
 
 ## Example
 
 ```rust,no_run
-use code_analyze_core::{analyze_directory, analyze_file, analyze_str, AnalysisConfig};
-use anyhow::Result;
+use code_analyze_core::{analyze_directory, analyze_file, analyze_str};
+use std::path::Path;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    // Analyze a directory (depth 2, compact summary)
-    let output = analyze_directory("src/", Some(2), true, None, None, false, false).await?;
-    println!("{}", output.formatted);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Analyze a directory
+    let output = analyze_directory(Path::new("src/"), None)?;
+    println!("{} files", output.files.len());
 
     // Analyze a single file
-    let output = analyze_file("src/lib.rs", false, None, None, false, false, None, None).await?;
+    let output = analyze_file("src/lib.rs", None)?;
     println!("{}", output.formatted);
 
     // Analyze source text in memory (no file path required)
     let source = std::fs::read_to_string("src/lib.rs")?;
-    let output = analyze_str(&source, "rs", None).await?;
+    let output = analyze_str(&source, "rs", None)?;
     println!("{}", output.formatted);
 
     Ok(())
@@ -82,7 +81,7 @@ use code_analyze_core::AnalysisConfig;
 
 let config = AnalysisConfig {
     max_file_bytes: Some(1_000_000), // skip files > 1 MB
-    parse_timeout_micros: None,      // reserved, no-op in 0.3
+    parse_timeout_micros: None,      // reserved, no-op in 0.4
     cache_capacity: None,            // use default LRU capacity
 };
 ```
