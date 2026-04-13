@@ -533,11 +533,6 @@ pub(crate) fn format_focused_internal(
         output.push_str(&format_chains_as_tree(&outgoing_refs, "->", symbol));
     }
 
-    // STATISTICS section
-    output.push_str("STATISTICS:\n");
-    let _ = writeln!(output, "  Incoming calls: {callers_count}");
-    let _ = writeln!(output, "  Outgoing calls: {callees_count}");
-
     // FILES section - collect unique files from production chains
     let mut files = HashSet::new();
     for chain in &prod_chains {
