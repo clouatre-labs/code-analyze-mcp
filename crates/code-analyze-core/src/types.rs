@@ -92,7 +92,7 @@ pub struct AnalyzeFileParams {
     /// File path to analyze
     pub path: String,
 
-    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code. Minimum value is 1; passing 0 is treated as unlimited (same as unset).
+    /// AST traversal depth limit for tree-sitter queries. Leave unset in normal use; increase only for deeply nested generated code. 0=unlimited, min 1.
     #[cfg_attr(
         feature = "schemars",
         schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")
@@ -146,7 +146,7 @@ pub struct AnalyzeSymbolParams {
     /// Symbol name to build call graph for (function or method). Example: `parse_config` finds all callers and callees of that function.
     pub symbol: String,
 
-    /// Symbol matching mode (default: exact). exact: case-sensitive exact match. insensitive: case-insensitive exact match. prefix: case-insensitive prefix match. contains: case-insensitive substring match. When exact match fails, retry with insensitive. When prefix or contains returns multiple candidates, the response lists them so you can refine.
+    /// Symbol matching mode (default: exact). exact: case-sensitive exact match. insensitive: case-insensitive exact match. prefix: case-insensitive prefix match. contains: case-insensitive substring match.
     #[cfg_attr(feature = "schemars", schemars(extend("examples" = ["exact", "insensitive", "prefix", "contains"])))]
     pub match_mode: Option<SymbolMatchMode>,
 
@@ -164,7 +164,7 @@ pub struct AnalyzeSymbolParams {
     )]
     pub max_depth: Option<u32>,
 
-    /// Maximum AST node depth for tree-sitter queries. Internal tuning parameter; leave unset in normal use. Increase only if query results are missing constructs in deeply nested or generated code. Minimum value is 1; passing 0 is treated as unlimited (same as unset).
+    /// AST traversal depth limit for tree-sitter queries. Leave unset in normal use; increase only for deeply nested generated code. 0=unlimited, min 1.
     #[cfg_attr(
         feature = "schemars",
         schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")
@@ -177,9 +177,7 @@ pub struct AnalyzeSymbolParams {
     #[serde(flatten)]
     pub output_control: OutputControlParams,
 
-    /// When true, filter callers to only those originating from an `impl Trait for Type` block.
-    /// Only valid for Rust source directories; returns an error for other languages.
-    /// Emits a FILTER header showing how many callers were retained.
+    /// Filter callers to impl Trait for Type blocks only. Rust only; returns INVALID_PARAMS for other languages.
     #[serde(default)]
     pub impl_only: Option<bool>,
 }

@@ -2443,7 +2443,7 @@ pub fn leaf_2() {}
     if let Some(callees_idx) = lines.iter().position(|l| l.contains("CALLEES:")) {
         let callees_lines: Vec<&str> = lines[callees_idx + 1..]
             .iter()
-            .take_while(|l| !l.is_empty() && !l.starts_with("STATISTICS:"))
+            .take_while(|l| !l.is_empty() && !l.starts_with("FILES:"))
             .copied()
             .collect();
 
@@ -2621,7 +2621,7 @@ fn test_target() {
     let has_prod_caller = callers_content
         .iter()
         .take_while(|l| {
-            !l.starts_with("STATISTICS:") && !l.starts_with("CALLERS (test):") && !l.is_empty()
+            !l.starts_with("FILES:") && !l.starts_with("CALLERS (test):") && !l.is_empty()
         })
         .any(|l| l.contains("prod_caller_a") || l.contains("prod_caller_b"));
     assert!(
@@ -2685,7 +2685,7 @@ fn test_target_b() {
     // Check that production callers show (none)
     let callers_section: Vec<&str> = lines[callers_idx + 1..]
         .iter()
-        .take_while(|l| !l.starts_with("STATISTICS:") && !l.starts_with("CALLERS (test):"))
+        .take_while(|l| !l.starts_with("FILES:") && !l.starts_with("CALLERS (test):"))
         .copied()
         .collect();
 

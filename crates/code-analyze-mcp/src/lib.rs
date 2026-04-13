@@ -717,7 +717,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_directory",
-        description = "Analyze directory structure and code metrics for multi-file overview. Use this tool for directories; use analyze_file for a single file. Returns a tree with LOC, function count, class count, and test file markers. Respects .gitignore (results may differ from raw filesystem listing because .gitignore rules are applied). For repos with 1000+ files, use max_depth=2-3 and summary=true to stay within token budgets. Empty directories return an empty tree with zero counts. Example queries: Analyze the src/ directory to understand module structure; What files are in the tests/ directory and how large are they?",
+        description = "Tree-view of directory with LOC, function/class counts, test markers. Respects .gitignore. For 1000+ files, use max_depth=2-3 and summary=true. Empty directories return zero counts. Example queries: Analyze the src/ directory to understand module structure; What files are in the tests/ directory and how large are they?",
         output_schema = schema_for_type::<analyze::AnalysisOutput>(),
         annotations(
             title = "Analyze Directory",
@@ -872,7 +872,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "analyze_file",
-        description = "Extract semantic structure from a single source file only; pass a directory to analyze_directory instead. Returns functions with signatures, types, and line ranges; class and method definitions with inheritance, fields, and imports. Supported languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#; unsupported file extensions return an error. Common mistake: passing a directory path returns an error; use analyze_directory for directories. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py.",
+        description = "Functions, types, classes, and imports from a single source file; use analyze_directory for directories. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. Passing a directory path returns an error. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py.",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
@@ -1049,7 +1049,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Build call graph for a named function or method across all files in a directory to trace a specific function's usage. Returns direct callers and callees. A symbol unknown to the graph (not defined and not referenced) returns an error; a symbol that is defined but has no callers or callees returns empty chains without error. Returns structured output conforming to the FocusedAnalysisOutput schema together with a human-readable summary of callers and callees. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method",
+        description = "Call graph for a named function/method across all files in a directory to trace usage. Returns direct callers and callees. Unknown symbols return error; symbols with no callers/callees return empty chains. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",
@@ -1233,7 +1233,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "analyze_module",
-        description = "Index functions and imports in a single source file with minimal token cost. Returns name, line_count, language, function names with line numbers, and import list only -- no signatures, no types, no call graphs, no references. ~75% smaller output than analyze_file. Use analyze_file when you need function signatures, types, or class details; use analyze_module when you only need a function/import index to orient in a file or survey many files in sequence. Use analyze_directory for multi-file overviews; use analyze_symbol to trace call graphs for a specific function. Supported languages: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#; unsupported extensions return an error. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs. Pagination, summary, force, and verbose parameters are not supported by this tool.",
+        description = "Function and import index for a single source file with minimal token cost: name, line_count, language, function names with line numbers, import list only (~75% smaller than analyze_file). Use analyze_file when you need signatures, types, or class details. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. Pagination, summary, force, and verbose not supported. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs.",
         output_schema = schema_for_type::<types::ModuleInfo>(),
         annotations(
             title = "Analyze Module",
@@ -1352,14 +1352,12 @@ impl ServerHandler for CodeAnalyzer {
     fn get_info(&self) -> InitializeResult {
         let excluded = crate::EXCLUDED_DIRS.join(", ");
         let instructions = format!(
-            "Recommended workflow for unknown repositories:\n\
-            1. Start with analyze_directory(path=<repo_root>, max_depth=2, summary=true) to identify the source package directory \
-            (typically the largest directory by file count; exclude {excluded}).\n\
-            2. Re-run analyze_directory(path=<source_package>, max_depth=2, summary=true) for a module map with per-package class and function counts. Include test directories (e.g., tests/, testutil/, files matching *_test.go, test_*.py, test_*.rs, *_test.rs, *.spec.ts, *.spec.js) in the module map; test files are valid analysis targets and must not be skipped.\n\
-            3. For key files identified in step 2, prefer analyze_module to get a lightweight function/import index (~75% smaller output) when you only need function names and imports; call analyze_file when you need signatures, types, or class structure.\n\
-            4. Use analyze_symbol to trace call graphs for specific functions found in step 3.\n\
-            Prefer summary=true on large directories (1000+ files). Set max_depth=2 for the first call; increase only if packages are too large to differentiate. \
-            Paginate with cursor/page_size. For subagents: DISABLE_PROMPT_CACHING=1."
+            "Recommended workflow:\n\
+            1. Start with analyze_directory(path=<repo_root>, max_depth=2, summary=true) to identify source package (largest by file count; exclude {excluded}).\n\
+            2. Re-run analyze_directory(path=<source_package>, max_depth=2, summary=true) for module map. Include test directories (tests/, *_test.go, test_*.py, test_*.rs, *.spec.ts, *.spec.js).\n\
+            3. For key files, prefer analyze_module for function/import index; use analyze_file for signatures and types.\n\
+            4. Use analyze_symbol to trace call graphs.\n\
+            Prefer summary=true on 1000+ files. Set max_depth=2; increase if packages too large. Paginate with cursor/page_size. For subagents: DISABLE_PROMPT_CACHING=1."
         );
         let capabilities = ServerCapabilities::builder()
             .enable_logging()
