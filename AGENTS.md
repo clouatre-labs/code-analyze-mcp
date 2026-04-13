@@ -56,4 +56,5 @@ Canonical parameter lists live in the `types` module (`crates/code-analyze-core/
 - Modify files outside the scope of the assigned issue
 - Assume any API exists based on training data; verify against installed crate versions
 - Reference host-specific tools or clients in tool descriptions or server instructions (e.g. Claude Code's Grep, Glob, Read)
+- Keep `DISABLE_PROMPT_CACHING=1` in server instructions; caching data never read again is detrimental
 - Use `gh release create` to tag releases; always create a GPG-signed annotated tag and push it to trigger the release workflow
