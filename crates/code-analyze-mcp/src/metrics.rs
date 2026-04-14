@@ -84,7 +84,10 @@ impl MetricsWriter {
             }
 
             if current_file.is_none() {
-                current_file = Some(rotate_path(&self.base_dir, &current_date));
+                current_file = Some(
+                    self.base_dir
+                        .join(format!("metrics-{}.jsonl", current_date)),
+                );
             }
 
             let path = current_file.as_ref().unwrap();
@@ -148,10 +151,6 @@ fn xdg_metrics_dir() -> PathBuf {
     } else {
         PathBuf::from(".")
     }
-}
-
-fn rotate_path(base_dir: &Path, date_str: &str) -> PathBuf {
-    base_dir.join(format!("metrics-{date_str}.jsonl"))
 }
 
 async fn cleanup_old_files(base_dir: &Path) {

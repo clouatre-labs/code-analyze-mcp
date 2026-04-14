@@ -455,7 +455,7 @@ pub struct FocusedAnalysisConfig {
 
 /// Internal parameters for focused analysis phases.
 #[derive(Clone)]
-struct FocusedAnalysisParams {
+struct InternalFocusedParams {
     focus: String,
     match_mode: SymbolMatchMode,
     follow_depth: u32,
@@ -465,7 +465,7 @@ struct FocusedAnalysisParams {
 }
 
 /// Type alias for analysis results: (`file_path`, `semantic_analysis`) pairs and impl-trait info.
-type AnalysisResults = (Vec<(PathBuf, SemanticAnalysis)>, Vec<ImplTraitInfo>);
+type FileAnalysisBatch = (Vec<(PathBuf, SemanticAnalysis)>, Vec<ImplTraitInfo>);
 
 /// Phase 1: Collect semantic analysis for all files in parallel.
 fn collect_file_analysis(
@@ -473,7 +473,7 @@ fn collect_file_analysis(
     progress: &Arc<AtomicUsize>,
     ct: &CancellationToken,
     ast_recursion_limit: Option<usize>,
-) -> Result<AnalysisResults, AnalyzeError> {
+) -> Result<FileAnalysisBatch, AnalyzeError> {
     // Check if already cancelled
     if ct.is_cancelled() {
         return Err(AnalyzeError::Cancelled);
@@ -562,7 +562,7 @@ fn build_call_graph(
 /// then compute `impl_trait_caller_count`.
 fn resolve_symbol(
     graph: &mut CallGraph,
-    params: &FocusedAnalysisParams,
+    params: &InternalFocusedParams,
 ) -> Result<(String, usize, usize), AnalyzeError> {
     // Resolve symbol name using the requested match mode.
     let resolved_focus = if params.match_mode == SymbolMatchMode::Exact {
@@ -667,7 +667,7 @@ fn compute_chains(
     graph: &CallGraph,
     resolved_focus: &str,
     root: &Path,
-    params: &FocusedAnalysisParams,
+    params: &InternalFocusedParams,
     unfiltered_caller_count: usize,
     impl_trait_caller_count: usize,
 ) -> Result<ChainComputeResult, AnalyzeError> {
@@ -732,7 +732,7 @@ pub fn analyze_focused_with_progress(
     ct: CancellationToken,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     let entries = walk_directory(root, params.max_depth)?;
-    let internal_params = FocusedAnalysisParams {
+    let internal_params = InternalFocusedParams {
         focus: params.focus.clone(),
         match_mode: params.match_mode.clone(),
         follow_depth: params.follow_depth,
@@ -757,7 +757,7 @@ fn analyze_focused_with_progress_with_entries_internal(
     _max_depth: Option<u32>,
     progress: &Arc<AtomicUsize>,
     ct: &CancellationToken,
-    params: &FocusedAnalysisParams,
+    params: &InternalFocusedParams,
     entries: &[WalkEntry],
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
     // Check if already cancelled
@@ -872,7 +872,7 @@ pub fn analyze_focused_with_progress_with_entries(
     ct: &CancellationToken,
     entries: &[WalkEntry],
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
-    let internal_params = FocusedAnalysisParams {
+    let internal_params = InternalFocusedParams {
         focus: params.focus.clone(),
         match_mode: params.match_mode.clone(),
         follow_depth: params.follow_depth,
