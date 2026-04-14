@@ -17,7 +17,7 @@ use tracing_subscriber::layer::Context;
 
 /// Maps `tracing::Level` to `MCP` [`LoggingLevel`].
 #[must_use]
-pub fn level_to_mcp(level: &Level) -> LoggingLevel {
+pub(crate) fn level_to_mcp(level: &Level) -> LoggingLevel {
     match *level {
         Level::TRACE | Level::DEBUG => LoggingLevel::Debug,
         Level::INFO => LoggingLevel::Info,
@@ -141,5 +141,19 @@ impl tracing::field::Visit for MessageVisitor<'_> {
 
     fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
         self.0.insert(field.name().to_string(), Value::Bool(value));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tracing::Level;
+    #[test]
+    fn test_logging_level_to_mcp_mapping() {
+        assert_eq!(level_to_mcp(&Level::TRACE), LoggingLevel::Debug);
+        assert_eq!(level_to_mcp(&Level::DEBUG), LoggingLevel::Debug);
+        assert_eq!(level_to_mcp(&Level::INFO), LoggingLevel::Info);
+        assert_eq!(level_to_mcp(&Level::WARN), LoggingLevel::Warning);
+        assert_eq!(level_to_mcp(&Level::ERROR), LoggingLevel::Error);
     }
 }
