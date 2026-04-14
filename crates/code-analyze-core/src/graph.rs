@@ -12,7 +12,7 @@ use thiserror::Error;
 use tracing::{debug, instrument};
 
 /// Type info for a function: (path, line, parameters, `return_type`)
-type FunctionTypeInfo = (PathBuf, usize, Vec<String>, Option<String>);
+type FunctionSignatureEntry = (PathBuf, usize, Vec<String>, Option<String>);
 
 const MAX_CANDIDATES_IN_ERROR: usize = 20;
 
@@ -215,7 +215,7 @@ pub struct CallGraph {
     /// Definitions map: `function_name` -> vec of (`file_path`, `line_number`).
     pub definitions: HashMap<String, Vec<(PathBuf, usize)>>,
     /// Internal: maps function name to type info for type-aware disambiguation.
-    function_types: HashMap<String, Vec<FunctionTypeInfo>>,
+    function_types: HashMap<String, Vec<FunctionSignatureEntry>>,
     /// Index for O(1) case-insensitive symbol lookup: lowercased -> vec of originals.
     lowercase_index: HashMap<String, Vec<String>>,
 }
@@ -245,7 +245,7 @@ impl CallGraph {
         _call_line: usize,
         _arg_count: Option<usize>,
         definitions: &HashMap<String, Vec<(PathBuf, usize)>>,
-        _function_types: &HashMap<String, Vec<FunctionTypeInfo>>,
+        _function_types: &HashMap<String, Vec<FunctionSignatureEntry>>,
     ) -> String {
         // Try raw callee name first
         if let Some(_defs) = definitions.get(callee) {
