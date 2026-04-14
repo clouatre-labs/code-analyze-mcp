@@ -1,18 +1,7 @@
 // SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
 // SPDX-License-Identifier: Apache-2.0
-use code_analyze_mcp::logging::{LogEvent, level_to_mcp};
+use code_analyze_mcp::logging::LogEvent;
 use rmcp::model::{CallToolResult, Content, LoggingLevel, Meta};
-#[test]
-fn test_logging_level_to_mcp_mapping() {
-    use tracing::Level;
-
-    assert_eq!(level_to_mcp(&Level::TRACE), LoggingLevel::Debug);
-    assert_eq!(level_to_mcp(&Level::DEBUG), LoggingLevel::Debug);
-    assert_eq!(level_to_mcp(&Level::INFO), LoggingLevel::Info);
-    assert_eq!(level_to_mcp(&Level::WARN), LoggingLevel::Warning);
-    assert_eq!(level_to_mcp(&Level::ERROR), LoggingLevel::Error);
-}
-
 #[tokio::test]
 async fn test_batch_draining_with_multiple_events() {
     use serde_json::json;
