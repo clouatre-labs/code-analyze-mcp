@@ -278,7 +278,7 @@ impl CodeAnalyzer {
         {
             let changed = changed_files_from_git_ref(path, git_ref).map_err(|e| {
                 ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
                     format!("git_ref filter failed: {e}"),
                     Some(error_meta(
                         "resource",
@@ -465,16 +465,17 @@ impl CodeAnalyzer {
         Ok(())
     }
 
-    /// Validate that `import_lookup=true` and a non-empty symbol are not passed together.
+    /// Validate that `import_lookup=true` is accompanied by a non-empty symbol (the module path).
     fn validate_import_lookup(import_lookup: Option<bool>, symbol: &str) -> Result<(), ErrorData> {
-        if import_lookup == Some(true) && !symbol.is_empty() {
+        if import_lookup == Some(true) && symbol.is_empty() {
             return Err(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
-                "import_lookup=true requires an empty symbol; set symbol to \"\" and pass the module path as symbol".to_string(),
+                "import_lookup=true requires symbol to contain the module path to search for"
+                    .to_string(),
                 Some(error_meta(
                     "validation",
                     false,
-                    "clear symbol when using import_lookup=true",
+                    "set symbol to the module path when using import_lookup=true",
                 )),
             ));
         }
@@ -717,7 +718,7 @@ impl CodeAnalyzer {
         {
             let changed = changed_files_from_git_ref(path, git_ref).map_err(|e| {
                 ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
                     format!("git_ref filter failed: {e}"),
                     Some(error_meta(
                         "resource",
@@ -1115,7 +1116,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Call graph for a named function/method across all files in a directory to trace usage. Returns direct callers and callees. Unknown symbols return error; symbols with no callers/callees return empty chains. Use import_lookup=true with an empty symbol to find all files that import a given module path instead of tracing a call graph. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method; Find all files that import std::collections",
+        description = "Call graph for a named function/method across all files in a directory to trace usage. Returns direct callers and callees. Unknown symbols return error; symbols with no callers/callees return empty chains. Use import_lookup=true with symbol set to the module path to find all files that import a given module path instead of tracing a call graph. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method; Find all files that import std::collections",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",
@@ -1148,7 +1149,7 @@ impl CodeAnalyzer {
         // import_lookup mode: scan for files importing `params.symbol` as a module path.
         if params.import_lookup == Some(true) {
             let path = Path::new(&params.path);
-            let entries = match walk_directory(path, params.max_depth) {
+            let raw_entries = match walk_directory(path, params.max_depth) {
                 Ok(e) => e,
                 Err(e) => {
                     return Ok(err_to_tool_result(ErrorData::new(
@@ -1161,6 +1162,28 @@ impl CodeAnalyzer {
                         )),
                     )));
                 }
+            };
+            // Apply git_ref filter when requested (non-empty string only).
+            let entries = if let Some(ref git_ref) = params.git_ref
+                && !git_ref.is_empty()
+            {
+                let changed = match changed_files_from_git_ref(path, git_ref) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        return Ok(err_to_tool_result(ErrorData::new(
+                            rmcp::model::ErrorCode::INVALID_PARAMS,
+                            format!("git_ref filter failed: {e}"),
+                            Some(error_meta(
+                                "resource",
+                                false,
+                                "ensure git is installed and path is inside a git repository",
+                            )),
+                        )));
+                    }
+                };
+                filter_entries_by_git_ref(raw_entries, &changed, path)
+            } else {
+                raw_entries
             };
             let output = match analyze::analyze_import_lookup(
                 path,
@@ -1445,7 +1468,7 @@ impl CodeAnalyzer {
                 .and_then(code_analyze_core::lang::language_for_extension)
                 .unwrap_or("unknown")
                 .to_string();
-            let mi = crate::types::ModuleInfo {
+            let mi = types::ModuleInfo {
                 name,
                 line_count: cached_file.line_count,
                 language,
@@ -1453,7 +1476,7 @@ impl CodeAnalyzer {
                     .semantic
                     .functions
                     .iter()
-                    .map(|f| crate::types::ModuleFunctionInfo {
+                    .map(|f| types::ModuleFunctionInfo {
                         name: f.name.clone(),
                         line: f.line,
                     })
@@ -1462,7 +1485,7 @@ impl CodeAnalyzer {
                     .semantic
                     .imports
                     .iter()
-                    .map(|i| crate::types::ModuleImportInfo {
+                    .map(|i| types::ModuleImportInfo {
                         module: i.module.clone(),
                         items: i.items.clone(),
                     })
@@ -1470,7 +1493,10 @@ impl CodeAnalyzer {
             };
             (mi, true)
         } else {
-            let mi = match analyze::analyze_module_file(&params.path).map_err(|e| {
+            // Cache miss: call analyze_file (returns FileAnalysisOutput) so we can populate
+            // the file cache for future calls. Then reconstruct ModuleInfo from the result,
+            // mirroring the cache-hit path above.
+            let file_output = match analyze::analyze_file(&params.path, None).map_err(|e| {
                 ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
                     format!("Failed to analyze module: {e}"),
@@ -1483,6 +1509,45 @@ impl CodeAnalyzer {
             }) {
                 Ok(v) => v,
                 Err(e) => return Ok(err_to_tool_result(e)),
+            };
+            let arc_output = std::sync::Arc::new(file_output);
+            if let Some(key) = module_cache_key.clone() {
+                self.cache.put(key, arc_output.clone());
+            }
+            let file_path = std::path::Path::new(&params.path);
+            let name = file_path
+                .file_name()
+                .and_then(|n: &std::ffi::OsStr| n.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let language = file_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .and_then(code_analyze_core::lang::language_for_extension)
+                .unwrap_or("unknown")
+                .to_string();
+            let mi = types::ModuleInfo {
+                name,
+                line_count: arc_output.line_count,
+                language,
+                functions: arc_output
+                    .semantic
+                    .functions
+                    .iter()
+                    .map(|f| types::ModuleFunctionInfo {
+                        name: f.name.clone(),
+                        line: f.line,
+                    })
+                    .collect(),
+                imports: arc_output
+                    .semantic
+                    .imports
+                    .iter()
+                    .map(|i| types::ModuleImportInfo {
+                        module: i.module.clone(),
+                        items: i.items.clone(),
+                    })
+                    .collect(),
             };
             (mi, false)
         };
@@ -1974,14 +2039,15 @@ mod tests {
 
     #[test]
     fn test_analyze_symbol_import_lookup_invalid_params() {
-        // Arrange: non-empty symbol with import_lookup=true (violates the guard).
+        // Arrange: empty symbol with import_lookup=true (violates the guard:
+        // symbol must hold the module path when import_lookup=true).
         // Act: call the validate helper directly (same pattern as validate_impl_only).
-        let result = CodeAnalyzer::validate_import_lookup(Some(true), "std::io");
+        let result = CodeAnalyzer::validate_import_lookup(Some(true), "");
 
         // Assert: INVALID_PARAMS is returned.
         assert!(
             result.is_err(),
-            "import_lookup=true with non-empty symbol must return Err"
+            "import_lookup=true with empty symbol must return Err"
         );
         let err = result.unwrap_err();
         assert_eq!(

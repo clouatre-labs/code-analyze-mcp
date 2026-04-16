@@ -150,7 +150,10 @@ pub fn changed_files_from_git_ref(
         )));
     }
 
-    let root = PathBuf::from(String::from_utf8_lossy(&root_out.stdout).trim().to_string());
+    let root_raw = PathBuf::from(String::from_utf8_lossy(&root_out.stdout).trim().to_string());
+    // Canonicalize to resolve symlinks (e.g. macOS /tmp -> /private/tmp) so that
+    // paths from git and paths from walk_directory are comparable.
+    let root = std::fs::canonicalize(&root_raw).unwrap_or(root_raw);
 
     // Run `git diff --name-only <git_ref>` to get changed files relative to root.
     let diff_out = Command::new("git")
@@ -180,20 +183,48 @@ pub fn changed_files_from_git_ref(
 
 /// Filter walk entries to only those that are either changed files or ancestor directories
 /// of changed files. This preserves the tree structure while limiting analysis scope.
+///
+/// Uses O(|changed| * depth + |entries|) time by precomputing a HashSet of ancestor
+/// directories for each changed file (up to and including `root`).
 #[must_use]
 pub fn filter_entries_by_git_ref(
     entries: Vec<WalkEntry>,
     changed: &HashSet<PathBuf>,
     root: &Path,
 ) -> Vec<WalkEntry> {
+    let canonical_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+
+    // Precompute canonical changed set so comparison works across symlink differences.
+    let canonical_changed: HashSet<PathBuf> = changed
+        .iter()
+        .map(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()))
+        .collect();
+
+    // Build HashSet of all ancestor directories of changed files (bounded by canonical_root).
+    let mut ancestor_dirs: HashSet<PathBuf> = HashSet::new();
+    ancestor_dirs.insert(canonical_root.clone());
+    for p in &canonical_changed {
+        let mut cur = p.as_path();
+        while let Some(parent) = cur.parent() {
+            if !ancestor_dirs.insert(parent.to_path_buf()) {
+                // Already inserted this ancestor and all its ancestors; stop early.
+                break;
+            }
+            if parent == canonical_root {
+                break;
+            }
+            cur = parent;
+        }
+    }
+
     entries
         .into_iter()
         .filter(|e| {
+            let canonical_path = std::fs::canonicalize(&e.path).unwrap_or_else(|_| e.path.clone());
             if e.is_dir {
-                // Keep directory if any changed file is underneath it.
-                changed.iter().any(|c| c.starts_with(&e.path)) || e.path == root
+                ancestor_dirs.contains(&canonical_path)
             } else {
-                changed.contains(&e.path)
+                canonical_changed.contains(&canonical_path)
             }
         })
         .collect()
