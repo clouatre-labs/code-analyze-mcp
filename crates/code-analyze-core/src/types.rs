@@ -53,6 +53,7 @@ pub struct OutputControlParams {
     pub verbose: Option<bool>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeDirectoryParams {
@@ -147,6 +148,7 @@ pub enum SymbolMatchMode {
     Contains,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeSymbolParams {

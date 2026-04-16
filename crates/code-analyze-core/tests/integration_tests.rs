@@ -743,7 +743,7 @@ fn hello() {
 "#;
     fs::write(&file_path, rust_code).unwrap();
 
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
     let mtime = fs::metadata(&file_path).unwrap().modified().unwrap();
     let key = CacheKey {
         path: file_path.clone(),
@@ -775,7 +775,7 @@ fn hello() {
 "#;
     fs::write(&file_path, rust_code).unwrap();
 
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
     let mtime1 = fs::metadata(&file_path).unwrap().modified().unwrap();
     let key1 = CacheKey {
         path: file_path.clone(),
@@ -803,7 +803,7 @@ fn hello() {
 
 #[test]
 fn test_cache_eviction_at_capacity() {
-    let cache = AnalysisCache::new(3, 20);
+    let cache = AnalysisCache::new(3);
     let temp_dir = TempDir::new().unwrap();
 
     // Create 4 files and cache them
@@ -838,7 +838,7 @@ fn test_cache_eviction_at_capacity() {
 
 #[test]
 fn test_cache_mutex_poison_recovery() {
-    let cache = AnalysisCache::new(10, 20);
+    let cache = AnalysisCache::new(10);
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("test.rs");
     fs::write(&file_path, "fn test() {}").unwrap();
@@ -882,7 +882,7 @@ fn test_directory_cache_hit_on_identical_call() {
     fs::write(root.join("file1.rs"), "fn hello() {}").unwrap();
     fs::write(root.join("file2.rs"), "fn world() {}").unwrap();
 
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
 
     // First analysis
     let entries1 = walk_directory(root, None).unwrap();
@@ -921,7 +921,7 @@ fn test_directory_cache_miss_on_mtime_change() {
     let file1 = root.join("file1.rs");
     fs::write(&file1, "fn hello() {}").unwrap();
 
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
 
     // First analysis
     let entries1 = walk_directory(root, None).unwrap();
@@ -1179,7 +1179,7 @@ fn test_symbol_completions_with_cached_analysis() {
 
     // Analyze the file to populate cache
     let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
     let cache_key = CacheKey {
         path: file_path.clone(),
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
@@ -1206,7 +1206,7 @@ fn test_symbol_completions_missing_path_argument() {
     // Arrange: Create cache but don't populate it
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("nonexistent.rs");
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
 
     // Act: Get symbol completions for non-existent file
     let completions = symbol_completions(&cache, &file_path, "test");
@@ -1226,7 +1226,7 @@ fn test_symbol_completions_empty_prefix() {
     fs::write(&file_path, "fn test_func() {}").unwrap();
 
     let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
     let cache_key = CacheKey {
         path: file_path.clone(),
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
@@ -1256,7 +1256,7 @@ fn test_symbol_completions_truncates_at_100() {
     fs::write(&file_path, content).unwrap();
 
     let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-    let cache = AnalysisCache::new(100, 20);
+    let cache = AnalysisCache::new(100);
     let cache_key = CacheKey {
         path: file_path.clone(),
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
@@ -3368,7 +3368,7 @@ fn test_summary_sub_annotation_present_for_nested_dirs() {
 #[test]
 fn test_overview_force_true_with_cursor_no_guard() {
     use code_analyze_core::pagination::{CursorData, PaginationMode, encode_cursor};
-    use code_analyze_core::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+    use code_analyze_core::types::AnalyzeDirectoryParams;
 
     let cursor_data = CursorData {
         mode: PaginationMode::Default,
@@ -3377,20 +3377,12 @@ fn test_overview_force_true_with_cursor_no_guard() {
     let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
     // force=Some(true) requests non-summary output; summary is not set.
     // The guard only fires on summary=Some(true), so this combination must not trigger it.
-    let params = AnalyzeDirectoryParams {
-        path: ".".to_string(),
-        max_depth: None,
-        git_ref: None,
-        pagination: PaginationParams {
-            cursor: Some(cursor_str),
-            page_size: None,
-        },
-        output_control: OutputControlParams {
-            summary: None,
-            force: Some(true),
-            verbose: None,
-        },
-    };
+    let params: AnalyzeDirectoryParams = serde_json::from_value(serde_json::json!({
+        "path": ".",
+        "force": true,
+        "cursor": cursor_str,
+    }))
+    .expect("valid AnalyzeDirectoryParams JSON");
 
     assert!(
         !(params.output_control.summary == Some(true) && params.pagination.cursor.is_some()),

@@ -187,13 +187,9 @@ impl CodeAnalyzer {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(100);
-        let dir_cap: usize = std::env::var("CODE_ANALYZE_DIR_CACHE_CAPACITY")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(20);
         CodeAnalyzer {
             tool_router: Self::tool_router(),
-            cache: AnalysisCache::new(file_cap, dir_cap),
+            cache: AnalysisCache::new(file_cap),
             peer,
             log_level_filter,
             event_rx: Arc::new(TokioMutex::new(Some(event_rx))),
@@ -1791,20 +1787,10 @@ mod tests {
         std::fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
 
         let analyzer = make_analyzer();
-        let params = AnalyzeDirectoryParams {
-            path: dir.path().to_str().unwrap().to_string(),
-            max_depth: None,
-            git_ref: None,
-            pagination: PaginationParams {
-                cursor: None,
-                page_size: None,
-            },
-            output_control: OutputControlParams {
-                summary: None,
-                force: None,
-                verbose: None,
-            },
-        };
+        let params: AnalyzeDirectoryParams = serde_json::from_value(serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+        }))
+        .unwrap();
         let ct = tokio_util::sync::CancellationToken::new();
         let (arc_output, _cache_hit) = analyzer.handle_overview_mode(&params, ct).await.unwrap();
         // Verify the no_cache_meta shape by constructing it directly and checking the shape
@@ -1853,20 +1839,11 @@ mod tests {
             crate::metrics::MetricsSender(metrics_tx),
         );
 
-        let params = AnalyzeDirectoryParams {
-            path: tmp.path().to_str().unwrap().to_string(),
-            max_depth: None,
-            git_ref: None,
-            pagination: PaginationParams {
-                cursor: None,
-                page_size: None,
-            },
-            output_control: OutputControlParams {
-                summary: None,
-                force: None,
-                verbose: Some(true),
-            },
-        };
+        let params: AnalyzeDirectoryParams = serde_json::from_value(serde_json::json!({
+            "path": tmp.path().to_str().unwrap(),
+            "verbose": true,
+        }))
+        .unwrap();
 
         let ct = tokio_util::sync::CancellationToken::new();
         let (output, _cache_hit) = analyzer.handle_overview_mode(&params, ct).await.unwrap();
@@ -1917,20 +1894,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         std::fs::write(dir.path().join("lib.rs"), "fn foo() {}").unwrap();
         let analyzer = make_analyzer();
-        let params = AnalyzeDirectoryParams {
-            path: dir.path().to_str().unwrap().to_string(),
-            max_depth: None,
-            git_ref: None,
-            pagination: PaginationParams {
-                cursor: None,
-                page_size: None,
-            },
-            output_control: OutputControlParams {
-                summary: None,
-                force: None,
-                verbose: None,
-            },
-        };
+        let params: AnalyzeDirectoryParams = serde_json::from_value(serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+        }))
+        .unwrap();
 
         // Act: first call (cache miss)
         let ct1 = tokio_util::sync::CancellationToken::new();
@@ -2217,20 +2184,11 @@ mod tests {
         // (macOS /tmp is a symlink to /private/tmp; without canonicalization paths would differ).
         let canon_repo = std::fs::canonicalize(repo).unwrap();
         let analyzer = make_analyzer();
-        let params = AnalyzeDirectoryParams {
-            path: canon_repo.to_str().unwrap().to_string(),
-            max_depth: None,
-            git_ref: Some("HEAD~1".to_string()),
-            pagination: PaginationParams {
-                cursor: None,
-                page_size: None,
-            },
-            output_control: OutputControlParams {
-                summary: None,
-                force: None,
-                verbose: None,
-            },
-        };
+        let params: AnalyzeDirectoryParams = serde_json::from_value(serde_json::json!({
+            "path": canon_repo.to_str().unwrap(),
+            "git_ref": "HEAD~1",
+        }))
+        .unwrap();
         let ct = tokio_util::sync::CancellationToken::new();
         let (arc_output, _cache_hit) = analyzer
             .handle_overview_mode(&params, ct)
