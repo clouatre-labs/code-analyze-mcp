@@ -968,6 +968,68 @@ pub fn analyze_module_file(path: &str) -> Result<crate::types::ModuleInfo, Analy
     })
 }
 
+/// Scan a directory for files that import a given module path.
+///
+/// For each non-directory walk entry, extracts imports via [`SemanticExtractor`] and
+/// checks whether `module` matches `ImportInfo.module` or appears in `ImportInfo.items`.
+/// Returns a [`FocusedAnalysisOutput`] whose `formatted` field lists matching files.
+pub fn analyze_import_lookup(
+    root: &Path,
+    module: &str,
+    entries: &[WalkEntry],
+    ast_recursion_limit: Option<usize>,
+) -> Result<FocusedAnalysisOutput, AnalyzeError> {
+    let mut matches: Vec<(PathBuf, usize)> = Vec::new();
+
+    for entry in entries {
+        if entry.is_dir {
+            continue;
+        }
+        let ext = entry
+            .path
+            .extension()
+            .and_then(|e| e.to_str())
+            .and_then(crate::lang::language_for_extension);
+        let Some(lang) = ext else {
+            continue;
+        };
+        let Ok(source) = std::fs::read_to_string(&entry.path) else {
+            continue;
+        };
+        let Ok(semantic) = SemanticExtractor::extract(&source, lang, ast_recursion_limit) else {
+            continue;
+        };
+        for import in &semantic.imports {
+            if import.module == module || import.items.iter().any(|item| item == module) {
+                matches.push((entry.path.clone(), import.line));
+                break;
+            }
+        }
+    }
+
+    let mut text = format!("IMPORT_LOOKUP: {module}\n");
+    text.push_str(&format!("ROOT: {}\n", root.display()));
+    text.push_str(&format!("MATCHES: {}\n", matches.len()));
+    for (path, line) in &matches {
+        let rel = path.strip_prefix(root).unwrap_or(path);
+        text.push_str(&format!("  {}:{line}\n", rel.display()));
+    }
+
+    Ok(FocusedAnalysisOutput {
+        formatted: text,
+        next_cursor: None,
+        prod_chains: vec![],
+        test_chains: vec![],
+        outgoing_chains: vec![],
+        def_count: 0,
+        unfiltered_caller_count: 0,
+        impl_trait_caller_count: 0,
+        callers: None,
+        test_callers: None,
+        callees: None,
+    })
+}
+
 /// Resolve Python wildcard imports to actual symbol names.
 ///
 /// For each import with items=`["*"]`, this function:

@@ -890,6 +890,7 @@ fn test_directory_cache_hit_on_identical_call() {
         &entries1,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let output1 = analyze_directory(root, None).unwrap();
     let arc_output1 = Arc::new(output1);
@@ -901,6 +902,7 @@ fn test_directory_cache_hit_on_identical_call() {
         &entries2,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let cached = cache.get_directory(&key2);
     assert!(
@@ -927,6 +929,7 @@ fn test_directory_cache_miss_on_mtime_change() {
         &entries1,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let output1 = analyze_directory(root, None).unwrap();
     let arc_output1 = Arc::new(output1);
@@ -942,6 +945,7 @@ fn test_directory_cache_miss_on_mtime_change() {
         &entries2,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let cached = cache.get_directory(&key2);
     assert!(
@@ -3364,7 +3368,7 @@ fn test_summary_sub_annotation_present_for_nested_dirs() {
 #[test]
 fn test_overview_force_true_with_cursor_no_guard() {
     use code_analyze_core::pagination::{CursorData, PaginationMode, encode_cursor};
-    use code_analyze_core::types::{AnalyzeDirectoryParams, OutputControlParams, PaginationParams};
+    use code_analyze_core::types::AnalyzeDirectoryParams;
 
     let cursor_data = CursorData {
         mode: PaginationMode::Default,
@@ -3373,19 +3377,12 @@ fn test_overview_force_true_with_cursor_no_guard() {
     let cursor_str = encode_cursor(&cursor_data).expect("encode should succeed");
     // force=Some(true) requests non-summary output; summary is not set.
     // The guard only fires on summary=Some(true), so this combination must not trigger it.
-    let params = AnalyzeDirectoryParams {
-        path: ".".to_string(),
-        max_depth: None,
-        pagination: PaginationParams {
-            cursor: Some(cursor_str),
-            page_size: None,
-        },
-        output_control: OutputControlParams {
-            summary: None,
-            force: Some(true),
-            verbose: None,
-        },
-    };
+    let params: AnalyzeDirectoryParams = serde_json::from_value(serde_json::json!({
+        "path": ".",
+        "force": true,
+        "cursor": cursor_str,
+    }))
+    .expect("valid AnalyzeDirectoryParams JSON");
 
     assert!(
         !(params.output_control.summary == Some(true) && params.pagination.cursor.is_some()),

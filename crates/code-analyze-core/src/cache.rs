@@ -17,8 +17,6 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tracing::{debug, instrument};
 
-const DIR_CACHE_CAPACITY: usize = 20;
-
 /// Cache key combining path, modification time, and analysis mode.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct CacheKey {
@@ -33,6 +31,7 @@ pub struct DirectoryCacheKey {
     files: Vec<(PathBuf, SystemTime)>,
     mode: AnalysisMode,
     max_depth: Option<u32>,
+    git_ref: Option<String>,
 }
 
 impl DirectoryCacheKey {
@@ -40,8 +39,14 @@ impl DirectoryCacheKey {
     /// Files are sorted by path for deterministic hashing.
     /// Directories are filtered out; only file entries are processed.
     /// Metadata collection is parallelized using rayon.
+    /// The `git_ref` is included so that filtered and unfiltered results have distinct keys.
     #[must_use]
-    pub fn from_entries(entries: &[WalkEntry], max_depth: Option<u32>, mode: AnalysisMode) -> Self {
+    pub fn from_entries(
+        entries: &[WalkEntry],
+        max_depth: Option<u32>,
+        mode: AnalysisMode,
+        git_ref: Option<&str>,
+    ) -> Self {
         let mut files: Vec<(PathBuf, SystemTime)> = entries
             .par_iter()
             .filter(|e| !e.is_dir)
@@ -57,6 +62,7 @@ impl DirectoryCacheKey {
             files,
             mode,
             max_depth,
+            git_ref: git_ref.map(ToOwned::to_owned),
         }
     }
 }
@@ -83,19 +89,28 @@ where
 /// LRU cache for file analysis results with mutex protection.
 pub struct AnalysisCache {
     file_capacity: usize,
+    dir_capacity: usize,
     cache: Arc<Mutex<LruCache<CacheKey, Arc<FileAnalysisOutput>>>>,
     directory_cache: Arc<Mutex<LruCache<DirectoryCacheKey, Arc<AnalysisOutput>>>>,
 }
 
 impl AnalysisCache {
-    /// Create a new cache with the specified capacity.
+    /// Create a new cache with the specified file capacity.
+    /// The directory cache capacity is read from the `CODE_ANALYZE_DIR_CACHE_CAPACITY`
+    /// environment variable (default: 20).
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         let file_capacity = capacity.max(1);
+        let dir_capacity: usize = std::env::var("CODE_ANALYZE_DIR_CACHE_CAPACITY")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20);
+        let dir_capacity = dir_capacity.max(1);
         let cache_size = NonZeroUsize::new(file_capacity).unwrap();
-        let dir_cache_size = NonZeroUsize::new(DIR_CACHE_CAPACITY).unwrap();
+        let dir_cache_size = NonZeroUsize::new(dir_capacity).unwrap();
         Self {
             file_capacity,
+            dir_capacity,
             cache: Arc::new(Mutex::new(LruCache::new(cache_size))),
             directory_cache: Arc::new(Mutex::new(LruCache::new(dir_cache_size))),
         }
@@ -143,7 +158,7 @@ impl AnalysisCache {
     /// Get a cached directory analysis result if it exists.
     #[instrument(skip(self))]
     pub fn get_directory(&self, key: &DirectoryCacheKey) -> Option<Arc<AnalysisOutput>> {
-        lock_or_recover(&self.directory_cache, DIR_CACHE_CAPACITY, |guard| {
+        lock_or_recover(&self.directory_cache, self.dir_capacity, |guard| {
             let result = guard.get(key).cloned();
             let cache_size = guard.len();
             if let Some(v) = result {
@@ -159,7 +174,7 @@ impl AnalysisCache {
     /// Store a directory analysis result in the cache.
     #[instrument(skip(self, value))]
     pub fn put_directory(&self, key: DirectoryCacheKey, value: Arc<AnalysisOutput>) {
-        lock_or_recover(&self.directory_cache, DIR_CACHE_CAPACITY, |guard| {
+        lock_or_recover(&self.directory_cache, self.dir_capacity, |guard| {
             let push_result = guard.push(key, value);
             let cache_size = guard.len();
             match push_result {
@@ -178,6 +193,7 @@ impl Clone for AnalysisCache {
     fn clone(&self) -> Self {
         Self {
             file_capacity: self.file_capacity,
+            dir_capacity: self.dir_capacity,
             cache: Arc::clone(&self.cache),
             directory_cache: Arc::clone(&self.directory_cache),
         }
@@ -213,7 +229,7 @@ mod tests {
         ];
 
         // Act: build cache key from entries
-        let key = DirectoryCacheKey::from_entries(&entries, None, AnalysisMode::Overview);
+        let key = DirectoryCacheKey::from_entries(&entries, None, AnalysisMode::Overview, None);
 
         // Assert: only the file entry should be in the cache key
         // The directory entry should be filtered out

@@ -257,6 +257,15 @@ In single-pass subagent sessions, prompt caches are written but never reused. Be
 
 The server's own instructions expose a 4-step recommended workflow for unknown repositories: survey the repo root with `analyze_directory` at `max_depth=2`, drill into the source package, run `analyze_module` on key files for a function/import index (or `analyze_file` when signatures and types are needed), then use `analyze_symbol` to trace call graphs. MCP clients that surface server instructions will present this workflow automatically to the agent.
 
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `CODE_ANALYZE_FILE_CACHE_CAPACITY` | `100` | Maximum number of file-analysis results held in the in-process LRU cache. Increase for large repos where many files are queried repeatedly. |
+| `CODE_ANALYZE_DIR_CACHE_CAPACITY` | `20` | Maximum number of directory-analysis results held in the in-process LRU cache. |
+| `DISABLE_PROMPT_CACHING` | unset | Set to `1` to disable prompt caching (recommended for single-pass subagent sessions). |
+| `DISABLE_PROMPT_CACHING_HAIKU` | unset | Set to `1` to disable prompt caching for Haiku-specific pipelines only. |
+
 ## Observability
 
 All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code-analyze-mcp/` (fallback: `~/.local/share/code-analyze-mcp/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
