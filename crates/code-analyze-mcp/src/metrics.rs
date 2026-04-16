@@ -28,6 +28,9 @@ pub struct MetricEvent {
     pub session_id: Option<String>,
     #[serde(default)]
     pub seq: Option<u32>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_hit: Option<bool>,
 }
 
 /// Sender half of the metrics channel; cloned and passed to tools for event emission.
@@ -286,6 +289,7 @@ mod tests {
             error_type: None,
             session_id: None,
             seq: None,
+            cache_hit: None,
         };
 
         tx.send(make_event()).unwrap();
@@ -346,6 +350,7 @@ mod tests {
             error_type: None,
             session_id: None,
             seq: None,
+            cache_hit: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("analyze_directory"));
@@ -366,6 +371,7 @@ mod tests {
             error_type: Some("invalid_params".to_string()),
             session_id: None,
             seq: None,
+            cache_hit: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""result":"error""#));
@@ -387,6 +393,7 @@ mod tests {
             error_type: None,
             session_id: Some("1742468880123-42".to_string()),
             seq: Some(5),
+            cache_hit: None,
         };
         let serialized = serde_json::to_string(&event).unwrap();
         let json_str = r#"{"ts":1700000000000,"tool":"analyze_file","duration_ms":100,"output_chars":500,"param_path_depth":2,"max_depth":3,"result":"ok","error_type":null,"session_id":"1742468880123-42","seq":5}"#;
@@ -418,11 +425,49 @@ mod tests {
             error_type: None,
             session_id: Some("1742468880123-0".to_string()),
             seq: Some(0),
+            cache_hit: None,
         };
         let sid = event.session_id.unwrap();
         assert!(sid.contains('-'), "session_id should contain a dash");
         let parts: Vec<&str> = sid.split('-').collect();
         assert_eq!(parts.len(), 2, "session_id should have exactly 2 parts");
         assert!(parts[0].len() == 13, "millis part should be 13 digits");
+    }
+
+    // --- cache_hit field tests ---
+
+    #[test]
+    fn test_metric_event_cache_hit_backward_compat() {
+        // Arrange: event with cache_hit: None (old-style, field absent)
+        let event = MetricEvent {
+            ts: 1_700_000_000_000,
+            tool: "analyze_directory",
+            duration_ms: 1,
+            output_chars: 10,
+            param_path_depth: 1,
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: None,
+            seq: None,
+            cache_hit: None,
+        };
+
+        // Act: serialize
+        let json = serde_json::to_string(&event).unwrap();
+
+        // Assert: cache_hit key must NOT appear (skip_serializing_if = "Option::is_none")
+        assert!(
+            !json.contains("cache_hit"),
+            "cache_hit: None must not appear in JSON; got: {json}"
+        );
+
+        // Edge case: old JSON without cache_hit must deserialize without error
+        let old_json = r#"{"ts":1700000000000,"tool":"analyze_directory","duration_ms":1,"output_chars":10,"param_path_depth":1,"max_depth":null,"result":"ok","error_type":null}"#;
+        let parsed: MetricEvent = serde_json::from_str(old_json).unwrap();
+        assert_eq!(
+            parsed.cache_hit, None,
+            "missing cache_hit must default to None"
+        );
     }
 }

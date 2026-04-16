@@ -6,7 +6,9 @@
 //! Uses the `ignore` crate for cross-platform, efficient file system traversal.
 
 use ignore::WalkBuilder;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use thiserror::Error;
@@ -29,6 +31,8 @@ pub enum TraversalError {
     Io(#[from] std::io::Error),
     #[error("internal concurrency error: {0}")]
     Internal(String),
+    #[error("git error: {0}")]
+    GitError(String),
 }
 
 /// Walk a directory with support for `.gitignore` and `.ignore`.
@@ -110,6 +114,89 @@ pub fn walk_directory(
     // Restore sort contract: walk_parallel does not guarantee order.
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(entries)
+}
+
+/// Return the set of absolute paths changed relative to `git_ref` in the repository
+/// containing `dir`. Invokes git without shell interpolation.
+///
+/// # Errors
+/// Returns [`TraversalError::GitError`] when:
+/// - `git` is not on PATH (distinct message)
+/// - `dir` is not inside a git repository
+pub fn changed_files_from_git_ref(
+    dir: &Path,
+    git_ref: &str,
+) -> Result<HashSet<PathBuf>, TraversalError> {
+    // Resolve the git repository root so that relative paths from `git diff` can
+    // be anchored to an absolute base.
+    let root_out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .arg("rev-parse")
+        .arg("--show-toplevel")
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                TraversalError::GitError("git not found on PATH".to_string())
+            } else {
+                TraversalError::GitError(format!("failed to run git: {e}"))
+            }
+        })?;
+
+    if !root_out.status.success() {
+        let stderr = String::from_utf8_lossy(&root_out.stderr);
+        return Err(TraversalError::GitError(format!(
+            "not a git repository: {stderr}"
+        )));
+    }
+
+    let root = PathBuf::from(String::from_utf8_lossy(&root_out.stdout).trim().to_string());
+
+    // Run `git diff --name-only <git_ref>` to get changed files relative to root.
+    let diff_out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .arg("diff")
+        .arg("--name-only")
+        .arg(git_ref)
+        .output()
+        .map_err(|e| TraversalError::GitError(format!("failed to run git diff: {e}")))?;
+
+    if !diff_out.status.success() {
+        let stderr = String::from_utf8_lossy(&diff_out.stderr);
+        return Err(TraversalError::GitError(format!(
+            "git diff failed: {stderr}"
+        )));
+    }
+
+    let changed: HashSet<PathBuf> = String::from_utf8_lossy(&diff_out.stdout)
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| root.join(l))
+        .collect();
+
+    Ok(changed)
+}
+
+/// Filter walk entries to only those that are either changed files or ancestor directories
+/// of changed files. This preserves the tree structure while limiting analysis scope.
+#[must_use]
+pub fn filter_entries_by_git_ref(
+    entries: Vec<WalkEntry>,
+    changed: &HashSet<PathBuf>,
+    root: &Path,
+) -> Vec<WalkEntry> {
+    entries
+        .into_iter()
+        .filter(|e| {
+            if e.is_dir {
+                // Keep directory if any changed file is underneath it.
+                changed.iter().any(|c| c.starts_with(&e.path)) || e.path == root
+            } else {
+                changed.contains(&e.path)
+            }
+        })
+        .collect()
 }
 
 /// Compute files-per-depth-1-subdirectory counts from an already-collected entry list.

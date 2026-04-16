@@ -743,7 +743,7 @@ fn hello() {
 "#;
     fs::write(&file_path, rust_code).unwrap();
 
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
     let mtime = fs::metadata(&file_path).unwrap().modified().unwrap();
     let key = CacheKey {
         path: file_path.clone(),
@@ -775,7 +775,7 @@ fn hello() {
 "#;
     fs::write(&file_path, rust_code).unwrap();
 
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
     let mtime1 = fs::metadata(&file_path).unwrap().modified().unwrap();
     let key1 = CacheKey {
         path: file_path.clone(),
@@ -803,7 +803,7 @@ fn hello() {
 
 #[test]
 fn test_cache_eviction_at_capacity() {
-    let cache = AnalysisCache::new(3);
+    let cache = AnalysisCache::new(3, 20);
     let temp_dir = TempDir::new().unwrap();
 
     // Create 4 files and cache them
@@ -838,7 +838,7 @@ fn test_cache_eviction_at_capacity() {
 
 #[test]
 fn test_cache_mutex_poison_recovery() {
-    let cache = AnalysisCache::new(10);
+    let cache = AnalysisCache::new(10, 20);
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("test.rs");
     fs::write(&file_path, "fn test() {}").unwrap();
@@ -882,7 +882,7 @@ fn test_directory_cache_hit_on_identical_call() {
     fs::write(root.join("file1.rs"), "fn hello() {}").unwrap();
     fs::write(root.join("file2.rs"), "fn world() {}").unwrap();
 
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
 
     // First analysis
     let entries1 = walk_directory(root, None).unwrap();
@@ -890,6 +890,7 @@ fn test_directory_cache_hit_on_identical_call() {
         &entries1,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let output1 = analyze_directory(root, None).unwrap();
     let arc_output1 = Arc::new(output1);
@@ -901,6 +902,7 @@ fn test_directory_cache_hit_on_identical_call() {
         &entries2,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let cached = cache.get_directory(&key2);
     assert!(
@@ -919,7 +921,7 @@ fn test_directory_cache_miss_on_mtime_change() {
     let file1 = root.join("file1.rs");
     fs::write(&file1, "fn hello() {}").unwrap();
 
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
 
     // First analysis
     let entries1 = walk_directory(root, None).unwrap();
@@ -927,6 +929,7 @@ fn test_directory_cache_miss_on_mtime_change() {
         &entries1,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let output1 = analyze_directory(root, None).unwrap();
     let arc_output1 = Arc::new(output1);
@@ -942,6 +945,7 @@ fn test_directory_cache_miss_on_mtime_change() {
         &entries2,
         None,
         AnalysisMode::Overview,
+        None,
     );
     let cached = cache.get_directory(&key2);
     assert!(
@@ -1175,7 +1179,7 @@ fn test_symbol_completions_with_cached_analysis() {
 
     // Analyze the file to populate cache
     let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
     let cache_key = CacheKey {
         path: file_path.clone(),
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
@@ -1202,7 +1206,7 @@ fn test_symbol_completions_missing_path_argument() {
     // Arrange: Create cache but don't populate it
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("nonexistent.rs");
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
 
     // Act: Get symbol completions for non-existent file
     let completions = symbol_completions(&cache, &file_path, "test");
@@ -1222,7 +1226,7 @@ fn test_symbol_completions_empty_prefix() {
     fs::write(&file_path, "fn test_func() {}").unwrap();
 
     let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
     let cache_key = CacheKey {
         path: file_path.clone(),
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
@@ -1252,7 +1256,7 @@ fn test_symbol_completions_truncates_at_100() {
     fs::write(&file_path, content).unwrap();
 
     let analysis = analyze_file(file_path.to_str().unwrap(), None).unwrap();
-    let cache = AnalysisCache::new(100);
+    let cache = AnalysisCache::new(100, 20);
     let cache_key = CacheKey {
         path: file_path.clone(),
         modified: std::fs::metadata(&file_path).unwrap().modified().unwrap(),
@@ -3376,6 +3380,7 @@ fn test_overview_force_true_with_cursor_no_guard() {
     let params = AnalyzeDirectoryParams {
         path: ".".to_string(),
         max_depth: None,
+        git_ref: None,
         pagination: PaginationParams {
             cursor: Some(cursor_str),
             page_size: None,

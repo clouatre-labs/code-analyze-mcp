@@ -66,6 +66,16 @@ pub struct AnalyzeDirectoryParams {
     )]
     pub max_depth: Option<u32>,
 
+    /// Restrict analysis to files changed relative to this git ref (branch, tag, or commit SHA). Empty string or unset means no filtering. Example: "main" or "HEAD~1".
+    #[serde(default)]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            description = "Restrict analysis to files changed relative to this git ref (branch, tag, or commit SHA). Empty string or unset means no filtering."
+        )
+    )]
+    pub git_ref: Option<String>,
+
     #[serde(flatten)]
     pub pagination: PaginationParams,
 
@@ -180,6 +190,26 @@ pub struct AnalyzeSymbolParams {
     /// Filter callers to impl Trait for Type blocks only. Rust only; returns INVALID_PARAMS for other languages.
     #[serde(default)]
     pub impl_only: Option<bool>,
+
+    /// Scan directory for files that import the given module path instead of building a call graph. Mutually exclusive with non-empty symbol; returns INVALID_PARAMS if symbol is non-empty.
+    #[serde(default)]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            description = "Scan directory for files that import the given module path instead of building a call graph. Mutually exclusive with non-empty symbol; returns INVALID_PARAMS if symbol is non-empty."
+        )
+    )]
+    pub import_lookup: Option<bool>,
+
+    /// Restrict analysis to files changed relative to this git ref (branch, tag, or commit SHA). Empty string or unset means no filtering. Example: "main" or "HEAD~1".
+    #[serde(default)]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            description = "Restrict analysis to files changed relative to this git ref (branch, tag, or commit SHA). Empty string or unset means no filtering."
+        )
+    )]
+    pub git_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
