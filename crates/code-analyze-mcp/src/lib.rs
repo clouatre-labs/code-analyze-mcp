@@ -1345,6 +1345,7 @@ impl CodeAnalyzer {
                 unreachable!("SymbolFocus should only use Callers or Callees modes")
             }
             PaginationMode::DefUse => {
+                let total_sites = output.def_use_sites.len();
                 let (paginated_sites, paginated_next) = match paginate_slice(
                     &output.def_use_sites,
                     offset,
@@ -1355,20 +1356,25 @@ impl CodeAnalyzer {
                     Err(e) => return Ok(err_to_tool_result_from_pagination(e)),
                 };
 
-                if paginated_next.is_some() || offset > 0 || !verbose {
+                // Always regenerate formatted output for DefUse mode so the
+                // first page (offset=0, verbose=true) is not skipped.
+                if !use_summary {
                     let base_path = Path::new(&params.path);
                     output.formatted = format_focused_paginated_defuse(
                         &paginated_sites,
-                        output.def_use_sites.len(),
+                        total_sites,
                         &params.symbol,
                         offset,
                         Some(base_path),
                         verbose,
                     );
-                    paginated_next
-                } else {
-                    None
                 }
+
+                // Slice output.def_use_sites to the current page window so
+                // structuredContent only contains the paginated subset.
+                output.def_use_sites = paginated_sites;
+
+                paginated_next
             }
         };
 
@@ -1391,8 +1397,14 @@ impl CodeAnalyzer {
         // When callees are exhausted and def_use_sites exist, bootstrap defuse cursor
         // by emitting a {mode:defuse, offset:0} cursor. This makes PaginationMode::DefUse
         // reachable. Suppressed in summary mode because summary and pagination are mutually exclusive.
+        // Also bootstrap directly from Callers mode when there are no outgoing chains
+        // (e.g. SymbolNotFound path or symbols with no callees) so def-use pagination
+        // is reachable even without a Callees phase.
         if callee_cursor.is_none()
-            && cursor_mode == PaginationMode::Callees
+            && matches!(
+                cursor_mode,
+                PaginationMode::Callees | PaginationMode::Callers
+            )
             && !output.def_use_sites.is_empty()
             && !use_summary
             && let Ok(cursor) = encode_cursor(&CursorData {
@@ -1400,7 +1412,11 @@ impl CodeAnalyzer {
                 offset: 0,
             })
         {
-            callee_cursor = Some(cursor);
+            // Only bootstrap from Callers when callees are empty (otherwise
+            // the Callees bootstrap above takes priority).
+            if cursor_mode == PaginationMode::Callees || output.outgoing_chains.is_empty() {
+                callee_cursor = Some(cursor);
+            }
         }
 
         // Update next_cursor in output

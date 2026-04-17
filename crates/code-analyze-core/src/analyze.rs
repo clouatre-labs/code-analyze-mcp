@@ -439,6 +439,7 @@ pub struct FocusedAnalysisOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub callees: Option<Vec<CallChainEntry>>,
     /// Definition and use sites for the symbol.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub def_use_sites: Vec<crate::types::DefUseSite>,
 }
 
@@ -935,15 +936,22 @@ fn analyze_focused_with_progress_with_entries_internal(
 
     // Phase 4b: Re-format with def_use_sites only when def_use is enabled;
     // otherwise reuse Phase 4 output to avoid redundant formatting.
+    // Pass already-computed chains to avoid recomputing from the graph.
     let formatted = if params.def_use {
+        // Reconstruct incoming_chains from the prod/test partition computed in Phase 4.
+        let incoming_chains: Vec<InternalCallChain> = prod_chains
+            .iter()
+            .chain(test_chains.iter())
+            .cloned()
+            .collect();
         if params.use_summary {
             format_focused_summary_internal(
                 &graph,
                 &resolved_focus,
                 params.follow_depth,
                 Some(root),
-                None,
-                None,
+                Some(&incoming_chains),
+                Some(&outgoing_chains),
                 &def_use_sites,
             )?
         } else {
@@ -952,8 +960,8 @@ fn analyze_focused_with_progress_with_entries_internal(
                 &resolved_focus,
                 params.follow_depth,
                 Some(root),
-                None,
-                None,
+                Some(&incoming_chains),
+                Some(&outgoing_chains),
                 &def_use_sites,
             )?
         }

@@ -49,9 +49,14 @@ pub fn format_focused_paginated_defuse(
                 .map(|s| format!("{}()", s))
                 .unwrap_or_default();
             let snippet = snippet_one_line(&site.snippet);
+            let wr_label = if site.kind == crate::types::DefUseKind::WriteRead {
+                " [write_read]"
+            } else {
+                ""
+            };
             let _ = writeln!(
                 output,
-                "    {file_display}:{}  {scope_str}  {snippet}",
+                "    {file_display}:{}  {scope_str}  {snippet}{wr_label}",
                 site.line
             );
         }

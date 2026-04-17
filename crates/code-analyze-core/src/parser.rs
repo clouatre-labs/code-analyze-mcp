@@ -1056,17 +1056,26 @@ impl SemanticExtractor {
                     write_offsets.insert(byte_offset);
                 }
 
-                // Get line number (1-indexed) and center-line snippet
+                // Get line number (1-indexed) and center-line snippet.
+                // Always produce a 3-line window so snippet_one_line (index 1) is safe.
                 let line = node.start_position().row + 1;
                 let snippet = {
-                    let line_idx = node.start_position().row;
-                    let start_line = if line_idx > 0 { line_idx - 1 } else { 0 };
-                    let end_line = std::cmp::min(line_idx + 2, source_lines.len());
-                    let window: Vec<&str> = source_lines[start_line..end_line]
-                        .iter()
-                        .map(|l| l.trim_end())
-                        .collect();
-                    window.join("\n")
+                    let row = node.start_position().row;
+                    let last_line = source_lines.len().saturating_sub(1);
+                    let prev = if row > 0 { row - 1 } else { 0 };
+                    let next = std::cmp::min(row + 1, last_line);
+                    let prev_text = if row == 0 {
+                        ""
+                    } else {
+                        source_lines[prev].trim_end()
+                    };
+                    let cur_text = source_lines[row].trim_end();
+                    let next_text = if row >= last_line {
+                        ""
+                    } else {
+                        source_lines[next].trim_end()
+                    };
+                    format!("{prev_text}\n{cur_text}\n{next_text}")
                 };
 
                 // Get enclosing function scope
