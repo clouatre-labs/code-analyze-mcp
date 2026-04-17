@@ -30,8 +30,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-code-analyze-core = "0.4"
+code-analyze-core = "*"
 ```
+
+The current version is published on [crates.io](https://crates.io/crates/code-analyze-core). Replace `"*"` with the latest version string if you prefer a pinned dependency.
 
 ## Example
 
@@ -81,7 +83,7 @@ use code_analyze_core::AnalysisConfig;
 
 let config = AnalysisConfig {
     max_file_bytes: Some(1_000_000), // skip files > 1 MB
-    parse_timeout_micros: None,      // reserved, no-op in 0.4
+    parse_timeout_micros: None,      // reserved, currently a no-op
     cache_capacity: None,            // use default LRU capacity
 };
 ```

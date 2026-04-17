@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 /// Tree-sitter query for extracting Fortran elements (functions and subroutines).
 ///
-/// Module constructs are omitted: `module_statement` has no `name` field in
-/// tree-sitter-fortran 0.5.1, so `@class` captures would be counted in
+/// Module constructs are omitted: `module_statement` has no `name` field
+/// in the current grammar, so `@class` captures would be counted in
 /// `analyze_directory` but produce no names in `analyze_file`. Modules will
 /// be added here once the grammar exposes a `name` field.
 pub const ELEMENT_QUERY: &str = r"
