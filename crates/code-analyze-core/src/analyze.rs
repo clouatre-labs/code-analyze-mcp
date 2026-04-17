@@ -816,68 +816,59 @@ fn analyze_focused_with_progress_with_entries_internal(
     // When def_use=true and the symbol is not in the call graph (e.g. a variable),
     // fall through to def-use extraction instead of returning SymbolNotFound.
     let resolve_result = resolve_symbol(&mut graph, params);
-    match resolve_result {
-        Err(ref e) if params.def_use => {
-            if let AnalyzeError::Graph(crate::graph::GraphError::SymbolNotFound { .. }) = e {
-                // Symbol not in call graph but def_use requested: collect sites only.
-                let def_use_sites = collect_def_use_sites(
-                    entries,
-                    &params.focus,
-                    params.ast_recursion_limit,
-                    root,
-                    ct,
-                );
-                // Build minimal formatted output with def-use section only
-                // (symbol has no call graph, so skip FOCUS/CALLERS/CALLEES).
-                let mut formatted = String::new();
-                use std::fmt::Write as _;
+    if let Err(AnalyzeError::Graph(crate::graph::GraphError::SymbolNotFound { .. })) =
+        &resolve_result
+    {
+        // Deliberately not collapsed: resolve_result must stay alive past this block
+        // so that the `?` below can propagate non-SymbolNotFound errors.
+        if params.def_use {
+            let def_use_sites =
+                collect_def_use_sites(entries, &params.focus, params.ast_recursion_limit, root, ct);
+            use std::fmt::Write as _;
+            let mut formatted = String::new();
+            let _ = writeln!(
+                formatted,
+                "FOCUS: {} (0 defs, 0 callers, 0 callees)",
+                params.focus
+            );
+            if !def_use_sites.is_empty() {
+                let writes = def_use_sites
+                    .iter()
+                    .filter(|s| {
+                        matches!(
+                            s.kind,
+                            crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead
+                        )
+                    })
+                    .count();
+                let reads = def_use_sites
+                    .iter()
+                    .filter(|s| s.kind == crate::types::DefUseKind::Read)
+                    .count();
                 let _ = writeln!(
                     formatted,
-                    "FOCUS: {} (0 defs, 0 callers, 0 callees)",
-                    params.focus
+                    "DEF-USE SITES  {}  ({} total: {} writes, {} reads)",
+                    params.focus,
+                    def_use_sites.len(),
+                    writes,
+                    reads
                 );
-                if !def_use_sites.is_empty() {
-                    let write_count = def_use_sites
-                        .iter()
-                        .filter(|s| {
-                            matches!(
-                                s.kind,
-                                crate::types::DefUseKind::Write
-                                    | crate::types::DefUseKind::WriteRead
-                            )
-                        })
-                        .count();
-                    let read_count = def_use_sites
-                        .iter()
-                        .filter(|s| s.kind == crate::types::DefUseKind::Read)
-                        .count();
-                    let _ = writeln!(
-                        formatted,
-                        "DEF-USE SITES  {}  ({} total: {} writes, {} reads)",
-                        params.focus,
-                        def_use_sites.len(),
-                        write_count,
-                        read_count,
-                    );
-                }
-                return Ok(FocusedAnalysisOutput {
-                    formatted,
-                    next_cursor: None,
-                    callers: None,
-                    test_callers: None,
-                    callees: None,
-                    prod_chains: vec![],
-                    test_chains: vec![],
-                    outgoing_chains: vec![],
-                    def_count: 0,
-                    unfiltered_caller_count: 0,
-                    impl_trait_caller_count: 0,
-                    def_use_sites,
-                });
             }
+            return Ok(FocusedAnalysisOutput {
+                formatted,
+                next_cursor: None,
+                callers: None,
+                test_callers: None,
+                callees: None,
+                prod_chains: vec![],
+                test_chains: vec![],
+                outgoing_chains: vec![],
+                def_count: 0,
+                unfiltered_caller_count: 0,
+                impl_trait_caller_count: 0,
+                def_use_sites,
+            });
         }
-        Err(_) => {}
-        Ok(_) => {}
     }
     let (resolved_focus, unfiltered_caller_count, impl_trait_caller_count) = resolve_result?;
 
@@ -886,15 +877,24 @@ fn analyze_focused_with_progress_with_entries_internal(
         return Err(AnalyzeError::Cancelled);
     }
 
-    // Phase 4: Compute chains and format output
-    let (phase4_formatted, prod_chains, test_chains, outgoing_chains, def_count) = compute_chains(
+    // Phase 5 (optional, before formatting): Def-use site extraction.
+    // Use params.focus (the raw user-supplied string) rather than resolved_focus
+    // so that variable/field names that are not in the call graph still work.
+    let def_use_sites = if params.def_use {
+        collect_def_use_sites(entries, &params.focus, params.ast_recursion_limit, root, ct)
+    } else {
+        Vec::new()
+    };
+
+    // Phase 4: Compute chains and format output (includes def_use_sites in one pass)
+    let (formatted, prod_chains, test_chains, outgoing_chains, def_count) = compute_chains(
         &graph,
         &resolved_focus,
         root,
         params,
         unfiltered_caller_count,
         impl_trait_caller_count,
-        &[], // def_use_sites computed later in Phase 5
+        &def_use_sites,
     )?;
 
     // Compute depth-1 chains for structured output fields (always direct relationships only,
@@ -923,61 +923,6 @@ fn analyze_focused_with_progress_with_entries_internal(
         let test_callers = chains_to_entries(&test1, Some(root));
         let callees = chains_to_entries(&outgoing1, Some(root));
         (callers, test_callers, callees)
-    };
-
-    // Phase 5 (optional): Def-use site extraction
-    // Use params.focus (the raw user-supplied string) rather than resolved_focus
-    // so that variable/field names that are not in the call graph still work.
-    let def_use_sites = if params.def_use {
-        collect_def_use_sites(entries, &params.focus, params.ast_recursion_limit, root, ct)
-    } else {
-        Vec::new()
-    };
-
-    // Phase 4b: Re-format with def_use_sites only when def_use is enabled;
-    // otherwise reuse Phase 4 output to avoid redundant formatting.
-    // Pass already-computed chains to avoid recomputing from the graph.
-    let formatted = if params.def_use {
-        // Reconstruct incoming_chains from the prod/test partition computed in Phase 4.
-        let incoming_chains: Vec<InternalCallChain> = prod_chains
-            .iter()
-            .chain(test_chains.iter())
-            .cloned()
-            .collect();
-        if params.use_summary {
-            format_focused_summary_internal(
-                &graph,
-                &resolved_focus,
-                params.follow_depth,
-                Some(root),
-                Some(&incoming_chains),
-                Some(&outgoing_chains),
-                &def_use_sites,
-            )?
-        } else {
-            format_focused_internal(
-                &graph,
-                &resolved_focus,
-                params.follow_depth,
-                Some(root),
-                Some(&incoming_chains),
-                Some(&outgoing_chains),
-                &def_use_sites,
-            )?
-        }
-    } else {
-        phase4_formatted
-    };
-
-    // Apply FILTER header if impl_only filter was applied
-    let formatted = if params.impl_only.unwrap_or(false) {
-        let filter_header = format!(
-            "FILTER: impl_only=true ({} of {} callers shown)\n",
-            impl_trait_caller_count, unfiltered_caller_count
-        );
-        format!("{filter_header}{formatted}")
-    } else {
-        formatted
     };
 
     Ok(FocusedAnalysisOutput {
@@ -1832,17 +1777,12 @@ fn caller_c() { target(); }
     #[cfg(feature = "lang-rust")]
     #[test]
     fn test_def_use_focused_analysis() {
-        // Arrange: create a Rust fixture with write, write_read, and read sites for `x`
         let temp_dir = TempDir::new().unwrap();
-        let code = r#"
-fn example() {
-    let x = 10;
-    x += 1;
-    println!("{}", x);
-    let y = x + 1;
-}
-"#;
-        fs::write(temp_dir.path().join("lib.rs"), code).unwrap();
+        fs::write(
+            temp_dir.path().join("lib.rs"),
+            "fn example() {\n    let x = 10;\n    x += 1;\n    println!(\"{}\", x);\n    let y = x + 1;\n}\n",
+        )
+        .unwrap();
 
         let entries = walk_directory(temp_dir.path(), None).unwrap();
         let counter = Arc::new(AtomicUsize::new(0));
@@ -1858,7 +1798,6 @@ fn example() {
             def_use: true,
         };
 
-        // Act
         let output = analyze_focused_with_progress_with_entries(
             temp_dir.path(),
             &params,
@@ -1868,45 +1807,40 @@ fn example() {
         )
         .expect("def_use analysis should succeed");
 
-        // Assert: def_use_sites is non-empty
         assert!(
             !output.def_use_sites.is_empty(),
-            "def_use_sites should be non-empty for symbol x"
+            "should find def-use sites for x"
         );
-
-        // Assert: at least one Write site exists
-        let has_write = output
-            .def_use_sites
-            .iter()
-            .any(|s| s.kind == crate::types::DefUseKind::Write);
-        assert!(has_write, "should have at least one Write site for x");
-
-        // Assert: no site appears as both Write and Read for the same byte offset
-        let write_offsets: std::collections::HashSet<(String, usize, usize)> = output
+        assert!(
+            output
+                .def_use_sites
+                .iter()
+                .any(|s| s.kind == crate::types::DefUseKind::Write),
+            "should have at least one Write site",
+        );
+        // No location appears as both write and read
+        let write_locs: std::collections::HashSet<_> = output
             .def_use_sites
             .iter()
             .filter(|s| {
-                s.kind == crate::types::DefUseKind::Write
-                    || s.kind == crate::types::DefUseKind::WriteRead
+                matches!(
+                    s.kind,
+                    crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead
+                )
             })
-            .map(|s| (s.file.clone(), s.line, s.column))
+            .map(|s| (&s.file, s.line, s.column))
             .collect();
-        for site in &output.def_use_sites {
-            if site.kind == crate::types::DefUseKind::Read {
-                assert!(
-                    !write_offsets.contains(&(site.file.clone(), site.line, site.column)),
-                    "site at {}:{}:{} appears as both write and read",
-                    site.file,
-                    site.line,
-                    site.column
-                );
-            }
-        }
-
-        // Assert: formatted output contains DEF-USE SITES section
+        assert!(
+            output
+                .def_use_sites
+                .iter()
+                .filter(|s| s.kind == crate::types::DefUseKind::Read)
+                .all(|s| !write_locs.contains(&(&s.file, s.line, s.column))),
+            "no location should appear as both write and read",
+        );
         assert!(
             output.formatted.contains("DEF-USE SITES"),
-            "formatted output should contain DEF-USE SITES section"
+            "formatted output should contain DEF-USE SITES"
         );
     }
 }

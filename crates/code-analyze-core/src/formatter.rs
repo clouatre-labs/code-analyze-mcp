@@ -11,7 +11,8 @@ use crate::pagination::PaginationMode;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
 use crate::types::{
-    AnalyzeFileField, ClassInfo, FileInfo, FunctionInfo, ImportInfo, ModuleInfo, SemanticAnalysis,
+    AnalyzeFileField, ClassInfo, DefUseKind, DefUseSite, FileInfo, FunctionInfo, ImportInfo,
+    ModuleInfo, SemanticAnalysis,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -120,15 +121,10 @@ fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
     }
 }
 
-/// Maximum length for snippet display before truncation.
 const SNIPPET_MAX_LEN: usize = 80;
-/// Truncation point when snippet exceeds `SNIPPET_MAX_LEN`.
 const SNIPPET_TRUNCATION_POINT: usize = 77;
 
-/// Extract the center line from a (possibly multi-line) snippet and truncate safely.
-///
-/// The snippet is a 3-line window (prev, current, next). We extract only the center
-/// line (index 1 if at least 2 lines, else index 0), then truncate at a char boundary.
+/// Extract the center line from a snippet window and truncate at a char boundary.
 pub(crate) fn snippet_one_line(snippet: &str) -> String {
     let lines: Vec<&str> = snippet.split('\n').collect();
     let center = if lines.len() >= 2 { lines[1] } else { lines[0] };
@@ -138,6 +134,49 @@ pub(crate) fn snippet_one_line(snippet: &str) -> String {
         format!("{}...", &trimmed[..truncate_at])
     } else {
         trimmed.to_string()
+    }
+}
+
+/// Count (writes, reads) in a def-use site slice.
+fn def_use_write_read_counts(sites: &[DefUseSite]) -> (usize, usize) {
+    let w = sites
+        .iter()
+        .filter(|s| matches!(s.kind, DefUseKind::Write | DefUseKind::WriteRead))
+        .count();
+    (w, sites.len() - w)
+}
+
+/// Render a WRITES or READS group of def-use sites.
+fn render_def_use_group(
+    output: &mut String,
+    sites: &[DefUseSite],
+    heading: &str,
+    pred: impl Fn(&DefUseSite) -> bool,
+    base_path: Option<&Path>,
+) {
+    let filtered: Vec<_> = sites.iter().filter(|s| pred(s)).collect();
+    if filtered.is_empty() {
+        return;
+    }
+    let _ = writeln!(output, "  {heading}");
+    for site in filtered {
+        let file_display = strip_base_path(Path::new(&site.file), base_path);
+        let scope_str = site
+            .enclosing_scope
+            .as_ref()
+            .map(|s| format!("{}()", s))
+            .unwrap_or_default();
+        let snippet = snippet_one_line(&site.snippet);
+        let wr_label = if site.kind == DefUseKind::WriteRead {
+            " [write_read]"
+        } else {
+            ""
+        };
+        let _ = writeln!(
+            output,
+            "    {file_display}:{}  {scope_str}  {snippet}{wr_label}",
+            site.line
+        );
     }
 }
 
@@ -419,7 +458,7 @@ pub(crate) fn format_focused_internal(
     base_path: Option<&Path>,
     incoming_chains: Option<&[InternalCallChain]>,
     outgoing_chains: Option<&[InternalCallChain]>,
-    def_use_sites: &[crate::types::DefUseSite],
+    def_use_sites: &[DefUseSite],
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
@@ -605,83 +644,27 @@ pub(crate) fn format_focused_internal(
 
     // DEF-USE SITES section - show writes and reads of the symbol
     if !def_use_sites.is_empty() {
-        // Count writes (including write_read) and reads
-        let mut write_count = 0;
-        let mut read_count = 0;
-        for site in def_use_sites {
-            match site.kind {
-                crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead => {
-                    write_count += 1;
-                }
-                crate::types::DefUseKind::Read => {
-                    read_count += 1;
-                }
-            }
-        }
-
+        let (write_count, read_count) = def_use_write_read_counts(def_use_sites);
         let total = def_use_sites.len();
         let _ = writeln!(
             output,
             "DEF-USE SITES  {symbol}  ({total} total: {write_count} writes, {read_count} reads)"
         );
 
-        // Render writes (Write and WriteRead)
-        let write_sites: Vec<_> = def_use_sites
-            .iter()
-            .filter(|s| {
-                matches!(
-                    s.kind,
-                    crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead
-                )
-            })
-            .collect();
-
-        if !write_sites.is_empty() {
-            output.push_str("  WRITES\n");
-            for site in write_sites {
-                let file_display = strip_base_path(Path::new(&site.file), base_path);
-                let scope_str = site
-                    .enclosing_scope
-                    .as_ref()
-                    .map(|s| format!("{}()", s))
-                    .unwrap_or_default();
-                let snippet = snippet_one_line(&site.snippet);
-                let wr_label = if site.kind == crate::types::DefUseKind::WriteRead {
-                    " [write_read]"
-                } else {
-                    ""
-                };
-                let _ = writeln!(
-                    output,
-                    "    {file_display}:{}  {scope_str}  {snippet}{wr_label}",
-                    site.line
-                );
-            }
-        }
-
-        // Render reads
-        let read_sites: Vec<_> = def_use_sites
-            .iter()
-            .filter(|s| matches!(s.kind, crate::types::DefUseKind::Read))
-            .collect();
-
-        if !read_sites.is_empty() {
-            output.push_str("  READS\n");
-            for site in read_sites {
-                let file_display = strip_base_path(Path::new(&site.file), base_path);
-                let scope_str = site
-                    .enclosing_scope
-                    .as_ref()
-                    .map(|s| format!("{}()", s))
-                    .unwrap_or_default();
-                let snippet = snippet_one_line(&site.snippet);
-                let _ = writeln!(
-                    output,
-                    "    {file_display}:{}  {scope_str}  {snippet}",
-                    site.line
-                );
-            }
-        }
+        render_def_use_group(
+            &mut output,
+            def_use_sites,
+            "WRITES",
+            |s| matches!(s.kind, DefUseKind::Write | DefUseKind::WriteRead),
+            base_path,
+        );
+        render_def_use_group(
+            &mut output,
+            def_use_sites,
+            "READS",
+            |s| s.kind == DefUseKind::Read,
+            base_path,
+        );
     }
 
     Ok(output)
@@ -700,7 +683,7 @@ pub(crate) fn format_focused_summary_internal(
     base_path: Option<&Path>,
     incoming_chains: Option<&[InternalCallChain]>,
     outgoing_chains: Option<&[InternalCallChain]>,
-    def_use_sites: &[crate::types::DefUseSite],
+    def_use_sites: &[DefUseSite],
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
@@ -842,23 +825,11 @@ pub(crate) fn format_focused_summary_internal(
 
     // DEF-USE SITES brief summary
     if !def_use_sites.is_empty() {
-        let write_count = def_use_sites
-            .iter()
-            .filter(|s| {
-                matches!(
-                    s.kind,
-                    crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead
-                )
-            })
-            .count();
-        let read_count = def_use_sites
-            .iter()
-            .filter(|s| matches!(s.kind, crate::types::DefUseKind::Read))
-            .count();
+        let (write_count, read_count) = def_use_write_read_counts(def_use_sites);
+        let total = def_use_sites.len();
         let _ = writeln!(
             output,
             "DEF-USE SITES: {total} total ({write_count} writes, {read_count} reads)",
-            total = def_use_sites.len()
         );
     }
 
@@ -2691,83 +2662,72 @@ mod tests {
 
     #[test]
     fn test_format_focused_internal_with_def_use_sites() {
-        use crate::graph::CallGraph;
-        use crate::types::{DefUseKind, DefUseSite};
-
-        // Arrange: graph with a defined symbol
         let mut graph = CallGraph::new();
         graph
             .definitions
-            .insert("my_var".to_string(), vec![(PathBuf::from("src/lib.rs"), 5)]);
+            .insert("my_var".into(), vec![(PathBuf::from("src/lib.rs"), 5)]);
 
+        let site = |kind, file: &str, line, snippet: &str, scope: Option<&str>| DefUseSite {
+            kind,
+            symbol: "my_var".into(),
+            file: file.into(),
+            line,
+            column: 0,
+            snippet: snippet.into(),
+            enclosing_scope: scope.map(Into::into),
+        };
         let sites = vec![
-            DefUseSite {
-                kind: DefUseKind::Write,
-                symbol: "my_var".to_string(),
-                file: "src/lib.rs".to_string(),
-                line: 5,
-                column: 4,
-                snippet: "\nlet my_var = 42;\n".to_string(),
-                enclosing_scope: Some("init".to_string()),
-            },
-            DefUseSite {
-                kind: DefUseKind::WriteRead,
-                symbol: "my_var".to_string(),
-                file: "src/lib.rs".to_string(),
-                line: 10,
-                column: 4,
-                snippet: "\nmy_var += 1;\n".to_string(),
-                enclosing_scope: None,
-            },
-            DefUseSite {
-                kind: DefUseKind::Read,
-                symbol: "my_var".to_string(),
-                file: "src/main.rs".to_string(),
-                line: 20,
-                column: 8,
-                snippet: "\nprintln!(\"{}\", my_var);\n".to_string(),
-                enclosing_scope: Some("run".to_string()),
-            },
+            site(
+                DefUseKind::Write,
+                "src/lib.rs",
+                5,
+                "\nlet my_var = 42;\n",
+                Some("init"),
+            ),
+            site(
+                DefUseKind::WriteRead,
+                "src/lib.rs",
+                10,
+                "\nmy_var += 1;\n",
+                None,
+            ),
+            site(
+                DefUseKind::Read,
+                "src/main.rs",
+                20,
+                "\nprintln!(\"{}\", my_var);\n",
+                Some("run"),
+            ),
         ];
 
-        // Act
         let output =
             format_focused_internal(&graph, "my_var", 1, None, Some(&[]), Some(&[]), &sites)
                 .expect("format should succeed");
 
-        // Assert
-        assert!(
-            output.contains("DEF-USE SITES  my_var  (3 total: 2 writes, 1 reads)"),
-            "missing def-use header in: {output}"
-        );
-        assert!(output.contains("WRITES"), "missing WRITES section");
-        assert!(output.contains("[write_read]"), "missing write_read label");
-        assert!(output.contains("READS"), "missing READS section");
-        assert!(output.contains("run()"), "missing enclosing scope for read");
+        assert!(output.contains("DEF-USE SITES  my_var  (3 total: 2 writes, 1 reads)"));
+        assert!(output.contains("WRITES"));
+        assert!(output.contains("[write_read]"));
+        assert!(output.contains("READS"));
+        assert!(output.contains("run()"));
     }
 
     #[test]
     fn test_format_focused_summary_internal_with_def_use_sites() {
-        use crate::graph::CallGraph;
-        use crate::types::{DefUseKind, DefUseSite};
-
-        // Arrange: symbol with only reads (no writes section)
         let mut graph = CallGraph::new();
         graph
             .definitions
-            .insert("counter".to_string(), vec![(PathBuf::from("src/a.rs"), 1)]);
+            .insert("counter".into(), vec![(PathBuf::from("src/a.rs"), 1)]);
 
         let sites = vec![DefUseSite {
             kind: DefUseKind::Read,
-            symbol: "counter".to_string(),
-            file: "src/b.rs".to_string(),
+            symbol: "counter".into(),
+            file: "src/b.rs".into(),
             line: 15,
             column: 0,
-            snippet: "\nuse_counter(counter);\n".to_string(),
-            enclosing_scope: Some("main".to_string()),
+            snippet: "\nuse_counter(counter);\n".into(),
+            enclosing_scope: Some("main".into()),
         }];
 
-        // Act
         let output = format_focused_summary_internal(
             &graph,
             "counter",
@@ -2779,11 +2739,7 @@ mod tests {
         )
         .expect("format should succeed");
 
-        // Assert: summary uses compact "DEF-USE SITES: N total" format
-        assert!(
-            output.contains("DEF-USE SITES: 1 total (0 writes, 1 reads)"),
-            "missing def-use summary line in: {output}"
-        );
+        assert!(output.contains("DEF-USE SITES: 1 total (0 writes, 1 reads)"));
     }
 }
 
