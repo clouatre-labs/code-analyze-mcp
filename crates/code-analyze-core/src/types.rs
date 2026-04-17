@@ -29,7 +29,7 @@ pub struct ImplTraitInfo {
 /// Kind of definition or use of a symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum DefUseKind {
     /// Symbol write (declaration, assignment LHS).
     Write,

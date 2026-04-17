@@ -5,6 +5,8 @@
 use std::fmt::Write;
 use std::path::Path;
 
+use crate::formatter::snippet_one_line;
+
 /// Format a page of def-use sites for pagination.
 /// Renders a DEF-USE SITES section with WRITES and READS sub-sections.
 pub fn format_focused_paginated_defuse(
@@ -46,11 +48,7 @@ pub fn format_focused_paginated_defuse(
                 .as_ref()
                 .map(|s| format!("{}()", s))
                 .unwrap_or_default();
-            let snippet = if site.snippet.len() > 80 {
-                format!("{}...", &site.snippet[..77])
-            } else {
-                site.snippet.clone()
-            };
+            let snippet = snippet_one_line(&site.snippet);
             let _ = writeln!(
                 output,
                 "    {file_display}:{}  {scope_str}  {snippet}",
@@ -74,11 +72,7 @@ pub fn format_focused_paginated_defuse(
                 .as_ref()
                 .map(|s| format!("{}()", s))
                 .unwrap_or_default();
-            let snippet = if site.snippet.len() > 80 {
-                format!("{}...", &site.snippet[..77])
-            } else {
-                site.snippet.clone()
-            };
+            let snippet = snippet_one_line(&site.snippet);
             let _ = writeln!(
                 output,
                 "    {file_display}:{}  {scope_str}  {snippet}",

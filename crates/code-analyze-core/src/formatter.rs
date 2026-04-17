@@ -120,6 +120,27 @@ fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
     }
 }
 
+/// Maximum length for snippet display before truncation.
+const SNIPPET_MAX_LEN: usize = 80;
+/// Truncation point when snippet exceeds `SNIPPET_MAX_LEN`.
+const SNIPPET_TRUNCATION_POINT: usize = 77;
+
+/// Extract the center line from a (possibly multi-line) snippet and truncate safely.
+///
+/// The snippet is a 3-line window (prev, current, next). We extract only the center
+/// line (index 1 if at least 2 lines, else index 0), then truncate at a char boundary.
+pub(crate) fn snippet_one_line(snippet: &str) -> String {
+    let lines: Vec<&str> = snippet.split('\n').collect();
+    let center = if lines.len() >= 2 { lines[1] } else { lines[0] };
+    let trimmed = center.trim();
+    if trimmed.len() > SNIPPET_MAX_LEN {
+        let truncate_at = trimmed.floor_char_boundary(SNIPPET_TRUNCATION_POINT);
+        format!("{}...", &trimmed[..truncate_at])
+    } else {
+        trimmed.to_string()
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum FormatterError {
     #[error("Graph error: {0}")]
@@ -624,11 +645,7 @@ pub(crate) fn format_focused_internal(
                     .as_ref()
                     .map(|s| format!("{}()", s))
                     .unwrap_or_default();
-                let snippet = if site.snippet.len() > 80 {
-                    format!("{}...", &site.snippet[..77])
-                } else {
-                    site.snippet.clone()
-                };
+                let snippet = snippet_one_line(&site.snippet);
                 let _ = writeln!(
                     output,
                     "    {file_display}:{}  {scope_str}  {snippet}",
@@ -652,11 +669,7 @@ pub(crate) fn format_focused_internal(
                     .as_ref()
                     .map(|s| format!("{}()", s))
                     .unwrap_or_default();
-                let snippet = if site.snippet.len() > 80 {
-                    format!("{}...", &site.snippet[..77])
-                } else {
-                    site.snippet.clone()
-                };
+                let snippet = snippet_one_line(&site.snippet);
                 let _ = writeln!(
                     output,
                     "    {file_display}:{}  {scope_str}  {snippet}",

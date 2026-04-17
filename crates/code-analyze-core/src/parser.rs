@@ -1000,22 +1000,29 @@ impl SemanticExtractor {
     /// * `compiled` - Compiled tree-sitter queries
     /// * `root` - Root node of the AST
     /// * `symbol_name` - The symbol to search for (must match exactly)
-    /// * `language` - The language name (for node kind mapping)
+    /// * `file_path` - Relative file path for site reporting
     fn extract_def_use(
         source: &str,
         compiled: &CompiledQueries,
         root: Node<'_>,
         symbol_name: &str,
         file_path: &str,
+        max_depth: Option<u32>,
     ) -> Vec<crate::types::DefUseSite> {
         let Some(ref defuse_query) = compiled.defuse else {
             return vec![];
         };
 
         let mut cursor = QueryCursor::new();
+        if let Some(depth) = max_depth {
+            cursor.set_max_start_depth(Some(depth));
+        }
         let mut matches = cursor.matches(defuse_query, root, source.as_bytes());
         let mut sites = Vec::new();
         let source_lines: Vec<&str> = source.lines().collect();
+        // Track byte offsets that already have a write or writeread capture so
+        // duplicate read captures for the same identifier are suppressed.
+        let mut write_offsets = std::collections::HashSet::new();
 
         while let Some(mat) = matches.next() {
             for capture in mat.captures {
@@ -1039,7 +1046,17 @@ impl SemanticExtractor {
                     continue;
                 };
 
-                // Get line number (1-indexed) and 3-line snippet
+                let byte_offset = node.start_byte();
+
+                // De-duplicate: skip read captures for offsets already captured as write/writeread
+                if kind == crate::types::DefUseKind::Read && write_offsets.contains(&byte_offset) {
+                    continue;
+                }
+                if kind != crate::types::DefUseKind::Read {
+                    write_offsets.insert(byte_offset);
+                }
+
+                // Get line number (1-indexed) and center-line snippet
                 let line = node.start_position().row + 1;
                 let snippet = {
                     let line_idx = node.start_position().row;
@@ -1083,23 +1100,33 @@ impl SemanticExtractor {
         let Some(lang_info) = crate::languages::get_language_info(language) else {
             return vec![];
         };
-        let compiled = match build_compiled_queries(&lang_info) {
-            Ok(c) => c,
-            Err(_) => return vec![],
+        let Ok(compiled) = get_compiled_queries(language) else {
+            return vec![];
         };
         if compiled.defuse.is_none() {
             return vec![];
         }
-        let mut parser = tree_sitter::Parser::new();
-        if parser.set_language(&lang_info.language).is_err() {
-            return vec![];
-        }
-        let Some(tree) = parser.parse(source, None) else {
-            return vec![];
+
+        let tree = match PARSER.with(|p| {
+            let mut parser = p.borrow_mut();
+            if parser.set_language(&lang_info.language).is_err() {
+                return None;
+            }
+            parser.parse(source, None)
+        }) {
+            Some(t) => t,
+            None => return vec![],
         };
+
         let root = tree.root_node();
-        let _ = ast_recursion_limit; // reserved for future depth-limiting
-        Self::extract_def_use(source, &compiled, root, symbol, file_path)
+
+        // Convert ast_recursion_limit the same way extract() does:
+        // 0 means unlimited (None); positive values become Some(u32).
+        let max_depth: Option<u32> = ast_recursion_limit
+            .filter(|&limit| limit > 0)
+            .and_then(|limit| u32::try_from(limit).ok());
+
+        Self::extract_def_use(source, compiled, root, symbol, file_path, max_depth)
     }
 }
 
