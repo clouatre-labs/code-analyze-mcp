@@ -125,6 +125,8 @@ pub fn extract_inheritance(_node: &Node, _source: &str) -> Vec<String> {
 #[cfg(all(test, feature = "lang-rust"))]
 mod tests {
     use super::*;
+    use crate::parser::SemanticExtractor;
+    use crate::types::DefUseKind;
     use tree_sitter::Parser;
 
     fn parse_rust(source: &str) -> tree_sitter::Tree {
@@ -218,5 +220,17 @@ mod tests {
         let result = find_receiver_type(&node, source);
         // Assert
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let source = "fn foo() { let x = 5; }";
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(source, "rust", "x", "test.rs", None);
+        // Act & Assert
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

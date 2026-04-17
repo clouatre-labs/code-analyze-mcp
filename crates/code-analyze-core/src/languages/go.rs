@@ -119,6 +119,8 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
 #[cfg(all(test, feature = "lang-go"))]
 mod tests {
     use super::*;
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::Parser;
 
     fn parse_go(source: &str) -> tree_sitter::Tree {
@@ -169,5 +171,15 @@ mod tests {
         let result = find_method_for_receiver(&node, source, None);
         // Assert
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "package p\nfunc main() { x := 1 }\n";
+        let sites = SemanticExtractor::extract_def_use_for_file(src, "go", "x", "test.go", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

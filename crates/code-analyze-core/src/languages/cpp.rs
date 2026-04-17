@@ -157,6 +157,8 @@ fn extract_declarator_name(node: Node, source: &str) -> Option<String> {
 #[cfg(all(test, feature = "lang-cpp"))]
 mod tests {
     use super::*;
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::Parser;
 
     fn parse_cpp(source: &str) -> tree_sitter::Tree {
@@ -307,5 +309,15 @@ mod tests {
             }
         }
         None
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "void f() { int a = 7; }\n";
+        let sites = SemanticExtractor::extract_def_use_for_file(src, "cpp", "a", "test.cpp", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }
