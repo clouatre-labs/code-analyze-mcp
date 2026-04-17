@@ -60,8 +60,10 @@ To build with a subset of languages, disable default features and opt in:
 
 ```toml
 [dependencies]
-code-analyze-core = { version = "0.3", default-features = false, features = ["lang-rust", "lang-python"] }
+code-analyze-core = { version = "*", default-features = false, features = ["lang-rust", "lang-python"] }
 ```
+
+The current version is published on [crates.io](https://crates.io/crates/code-analyze-core). Replace `"*"` with the latest version string if you prefer a pinned dependency.
 
 ## Installation
 

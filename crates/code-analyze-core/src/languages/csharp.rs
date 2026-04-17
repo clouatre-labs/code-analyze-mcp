@@ -33,10 +33,10 @@ pub const REFERENCE_QUERY: &str = r"
 
 /// Tree-sitter query for extracting C# `using` directives.
 ///
-/// In tree-sitter-c-sharp 0.23.1 all `using` forms (namespace, `using static`,
-/// and `using alias = ...`) are represented by a single `using_directive` node
-/// kind.  There are no separate `using_static_directive` or
-/// `using_alias_directive` node kinds, so one pattern captures everything.
+/// All `using` forms (namespace, `using static`, and `using alias = ...`)
+/// are represented by a single `using_directive` node kind. There are no
+/// separate `using_static_directive` or `using_alias_directive` node kinds,
+/// so one pattern captures everything.
 pub const IMPORT_QUERY: &str = r"
 (using_directive) @import_path
 ";
