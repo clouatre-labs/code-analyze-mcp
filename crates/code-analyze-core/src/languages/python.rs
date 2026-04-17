@@ -30,6 +30,14 @@ pub const IMPORT_QUERY: &str = r"
 (import_from_statement) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(assignment left: (identifier) @write.assign)
+(augmented_assignment left: (identifier) @writeread.augmented)
+(named_expression name: (identifier) @write.named)
+(identifier) @read.usage
+";
+
 use tree_sitter::Node;
 
 /// Extract inheritance information from a Python class node.

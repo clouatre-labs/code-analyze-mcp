@@ -49,6 +49,16 @@ pub const IMPL_QUERY: &str = r"
       parameters: (parameters) @method_params) @method))
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+/// Captures write sites (let declarations, assignment LHS), read sites (identifiers in expression context),
+/// and write-read sites (compound assignments, +=, etc.).
+pub const DEFUSE_QUERY: &str = r"
+(let_declaration pattern: (identifier) @write.decl)
+(assignment_expression left: (identifier) @write.assign)
+(compound_assignment_expr left: (identifier) @writeread.compound)
+(identifier) @read.usage
+";
+
 /// Extract function name from a function node.
 #[must_use]
 pub fn extract_function_name(node: &Node, source: &str, _query_name: &str) -> Option<String> {

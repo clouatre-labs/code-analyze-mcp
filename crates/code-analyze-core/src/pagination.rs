@@ -22,6 +22,8 @@ pub enum PaginationMode {
     Callers,
     /// Paginating through the callees chain of a symbol.
     Callees,
+    /// Paginating through def-use sites for a symbol.
+    DefUse,
 }
 
 /// Serializable state embedded in a pagination cursor.
@@ -157,6 +159,20 @@ mod tests {
             "expected lowercase 'callers' in JSON, got: {}",
             json_str
         );
+    }
+
+    #[test]
+    fn test_pagination_mode_defuse_roundtrip() {
+        let original = CursorData {
+            mode: PaginationMode::DefUse,
+            offset: 123,
+        };
+
+        let encoded = encode_cursor(&original).expect("encode failed");
+        let decoded = decode_cursor(&encoded).expect("decode failed");
+
+        assert_eq!(decoded.mode, PaginationMode::DefUse);
+        assert_eq!(decoded.offset, 123);
     }
 
     #[test]

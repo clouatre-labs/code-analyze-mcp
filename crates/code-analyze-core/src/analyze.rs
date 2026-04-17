@@ -438,6 +438,8 @@ pub struct FocusedAnalysisOutput {
     /// Direct (depth-1) callees. `follow_depth` does not affect this field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub callees: Option<Vec<CallChainEntry>>,
+    /// Definition and use sites for the symbol.
+    pub def_use_sites: Vec<crate::types::DefUseSite>,
 }
 
 /// Parameters for focused symbol analysis. Groups high-arity parameters to keep
@@ -451,6 +453,7 @@ pub struct FocusedAnalysisConfig {
     pub ast_recursion_limit: Option<usize>,
     pub use_summary: bool,
     pub impl_only: Option<bool>,
+    pub def_use: bool,
 }
 
 /// Internal parameters for focused analysis phases.
@@ -462,6 +465,7 @@ struct InternalFocusedParams {
     ast_recursion_limit: Option<usize>,
     use_summary: bool,
     impl_only: Option<bool>,
+    def_use: bool,
 }
 
 /// Type alias for analysis results: (`file_path`, `semantic_analysis`) pairs and impl-trait info.
@@ -739,6 +743,7 @@ pub fn analyze_focused_with_progress(
         ast_recursion_limit: params.ast_recursion_limit,
         use_summary: params.use_summary,
         impl_only: params.impl_only,
+        def_use: params.def_use,
     };
     analyze_focused_with_progress_with_entries_internal(
         root,
@@ -782,6 +787,7 @@ fn analyze_focused_with_progress_with_entries_internal(
             callers: None,
             test_callers: None,
             callees: None,
+            def_use_sites: vec![],
         });
     }
 
@@ -849,6 +855,13 @@ fn analyze_focused_with_progress_with_entries_internal(
         (callers, test_callers, callees)
     };
 
+    // Phase 5 (optional): Def-use site extraction
+    let def_use_sites = if params.def_use {
+        collect_def_use_sites(entries, &resolved_focus, params.ast_recursion_limit, root)
+    } else {
+        Vec::new()
+    };
+
     Ok(FocusedAnalysisOutput {
         formatted,
         next_cursor: None,
@@ -861,7 +874,64 @@ fn analyze_focused_with_progress_with_entries_internal(
         def_count,
         unfiltered_caller_count,
         impl_trait_caller_count,
+        def_use_sites,
     })
+}
+
+/// Phase 5: Extract def-use sites for `symbol` across all entries.
+/// Writes go before reads; within each kind ordered by file then line.
+fn collect_def_use_sites(
+    entries: &[WalkEntry],
+    symbol: &str,
+    ast_recursion_limit: Option<usize>,
+    root: &std::path::Path,
+) -> Vec<crate::types::DefUseSite> {
+    use crate::parser::SemanticExtractor;
+
+    let mut sites: Vec<crate::types::DefUseSite> = entries
+        .par_iter()
+        .filter_map(|entry| {
+            let Ok(source) = std::fs::read_to_string(&entry.path) else {
+                return None;
+            };
+            let ext = entry
+                .path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            let lang = crate::lang::language_for_extension(ext)?;
+            let file_path = entry
+                .path
+                .strip_prefix(root)
+                .unwrap_or(&entry.path)
+                .display()
+                .to_string();
+            let sites = SemanticExtractor::extract_def_use_for_file(
+                &source,
+                lang,
+                symbol,
+                &file_path,
+                ast_recursion_limit,
+            );
+            if sites.is_empty() { None } else { Some(sites) }
+        })
+        .flatten()
+        .collect();
+
+    // Writes before reads; within each kind: file then line
+    sites.sort_by(|a, b| {
+        use crate::types::DefUseKind;
+        let kind_ord = |k: &DefUseKind| match k {
+            DefUseKind::Write | DefUseKind::WriteRead => 0,
+            DefUseKind::Read => 1,
+        };
+        kind_ord(&a.kind)
+            .cmp(&kind_ord(&b.kind))
+            .then_with(|| a.file.cmp(&b.file))
+            .then_with(|| a.line.cmp(&b.line))
+    });
+
+    sites
 }
 
 /// Analyze a symbol's call graph using pre-walked directory entries.
@@ -879,6 +949,7 @@ pub fn analyze_focused_with_progress_with_entries(
         ast_recursion_limit: params.ast_recursion_limit,
         use_summary: params.use_summary,
         impl_only: params.impl_only,
+        def_use: params.def_use,
     };
     analyze_focused_with_progress_with_entries_internal(
         root,
@@ -909,6 +980,7 @@ pub fn analyze_focused(
         ast_recursion_limit,
         use_summary: false,
         impl_only: None,
+        def_use: false,
     };
     analyze_focused_with_progress_with_entries(root, &params, &counter, &ct, &entries)
 }
@@ -1027,6 +1099,7 @@ pub fn analyze_import_lookup(
         callers: None,
         test_callers: None,
         callees: None,
+        def_use_sites: vec![],
     })
 }
 
@@ -1543,6 +1616,7 @@ fn regular_caller() {
             ast_recursion_limit: None,
             use_summary: false,
             impl_only: Some(true),
+            def_use: false,
         };
         let output = analyze_focused_with_progress(
             temp_dir.path(),

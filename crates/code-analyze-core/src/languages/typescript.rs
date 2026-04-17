@@ -42,6 +42,16 @@ pub const IMPORT_QUERY: &str = r"
 (import_statement) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(variable_declarator name: (identifier) @write.declarator)
+(assignment_expression left: (identifier) @write.assign)
+(augmented_assignment_expression left: (identifier) @writeread.augmented)
+(update_expression argument: (identifier) @writeread.update)
+(public_field_definition name: (property_identifier) @write.field)
+(identifier) @read.usage
+";
+
 use tree_sitter::Node;
 
 /// Extract inheritance information from a TypeScript class node.

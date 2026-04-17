@@ -34,6 +34,16 @@ pub const IMPORT_QUERY: &str = r"
 (import_declaration) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(short_var_declaration left: (expression_list (identifier) @write.short))
+(assignment_statement left: (expression_list (identifier) @write.assign))
+(var_declaration (var_spec (identifier) @write.var))
+(inc_statement (identifier) @writeread.inc)
+(dec_statement (identifier) @writeread.dec)
+(identifier) @read.usage
+";
+
 /// Find method name for a receiver type.
 #[must_use]
 pub fn find_method_for_receiver(

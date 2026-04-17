@@ -26,6 +26,39 @@ pub struct ImplTraitInfo {
     pub line: usize,
 }
 
+/// Kind of definition or use of a symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum DefUseKind {
+    /// Symbol write (declaration, assignment LHS).
+    Write,
+    /// Symbol read (reference in expression context).
+    Read,
+    /// Augmented assignment (+=, |=, ++, etc.); both written and read.
+    WriteRead,
+}
+
+/// A single definition or use site of a symbol within a file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct DefUseSite {
+    /// Kind of site: write, read, or write_read.
+    pub kind: DefUseKind,
+    /// Symbol name.
+    pub symbol: String,
+    /// File path (relative to the analysis root).
+    pub file: String,
+    /// Line number (1-indexed) in the file.
+    pub line: usize,
+    /// Column offset (0-indexed, byte offset from line start).
+    pub column: usize,
+    /// 3-line code context: lines N-1, N, N+1 from source.
+    pub snippet: String,
+    /// Name of the enclosing function or method, or None if at file scope.
+    pub enclosing_scope: Option<String>,
+}
+
 /// Pagination parameters shared across all tools.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
@@ -212,6 +245,10 @@ pub struct AnalyzeSymbolParams {
         )
     )]
     pub git_ref: Option<String>,
+
+    /// Extract definition and use sites (write/read locations) for the symbol. When true, def_use_sites will be populated in the response. Default: false.
+    #[serde(default)]
+    pub def_use: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -455,6 +492,10 @@ pub struct SemanticAnalysis {
     #[serde(skip)]
     #[cfg_attr(feature = "schemars", schemars(skip))]
     pub impl_traits: Vec<ImplTraitInfo>,
+    /// Definition and use sites for a focused symbol (in-memory only).
+    #[serde(skip)]
+    #[cfg_attr(feature = "schemars", schemars(skip))]
+    pub def_use_sites: Vec<DefUseSite>,
 }
 
 impl SemanticAnalysis {
@@ -478,6 +519,7 @@ impl SemanticAnalysis {
             call_frequency,
             calls,
             impl_traits,
+            def_use_sites: Vec::new(),
         }
     }
 }

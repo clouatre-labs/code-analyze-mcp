@@ -513,6 +513,7 @@ impl CodeAnalyzer {
                 ast_recursion_limit,
                 use_summary,
                 impl_only,
+                def_use: false,
             };
             analyze::analyze_focused_with_progress_with_entries(
                 &path_owned,
@@ -1331,6 +1332,9 @@ impl CodeAnalyzer {
                 }
             }
             PaginationMode::Default => {
+                unreachable!("SymbolFocus should only use Callers or Callees modes")
+            }
+            PaginationMode::DefUse => {
                 unreachable!("SymbolFocus should only use Callers or Callees modes")
             }
         };

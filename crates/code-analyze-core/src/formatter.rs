@@ -1399,6 +1399,9 @@ pub fn format_focused_paginated(
         PaginationMode::Default => {
             unreachable!("format_focused_paginated called with PaginationMode::Default")
         }
+        PaginationMode::DefUse => {
+            unreachable!("format_focused_paginated called with PaginationMode::DefUse")
+        }
     }
 
     output
@@ -1516,6 +1519,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let result = format_file_details_summary(&semantic, "src/main.rs", 100);
@@ -1563,6 +1567,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let result = format_file_details_summary(&semantic, "src/lib.rs", 250);
@@ -1672,6 +1677,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let verbose_out = format_file_details_paginated(
@@ -1753,6 +1759,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let verbose_out = format_file_details_paginated(
@@ -1864,6 +1871,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let compact_out = format_file_details_paginated(
@@ -2043,6 +2051,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let output = format_file_details("test.rs", &semantic, 100, false, None);
@@ -2151,6 +2160,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let output = format_file_details_paginated(
@@ -2206,6 +2216,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Functions]);
@@ -2262,6 +2273,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Classes]);
@@ -2321,6 +2333,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Imports]);
@@ -2380,6 +2393,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Imports]);
@@ -2442,6 +2456,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![]);
@@ -2507,6 +2522,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Classes, AnalyzeFileField::Imports]);

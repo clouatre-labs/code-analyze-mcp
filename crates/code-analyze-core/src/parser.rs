@@ -44,6 +44,7 @@ struct CompiledQueries {
     impl_block: Option<Query>,
     reference: Option<Query>,
     impl_trait: Option<Query>,
+    defuse: Option<Query>,
 }
 
 /// Build compiled queries for a given language.
@@ -118,6 +119,19 @@ fn build_compiled_queries(
         None
     };
 
+    let defuse = if let Some(defuse_query_str) = lang_info.defuse_query {
+        Some(
+            Query::new(&lang_info.language, defuse_query_str).map_err(|e| {
+                ParserError::QueryError(format!(
+                    "Failed to compile defuse query for {}: {}",
+                    lang_info.name, e
+                ))
+            })?,
+        )
+    } else {
+        None
+    };
+
     Ok(CompiledQueries {
         element,
         call,
@@ -125,6 +139,7 @@ fn build_compiled_queries(
         impl_block,
         reference,
         impl_trait,
+        defuse,
     })
 }
 
@@ -540,6 +555,7 @@ impl SemanticExtractor {
             call_frequency,
             calls,
             impl_traits,
+            def_use_sites: Vec::new(),
         })
     }
 
@@ -971,6 +987,119 @@ impl SemanticExtractor {
         }
 
         results
+    }
+
+    /// Extract def-use sites (write/read locations) for a given symbol within a file.
+    ///
+    /// Runs the defuse query to find all definition and use sites of a symbol.
+    /// Returns empty vec if no defuse query is available for this language.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The source code text
+    /// * `compiled` - Compiled tree-sitter queries
+    /// * `root` - Root node of the AST
+    /// * `symbol_name` - The symbol to search for (must match exactly)
+    /// * `language` - The language name (for node kind mapping)
+    fn extract_def_use(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        symbol_name: &str,
+        file_path: &str,
+    ) -> Vec<crate::types::DefUseSite> {
+        let Some(ref defuse_query) = compiled.defuse else {
+            return vec![];
+        };
+
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(defuse_query, root, source.as_bytes());
+        let mut sites = Vec::new();
+        let source_lines: Vec<&str> = source.lines().collect();
+
+        while let Some(mat) = matches.next() {
+            for capture in mat.captures {
+                let capture_name = defuse_query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                let node_text = source[node.start_byte()..node.end_byte()].to_string();
+
+                // Only collect if the captured node matches the target symbol
+                if node_text != symbol_name {
+                    continue;
+                }
+
+                // Classify capture by prefix
+                let kind = if capture_name.starts_with("write.") {
+                    crate::types::DefUseKind::Write
+                } else if capture_name.starts_with("read.") {
+                    crate::types::DefUseKind::Read
+                } else if capture_name.starts_with("writeread.") {
+                    crate::types::DefUseKind::WriteRead
+                } else {
+                    continue;
+                };
+
+                // Get line number (1-indexed) and 3-line snippet
+                let line = node.start_position().row + 1;
+                let snippet = {
+                    let line_idx = node.start_position().row;
+                    let start_line = if line_idx > 0 { line_idx - 1 } else { 0 };
+                    let end_line = std::cmp::min(line_idx + 2, source_lines.len());
+                    let window: Vec<&str> = source_lines[start_line..end_line]
+                        .iter()
+                        .map(|l| l.trim_end())
+                        .collect();
+                    window.join("\n")
+                };
+
+                // Get enclosing function scope
+                let enclosing_scope = Self::enclosing_function_name(node, source);
+
+                let column = node.start_position().column;
+                sites.push(crate::types::DefUseSite {
+                    kind,
+                    symbol: node_text,
+                    file: file_path.to_string(),
+                    line,
+                    column,
+                    snippet,
+                    enclosing_scope,
+                });
+            }
+        }
+
+        sites
+    }
+
+    /// Parse `source` in `language`, run the defuse query for `symbol`, and return all sites.
+    /// Returns an empty vec if the language has no defuse query or parsing fails.
+    pub(crate) fn extract_def_use_for_file(
+        source: &str,
+        language: &str,
+        symbol: &str,
+        file_path: &str,
+        ast_recursion_limit: Option<usize>,
+    ) -> Vec<crate::types::DefUseSite> {
+        let Some(lang_info) = crate::languages::get_language_info(language) else {
+            return vec![];
+        };
+        let compiled = match build_compiled_queries(&lang_info) {
+            Ok(c) => c,
+            Err(_) => return vec![],
+        };
+        if compiled.defuse.is_none() {
+            return vec![];
+        }
+        let mut parser = tree_sitter::Parser::new();
+        if parser.set_language(&lang_info.language).is_err() {
+            return vec![];
+        }
+        let Some(tree) = parser.parse(source, None) else {
+            return vec![];
+        };
+        let root = tree.root_node();
+        let _ = ast_recursion_limit; // reserved for future depth-limiting
+        Self::extract_def_use(source, &compiled, root, symbol, file_path)
     }
 }
 

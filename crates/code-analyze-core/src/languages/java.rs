@@ -28,6 +28,14 @@ pub const IMPORT_QUERY: &str = r"
 (import_declaration) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(local_variable_declaration declarator: (variable_declarator name: (identifier) @write.local))
+(assignment_expression left: (identifier) @write.assign)
+(update_expression (identifier) @writeread.update)
+(identifier) @read.usage
+";
+
 use tree_sitter::Node;
 
 /// Extract inheritance information from a Java class node.

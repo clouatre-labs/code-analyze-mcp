@@ -41,6 +41,13 @@ pub const IMPORT_QUERY: &str = r"
 (using_directive) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(variable_declarator name: (identifier) @write.var)
+(assignment_expression left: (identifier) @write.assign)
+(identifier) @read.usage
+";
+
 /// Extract base class and interface names from a C# class, interface, or record node.
 ///
 /// The parser calls this with the class/interface/record declaration node itself.

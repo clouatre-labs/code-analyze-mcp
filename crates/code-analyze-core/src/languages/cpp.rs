@@ -42,6 +42,14 @@ pub const IMPORT_QUERY: &str = r"
   path: (system_lib_string) @import_path)
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(init_declarator declarator: (identifier) @write.decl)
+(assignment_expression left: (identifier) @write.assign)
+(update_expression argument: (identifier) @writeread.update)
+(identifier) @read.usage
+";
+
 /// Extract the function name from a C/C++ `function_definition` node by
 /// walking the declarator chain: declarator -> function_declarator -> declarator -> identifier.
 pub fn extract_function_name(node: &Node, source: &str, _lang: &str) -> Option<String> {

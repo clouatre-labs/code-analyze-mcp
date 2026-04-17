@@ -25,6 +25,15 @@ pub const IMPORT_QUERY: &str = r#"
   arguments: (arguments (string) @import_path))
 "#;
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(variable_declarator name: (identifier) @write.declarator)
+(assignment_expression left: (identifier) @write.assign)
+(augmented_assignment_expression left: (identifier) @writeread.augmented)
+(update_expression argument: (identifier) @writeread.update)
+(identifier) @read.usage
+";
+
 // JavaScript intentionally has no REFERENCE_QUERY. JavaScript's dynamic typing
 // makes static type reference extraction low-value: most "type" references in JS
 // are just identifiers that appear in many non-type contexts, producing excessive
