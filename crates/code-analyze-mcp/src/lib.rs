@@ -37,6 +37,7 @@ use code_analyze_core::formatter::{
     format_file_details_paginated, format_file_details_summary, format_focused_paginated,
     format_module_info, format_structure_paginated, format_summary,
 };
+use code_analyze_core::formatter_defuse::format_focused_paginated_defuse;
 use code_analyze_core::pagination::{
     CursorData, DEFAULT_PAGE_SIZE, PaginationMode, decode_cursor, encode_cursor, paginate_slice,
 };
@@ -92,6 +93,13 @@ fn error_meta(
 #[must_use]
 fn err_to_tool_result(e: ErrorData) -> CallToolResult {
     CallToolResult::error(vec![Content::text(e.message)])
+}
+
+fn err_to_tool_result_from_pagination(
+    e: code_analyze_core::pagination::PaginationError,
+) -> CallToolResult {
+    let msg = format!("Pagination error: {}", e);
+    CallToolResult::error(vec![Content::text(msg)])
 }
 
 fn no_cache_meta() -> Meta {
@@ -504,6 +512,7 @@ impl CodeAnalyzer {
         let ast_recursion_limit = analysis_params.ast_recursion_limit;
         let use_summary = analysis_params.use_summary;
         let impl_only = analysis_params.impl_only;
+        let def_use = analysis_params.def_use;
         let handle = tokio::task::spawn_blocking(move || {
             let params = analyze::FocusedAnalysisConfig {
                 focus: symbol_owned,
@@ -513,7 +522,7 @@ impl CodeAnalyzer {
                 ast_recursion_limit,
                 use_summary,
                 impl_only,
-                def_use: false,
+                def_use,
             };
             analyze::analyze_focused_with_progress_with_entries(
                 &path_owned,
@@ -750,6 +759,7 @@ impl CodeAnalyzer {
             ast_recursion_limit: params.ast_recursion_limit,
             use_summary: false,
             impl_only: params.impl_only,
+            def_use: params.def_use.unwrap_or(false),
         };
 
         let mut output = self
@@ -1117,7 +1127,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Call graph for a named function/method across all files in a directory to trace usage. Returns direct callers and callees. Unknown symbols return error; symbols with no callers/callees return empty chains. Use import_lookup=true with symbol set to the module path to find all files that import a given module path instead of tracing a call graph. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method; Find all files that import std::collections",
+        description = "Call graph for a named function/method across all files in a directory to trace usage. Returns direct callers and callees. Unknown symbols return error; symbols with no callers/callees return empty chains. Use import_lookup=true with symbol set to the module path to find all files that import a given module path instead of tracing a call graph. When def_use is true, returns write and read sites for the symbol in def_use_sites; write sites include assignments and initializations, read sites include all references, augmented assignments appear as kind write_read. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method; Find all files that import std::collections",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",
@@ -1335,7 +1345,30 @@ impl CodeAnalyzer {
                 unreachable!("SymbolFocus should only use Callers or Callees modes")
             }
             PaginationMode::DefUse => {
-                unreachable!("SymbolFocus should only use Callers or Callees modes")
+                let (paginated_sites, paginated_next) = match paginate_slice(
+                    &output.def_use_sites,
+                    offset,
+                    page_size,
+                    PaginationMode::DefUse,
+                ) {
+                    Ok(r) => (r.items, r.next_cursor),
+                    Err(e) => return Ok(err_to_tool_result_from_pagination(e)),
+                };
+
+                if paginated_next.is_some() || offset > 0 || !verbose {
+                    let base_path = Path::new(&params.path);
+                    output.formatted = format_focused_paginated_defuse(
+                        &paginated_sites,
+                        output.def_use_sites.len(),
+                        &params.symbol,
+                        offset,
+                        Some(base_path),
+                        verbose,
+                    );
+                    paginated_next
+                } else {
+                    None
+                }
             }
         };
 
@@ -1349,6 +1382,21 @@ impl CodeAnalyzer {
             && !use_summary
             && let Ok(cursor) = encode_cursor(&CursorData {
                 mode: PaginationMode::Callees,
+                offset: 0,
+            })
+        {
+            callee_cursor = Some(cursor);
+        }
+
+        // When callees are exhausted and def_use_sites exist, bootstrap defuse cursor
+        // by emitting a {mode:defuse, offset:0} cursor. This makes PaginationMode::DefUse
+        // reachable. Suppressed in summary mode because summary and pagination are mutually exclusive.
+        if callee_cursor.is_none()
+            && cursor_mode == PaginationMode::Callees
+            && !output.def_use_sites.is_empty()
+            && !use_summary
+            && let Ok(cursor) = encode_cursor(&CursorData {
+                mode: PaginationMode::DefUse,
                 offset: 0,
             })
         {
@@ -1599,6 +1647,7 @@ struct FocusedAnalysisParams {
     ast_recursion_limit: Option<usize>,
     use_summary: bool,
     impl_only: Option<bool>,
+    def_use: bool,
 }
 
 #[tool_handler]

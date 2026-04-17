@@ -398,6 +398,7 @@ pub(crate) fn format_focused_internal(
     base_path: Option<&Path>,
     incoming_chains: Option<&[InternalCallChain]>,
     outgoing_chains: Option<&[InternalCallChain]>,
+    def_use_sites: &[crate::types::DefUseSite],
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
@@ -581,6 +582,90 @@ pub(crate) fn format_focused_internal(
         }
     }
 
+    // DEF-USE SITES section - show writes and reads of the symbol
+    if !def_use_sites.is_empty() {
+        // Count writes (including write_read) and reads
+        let mut write_count = 0;
+        let mut read_count = 0;
+        for site in def_use_sites {
+            match site.kind {
+                crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead => {
+                    write_count += 1;
+                }
+                crate::types::DefUseKind::Read => {
+                    read_count += 1;
+                }
+            }
+        }
+
+        let total = def_use_sites.len();
+        let _ = writeln!(
+            output,
+            "DEF-USE SITES  {symbol}  ({total} total: {write_count} writes, {read_count} reads)"
+        );
+
+        // Render writes (Write and WriteRead)
+        let write_sites: Vec<_> = def_use_sites
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.kind,
+                    crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead
+                )
+            })
+            .collect();
+
+        if !write_sites.is_empty() {
+            output.push_str("  WRITES\n");
+            for site in write_sites {
+                let file_display = strip_base_path(Path::new(&site.file), base_path);
+                let scope_str = site
+                    .enclosing_scope
+                    .as_ref()
+                    .map(|s| format!("{}()", s))
+                    .unwrap_or_default();
+                let snippet = if site.snippet.len() > 80 {
+                    format!("{}...", &site.snippet[..77])
+                } else {
+                    site.snippet.clone()
+                };
+                let _ = writeln!(
+                    output,
+                    "    {file_display}:{}  {scope_str}  {snippet}",
+                    site.line
+                );
+            }
+        }
+
+        // Render reads
+        let read_sites: Vec<_> = def_use_sites
+            .iter()
+            .filter(|s| matches!(s.kind, crate::types::DefUseKind::Read))
+            .collect();
+
+        if !read_sites.is_empty() {
+            output.push_str("  READS\n");
+            for site in read_sites {
+                let file_display = strip_base_path(Path::new(&site.file), base_path);
+                let scope_str = site
+                    .enclosing_scope
+                    .as_ref()
+                    .map(|s| format!("{}()", s))
+                    .unwrap_or_default();
+                let snippet = if site.snippet.len() > 80 {
+                    format!("{}...", &site.snippet[..77])
+                } else {
+                    site.snippet.clone()
+                };
+                let _ = writeln!(
+                    output,
+                    "    {file_display}:{}  {scope_str}  {snippet}",
+                    site.line
+                );
+            }
+        }
+    }
+
     Ok(output)
 }
 
@@ -597,6 +682,7 @@ pub(crate) fn format_focused_summary_internal(
     base_path: Option<&Path>,
     incoming_chains: Option<&[InternalCallChain]>,
     outgoing_chains: Option<&[InternalCallChain]>,
+    def_use_sites: &[crate::types::DefUseSite],
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
@@ -736,6 +822,28 @@ pub(crate) fn format_focused_summary_internal(
     output.push_str("SUGGESTION:\n");
     output.push_str("Use summary=false with force=true for full output\n");
 
+    // DEF-USE SITES brief summary
+    if !def_use_sites.is_empty() {
+        let write_count = def_use_sites
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.kind,
+                    crate::types::DefUseKind::Write | crate::types::DefUseKind::WriteRead
+                )
+            })
+            .count();
+        let read_count = def_use_sites
+            .iter()
+            .filter(|s| matches!(s.kind, crate::types::DefUseKind::Read))
+            .count();
+        let _ = writeln!(
+            output,
+            "DEF-USE SITES: {total} total ({write_count} writes, {read_count} reads)",
+            total = def_use_sites.len()
+        );
+    }
+
     Ok(output)
 }
 
@@ -747,7 +855,7 @@ pub fn format_focused_summary(
     follow_depth: u32,
     base_path: Option<&Path>,
 ) -> Result<String, FormatterError> {
-    format_focused_summary_internal(graph, symbol, follow_depth, base_path, None, None)
+    format_focused_summary_internal(graph, symbol, follow_depth, base_path, None, None, &[])
 }
 
 /// Format a compact summary for large directory analysis results.

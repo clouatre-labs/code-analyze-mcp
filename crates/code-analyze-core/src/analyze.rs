@@ -674,6 +674,7 @@ fn compute_chains(
     params: &InternalFocusedParams,
     unfiltered_caller_count: usize,
     impl_trait_caller_count: usize,
+    def_use_sites: &[crate::types::DefUseSite],
 ) -> Result<ChainComputeResult, AnalyzeError> {
     // Compute chain data for pagination (always, regardless of summary mode)
     let def_count = graph.definitions.get(resolved_focus).map_or(0, Vec::len);
@@ -697,6 +698,7 @@ fn compute_chains(
             Some(root),
             Some(&incoming_chains),
             Some(&outgoing_chains),
+            def_use_sites,
         )?
     } else {
         format_focused_internal(
@@ -706,6 +708,7 @@ fn compute_chains(
             Some(root),
             Some(&incoming_chains),
             Some(&outgoing_chains),
+            def_use_sites,
         )?
     };
 
@@ -818,13 +821,14 @@ fn analyze_focused_with_progress_with_entries_internal(
     }
 
     // Phase 4: Compute chains and format output
-    let (formatted, prod_chains, test_chains, outgoing_chains, def_count) = compute_chains(
+    let (_formatted, prod_chains, test_chains, outgoing_chains, def_count) = compute_chains(
         &graph,
         &resolved_focus,
         root,
         params,
         unfiltered_caller_count,
         impl_trait_caller_count,
+        &[], // def_use_sites computed later in Phase 5
     )?;
 
     // Compute depth-1 chains for structured output fields (always direct relationships only,
@@ -860,6 +864,40 @@ fn analyze_focused_with_progress_with_entries_internal(
         collect_def_use_sites(entries, &resolved_focus, params.ast_recursion_limit, root)
     } else {
         Vec::new()
+    };
+
+    // Phase 4b: Re-format output now that we have def_use_sites
+    let formatted = if params.use_summary {
+        format_focused_summary_internal(
+            &graph,
+            &resolved_focus,
+            params.follow_depth,
+            Some(root),
+            None,
+            None,
+            &def_use_sites,
+        )?
+    } else {
+        format_focused_internal(
+            &graph,
+            &resolved_focus,
+            params.follow_depth,
+            Some(root),
+            None,
+            None,
+            &def_use_sites,
+        )?
+    };
+
+    // Apply FILTER header if impl_only filter was applied
+    let formatted = if params.impl_only.unwrap_or(false) {
+        let filter_header = format!(
+            "FILTER: impl_only=true ({} of {} callers shown)\n",
+            impl_trait_caller_count, unfiltered_caller_count
+        );
+        format!("{filter_header}{formatted}")
+    } else {
+        formatted
     };
 
     Ok(FocusedAnalysisOutput {
