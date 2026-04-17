@@ -1421,6 +1421,58 @@ impl Display for Foo {}
             "expected at least one function with depth limit 5"
         );
     }
+
+    #[test]
+    fn test_extract_def_use_for_file_finds_write_and_read() {
+        // Arrange
+        let source = r#"
+fn main() {
+    let count = 0;
+    println!("{}", count);
+}
+"#;
+        // Act
+        let sites = SemanticExtractor::extract_def_use_for_file(
+            source,
+            "rust",
+            "count",
+            "src/main.rs",
+            None,
+        );
+
+        // Assert
+        assert!(
+            !sites.is_empty(),
+            "expected at least one def-use site for 'count'"
+        );
+        let has_write = sites
+            .iter()
+            .any(|s| s.kind == crate::types::DefUseKind::Write);
+        let has_read = sites
+            .iter()
+            .any(|s| s.kind == crate::types::DefUseKind::Read);
+        assert!(has_write, "expected a write site for 'count'");
+        assert!(has_read, "expected a read site for 'count'");
+        assert_eq!(sites[0].file, "src/main.rs");
+    }
+
+    #[test]
+    fn test_extract_def_use_for_file_no_match_returns_empty() {
+        // Arrange
+        let source = "fn foo() { let x = 1; }";
+
+        // Act
+        let sites = SemanticExtractor::extract_def_use_for_file(
+            source,
+            "rust",
+            "nonexistent_symbol",
+            "src/lib.rs",
+            None,
+        );
+
+        // Assert
+        assert!(sites.is_empty(), "expected empty for nonexistent symbol");
+    }
 }
 
 // Language-feature-gated tests for Python

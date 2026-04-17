@@ -98,3 +98,57 @@ fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
     }
     path.to_string_lossy().into_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{DefUseKind, DefUseSite};
+
+    fn site(kind: DefUseKind, line: usize, scope: Option<&str>, file: &str) -> DefUseSite {
+        DefUseSite {
+            kind,
+            symbol: "x".to_string(),
+            file: file.to_string(),
+            line,
+            column: 0,
+            snippet: "prev\nlet x = 1;\nnext".to_string(),
+            enclosing_scope: scope.map(String::from),
+        }
+    }
+
+    #[test]
+    fn test_format_paginated_defuse_writes_and_reads() {
+        // Arrange
+        let sites = vec![
+            site(DefUseKind::Write, 10, Some("init"), "src/main.rs"),
+            site(DefUseKind::WriteRead, 20, None, "src/lib.rs"),
+            site(DefUseKind::Read, 30, Some("run"), "src/main.rs"),
+        ];
+        let base = Path::new("/project");
+
+        // Act
+        let output = format_focused_paginated_defuse(&sites, 3, "x", 0, Some(base), false);
+
+        // Assert
+        assert!(output.contains("DEF-USE SITES  x  (1-3 of 3)"));
+        assert!(output.contains("WRITES"));
+        assert!(output.contains("src/main.rs:10  init()"));
+        assert!(output.contains("[write_read]"));
+        assert!(output.contains("READS"));
+        assert!(output.contains("src/main.rs:30  run()"));
+    }
+
+    #[test]
+    fn test_format_paginated_defuse_no_base_path() {
+        // Arrange: single read, no base path, no enclosing scope
+        let sites = vec![site(DefUseKind::Read, 5, None, "/abs/path/file.rs")];
+
+        // Act
+        let output = format_focused_paginated_defuse(&sites, 1, "x", 0, None, false);
+
+        // Assert
+        assert!(output.contains("/abs/path/file.rs:5"));
+        assert!(!output.contains("WRITES"));
+        assert!(output.contains("READS"));
+    }
+}

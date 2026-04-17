@@ -2675,6 +2675,116 @@ mod tests {
             "Functions section should not appear (filtered by fields)"
         );
     }
+
+    #[test]
+    fn test_snippet_one_line_short() {
+        let snippet = "prev line\nlet x = 1;\nnext line";
+        let result = snippet_one_line(snippet);
+        assert_eq!(result, "let x = 1;");
+    }
+
+    #[test]
+    fn test_snippet_one_line_single_line() {
+        let result = snippet_one_line("only line");
+        assert_eq!(result, "only line");
+    }
+
+    #[test]
+    fn test_format_focused_internal_with_def_use_sites() {
+        use crate::graph::CallGraph;
+        use crate::types::{DefUseKind, DefUseSite};
+
+        // Arrange: graph with a defined symbol
+        let mut graph = CallGraph::new();
+        graph
+            .definitions
+            .insert("my_var".to_string(), vec![(PathBuf::from("src/lib.rs"), 5)]);
+
+        let sites = vec![
+            DefUseSite {
+                kind: DefUseKind::Write,
+                symbol: "my_var".to_string(),
+                file: "src/lib.rs".to_string(),
+                line: 5,
+                column: 4,
+                snippet: "\nlet my_var = 42;\n".to_string(),
+                enclosing_scope: Some("init".to_string()),
+            },
+            DefUseSite {
+                kind: DefUseKind::WriteRead,
+                symbol: "my_var".to_string(),
+                file: "src/lib.rs".to_string(),
+                line: 10,
+                column: 4,
+                snippet: "\nmy_var += 1;\n".to_string(),
+                enclosing_scope: None,
+            },
+            DefUseSite {
+                kind: DefUseKind::Read,
+                symbol: "my_var".to_string(),
+                file: "src/main.rs".to_string(),
+                line: 20,
+                column: 8,
+                snippet: "\nprintln!(\"{}\", my_var);\n".to_string(),
+                enclosing_scope: Some("run".to_string()),
+            },
+        ];
+
+        // Act
+        let output =
+            format_focused_internal(&graph, "my_var", 1, None, Some(&[]), Some(&[]), &sites)
+                .expect("format should succeed");
+
+        // Assert
+        assert!(
+            output.contains("DEF-USE SITES  my_var  (3 total: 2 writes, 1 reads)"),
+            "missing def-use header in: {output}"
+        );
+        assert!(output.contains("WRITES"), "missing WRITES section");
+        assert!(output.contains("[write_read]"), "missing write_read label");
+        assert!(output.contains("READS"), "missing READS section");
+        assert!(output.contains("run()"), "missing enclosing scope for read");
+    }
+
+    #[test]
+    fn test_format_focused_summary_internal_with_def_use_sites() {
+        use crate::graph::CallGraph;
+        use crate::types::{DefUseKind, DefUseSite};
+
+        // Arrange: symbol with only reads (no writes section)
+        let mut graph = CallGraph::new();
+        graph
+            .definitions
+            .insert("counter".to_string(), vec![(PathBuf::from("src/a.rs"), 1)]);
+
+        let sites = vec![DefUseSite {
+            kind: DefUseKind::Read,
+            symbol: "counter".to_string(),
+            file: "src/b.rs".to_string(),
+            line: 15,
+            column: 0,
+            snippet: "\nuse_counter(counter);\n".to_string(),
+            enclosing_scope: Some("main".to_string()),
+        }];
+
+        // Act
+        let output = format_focused_summary_internal(
+            &graph,
+            "counter",
+            1,
+            None,
+            Some(&[]),
+            Some(&[]),
+            &sites,
+        )
+        .expect("format should succeed");
+
+        // Assert: summary uses compact "DEF-USE SITES: N total" format
+        assert!(
+            output.contains("DEF-USE SITES: 1 total (0 writes, 1 reads)"),
+            "missing def-use summary line in: {output}"
+        );
+    }
 }
 
 fn format_classes_section(classes: &[ClassInfo], functions: &[FunctionInfo]) -> String {
