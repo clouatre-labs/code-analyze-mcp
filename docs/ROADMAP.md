@@ -126,7 +126,7 @@ Unimplemented and pertinent:
 
 ## Wave 9: Editing Tools
 
-Augments aptu-coder with five mechanical code-editing tools in two phases. The existing analysis tools and composition API remain unchanged. This wave completes the read-analyse-write loop that the coder-build agent (#664, #665) requires without introducing a second MCP server.
+Augments aptu-coder with five mechanical code-editing tools in two phases. The existing analysis tools and composition API remain unchanged. This wave completes the read-analyze-write loop that the coder-build agent (#664, #665) requires without introducing a second MCP server.
 
 **Prerequisite:** the rename PR (#664) must merge before this wave begins.
 
@@ -141,14 +141,14 @@ The `ToolRouter::merge()` / `Add` / `AddAssign` API (verified against rmcp 1.5.0
 Three tools with no tree-sitter dependency. These validate the BUILD agent workflow and establish the write-path integration before adding AST complexity.
 
 - `read_file(path, start_line?, end_line?)` -- raw file content with optional line range; `read_only_hint=true`, `idempotent_hint=true`
-- `write_file(path, content)` -- create or overwrite; `destructive_hint=true`, `idempotent_hint=false`
-- `edit_file(path, old_text, new_text)` -- replace a unique exact text block; errors if the block appears zero or more than once; `destructive_hint=true`, `idempotent_hint=false`
+- `write_file(path, content)` -- create or overwrite; `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `edit_file(path, old_text, new_text)` -- replace a unique exact text block; errors if the block appears zero times or more than once; `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 
 Cache invalidation: `write_file` and `edit_file` must call `cache.invalidate(path)` after every successful write or the next `analyze_file` call returns stale data.
 
 ### Phase 2: AST-backed tools
 
-Two tools that require `code-analyze-core` capture data. These are the primary justification for keeping editing in the same crate rather than a separate repository.
+Two tools that require `aptu-coder-core` (formerly `code-analyze-core`) capture data. These are the primary justification for keeping editing in the same crate rather than a separate repository.
 
 - `rename_symbol(path, old_name, new_name, kind?)` -- renames by AST node kind, not string match, so identifiers in string literals are excluded; single-file scope in v1; directory-wide is a follow-up
 - `insert_at_symbol(path, symbol_name, position, content)` -- inserts content before or after a named AST node using `start_byte`/`end_byte` from the existing capture pipeline; `position` is `before | after`
