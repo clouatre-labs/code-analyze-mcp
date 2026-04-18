@@ -123,3 +123,49 @@ Unimplemented and pertinent:
 
 - MCP SEP adoption: #1487 (`trustedHint`), #1561 (`unsafeOutputHint`), #1913 (trust/sensitivity annotations), #1984 (governance annotations) -- open upstream; no action until specs stabilize. #1560 (`secretHint`) closed 2026-03-23; evaluate adoption once merged into spec.
 - Streamable HTTP transport: add `--http` flag exposing `StreamableHttpService` (axum + rmcp `transport-streamable-http-server` + `transport-streamable-http-server-session` features) alongside existing stdio. Tower middleware: `RequestBodyLimitLayer` (4 MB) + `tower-governor` (per-token rate limit) + static Bearer token from env var. Target deployment: GCP e2-micro Always Free (us-central1) behind Cloudflare proxy (free tier, TLS termination, WAF, 5 rate-limit rules). No changes to tool handlers or session logic required.
+
+## Wave 9: Editing Tools
+
+Augments aptu-coder with five mechanical code-editing tools in two phases. The existing analysis tools and composition API remain unchanged. This wave completes the read-analyse-write loop that the coder-build agent (#664, #665) requires without introducing a second MCP server.
+
+**Prerequisite:** the rename PR (#664) must merge before this wave begins.
+
+### Rationale
+
+Both a combined server and two separate servers inject into the same model context window. Token cost is identical. A single server with one MCP config entry, one binary, and one version pin is operationally simpler. Five editing tools keep the total tool count below the reliable SML selection ceiling (~10-12 tools).
+
+The `ToolRouter::merge()` / `Add` / `AddAssign` API (verified against rmcp 1.5.0 source) supports multi-group composition with no breaking changes from 1.1.0. Write tools are placed in a second `#[tool_router(router = write_router, vis = "pub")]` impl block and merged at construction.
+
+### Phase 1: Mechanical tools [no AST required]
+
+Three tools with no tree-sitter dependency. These validate the BUILD agent workflow and establish the write-path integration before adding AST complexity.
+
+- `read_file(path, start_line?, end_line?)` -- raw file content with optional line range; `read_only_hint=true`, `idempotent_hint=true`
+- `write_file(path, content)` -- create or overwrite; `destructive_hint=true`, `idempotent_hint=false`
+- `edit_file(path, old_text, new_text)` -- replace a unique exact text block; errors if the block appears zero or more than once; `destructive_hint=true`, `idempotent_hint=false`
+
+Cache invalidation: `write_file` and `edit_file` must call `cache.invalidate(path)` after every successful write or the next `analyze_file` call returns stale data.
+
+### Phase 2: AST-backed tools
+
+Two tools that require `code-analyze-core` capture data. These are the primary justification for keeping editing in the same crate rather than a separate repository.
+
+- `rename_symbol(path, old_name, new_name, kind?)` -- renames by AST node kind, not string match, so identifiers in string literals are excluded; single-file scope in v1; directory-wide is a follow-up
+- `insert_at_symbol(path, symbol_name, position, content)` -- inserts content before or after a named AST node using `start_byte`/`end_byte` from the existing capture pipeline; `position` is `before | after`
+
+### Annotation posture update
+
+Phase 2 tools are the first exception to the annotation freeze established in the Annotation Posture Policy section. Write tools carry `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`. Read tools (`read_file`, and all existing analysis tools) retain `read_only_hint=true`. The per-tool `#[tool(annotations(...))]` macro attribute in rmcp 1.5.0 is confirmed to support mixed postures within one server.
+
+Note: `read_only_hint` is a hint surfaced to MCP clients in `tools/list`; rmcp 1.5.0 has no per-tool access control enforcement.
+
+### SML validation requirement
+
+Per the Small-Model-First Constraint: all five tools must be evaluated against Haiku, Mistral-small-2603, and MiniMax-M2.5 before Sonnet in a Wave 9 benchmark. Tool descriptions must follow literal-instruction style -- SML models follow tool descriptions literally.
+
+### Risks
+
+- **Cache staleness** -- mitigated by mandatory `cache.invalidate(path)` in all write paths
+- **`rename_symbol` scope creep** -- directory-wide rename requires type information tree-sitter cannot provide; enforce single-file boundary in v1 with a clear error if a directory path is supplied
+- **Annotation posture drift** -- document the per-tool posture in this section; update REUSE.toml for any new source files
+- **SPDX headers** -- every new `.rs` file requires an SPDX header or `reuse lint` fails CI
