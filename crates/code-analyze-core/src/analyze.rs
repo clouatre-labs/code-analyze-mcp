@@ -439,7 +439,7 @@ pub struct FocusedAnalysisOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub callees: Option<Vec<CallChainEntry>>,
     /// Definition and use sites for the symbol.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub def_use_sites: Vec<crate::types::DefUseSite>,
 }
 
@@ -824,6 +824,12 @@ fn analyze_focused_with_progress_with_entries_internal(
         if params.def_use {
             let def_use_sites =
                 collect_def_use_sites(entries, &params.focus, params.ast_recursion_limit, root, ct);
+            if def_use_sites.is_empty() {
+                // Symbol not found anywhere (neither in call graph nor as def/use site).
+                // Propagate the original SymbolNotFound error instead of returning an
+                // empty success response.
+                return Err(resolve_result.unwrap_err());
+            }
             use std::fmt::Write as _;
             let mut formatted = String::new();
             let _ = writeln!(
@@ -831,7 +837,7 @@ fn analyze_focused_with_progress_with_entries_internal(
                 "FOCUS: {} (0 defs, 0 callers, 0 callees)",
                 params.focus
             );
-            if !def_use_sites.is_empty() {
+            {
                 let writes = def_use_sites
                     .iter()
                     .filter(|s| {

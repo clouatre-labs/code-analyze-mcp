@@ -108,7 +108,7 @@ fn format_file_info_parts(line_count: usize, fn_count: usize, cls_count: usize) 
 }
 
 /// Strip a base path from a Path, returning a relative path or the original on failure.
-fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
+pub(crate) fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
     match base_path {
         Some(base) => {
             if let Ok(rel_path) = path.strip_prefix(base) {

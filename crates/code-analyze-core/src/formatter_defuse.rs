@@ -5,7 +5,7 @@
 use std::fmt::Write;
 use std::path::Path;
 
-use crate::formatter::snippet_one_line;
+use crate::formatter::{snippet_one_line, strip_base_path};
 
 /// Format a page of def-use sites for pagination.
 /// Renders a DEF-USE SITES section with WRITES and READS sub-sections.
@@ -20,8 +20,11 @@ pub fn format_focused_paginated_defuse(
     let mut output = String::new();
 
     let page_size = paginated_sites.len();
-    let start = offset + 1;
-    let end = offset + page_size;
+    let (start, end) = if page_size == 0 {
+        (0, 0)
+    } else {
+        (offset + 1, offset + page_size)
+    };
 
     let _ = writeln!(
         output,
@@ -87,16 +90,6 @@ pub fn format_focused_paginated_defuse(
     }
 
     output
-}
-
-/// Strip base path from a full file path for display.
-fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
-    if let Some(base) = base_path
-        && let Ok(rel) = path.strip_prefix(base)
-    {
-        return rel.to_string_lossy().into_owned();
-    }
-    path.to_string_lossy().into_owned()
 }
 
 #[cfg(test)]

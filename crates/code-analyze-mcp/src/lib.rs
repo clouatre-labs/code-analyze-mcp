@@ -1432,6 +1432,12 @@ impl CodeAnalyzer {
 
         let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
             .with_meta(Some(no_cache_meta()));
+        // Only include def_use_sites in structuredContent when in DefUse mode.
+        // In Callers/Callees modes, clearing the vec prevents large def-use
+        // payloads from leaking into paginated non-def-use responses.
+        if cursor_mode != PaginationMode::DefUse {
+            output.def_use_sites = Vec::new();
+        }
         let structured = serde_json::to_value(&output).unwrap_or(Value::Null);
         result.structured_content = Some(structured);
         let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);

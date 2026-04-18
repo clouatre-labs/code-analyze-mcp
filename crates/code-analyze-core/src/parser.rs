@@ -1028,7 +1028,7 @@ impl SemanticExtractor {
             for capture in mat.captures {
                 let capture_name = defuse_query.capture_names()[capture.index as usize];
                 let node = capture.node;
-                let node_text = source[node.start_byte()..node.end_byte()].to_string();
+                let node_text = node.utf8_text(source.as_bytes()).unwrap_or_default();
 
                 // Only collect if the captured node matches the target symbol
                 if node_text != symbol_name {
@@ -1084,7 +1084,7 @@ impl SemanticExtractor {
                 let column = node.start_position().column;
                 sites.push(crate::types::DefUseSite {
                     kind,
-                    symbol: node_text,
+                    symbol: node_text.to_string(),
                     file: file_path.to_string(),
                     line,
                     column,
