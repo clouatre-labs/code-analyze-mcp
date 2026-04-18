@@ -225,11 +225,7 @@ pub fn format_structure(
         .map_or_else(
             || "unknown 0%".to_string(),
             |(name, count)| {
-                let percentage = if total_files > 0 {
-                    (*count * 100) / total_files
-                } else {
-                    0
-                };
+                let percentage = (*count * 100).checked_div(total_files).unwrap_or(0);
                 format!("{name} {percentage}%")
             },
         );
@@ -260,11 +256,7 @@ pub fn format_structure(
         let lang_strs: Vec<String> = langs
             .iter()
             .map(|(name, count)| {
-                let percentage = if total_files > 0 {
-                    (**count * 100) / total_files
-                } else {
-                    0
-                };
+                let percentage = (**count * 100).checked_div(total_files).unwrap_or(0);
                 format!("{name} ({percentage}%)")
             })
             .collect();
@@ -767,7 +759,7 @@ pub(crate) fn format_focused_summary_internal(
 
         // Sort by frequency descending, take top 10
         let mut sorted_callers: Vec<_> = caller_freq.into_iter().collect();
-        sorted_callers.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+        sorted_callers.sort_by_key(|b| std::cmp::Reverse(b.1.0));
 
         for (name, (_, file_path)) in sorted_callers.into_iter().take(10) {
             let _ = writeln!(output, "  {name} {file_path}");
@@ -812,7 +804,7 @@ pub(crate) fn format_focused_summary_internal(
 
         // Sort by frequency descending, take top 10
         let mut sorted_callees: Vec<_> = callee_freq.into_iter().collect();
-        sorted_callees.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted_callees.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         for (name, _) in sorted_callees.into_iter().take(10) {
             let _ = writeln!(output, "  {name}");
@@ -895,11 +887,7 @@ pub fn format_summary(
         let lang_strs: Vec<String> = langs
             .iter()
             .map(|(name, count)| {
-                let percentage = if total_files > 0 {
-                    (**count * 100) / total_files
-                } else {
-                    0
-                };
+                let percentage = (**count * 100).checked_div(total_files).unwrap_or(0);
                 format!("{name} ({percentage}%)")
             })
             .collect();
