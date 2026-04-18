@@ -225,7 +225,7 @@ pub fn format_structure(
         .map_or_else(
             || "unknown 0%".to_string(),
             |(name, count)| {
-                let percentage = (*count * 100).checked_div(total_files).unwrap_or(0);
+                let percentage = (*count * 100).checked_div(total_files).unwrap_or_default();
                 format!("{name} {percentage}%")
             },
         );
@@ -256,7 +256,7 @@ pub fn format_structure(
         let lang_strs: Vec<String> = langs
             .iter()
             .map(|(name, count)| {
-                let percentage = (**count * 100).checked_div(total_files).unwrap_or(0);
+                let percentage = (**count * 100).checked_div(total_files).unwrap_or_default();
                 format!("{name} ({percentage}%)")
             })
             .collect();
@@ -759,7 +759,7 @@ pub(crate) fn format_focused_summary_internal(
 
         // Sort by frequency descending, take top 10
         let mut sorted_callers: Vec<_> = caller_freq.into_iter().collect();
-        sorted_callers.sort_by_key(|b| std::cmp::Reverse(b.1.0));
+        sorted_callers.sort_unstable_by_key(|b| std::cmp::Reverse(b.1.0));
 
         for (name, (_, file_path)) in sorted_callers.into_iter().take(10) {
             let _ = writeln!(output, "  {name} {file_path}");
@@ -804,7 +804,7 @@ pub(crate) fn format_focused_summary_internal(
 
         // Sort by frequency descending, take top 10
         let mut sorted_callees: Vec<_> = callee_freq.into_iter().collect();
-        sorted_callees.sort_by_key(|b| std::cmp::Reverse(b.1));
+        sorted_callees.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
 
         for (name, _) in sorted_callees.into_iter().take(10) {
             let _ = writeln!(output, "  {name}");
@@ -883,11 +883,11 @@ pub fn format_summary(
     if !lang_counts.is_empty() {
         output.push_str("Languages: ");
         let mut langs: Vec<_> = lang_counts.iter().collect();
-        langs.sort_by_key(|&(name, _)| name);
+        langs.sort_unstable_by_key(|&(name, _)| name);
         let lang_strs: Vec<String> = langs
             .iter()
             .map(|(name, count)| {
-                let percentage = (**count * 100).checked_div(total_files).unwrap_or(0);
+                let percentage = (**count * 100).checked_div(total_files).unwrap_or_default();
                 format!("{name} ({percentage}%)")
             })
             .collect();
