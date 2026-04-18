@@ -42,6 +42,16 @@ pub const IMPORT_QUERY: &str = r"
 (import_statement) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(variable_declarator name: (identifier) @write.declarator)
+(assignment_expression left: (identifier) @write.assign)
+(augmented_assignment_expression left: (identifier) @writeread.augmented)
+(update_expression argument: (identifier) @writeread.update)
+(public_field_definition name: (property_identifier) @write.field)
+(identifier) @read.usage
+";
+
 use tree_sitter::Node;
 
 /// Extract inheritance information from a TypeScript class node.
@@ -86,6 +96,8 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
 #[cfg(all(test, any(feature = "lang-typescript", feature = "lang-tsx")))]
 mod tests {
     use super::*;
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::{Parser, StreamingIterator};
 
     fn parse_ts(src: &str) -> tree_sitter::Tree {
@@ -235,5 +247,16 @@ mod tests {
             "expected Button component, got {:?}",
             captured_functions
         );
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "let x = 42;\n";
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "typescript", "x", "test.ts", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

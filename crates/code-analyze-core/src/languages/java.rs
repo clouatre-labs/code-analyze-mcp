@@ -28,6 +28,14 @@ pub const IMPORT_QUERY: &str = r"
 (import_declaration) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(local_variable_declaration declarator: (variable_declarator name: (identifier) @write.local))
+(assignment_expression left: (identifier) @write.assign)
+(update_expression (identifier) @writeread.update)
+(identifier) @read.usage
+";
+
 use tree_sitter::Node;
 
 /// Extract inheritance information from a Java class node.
@@ -70,6 +78,8 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
 #[cfg(all(test, feature = "lang-java"))]
 mod tests {
     use super::*;
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::{Parser, StreamingIterator};
 
     fn parse_java(src: &str) -> tree_sitter::Tree {
@@ -168,5 +178,16 @@ mod tests {
             "expected implements ICanSwim, got {:?}",
             bases
         );
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "class C { void m() { int z = 5; } }\n";
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "java", "z", "test.java", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

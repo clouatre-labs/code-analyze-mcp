@@ -41,6 +41,13 @@ pub const IMPORT_QUERY: &str = r"
 (using_directive) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(variable_declarator name: (identifier) @write.var)
+(assignment_expression left: (identifier) @write.assign)
+(identifier) @read.usage
+";
+
 /// Extract base class and interface names from a C# class, interface, or record node.
 ///
 /// The parser calls this with the class/interface/record declaration node itself.
@@ -147,6 +154,8 @@ pub fn find_method_for_receiver(
 #[cfg(all(test, feature = "lang-csharp"))]
 mod tests {
     use super::*;
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::Parser;
 
     fn parse_csharp(src: &str) -> tree_sitter::Tree {
@@ -390,5 +399,16 @@ mod tests {
 
         // Assert -- returns the method name, not the enclosing type name
         assert_eq!(name, Some("MyMethod".to_string()));
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "class C { void M() { int b = 3; } }\n";
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "csharp", "b", "test.cs", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

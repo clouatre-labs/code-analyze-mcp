@@ -30,6 +30,14 @@ pub const IMPORT_QUERY: &str = r"
 (import_from_statement) @import_path
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(assignment left: (identifier) @write.assign)
+(augmented_assignment left: (identifier) @writeread.augmented)
+(named_expression name: (identifier) @write.named)
+(identifier) @read.usage
+";
+
 use tree_sitter::Node;
 
 /// Extract inheritance information from a Python class node.
@@ -56,6 +64,8 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
 #[cfg(all(test, feature = "lang-python"))]
 mod tests {
     use super::*;
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::{Parser, StreamingIterator};
 
     fn parse_python(src: &str) -> tree_sitter::Tree {
@@ -149,5 +159,16 @@ mod tests {
             "expected Domestic, got {:?}",
             bases
         );
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "x = 1\n";
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "python", "x", "test.py", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

@@ -44,6 +44,7 @@ struct CompiledQueries {
     impl_block: Option<Query>,
     reference: Option<Query>,
     impl_trait: Option<Query>,
+    defuse: Option<Query>,
 }
 
 /// Build compiled queries for a given language.
@@ -118,6 +119,19 @@ fn build_compiled_queries(
         None
     };
 
+    let defuse = if let Some(defuse_query_str) = lang_info.defuse_query {
+        Some(
+            Query::new(&lang_info.language, defuse_query_str).map_err(|e| {
+                ParserError::QueryError(format!(
+                    "Failed to compile defuse query for {}: {}",
+                    lang_info.name, e
+                ))
+            })?,
+        )
+    } else {
+        None
+    };
+
     Ok(CompiledQueries {
         element,
         call,
@@ -125,6 +139,7 @@ fn build_compiled_queries(
         impl_block,
         reference,
         impl_trait,
+        defuse,
     })
 }
 
@@ -540,6 +555,7 @@ impl SemanticExtractor {
             call_frequency,
             calls,
             impl_traits,
+            def_use_sites: Vec::new(),
         })
     }
 
@@ -972,6 +988,155 @@ impl SemanticExtractor {
 
         results
     }
+
+    /// Extract def-use sites (write/read locations) for a given symbol within a file.
+    ///
+    /// Runs the defuse query to find all definition and use sites of a symbol.
+    /// Returns empty vec if no defuse query is available for this language.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The source code text
+    /// * `compiled` - Compiled tree-sitter queries
+    /// * `root` - Root node of the AST
+    /// * `symbol_name` - The symbol to search for (must match exactly)
+    /// * `file_path` - Relative file path for site reporting
+    fn extract_def_use(
+        source: &str,
+        compiled: &CompiledQueries,
+        root: Node<'_>,
+        symbol_name: &str,
+        file_path: &str,
+        max_depth: Option<u32>,
+    ) -> Vec<crate::types::DefUseSite> {
+        let Some(ref defuse_query) = compiled.defuse else {
+            return vec![];
+        };
+
+        let mut cursor = QueryCursor::new();
+        if let Some(depth) = max_depth {
+            cursor.set_max_start_depth(Some(depth));
+        }
+        let mut matches = cursor.matches(defuse_query, root, source.as_bytes());
+        let mut sites = Vec::new();
+        let source_lines: Vec<&str> = source.lines().collect();
+        // Track byte offsets that already have a write or writeread capture so
+        // duplicate read captures for the same identifier are suppressed.
+        let mut write_offsets = std::collections::HashSet::new();
+
+        while let Some(mat) = matches.next() {
+            for capture in mat.captures {
+                let capture_name = defuse_query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                let node_text = node.utf8_text(source.as_bytes()).unwrap_or_default();
+
+                // Only collect if the captured node matches the target symbol
+                if node_text != symbol_name {
+                    continue;
+                }
+
+                // Classify capture by prefix
+                let kind = if capture_name.starts_with("write.") {
+                    crate::types::DefUseKind::Write
+                } else if capture_name.starts_with("read.") {
+                    crate::types::DefUseKind::Read
+                } else if capture_name.starts_with("writeread.") {
+                    crate::types::DefUseKind::WriteRead
+                } else {
+                    continue;
+                };
+
+                let byte_offset = node.start_byte();
+
+                // De-duplicate: skip read captures for offsets already captured as write/writeread
+                if kind == crate::types::DefUseKind::Read && write_offsets.contains(&byte_offset) {
+                    continue;
+                }
+                if kind != crate::types::DefUseKind::Read {
+                    write_offsets.insert(byte_offset);
+                }
+
+                // Get line number (1-indexed) and center-line snippet.
+                // Always produce a 3-line window so snippet_one_line (index 1) is safe.
+                let line = node.start_position().row + 1;
+                let snippet = {
+                    let row = node.start_position().row;
+                    let last_line = source_lines.len().saturating_sub(1);
+                    let prev = if row > 0 { row - 1 } else { 0 };
+                    let next = std::cmp::min(row + 1, last_line);
+                    let prev_text = if row == 0 {
+                        ""
+                    } else {
+                        source_lines[prev].trim_end()
+                    };
+                    let cur_text = source_lines[row].trim_end();
+                    let next_text = if row >= last_line {
+                        ""
+                    } else {
+                        source_lines[next].trim_end()
+                    };
+                    format!("{prev_text}\n{cur_text}\n{next_text}")
+                };
+
+                // Get enclosing function scope
+                let enclosing_scope = Self::enclosing_function_name(node, source);
+
+                let column = node.start_position().column;
+                sites.push(crate::types::DefUseSite {
+                    kind,
+                    symbol: node_text.to_string(),
+                    file: file_path.to_string(),
+                    line,
+                    column,
+                    snippet,
+                    enclosing_scope,
+                });
+            }
+        }
+
+        sites
+    }
+
+    /// Parse `source` in `language`, run the defuse query for `symbol`, and return all sites.
+    /// Returns an empty vec if the language has no defuse query or parsing fails.
+    pub(crate) fn extract_def_use_for_file(
+        source: &str,
+        language: &str,
+        symbol: &str,
+        file_path: &str,
+        ast_recursion_limit: Option<usize>,
+    ) -> Vec<crate::types::DefUseSite> {
+        let Some(lang_info) = crate::languages::get_language_info(language) else {
+            return vec![];
+        };
+        let Ok(compiled) = get_compiled_queries(language) else {
+            return vec![];
+        };
+        if compiled.defuse.is_none() {
+            return vec![];
+        }
+
+        let tree = match PARSER.with(|p| {
+            let mut parser = p.borrow_mut();
+            if parser.set_language(&lang_info.language).is_err() {
+                return None;
+            }
+            parser.parse(source, None)
+        }) {
+            Some(t) => t,
+            None => return vec![],
+        };
+
+        let root = tree.root_node();
+
+        // Convert ast_recursion_limit the same way extract() does:
+        // 0 means unlimited (None); positive values become Some(u32).
+        let max_depth: Option<u32> = ast_recursion_limit
+            .filter(|&limit| limit > 0)
+            .and_then(|limit| u32::try_from(limit).ok());
+
+        Self::extract_def_use(source, compiled, root, symbol, file_path, max_depth)
+    }
 }
 
 /// Extract `impl Trait for Type` blocks from Rust source.
@@ -1255,6 +1420,58 @@ impl Display for Foo {}
             analysis.functions.len() >= 1,
             "expected at least one function with depth limit 5"
         );
+    }
+
+    #[test]
+    fn test_extract_def_use_for_file_finds_write_and_read() {
+        // Arrange
+        let source = r#"
+fn main() {
+    let count = 0;
+    println!("{}", count);
+}
+"#;
+        // Act
+        let sites = SemanticExtractor::extract_def_use_for_file(
+            source,
+            "rust",
+            "count",
+            "src/main.rs",
+            None,
+        );
+
+        // Assert
+        assert!(
+            !sites.is_empty(),
+            "expected at least one def-use site for 'count'"
+        );
+        let has_write = sites
+            .iter()
+            .any(|s| s.kind == crate::types::DefUseKind::Write);
+        let has_read = sites
+            .iter()
+            .any(|s| s.kind == crate::types::DefUseKind::Read);
+        assert!(has_write, "expected a write site for 'count'");
+        assert!(has_read, "expected a read site for 'count'");
+        assert_eq!(sites[0].file, "src/main.rs");
+    }
+
+    #[test]
+    fn test_extract_def_use_for_file_no_match_returns_empty() {
+        // Arrange
+        let source = "fn foo() { let x = 1; }";
+
+        // Act
+        let sites = SemanticExtractor::extract_def_use_for_file(
+            source,
+            "rust",
+            "nonexistent_symbol",
+            "src/lib.rs",
+            None,
+        );
+
+        // Assert
+        assert!(sites.is_empty(), "expected empty for nonexistent symbol");
     }
 }
 

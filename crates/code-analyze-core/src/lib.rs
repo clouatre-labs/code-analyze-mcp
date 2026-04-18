@@ -31,6 +31,7 @@ pub mod cache;
 pub mod completion;
 mod config;
 pub mod formatter;
+pub mod formatter_defuse;
 pub mod graph;
 pub mod lang;
 pub mod languages;

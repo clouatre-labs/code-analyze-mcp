@@ -579,6 +579,7 @@ mod tests {
                 })
                 .collect(),
             impl_traits: vec![],
+            def_use_sites: vec![],
         }
     }
 
@@ -612,6 +613,7 @@ mod tests {
                 })
                 .collect(),
             impl_traits: vec![],
+            def_use_sites: vec![],
         }
     }
 

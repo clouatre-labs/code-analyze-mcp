@@ -64,6 +64,7 @@ fn symbol_focus_benchmark(c: &mut Criterion) {
                 ast_recursion_limit,
                 use_summary: false,
                 impl_only: None,
+                def_use: false,
             };
 
             code_analyze_core::analyze::analyze_focused_with_progress(path, &params, progress, ct)

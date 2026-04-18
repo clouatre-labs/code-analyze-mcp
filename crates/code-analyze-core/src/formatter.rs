@@ -11,7 +11,8 @@ use crate::pagination::PaginationMode;
 use crate::test_detection::is_test_file;
 use crate::traversal::WalkEntry;
 use crate::types::{
-    AnalyzeFileField, ClassInfo, FileInfo, FunctionInfo, ImportInfo, ModuleInfo, SemanticAnalysis,
+    AnalyzeFileField, ClassInfo, DefUseKind, DefUseSite, FileInfo, FunctionInfo, ImportInfo,
+    ModuleInfo, SemanticAnalysis,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -107,7 +108,7 @@ fn format_file_info_parts(line_count: usize, fn_count: usize, cls_count: usize) 
 }
 
 /// Strip a base path from a Path, returning a relative path or the original on failure.
-fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
+pub(crate) fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
     match base_path {
         Some(base) => {
             if let Ok(rel_path) = path.strip_prefix(base) {
@@ -117,6 +118,65 @@ fn strip_base_path(path: &Path, base_path: Option<&Path>) -> String {
             }
         }
         None => path.display().to_string(),
+    }
+}
+
+const SNIPPET_MAX_LEN: usize = 80;
+const SNIPPET_TRUNCATION_POINT: usize = 77;
+
+/// Extract the center line from a snippet window and truncate at a char boundary.
+pub(crate) fn snippet_one_line(snippet: &str) -> String {
+    let lines: Vec<&str> = snippet.split('\n').collect();
+    let center = if lines.len() >= 2 { lines[1] } else { lines[0] };
+    let trimmed = center.trim();
+    if trimmed.len() > SNIPPET_MAX_LEN {
+        let truncate_at = trimmed.floor_char_boundary(SNIPPET_TRUNCATION_POINT);
+        format!("{}...", &trimmed[..truncate_at])
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// Count (writes, reads) in a def-use site slice.
+fn def_use_write_read_counts(sites: &[DefUseSite]) -> (usize, usize) {
+    let w = sites
+        .iter()
+        .filter(|s| matches!(s.kind, DefUseKind::Write | DefUseKind::WriteRead))
+        .count();
+    (w, sites.len() - w)
+}
+
+/// Render a WRITES or READS group of def-use sites.
+fn render_def_use_group(
+    output: &mut String,
+    sites: &[DefUseSite],
+    heading: &str,
+    pred: impl Fn(&DefUseSite) -> bool,
+    base_path: Option<&Path>,
+) {
+    let filtered: Vec<_> = sites.iter().filter(|s| pred(s)).collect();
+    if filtered.is_empty() {
+        return;
+    }
+    let _ = writeln!(output, "  {heading}");
+    for site in filtered {
+        let file_display = strip_base_path(Path::new(&site.file), base_path);
+        let scope_str = site
+            .enclosing_scope
+            .as_ref()
+            .map(|s| format!("{}()", s))
+            .unwrap_or_default();
+        let snippet = snippet_one_line(&site.snippet);
+        let wr_label = if site.kind == DefUseKind::WriteRead {
+            " [write_read]"
+        } else {
+            ""
+        };
+        let _ = writeln!(
+            output,
+            "    {file_display}:{}  {scope_str}  {snippet}{wr_label}",
+            site.line
+        );
     }
 }
 
@@ -398,6 +458,7 @@ pub(crate) fn format_focused_internal(
     base_path: Option<&Path>,
     incoming_chains: Option<&[InternalCallChain]>,
     outgoing_chains: Option<&[InternalCallChain]>,
+    def_use_sites: &[DefUseSite],
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
@@ -581,6 +642,31 @@ pub(crate) fn format_focused_internal(
         }
     }
 
+    // DEF-USE SITES section - show writes and reads of the symbol
+    if !def_use_sites.is_empty() {
+        let (write_count, read_count) = def_use_write_read_counts(def_use_sites);
+        let total = def_use_sites.len();
+        let _ = writeln!(
+            output,
+            "DEF-USE SITES  {symbol}  ({total} total: {write_count} writes, {read_count} reads)"
+        );
+
+        render_def_use_group(
+            &mut output,
+            def_use_sites,
+            "WRITES",
+            |s| matches!(s.kind, DefUseKind::Write | DefUseKind::WriteRead),
+            base_path,
+        );
+        render_def_use_group(
+            &mut output,
+            def_use_sites,
+            "READS",
+            |s| s.kind == DefUseKind::Read,
+            base_path,
+        );
+    }
+
     Ok(output)
 }
 
@@ -597,6 +683,7 @@ pub(crate) fn format_focused_summary_internal(
     base_path: Option<&Path>,
     incoming_chains: Option<&[InternalCallChain]>,
     outgoing_chains: Option<&[InternalCallChain]>,
+    def_use_sites: &[DefUseSite],
 ) -> Result<String, FormatterError> {
     let mut output = String::new();
 
@@ -736,6 +823,16 @@ pub(crate) fn format_focused_summary_internal(
     output.push_str("SUGGESTION:\n");
     output.push_str("Use summary=false with force=true for full output\n");
 
+    // DEF-USE SITES brief summary
+    if !def_use_sites.is_empty() {
+        let (write_count, read_count) = def_use_write_read_counts(def_use_sites);
+        let total = def_use_sites.len();
+        let _ = writeln!(
+            output,
+            "DEF-USE SITES: {total} total ({write_count} writes, {read_count} reads)",
+        );
+    }
+
     Ok(output)
 }
 
@@ -747,7 +844,7 @@ pub fn format_focused_summary(
     follow_depth: u32,
     base_path: Option<&Path>,
 ) -> Result<String, FormatterError> {
-    format_focused_summary_internal(graph, symbol, follow_depth, base_path, None, None)
+    format_focused_summary_internal(graph, symbol, follow_depth, base_path, None, None, &[])
 }
 
 /// Format a compact summary for large directory analysis results.
@@ -1399,6 +1496,9 @@ pub fn format_focused_paginated(
         PaginationMode::Default => {
             unreachable!("format_focused_paginated called with PaginationMode::Default")
         }
+        PaginationMode::DefUse => {
+            unreachable!("format_focused_paginated called with PaginationMode::DefUse")
+        }
     }
 
     output
@@ -1516,6 +1616,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let result = format_file_details_summary(&semantic, "src/main.rs", 100);
@@ -1563,6 +1664,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let result = format_file_details_summary(&semantic, "src/lib.rs", 250);
@@ -1672,6 +1774,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let verbose_out = format_file_details_paginated(
@@ -1753,6 +1856,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let verbose_out = format_file_details_paginated(
@@ -1864,6 +1968,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let compact_out = format_file_details_paginated(
@@ -2043,6 +2148,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let output = format_file_details("test.rs", &semantic, 100, false, None);
@@ -2151,6 +2257,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let output = format_file_details_paginated(
@@ -2206,6 +2313,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Functions]);
@@ -2262,6 +2370,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Classes]);
@@ -2321,6 +2430,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Imports]);
@@ -2380,6 +2490,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Imports]);
@@ -2442,6 +2553,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![]);
@@ -2507,6 +2619,7 @@ mod tests {
             call_frequency: HashMap::new(),
             calls: vec![],
             impl_traits: vec![],
+            def_use_sites: vec![],
         };
 
         let fields = Some(vec![AnalyzeFileField::Classes, AnalyzeFileField::Imports]);
@@ -2532,6 +2645,101 @@ mod tests {
             !output.contains("F:"),
             "Functions section should not appear (filtered by fields)"
         );
+    }
+
+    #[test]
+    fn test_snippet_one_line_short() {
+        let snippet = "prev line\nlet x = 1;\nnext line";
+        let result = snippet_one_line(snippet);
+        assert_eq!(result, "let x = 1;");
+    }
+
+    #[test]
+    fn test_snippet_one_line_single_line() {
+        let result = snippet_one_line("only line");
+        assert_eq!(result, "only line");
+    }
+
+    #[test]
+    fn test_format_focused_internal_with_def_use_sites() {
+        let mut graph = CallGraph::new();
+        graph
+            .definitions
+            .insert("my_var".into(), vec![(PathBuf::from("src/lib.rs"), 5)]);
+
+        let site = |kind, file: &str, line, snippet: &str, scope: Option<&str>| DefUseSite {
+            kind,
+            symbol: "my_var".into(),
+            file: file.into(),
+            line,
+            column: 0,
+            snippet: snippet.into(),
+            enclosing_scope: scope.map(Into::into),
+        };
+        let sites = vec![
+            site(
+                DefUseKind::Write,
+                "src/lib.rs",
+                5,
+                "\nlet my_var = 42;\n",
+                Some("init"),
+            ),
+            site(
+                DefUseKind::WriteRead,
+                "src/lib.rs",
+                10,
+                "\nmy_var += 1;\n",
+                None,
+            ),
+            site(
+                DefUseKind::Read,
+                "src/main.rs",
+                20,
+                "\nprintln!(\"{}\", my_var);\n",
+                Some("run"),
+            ),
+        ];
+
+        let output =
+            format_focused_internal(&graph, "my_var", 1, None, Some(&[]), Some(&[]), &sites)
+                .expect("format should succeed");
+
+        assert!(output.contains("DEF-USE SITES  my_var  (3 total: 2 writes, 1 reads)"));
+        assert!(output.contains("WRITES"));
+        assert!(output.contains("[write_read]"));
+        assert!(output.contains("READS"));
+        assert!(output.contains("run()"));
+    }
+
+    #[test]
+    fn test_format_focused_summary_internal_with_def_use_sites() {
+        let mut graph = CallGraph::new();
+        graph
+            .definitions
+            .insert("counter".into(), vec![(PathBuf::from("src/a.rs"), 1)]);
+
+        let sites = vec![DefUseSite {
+            kind: DefUseKind::Read,
+            symbol: "counter".into(),
+            file: "src/b.rs".into(),
+            line: 15,
+            column: 0,
+            snippet: "\nuse_counter(counter);\n".into(),
+            enclosing_scope: Some("main".into()),
+        }];
+
+        let output = format_focused_summary_internal(
+            &graph,
+            "counter",
+            1,
+            None,
+            Some(&[]),
+            Some(&[]),
+            &sites,
+        )
+        .expect("format should succeed");
+
+        assert!(output.contains("DEF-USE SITES: 1 total (0 writes, 1 reads)"));
     }
 }
 

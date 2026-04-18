@@ -42,6 +42,14 @@ pub const IMPORT_QUERY: &str = r"
   path: (system_lib_string) @import_path)
 ";
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(init_declarator declarator: (identifier) @write.decl)
+(assignment_expression left: (identifier) @write.assign)
+(update_expression argument: (identifier) @writeread.update)
+(identifier) @read.usage
+";
+
 /// Extract the function name from a C/C++ `function_definition` node by
 /// walking the declarator chain: declarator -> function_declarator -> declarator -> identifier.
 pub fn extract_function_name(node: &Node, source: &str, _lang: &str) -> Option<String> {
@@ -149,6 +157,8 @@ fn extract_declarator_name(node: Node, source: &str) -> Option<String> {
 #[cfg(all(test, feature = "lang-cpp"))]
 mod tests {
     use super::*;
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::Parser;
 
     fn parse_cpp(source: &str) -> tree_sitter::Tree {
@@ -299,5 +309,15 @@ mod tests {
             }
         }
         None
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "void f() { int a = 7; }\n";
+        let sites = SemanticExtractor::extract_def_use_for_file(src, "cpp", "a", "test.cpp", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

@@ -25,6 +25,15 @@ pub const IMPORT_QUERY: &str = r#"
   arguments: (arguments (string) @import_path))
 "#;
 
+/// Tree-sitter query for extracting definition and use sites.
+pub const DEFUSE_QUERY: &str = r"
+(variable_declarator name: (identifier) @write.declarator)
+(assignment_expression left: (identifier) @write.assign)
+(augmented_assignment_expression left: (identifier) @writeread.augmented)
+(update_expression argument: (identifier) @writeread.update)
+(identifier) @read.usage
+";
+
 // JavaScript intentionally has no REFERENCE_QUERY. JavaScript's dynamic typing
 // makes static type reference extraction low-value: most "type" references in JS
 // are just identifiers that appear in many non-type contexts, producing excessive
@@ -59,6 +68,8 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
 
 #[cfg(all(test, feature = "lang-javascript"))]
 mod tests {
+    use crate::DefUseKind;
+    use crate::parser::SemanticExtractor;
     use tree_sitter::Parser;
 
     fn parse_js(src: &str) -> tree_sitter::Tree {
@@ -129,5 +140,16 @@ mod tests {
         let root = tree.root_node();
         let call = find_node_by_kind(root, "call_expression");
         assert!(call.is_some(), "expected to find call_expression");
+    }
+
+    #[test]
+    fn test_defuse_query_write_site() {
+        // Arrange
+        let src = "let y = 10;\n";
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "javascript", "y", "test.js", None);
+        assert!(!sites.is_empty(), "defuse sites should not be empty");
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "should contain a Write DefUseSite");
     }
 }

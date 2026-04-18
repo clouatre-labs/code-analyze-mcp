@@ -239,6 +239,7 @@ pub fn another_caller() {
         ast_recursion_limit: None,
         use_summary: true,
         impl_only: None,
+        def_use: false,
     };
     let output = analyze_focused_with_progress(root, &params, counter, ct).unwrap();
 
@@ -304,6 +305,7 @@ pub fn another_caller() {
         ast_recursion_limit: None,
         use_summary: false,
         impl_only: None,
+        def_use: false,
     };
     let output = analyze_focused_with_progress(root, &params, counter, ct).unwrap();
 
