@@ -140,9 +140,9 @@ The `ToolRouter::merge()` / `Add` / `AddAssign` API (verified against rmcp 1.5.0
 
 Three tools with no tree-sitter dependency. These validate the BUILD agent workflow and establish the write-path integration before adding AST complexity.
 
-- `read_file(path, start_line?, end_line?)` -- raw file content with optional line range; `read_only_hint=true`, `idempotent_hint=true`
-- `write_file(path, content)` -- create or overwrite; `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
-- `edit_file(path, old_text, new_text)` -- replace a unique exact text block; errors if the block appears zero times or more than once; `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `read_file(path, start_line?, end_line?)` -- "Raw file content with optional line range. Prefer start_line/end_line to limit tokens on large files; omit both for full content. Use analyze_file for structure, not content. Example queries: Read lines 10-40 of src/lib.rs; Show the full contents of config.toml." `read_only_hint=true`, `idempotent_hint=true`
+- `write_file(path, content)` -- "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_file to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `edit_file(path, old_text, new_text)` -- "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once -- fix by making old_text longer and more specific. Use write_file to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 
 Cache invalidation: `write_file` and `edit_file` must call `cache.invalidate(path)` after every successful write or the next `analyze_file` call returns stale data.
 
@@ -150,8 +150,8 @@ Cache invalidation: `write_file` and `edit_file` must call `cache.invalidate(pat
 
 Two tools that require `aptu-coder-core` (formerly `code-analyze-core`) capture data. These are the primary justification for keeping editing in the same crate rather than a separate repository.
 
-- `rename_symbol(path, old_name, new_name, kind?)` -- renames by AST node kind, not string match, so identifiers in string literals are excluded; single-file scope in v1; directory-wide is a follow-up
-- `insert_at_symbol(path, symbol_name, position, content)` -- inserts content before or after a named AST node using `start_byte`/`end_byte` from the existing capture pipeline; `position` is `before | after`
+- `rename_symbol(path, old_name, new_name, kind?)` -- "AST-aware rename within a single file. Matches by node kind, not string -- identifiers in string literals and comments are excluded. Errors if old_name not found; supply kind to disambiguate (function, variable, type). Directory-wide rename not supported in v1. Example queries: Rename function parse_config to load_config in src/config.rs; Rename struct field timeout to timeout_ms." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `insert_at_symbol(path, symbol_name, position, content)` -- "Insert content immediately before or after a named AST node. position is before|after. Uses start_byte/end_byte from the capture pipeline; errors if symbol_name not found in file. Example queries: Insert a tracing span before the handle_request function; Add a derive macro after the MyStruct definition." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 
 ### Annotation posture update
 
