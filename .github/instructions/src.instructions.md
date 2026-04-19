@@ -1,7 +1,7 @@
 ---
-applyTo: "src/**/*.rs"
+applyTo: "crates/**/src/**/*.rs"
 excludeAgent: "coding-agent"
-description: "rmcp API patterns and Rust conventions for code-analyze-mcp source files"
+description: "rmcp API patterns and Rust conventions for aptu-coder source files"
 ---
 
 ## rmcp API correctness

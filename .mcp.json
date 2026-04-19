@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "code-analyze": {
+    "aptu-coder": {
       "type": "stdio",
-      "command": "code-analyze-mcp",
+      "command": "aptu-coder",
       "args": []
     },
     "context7": {

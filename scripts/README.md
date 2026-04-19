@@ -1,12 +1,12 @@
 # Scripts
 
-This directory contains benchmarking and testing utilities for code-analyze-mcp.
+This directory contains benchmarking and testing utilities for aptu-coder.
 
 ## Benchmarking
 
 ### bench-v12-run.sh, bench-v13-run.sh, bench-v14-run.sh
 
-Benchmark runners for versions 12, 13, and 14 of the code-analyze-mcp evaluation.
+Benchmark runners for versions 12, 13, and 14 of the aptu-coder evaluation.
 
 Each version supports parameterized conditions (A, B, C, D) to compare:
 - Different models (Sonnet vs Haiku)

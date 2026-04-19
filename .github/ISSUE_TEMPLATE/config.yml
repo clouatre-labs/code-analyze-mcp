@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Contributing Guidelines
-    url: https://github.com/clouatre-labs/code-analyze-mcp/blob/main/CONTRIBUTING.md
+    url: https://github.com/clouatre-labs/aptu-coder/blob/main/CONTRIBUTING.md
     about: Review contribution guidelines and development standards
   - name: Discussions
-    url: https://github.com/clouatre-labs/code-analyze-mcp/discussions
+    url: https://github.com/clouatre-labs/aptu-coder/discussions
     about: Ask questions and share ideas

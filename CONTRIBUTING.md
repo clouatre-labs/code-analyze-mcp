@@ -1,12 +1,12 @@
-# Contributing to code-analyze-mcp
+# Contributing to aptu-coder
 
 We welcome contributions! This document covers the essentials.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/code-analyze-mcp.git
-cd code-analyze-mcp
+git clone https://github.com/YOUR_USERNAME/aptu-coder.git
+cd aptu-coder
 cargo build
 cargo test
 ```
@@ -91,7 +91,7 @@ All changes go through a pull request; no direct pushes to main are permitted.
 - Confirm DCO sign-off is present on all commits (`git commit --signoff`)
 - New `.rs` files must include the two-line SPDX header at line 1:
   ```
-  // SPDX-FileCopyrightText: 2026 code-analyze-mcp contributors
+  // SPDX-FileCopyrightText: 2026 aptu-coder contributors
   // SPDX-License-Identifier: Apache-2.0
   ```
 

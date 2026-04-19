@@ -231,7 +231,7 @@ Annotate every tool. An unannotated tool is treated as potentially destructive b
 
 MCP provides no official linting or static analysis for annotation quality, description completeness, or token efficiency. The only official tooling is MCP Inspector (`@modelcontextprotocol/inspector`), which validates protocol compliance (JSON-RPC structure, schema presence, invocation correctness) but does not evaluate description text or parameter documentation. Community security tools (mcp-scan by Invariant Labs) scan for prompt injection but are not annotation quality linters.
 
-The absence of ecosystem tooling means annotation quality must be enforced at the server level. The minimum viable enforcement is a Rust test that calls `list_tools()` and asserts two properties for every registered tool: the tool description is non-empty, and every `inputSchema.properties` entry has a non-empty `description` field. This catches the two most common regressions: a tool added without a description string, and a parameter added without a doc comment. See `crates/code-analyze-mcp/tests/annotations.rs` for the implementation.
+The absence of ecosystem tooling means annotation quality must be enforced at the server level. The minimum viable enforcement is a Rust test that calls `list_tools()` and asserts two properties for every registered tool: the tool description is non-empty, and every `inputSchema.properties` entry has a non-empty `description` field. This catches the two most common regressions: a tool added without a description string, and a parameter added without a doc comment. See `crates/aptu-coder/tests/annotations.rs` for the implementation.
 
 ### 3.4 Transport Types
 

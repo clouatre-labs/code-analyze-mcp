@@ -1,10 +1,10 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.clouatre-labs/code-analyze-mcp",
-  "title": "Code Analyze MCP",
+  "name": "io.github.clouatre-labs/aptu-coder",
+  "title": "Aptu Coder",
   "description": "MCP server for code structure analysis using tree-sitter.",
   "repository": {
-    "url": "https://github.com/clouatre-labs/code-analyze-mcp",
+    "url": "https://github.com/clouatre-labs/aptu-coder",
     "source": "github"
   },
   "packages": []

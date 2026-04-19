@@ -9,7 +9,7 @@
 ## Design Goals
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
-- **Language-agnostic parsing via tree-sitter**: Support 11 languages (Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C, C++, C#) with a unified query-based extraction system; TypeScript and TSX use distinct grammars (`LANGUAGE_TYPESCRIPT` and `LANGUAGE_TSX`) but share the same queries in `crates/code-analyze-core/src/languages/typescript.rs`
+- **Language-agnostic parsing via tree-sitter**: Support 11 languages (Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C, C++, C#) with a unified query-based extraction system; TypeScript and TSX use distinct grammars (`LANGUAGE_TYPESCRIPT` and `LANGUAGE_TSX`) but share the same queries in `crates/aptu-coder-core/src/languages/typescript.rs`
 - **Four focused MCP tools**: `analyze_directory`, `analyze_file`, `analyze_module`, and `analyze_symbol` -- each with a clear, explicit interface rather than a single tool with auto-detected modes
 - **Compatible with any MCP orchestrator**: Designed to work with any standards-compliant MCP host
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
@@ -20,25 +20,25 @@ For the reasoning behind these goals, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md).
 
 | Module | File | Responsibility |
 |--------|------|-----------------|
-| `main` | `crates/code-analyze-mcp/src/main.rs` | MCP server entry point; initializes tracing and stdio transport |
-| `lib` | `crates/code-analyze-mcp/src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
-| `logging` | `crates/code-analyze-mcp/src/logging.rs` | MCP logging integration via tracing; McpLoggingLayer bridges events to MCP clients |
-| `schema_helpers` | `crates/code-analyze-core/src/schema_helpers.rs` | Core JSON Schema helpers for integer and page_size field validation |
-| `metrics` | `crates/code-analyze-mcp/src/metrics.rs` | Metrics collection and daily-rotating JSONL emission; `MetricEvent`, `MetricsSender`, `MetricsWriter` |
-| `analyze` | `crates/code-analyze-core/src/analyze.rs` | High-level analysis orchestration; directory, file, and module analysis |
-| `analyze_str` | `crates/code-analyze-core/src/analyze.rs` | Public in-memory API; parses source text without filesystem access; `AnalyzeError::UnsupportedLanguage` variant |
-| `parser` | `crates/code-analyze-core/src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
-| `formatter` | `crates/code-analyze-core/src/formatter.rs` | Output formatting for all four tools |
-| `traversal` | `crates/code-analyze-core/src/traversal.rs` | Directory walking with .gitignore support via ignore crate |
-| `types` | `crates/code-analyze-core/src/types.rs` | Shared data structures (`AnalyzeDirectoryParams`, `AnalyzeFileParams`, `AnalyzeModuleParams`, `AnalyzeSymbolParams`, `AnalysisResult`, etc.) |
-| `lang` | `crates/code-analyze-core/src/lang.rs` | Extension-to-language mapping |
-| `languages/mod` | `crates/code-analyze-core/src/languages/mod.rs` | LanguageInfo registry and handler function types |
-| `languages/rust` | `crates/code-analyze-core/src/languages/rust.rs` | Rust-specific queries and semantic handlers |
-| `cache` | `crates/code-analyze-core/src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
-| `completion` | `crates/code-analyze-core/src/completion.rs` | Path completion support respecting .gitignore |
-| `test_detection` | `crates/code-analyze-core/src/test_detection.rs` | Test file detection by path heuristics (directory and filename patterns) |
-| `pagination` | `crates/code-analyze-core/src/pagination.rs` | Cursor-based pagination with CursorData and PaginationMode (Default, Callers, Callees) |
-| `graph` | `crates/code-analyze-core/src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
+| `main` | `crates/aptu-coder/src/main.rs` | MCP server entry point; initializes tracing and stdio transport |
+| `lib` | `crates/aptu-coder/src/lib.rs` | CodeAnalyzer struct; MCP tool handlers for `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` |
+| `logging` | `crates/aptu-coder/src/logging.rs` | MCP logging integration via tracing; McpLoggingLayer bridges events to MCP clients |
+| `schema_helpers` | `crates/aptu-coder-core/src/schema_helpers.rs` | Core JSON Schema helpers for integer and page_size field validation |
+| `metrics` | `crates/aptu-coder/src/metrics.rs` | Metrics collection and daily-rotating JSONL emission; `MetricEvent`, `MetricsSender`, `MetricsWriter` |
+| `analyze` | `crates/aptu-coder-core/src/analyze.rs` | High-level analysis orchestration; directory, file, and module analysis |
+| `analyze_str` | `crates/aptu-coder-core/src/analyze.rs` | Public in-memory API; parses source text without filesystem access; `AnalyzeError::UnsupportedLanguage` variant |
+| `parser` | `crates/aptu-coder-core/src/parser.rs` | Tree-sitter parsing; ElementExtractor and SemanticExtractor |
+| `formatter` | `crates/aptu-coder-core/src/formatter.rs` | Output formatting for all four tools |
+| `traversal` | `crates/aptu-coder-core/src/traversal.rs` | Directory walking with .gitignore support via ignore crate |
+| `types` | `crates/aptu-coder-core/src/types.rs` | Shared data structures (`AnalyzeDirectoryParams`, `AnalyzeFileParams`, `AnalyzeModuleParams`, `AnalyzeSymbolParams`, `AnalysisResult`, etc.) |
+| `lang` | `crates/aptu-coder-core/src/lang.rs` | Extension-to-language mapping |
+| `languages/mod` | `crates/aptu-coder-core/src/languages/mod.rs` | LanguageInfo registry and handler function types |
+| `languages/rust` | `crates/aptu-coder-core/src/languages/rust.rs` | Rust-specific queries and semantic handlers |
+| `cache` | `crates/aptu-coder-core/src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
+| `completion` | `crates/aptu-coder-core/src/completion.rs` | Path completion support respecting .gitignore |
+| `test_detection` | `crates/aptu-coder-core/src/test_detection.rs` | Test file detection by path heuristics (directory and filename patterns) |
+| `pagination` | `crates/aptu-coder-core/src/pagination.rs` | Cursor-based pagination with CursorData and PaginationMode (Default, Callers, Callees) |
+| `graph` | `crates/aptu-coder-core/src/graph.rs` | CallGraph struct and BFS traversal for symbol focus mode |
 
 ## Data Flow
 
@@ -97,7 +97,7 @@ graph TD
 3. Run `SemanticExtractor` on the source bytes directly
 4. Return `Ok(FileAnalysisOutput)` on success
 
-Exported from `code_analyze_core` as a public API for library consumers that hold source text in memory (e.g. language servers, test harnesses) without a corresponding on-disk path. Eliminates the TOCTOU race and I/O overhead of writing a temp file first.
+Exported from `aptu_coder_core` as a public API for library consumers that hold source text in memory (e.g. language servers, test harnesses) without a corresponding on-disk path. Eliminates the TOCTOU race and I/O overhead of writing a temp file first.
 
 ### analyze_symbol (Symbol Call Graph)
 
@@ -112,7 +112,7 @@ Exported from `code_analyze_core` as a public API for library consumers that hol
 - `test_callers: Option<Vec<CallChainEntry>>` -- depth-1 callers from test files
 - `callees: Option<Vec<CallChainEntry>>` -- depth-1 callees
 
-`CallChainEntry` is a stable public type (exported from `code_analyze_core`) with fields `symbol: String`, `file: String`, `line: usize`. Conversion from the internal `InternalCallChain` (which is non-serializable and stays internal) happens at the output boundary via the private `chains_to_entries` helper. The `follow_depth` parameter does not affect these arrays; they always represent depth-1 relationships.
+`CallChainEntry` is a stable public type (exported from `aptu_coder_core`) with fields `symbol: String`, `file: String`, `line: usize`. Conversion from the internal `InternalCallChain` (which is non-serializable and stays internal) happens at the output boundary via the private `chains_to_entries` helper. The `follow_depth` parameter does not affect these arrays; they always represent depth-1 relationships.
 
 ## Language Handler System
 
@@ -134,7 +134,7 @@ Symbol resolution uses SymbolMatchMode to locate the target symbol: Exact (case-
 
 ## AnalysisConfig
 
-`AnalysisConfig` provides resource limits for library consumers (exported from `code_analyze_core`):
+`AnalysisConfig` provides resource limits for library consumers (exported from `aptu_coder_core`):
 
 - `max_file_bytes`: Skip files exceeding this size in bytes during analysis. `None` = no limit.
 - `parse_timeout_micros`: Reserved for future parse timeout enforcement. `None` = no timeout (no-op in current version).

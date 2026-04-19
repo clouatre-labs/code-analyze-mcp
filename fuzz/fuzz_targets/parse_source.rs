@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2026 code-analyze-mcp Contributors
+// SPDX-FileCopyrightText: 2026 aptu-coder Contributors
 
 #![no_main]
 
@@ -16,7 +16,7 @@ fuzz_target!(|data: &[u8]| {
             let path = dir.path().join("input.rs");
             if std::fs::write(&path, s).is_ok() {
                 if let Some(path_str) = path.to_str() {
-                    let _ = code_analyze_mcp::analyze::analyze_file(path_str, None);
+                    let _ = aptu_coder::analyze::analyze_file(path_str, None);
                 }
             }
         }

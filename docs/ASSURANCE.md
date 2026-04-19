@@ -1,10 +1,10 @@
 # Assurance Case
 
-This document provides the security assurance case for code-analyze-mcp.
+This document provides the security assurance case for aptu-coder.
 
 ## What the tool does
 
-code-analyze-mcp is a static analysis server that parses source files using tree-sitter and returns structured code metadata (functions, classes, imports, call graphs) over the MCP protocol. **Analyzed code is never executed.** The server performs read-only operations on local files.
+aptu-coder is a static analysis server that parses source files using tree-sitter and returns structured code metadata (functions, classes, imports, call graphs) over the MCP protocol. **Analyzed code is never executed.** The server performs read-only operations on local files.
 
 ## Trust boundaries
 
@@ -43,7 +43,7 @@ Existing mechanisms (not duplicated here):
 
 ## Site hardening
 
-The project website and repository are hosted on GitHub (https://github.com/clouatre-labs/code-analyze-mcp). GitHub enforces the following hardening headers by default, verified with `curl -sI`:
+The project website and repository are hosted on GitHub (https://github.com/clouatre-labs/aptu-coder). GitHub enforces the following hardening headers by default, verified with `curl -sI`:
 
 - `strict-transport-security: max-age=31536000; includeSubdomains; preload`
 - `x-frame-options: deny`

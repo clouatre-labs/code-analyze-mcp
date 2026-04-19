@@ -32,7 +32,7 @@ Key changes:
 
 ### [Complete] 0.3.0 Library API
 
-Promotes `code-analyze-core` to a stable public library API and adds structured output fields for programmatic consumption without text parsing.
+Promotes `aptu-coder-core` to a stable public library API and adds structured output fields for programmatic consumption without text parsing.
 
 Issues: #623, #624, #625.
 

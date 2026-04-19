@@ -4,7 +4,7 @@ This project has earned the [OpenSSF Best Practices silver badge](https://www.be
 
 ## Reporting
 
-Please report vulnerabilities privately via [GitHub's private vulnerability reporting](https://github.com/clouatre-labs/code-analyze-mcp/security/advisories/new).
+Please report vulnerabilities privately via [GitHub's private vulnerability reporting](https://github.com/clouatre-labs/aptu-coder/security/advisories/new).
 
 Do not open public issues for sensitive matters.
 
@@ -30,16 +30,16 @@ Reporters who disclose vulnerabilities responsibly will be credited in the relea
 
 ## Verifying release signatures
 
-Release artifacts are signed with [cosign](https://docs.sigstore.dev/cosign/overview/) using keyless signing. A `.bundle` file is published alongside each release tarball on the [releases page](https://github.com/clouatre-labs/code-analyze-mcp/releases).
+Release artifacts are signed with [cosign](https://docs.sigstore.dev/cosign/overview/) using keyless signing. A `.bundle` file is published alongside each release tarball on the [releases page](https://github.com/clouatre-labs/aptu-coder/releases).
 
 To verify a release artifact:
 
 ```bash
 cosign verify-blob \
-  --bundle code-analyze-mcp-<version>-<target>.tar.gz.bundle \
-  --certificate-identity-regexp 'https://github.com/clouatre-labs/code-analyze-mcp/.github/workflows/release.yml' \
+  --bundle aptu-coder-<version>-<target>.tar.gz.bundle \
+  --certificate-identity-regexp 'https://github.com/clouatre-labs/aptu-coder/.github/workflows/release.yml' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  code-analyze-mcp-<version>-<target>.tar.gz
+  aptu-coder-<version>-<target>.tar.gz
 ```
 
 Replace `<version>` with the release version and `<target>` with the target triple (e.g., `x86_64-unknown-linux-musl`).
