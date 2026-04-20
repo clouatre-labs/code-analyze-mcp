@@ -21,6 +21,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create shared peer Arc for logging layer
+    // Migrate legacy metrics directory if needed
+    if let Err(e) = aptu_coder::metrics::migrate_legacy_metrics_dir() {
+        tracing::warn!("Failed to migrate legacy metrics directory: {e}");
+    }
     let peer = Arc::new(TokioMutex::new(None));
 
     // Create shared level filter for dynamic control (std::sync::Mutex for Copy type)

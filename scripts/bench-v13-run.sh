@@ -161,7 +161,7 @@ SCRATCH_FILE=$(mktemp /tmp/bench-v13-XXXXXX.json)
 # ---------------------------------------------------------------------------
 # Tool isolation flags
 # ---------------------------------------------------------------------------
-MCP_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module"
+MCP_TOOLS="mcp__aptu-coder__analyze_directory,mcp__aptu-coder__analyze_file,mcp__aptu-coder__analyze_symbol,mcp__aptu-coder__analyze_module"
 NATIVE_TOOLS="Bash,Glob,Grep,Read,Write,ToolSearch"
 
 if [[ "$TOOL_SET" == "mcp" ]]; then
@@ -344,10 +344,10 @@ import json, sys
 session_file, expected_tool_set = sys.argv[1], sys.argv[2]
 
 MCP_TOOLS = {
-    "mcp__code-analyze__analyze_directory",
-    "mcp__code-analyze__analyze_file",
-    "mcp__code-analyze__analyze_symbol",
-    "mcp__code-analyze__analyze_module",
+    "mcp__aptu-coder__analyze_directory",
+    "mcp__aptu-coder__analyze_file",
+    "mcp__aptu-coder__analyze_symbol",
+    "mcp__aptu-coder__analyze_module",
 }
 NATIVE_TOOLS = {"Bash", "Glob", "Grep", "Read", "Write", "ToolSearch"}
 

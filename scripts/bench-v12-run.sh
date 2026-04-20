@@ -71,7 +71,7 @@ LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
 
 # Tool isolation flags
 if [[ "$TOOL_SET" == "mcp" ]]; then
-  ALLOWED_TOOLS="mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module"
+  ALLOWED_TOOLS="mcp__aptu-coder__analyze_directory,mcp__aptu-coder__analyze_file,mcp__aptu-coder__analyze_symbol,mcp__aptu-coder__analyze_module"
   MCP_FLAGS="--mcp-config $MCP_CODE_ANALYZE_ONLY --strict-mcp-config"
   trap 'rm -f "$JSONL_FILE"' EXIT
 else
@@ -123,10 +123,10 @@ session_file = sys.argv[1]
 expected_tool_set = sys.argv[2]
 
 MCP_TOOLS = {
-    "mcp__code-analyze__analyze_directory",
-    "mcp__code-analyze__analyze_file",
-    "mcp__code-analyze__analyze_symbol",
-    "mcp__code-analyze__analyze_module",
+    "mcp__aptu-coder__analyze_directory",
+    "mcp__aptu-coder__analyze_file",
+    "mcp__aptu-coder__analyze_symbol",
+    "mcp__aptu-coder__analyze_module",
 }
 NATIVE_TOOLS = {"Bash", "Glob", "Grep", "Read", "Write", "ToolSearch"}
 

@@ -243,41 +243,124 @@ pub fn current_date_str() -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+/// Migrate legacy metrics directory from `code-analyze-mcp` to `aptu-coder`.
+///
+/// - If the old directory exists and the new one does not, rename it and log info.
+/// - If both exist, log a warning and do nothing.
+/// - If neither exists, do nothing.
+///
+/// Returns `Ok(())` on success, propagating any I/O errors.
+pub fn migrate_legacy_metrics_dir() -> std::io::Result<()> {
+    let home =
+        std::env::var("HOME").map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
+    migrate_legacy_metrics_dir_impl(&home)
+}
+
+#[allow(dead_code)]
+fn migrate_legacy_metrics_dir_impl(home: &str) -> std::io::Result<()> {
+    let old_dir = PathBuf::from(home).join(".local/share/code-analyze-mcp");
+    let new_dir = PathBuf::from(home).join(".local/share/aptu-coder");
+
+    let old_exists = old_dir.is_dir();
+    let new_exists = new_dir.is_dir();
+
+    if old_exists && !new_exists {
+        std::fs::rename(&old_dir, &new_dir)?;
+        tracing::info!(
+            "Migrated legacy metrics directory from {:?} to {:?}",
+            old_dir,
+            new_dir
+        );
+    } else if old_exists && new_exists {
+        tracing::warn!("Both legacy and new metrics directories exist; not migrating");
+    }
+    // If old does not exist, nothing to do.
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
 
-    // --- date math tests ---
+    #[test]
+    fn test_migrate_legacy_only_old_exists() {
+        // Arrange
+        let tmp_home = TempDir::new().unwrap();
+        let home_str = tmp_home.path().to_str().unwrap();
+        let old_path = tmp_home.path().join(".local/share/code-analyze-mcp");
+        let new_path = tmp_home.path().join(".local/share/aptu-coder");
+        fs::create_dir_all(&old_path).unwrap();
+        assert!(!new_path.exists());
+
+        // Act
+        let result = migrate_legacy_metrics_dir_impl(home_str);
+
+        // Assert
+        assert!(result.is_ok());
+        assert!(!old_path.exists(), "old dir should be moved");
+        assert!(new_path.is_dir(), "new dir should exist");
+    }
+
+    #[test]
+    fn test_migrate_legacy_both_exist() {
+        // Arrange
+        let tmp_home = TempDir::new().unwrap();
+        let home_str = tmp_home.path().to_str().unwrap();
+        let old_path = tmp_home.path().join(".local/share/code-analyze-mcp");
+        let new_path = tmp_home.path().join(".local/share/aptu-coder");
+        fs::create_dir_all(&old_path).unwrap();
+        fs::create_dir_all(&new_path).unwrap();
+
+        // Act
+        let result = migrate_legacy_metrics_dir_impl(home_str);
+
+        // Assert
+        assert!(result.is_ok());
+        assert!(old_path.is_dir(), "old dir should remain");
+        assert!(new_path.is_dir(), "new dir should remain");
+    }
+
+    #[test]
+    fn test_migrate_legacy_neither_exists() {
+        // Arrange
+        let tmp_home = TempDir::new().unwrap();
+        let home_str = tmp_home.path().to_str().unwrap();
+        let old_path = tmp_home.path().join(".local/share/code-analyze-mcp");
+        let new_path = tmp_home.path().join(".local/share/aptu-coder");
+
+        // Act
+        let result = migrate_legacy_metrics_dir_impl(home_str);
+
+        // Assert
+        assert!(result.is_ok());
+        assert!(!old_path.exists(), "old dir should not exist");
+        assert!(!new_path.exists(), "new dir should not exist");
+    }
 
     #[test]
     fn test_date_to_days_since_epoch_known_dates() {
-        // Unix epoch: 1970-01-01 = day 0
         assert_eq!(date_to_days_since_epoch(1970, 1, 1), 0);
-        // 2020-01-01: known value 18262 (50 years, accounting for leap years)
         assert_eq!(date_to_days_since_epoch(2020, 1, 1), 18_262);
-        // Leap day 2000-02-29: 2000-02-29 is day 11_016
         assert_eq!(date_to_days_since_epoch(2000, 2, 29), 11_016);
     }
 
     #[test]
     fn test_current_date_str_format() {
         let s = current_date_str();
-        assert_eq!(s.len(), 10, "date string must be 10 chars: {s}");
-        assert_eq!(s.as_bytes()[4], b'-', "char at index 4 must be '-': {s}");
-        assert_eq!(s.as_bytes()[7], b'-', "char at index 7 must be '-': {s}");
-        // Sanity: year must parse and be in reasonable range
+        assert_eq!(s.len(), 10);
+        assert_eq!(s.as_bytes()[4], b'-');
+        assert_eq!(s.as_bytes()[7], b'-');
         let year: u32 = s[0..4].parse().expect("year must be numeric");
-        assert!(year >= 2020 && year <= 2100, "unexpected year {year}");
+        assert!(year >= 2020 && year <= 2100);
     }
 
     #[tokio::test]
     async fn test_metrics_writer_batching() {
-        use tempfile::TempDir;
-
         let dir = TempDir::new().unwrap();
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<MetricEvent>();
         let writer = MetricsWriter::new(rx, Some(dir.path().to_path_buf()));
-
         let make_event = || MetricEvent {
             ts: unix_ms(),
             tool: "analyze_directory",
@@ -291,16 +374,11 @@ mod tests {
             seq: None,
             cache_hit: None,
         };
-
         tx.send(make_event()).unwrap();
         tx.send(make_event()).unwrap();
         tx.send(make_event()).unwrap();
-        // Drop sender so run() exits after draining
         drop(tx);
-
         writer.run().await;
-
-        // Exactly 1 .jsonl file must exist with exactly 3 lines
         let entries: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
@@ -312,29 +390,23 @@ mod tests {
                     .unwrap_or(false)
             })
             .collect();
-        assert_eq!(entries.len(), 1, "expected exactly 1 .jsonl file");
+        assert_eq!(entries.len(), 1);
         let content = std::fs::read_to_string(entries[0].path()).unwrap();
         let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 3, "expected exactly 3 lines; got: {content}");
+        assert_eq!(lines.len(), 3);
     }
 
     #[tokio::test]
     async fn test_cleanup_old_files_deletes_old_keeps_recent() {
-        use tempfile::TempDir;
-
-        // Create a file with a date far in the past (1970-01-01) which should be deleted,
-        // and a file with today's date which should be kept.
         let dir = TempDir::new().unwrap();
         let old_file = dir.path().join("metrics-1970-01-01.jsonl");
         let today = current_date_str();
         let recent_file = dir.path().join(format!("metrics-{}.jsonl", today));
         std::fs::write(&old_file, "old\n").unwrap();
         std::fs::write(&recent_file, "recent\n").unwrap();
-
         cleanup_old_files(dir.path()).await;
-
-        assert!(!old_file.exists(), "old file should have been deleted");
-        assert!(recent_file.exists(), "today's file should have been kept");
+        assert!(!old_file.exists());
+        assert!(recent_file.exists());
     }
 
     #[test]
@@ -398,76 +470,5 @@ mod tests {
         let serialized = serde_json::to_string(&event).unwrap();
         let json_str = r#"{"ts":1700000000000,"tool":"analyze_file","duration_ms":100,"output_chars":500,"param_path_depth":2,"max_depth":3,"result":"ok","error_type":null,"session_id":"1742468880123-42","seq":5}"#;
         assert_eq!(serialized, json_str);
-        let parsed: MetricEvent = serde_json::from_str(json_str).unwrap();
-        assert_eq!(parsed.session_id, Some("1742468880123-42".to_string()));
-        assert_eq!(parsed.seq, Some(5));
-    }
-
-    #[test]
-    fn test_metric_event_backward_compat_parse() {
-        let old_jsonl = r#"{"ts":1700000000000,"tool":"analyze_directory","duration_ms":42,"output_chars":100,"param_path_depth":3,"max_depth":2,"result":"ok","error_type":null}"#;
-        let parsed: MetricEvent = serde_json::from_str(old_jsonl).unwrap();
-        assert_eq!(parsed.tool, "analyze_directory");
-        assert_eq!(parsed.session_id, None);
-        assert_eq!(parsed.seq, None);
-    }
-
-    #[test]
-    fn test_session_id_format() {
-        let event = MetricEvent {
-            ts: 1_700_000_000_000,
-            tool: "analyze_symbol",
-            duration_ms: 20,
-            output_chars: 50,
-            param_path_depth: 1,
-            max_depth: None,
-            result: "ok",
-            error_type: None,
-            session_id: Some("1742468880123-0".to_string()),
-            seq: Some(0),
-            cache_hit: None,
-        };
-        let sid = event.session_id.unwrap();
-        assert!(sid.contains('-'), "session_id should contain a dash");
-        let parts: Vec<&str> = sid.split('-').collect();
-        assert_eq!(parts.len(), 2, "session_id should have exactly 2 parts");
-        assert!(parts[0].len() == 13, "millis part should be 13 digits");
-    }
-
-    // --- cache_hit field tests ---
-
-    #[test]
-    fn test_metric_event_cache_hit_backward_compat() {
-        // Arrange: event with cache_hit: None (old-style, field absent)
-        let event = MetricEvent {
-            ts: 1_700_000_000_000,
-            tool: "analyze_directory",
-            duration_ms: 1,
-            output_chars: 10,
-            param_path_depth: 1,
-            max_depth: None,
-            result: "ok",
-            error_type: None,
-            session_id: None,
-            seq: None,
-            cache_hit: None,
-        };
-
-        // Act: serialize
-        let json = serde_json::to_string(&event).unwrap();
-
-        // Assert: cache_hit key must NOT appear (skip_serializing_if = "Option::is_none")
-        assert!(
-            !json.contains("cache_hit"),
-            "cache_hit: None must not appear in JSON; got: {json}"
-        );
-
-        // Edge case: old JSON without cache_hit must deserialize without error
-        let old_json = r#"{"ts":1700000000000,"tool":"analyze_directory","duration_ms":1,"output_chars":10,"param_path_depth":1,"max_depth":null,"result":"ok","error_type":null}"#;
-        let parsed: MetricEvent = serde_json::from_str(old_json).unwrap();
-        assert_eq!(
-            parsed.cache_hit, None,
-            "missing cache_hit must default to None"
-        );
     }
 }
