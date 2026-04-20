@@ -139,11 +139,11 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@5939f3337e40968c39aa70f5ecb1417a92fb25a0 # v2.75.15
+        uses: taiki-e/install-action@a2352fc6ce487f030a3aa709482d57823eadfb37 # v2.75.16
         with:
           tool: cargo-llvm-cov
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@5939f3337e40968c39aa70f5ecb1417a92fb25a0 # v2.75.15
+        uses: taiki-e/install-action@a2352fc6ce487f030a3aa709482d57823eadfb37 # v2.75.16
         with:
           tool: cargo-nextest
       - name: Coverage
@@ -169,7 +169,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Install cargo-deny
-        uses: taiki-e/install-action@5939f3337e40968c39aa70f5ecb1417a92fb25a0 # v2.75.15
+        uses: taiki-e/install-action@a2352fc6ce487f030a3aa709482d57823eadfb37 # v2.75.16
         with:
           tool: cargo-deny
       - name: Check advisories and licenses
