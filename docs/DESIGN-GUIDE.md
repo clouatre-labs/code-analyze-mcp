@@ -210,7 +210,7 @@ The annotation posture for this server is stable and locked until new MCP SEPs l
 
 rmcp's `#[tool(...)]` macro enforces type correctness at compile time: parameter types must implement `JsonSchema + Deserialize + Default`, and `schema_for_type::<T>()` in `output_schema` is evaluated at macro-expansion time. These checks catch type mismatches early.
 
-They do not catch annotation quality issues. An empty description string, a missing `///` doc comment on a parameter field, or a semantically incorrect annotation (e.g., `read_only_hint = false` on a read-only tool) all compile without warning. The annotation tests in `crates/code-analyze-mcp/tests/annotations.rs` fill this gap at the test layer.
+They do not catch annotation quality issues. An empty description string, a missing `///` doc comment on a parameter field, or a semantically incorrect annotation (e.g., `read_only_hint = false` on a read-only tool) all compile without warning. The annotation tests in `crates/aptu-coder/tests/annotations.rs` fill this gap at the test layer.
 
 ### 7.2 schemars Attributes for Schema Quality
 
@@ -229,7 +229,7 @@ Parameter documentation flows through schemars: `///` doc comments on struct fie
 
 **`#[serde(flatten)]` caveat:** Fields from flattened structs (`PaginationParams`, `OutputControlParams`) inherit their descriptions from the original struct's field doc comments. schemars version bumps can silently drop flatten propagation. The `test_flatten_fields_have_descriptions` test in `annotations.rs` catches this.
 
-**`format:uint` footgun:** schemars emits `"format": "uint"` or `"format": "uint32"` for unsigned integers by default. These formats are non-standard JSON Schema and are ignored or flagged by strict validators. Override them via `schema_with` (see `crates/code-analyze-core/src/schema_helpers.rs`) for any numeric field where validator compatibility matters.
+**`format:uint` footgun:** schemars emits `"format": "uint"` or `"format": "uint32"` for unsigned integers by default. These formats are non-standard JSON Schema and are ignored or flagged by strict validators. Override them via `schema_with` (see `crates/aptu-coder-core/src/schema_helpers.rs`) for any numeric field where validator compatibility matters.
 
 ## 8. Anti-Patterns
 

@@ -1,0 +1,37 @@
+[package]
+name = "aptu-coder"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+description = "MCP server for multi-language code structure analysis"
+readme = "../../README.md"
+keywords = ["mcp", "code-analysis", "tree-sitter", "ast", "static-analysis"]
+categories = ["development-tools", "parser-implementations"]
+publish = true
+
+[[bin]]
+name = "aptu-coder"
+path = "src/main.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+aptu-coder-core = { path = "../aptu-coder-core", version = "0.7", features = ["schemars", "lang-rust", "lang-go", "lang-java", "lang-python", "lang-typescript", "lang-tsx", "lang-fortran", "lang-javascript", "lang-cpp", "lang-csharp"] }
+rmcp = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }

@@ -1,20 +1,20 @@
 <p align="center">
 
-<h1 align="center">code-analyze-mcp</h1>
+<h1 align="center">aptu-coder</h1>
 
 <p align="center">
-  <a href="https://crates.io/crates/code-analyze-mcp"><img alt="crates.io" src="https://img.shields.io/crates/v/code-analyze-mcp.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20"></a>
-  <a href="https://api.reuse.software/info/github.com/clouatre-labs/code-analyze-mcp"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/code-analyze-mcp?style=for-the-badge" height="20"></a>
+  <a href="https://crates.io/crates/aptu-coder"><img alt="crates.io" src="https://img.shields.io/crates/v/aptu-coder.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20"></a>
+  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu-coder"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu-coder?style=for-the-badge" height="20"></a>
   <a href="https://slsa.dev"><img alt="SLSA Level 3" src="https://img.shields.io/badge/SLSA-Level%203-green?style=for-the-badge" height="20"></a>
   <a href="https://www.bestpractices.dev/projects/12275"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/12275?style=for-the-badge" height="20"></a>
 </p>
 
 <p align="center">Standalone MCP server for code structure analysis using tree-sitter. OpenSSF silver certified: fewer than 1% of open source projects reach this level.</p>
 
-<!-- mcp-name: io.github.clouatre-labs/code-analyze-mcp -->
+<!-- mcp-name: io.github.clouatre-labs/aptu-coder -->
 
 > [!NOTE]
-> Native agent tools (regex search, path matching, file reading) handle targeted lookups well. `code-analyze-mcp` handles the mechanical, non-AI work: mapping directory structure, extracting symbols, and tracing call graphs. Offloading this to a dedicated tool reduces token usage and speeds up coding with better accuracy.
+> Native agent tools (regex search, path matching, file reading) handle targeted lookups well. `aptu-coder` handles the mechanical, non-AI work: mapping directory structure, extracting symbols, and tracing call graphs. Offloading this to a dedicated tool reduces token usage and speeds up coding with better accuracy.
 
 ## Benchmarks
 
@@ -36,7 +36,7 @@ AeroDyn integration audit task on Claude Code against [OpenFAST](https://github.
 
 ## Overview
 
-code-analyze-mcp is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, TSX, Fortran, JavaScript, C/C++, and C#, and integrates with any MCP-compatible orchestrator.
+aptu-coder is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, TSX, Fortran, JavaScript, C/C++, and C#, and integrates with any MCP-compatible orchestrator.
 
 ## Supported Languages
 
@@ -60,31 +60,31 @@ To build with a subset of languages, disable default features and opt in:
 
 ```toml
 [dependencies]
-code-analyze-core = { version = "*", default-features = false, features = ["lang-rust", "lang-python"] }
+aptu-coder-core = { version = "*", default-features = false, features = ["lang-rust", "lang-python"] }
 ```
 
-The current version is published on [crates.io](https://crates.io/crates/code-analyze-core). Replace `"*"` with the latest version string if you prefer a pinned dependency.
+The current version is published on [crates.io](https://crates.io/crates/aptu-coder-core). Replace `"*"` with the latest version string if you prefer a pinned dependency.
 
 ## Installation
 
 ### Homebrew (macOS and Linux)
 
 ```bash
-brew install clouatre-labs/tap/code-analyze-mcp
+brew install clouatre-labs/tap/aptu-coder
 ```
 
-Update: `brew upgrade code-analyze-mcp`
+Update: `brew upgrade aptu-coder`
 
 ### cargo-binstall (no Rust required)
 
 ```bash
-cargo binstall code-analyze-mcp
+cargo binstall aptu-coder
 ```
 
 ### cargo install (requires Rust toolchain)
 
 ```bash
-cargo install code-analyze-mcp
+cargo install aptu-coder
 ```
 
 ## Quick Start
@@ -95,20 +95,20 @@ cargo install code-analyze-mcp
 cargo build --release
 ```
 
-The binary is at `target/release/code-analyze-mcp`.
+The binary is at `target/release/aptu-coder`.
 
 ### Configure MCP Client
 
 After installation via brew or cargo, register with the Claude Code CLI:
 
 ```bash
-claude mcp add --transport stdio code-analyze -- code-analyze-mcp
+claude mcp add --transport stdio aptu-coder -- aptu-coder
 ```
 
 If you built from source, use the binary path directly:
 
 ```bash
-claude mcp add --transport stdio code-analyze -- /path/to/repo/target/release/code-analyze-mcp
+claude mcp add --transport stdio aptu-coder -- /path/to/repo/target/release/aptu-coder
 ```
 
 stdio is intentional: this server runs locally and processes files directly on disk. The low-latency, zero-network-overhead transport matches the use case. Streamable HTTP adds a network hop with no benefit for a local tool.
@@ -118,8 +118,8 @@ Or add manually to `.mcp.json` at your project root (shared with your team via v
 ```json
 {
   "mcpServers": {
-    "code-analyze": {
-      "command": "code-analyze-mcp",
+    "aptu-coder": {
+      "command": "aptu-coder",
       "args": []
     }
   }
@@ -270,7 +270,7 @@ The server's own instructions expose a 4-step recommended workflow for unknown r
 
 ## Observability
 
-All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/code-analyze-mcp/` (fallback: `~/.local/share/code-analyze-mcp/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
+All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/aptu-coder/` (fallback: `~/.local/share/aptu-coder/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
 
 ## Documentation
 

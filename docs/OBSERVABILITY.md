@@ -41,8 +41,8 @@ The `session_id` and `seq` fields are optional (both marked with `#[serde(defaul
 
 Files are named `metrics-YYYY-MM-DD.jsonl` and stored in the XDG data directory:
 
-- Primary: `$XDG_DATA_HOME/code-analyze-mcp/`
-- Fallback: `~/.local/share/code-analyze-mcp/`
+- Primary: `$XDG_DATA_HOME/aptu-coder/`
+- Fallback: `~/.local/share/aptu-coder/`
 
 The `MetricsWriter` checks the current UTC date on each drain iteration. When the date changes, it closes the current file handle and opens a new one.
 

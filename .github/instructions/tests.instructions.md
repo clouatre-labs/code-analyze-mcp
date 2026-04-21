@@ -1,7 +1,7 @@
 ---
-applyTo: "tests/**/*.rs"
+applyTo: "crates/**/tests/**/*.rs"
 excludeAgent: "coding-agent"
-description: "Test conventions for code-analyze-mcp"
+description: "Test conventions for aptu-coder"
 ---
 
 ## Structure
@@ -27,4 +27,4 @@ description: "Test conventions for code-analyze-mcp"
 ## Scope
 
 - Test files must not contain `#[allow(dead_code)]` suppressing unused fixture helpers. Flag it: the helper should be removed or moved to `fixtures.rs`.
-- Do not introduce new `use code_analyze_mcp::*` glob imports in test files; if you touch an existing glob import, replace it with explicit imports so it is clear what is under test.
+- Do not introduce new `use aptu_coder::*` glob imports in test files; if you touch an existing glob import, replace it with explicit imports so it is clear what is under test.

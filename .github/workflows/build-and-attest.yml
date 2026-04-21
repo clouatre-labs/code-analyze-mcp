@@ -63,7 +63,7 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          shared-key: code-analyze-mcp
+          shared-key: aptu-coder
           key: ${{ inputs.target }}
 
       - name: Upload Rust binary
@@ -71,11 +71,11 @@ jobs:
         id: upload
         uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1
         with:
-          bin: code-analyze-mcp
+          bin: aptu-coder
           target: ${{ inputs.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
           checksum: sha256
-          archive: code-analyze-mcp-${{ inputs.version }}-$target
+          archive: aptu-coder-${{ inputs.version }}-$target
           ref: refs/tags/v${{ inputs.version }}
 
       - name: Build binary (dry-run)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cross-client compatibility tests for code-analyze-mcp.
+Cross-client compatibility tests for aptu-coder.
 
 Tests three MCP client implementations:
 1. Raw stdio (JSON-RPC over newline-delimited JSON)
@@ -124,7 +124,7 @@ class TestRawStdio(unittest.TestCase):
     def setUpClass(cls):
         """Build the server binary before running tests."""
         repo_root = Path(__file__).parent.parent
-        server_binary = repo_root / "target" / "release" / "code-analyze-mcp"
+        server_binary = repo_root / "target" / "release" / "aptu-coder"
         if not server_binary.exists():
             raise FileNotFoundError(f"Server binary not found: {server_binary}")
         cls.server_binary = server_binary
@@ -168,7 +168,7 @@ class TestRawStdio(unittest.TestCase):
         self.assertIn("capabilities", result)
         self.assertIn("serverInfo", result)
         server_info = result["serverInfo"]
-        self.assertEqual(server_info["name"], "code-analyze-mcp")
+        self.assertEqual(server_info["name"], "aptu-coder")
         self.assertIn("version", server_info)
         self.client.send_message("notifications/initialized", is_notification=True)
 
@@ -198,7 +198,7 @@ class TestRawStdio(unittest.TestCase):
             "tools/call",
             {
                 "name": "analyze",
-                "arguments": {"path": str(repo_root / "src")},
+                "arguments": {"path": str(repo_root / "crates" / "aptu-coder" / "src")},
             },
         )
         response = self.client.read_response(analyze_id)
@@ -214,7 +214,7 @@ class TestRawStdio(unittest.TestCase):
         """Happy path: Analyze a single file for details."""
         self._init_client()
         repo_root = Path(__file__).parent.parent
-        src_main = repo_root / "src" / "main.rs"
+        src_main = repo_root / "crates" / "aptu-coder" / "src" / "main.rs"
         analyze_id = self.client.send_message(
             "tools/call",
             {
@@ -255,7 +255,7 @@ class TestMcpInspector(unittest.TestCase):
     def setUpClass(cls):
         """Verify server binary exists."""
         repo_root = Path(__file__).parent.parent
-        cls.server_binary = repo_root / "target" / "release" / "code-analyze-mcp"
+        cls.server_binary = repo_root / "target" / "release" / "aptu-coder"
         if not cls.server_binary.exists():
             raise FileNotFoundError(f"Server binary not found: {cls.server_binary}")
         cls.repo_root = repo_root
@@ -318,7 +318,7 @@ class TestMcpInspector(unittest.TestCase):
 
     def test_inspector_analyze_file(self):
         """Happy path: Inspector can call analyze on a file."""
-        src_main = self.repo_root / "src" / "main.rs"
+        src_main = self.repo_root / "crates" / "aptu-coder" / "src" / "main.rs"
         response = self._run_inspector(
             [
                 "--config",
@@ -348,7 +348,7 @@ class TestGooseCli(unittest.TestCase):
     def setUpClass(cls):
         """Verify server binary exists."""
         repo_root = Path(__file__).parent.parent
-        cls.server_binary = repo_root / "target" / "release" / "code-analyze-mcp"
+        cls.server_binary = repo_root / "target" / "release" / "aptu-coder"
         if not cls.server_binary.exists():
             raise FileNotFoundError(f"Server binary not found: {cls.server_binary}")
         cls.repo_root = repo_root
@@ -392,7 +392,7 @@ class TestGooseCli(unittest.TestCase):
 
     def test_goose_analyze_file(self):
         """Happy path: Goose can call analyze on a file."""
-        src_main = self.repo_root / "src" / "main.rs"
+        src_main = self.repo_root / "crates" / "aptu-coder" / "src" / "main.rs"
         response = self._run_goose(
             f"Analyze the file {src_main} and describe its structure"
         )

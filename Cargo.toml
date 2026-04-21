@@ -1,16 +1,16 @@
 [workspace]
-members = ["crates/code-analyze-core", "crates/code-analyze-mcp"]
+members = ["crates/aptu-coder-core", "crates/aptu-coder"]
 exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.95.0"
 authors = ["Hugues Clouatre"]
 license = "Apache-2.0"
-repository = "https://github.com/clouatre-labs/code-analyze-mcp"
-homepage = "https://github.com/clouatre-labs/code-analyze-mcp"
+repository = "https://github.com/clouatre-labs/aptu-coder"
+homepage = "https://github.com/clouatre-labs/aptu-coder"
 
 [workspace.dependencies]
 tree-sitter = "0.26.6"

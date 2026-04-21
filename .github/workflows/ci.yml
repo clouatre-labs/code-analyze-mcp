@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'crates/code-analyze-core/**'
-      - 'crates/code-analyze-mcp/**'
+      - 'crates/aptu-coder-core/**'
+      - 'crates/aptu-coder/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'clippy.toml'
@@ -41,8 +41,8 @@ jobs:
         with:
           filters: |
             code:
-              - 'crates/code-analyze-core/**'
-              - 'crates/code-analyze-mcp/**'
+              - 'crates/aptu-coder-core/**'
+              - 'crates/aptu-coder/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'clippy.toml'
@@ -151,12 +151,12 @@ jobs:
           cargo llvm-cov nextest --no-report --all-features \
             --workspace \
             -E 'not binary(mcp_smoke)'
-          cargo llvm-cov report -p code-analyze-core \
+          cargo llvm-cov report -p aptu-coder-core \
             --fail-under-lines 90 \
             --fail-under-regions 80 \
             --lcov --output-path lcov-core.info
-          # code-analyze-mcp coverage tracked but not gated (transport/logging/metrics layer)
-          cargo llvm-cov report -p code-analyze-mcp \
+          # aptu-coder coverage tracked but not gated (transport/logging/metrics layer)
+          cargo llvm-cov report -p aptu-coder \
             --lcov --output-path lcov-mcp.info || true
 
   deny:
@@ -216,13 +216,27 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [lint]
     if: github.event_name == 'pull_request'
+    # This PR renames the crate; no published or git baseline exists for aptu-coder-core yet.
+    # Re-enable without continue-on-error after aptu-coder-core is first published on crates.io.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+      - name: Check crate is published on crates.io
+        id: published
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://crates.io/api/v1/crates/aptu-coder-core)
+          if [[ "$STATUS" == "200" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "aptu-coder-core not yet published on crates.io (HTTP $STATUS); skipping semver check."
+          fi
       - uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        if: steps.published.outputs.available == 'true'
         with:
-          package: code-analyze-core
+          package: aptu-coder-core
 
   ci-result:
     name: CI Result

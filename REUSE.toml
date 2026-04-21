@@ -1,93 +1,93 @@
 version = 1
 
 [[annotations]]
-path = ["crates/code-analyze-core/src/**/*.rs", "crates/code-analyze-mcp/src/**/*.rs", "crates/code-analyze-core/Cargo.toml", "crates/code-analyze-mcp/Cargo.toml"]
+path = ["crates/aptu-coder-core/src/**/*.rs", "crates/aptu-coder/src/**/*.rs", "crates/aptu-coder-core/Cargo.toml", "crates/aptu-coder/Cargo.toml"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [".github/**/*.yml", ".github/**/*.yaml", ".github/**/*.md"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["docs/**/*"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["crates/code-analyze-core/tests/**/*", "crates/code-analyze-mcp/tests/**/*"]
+path = ["crates/aptu-coder-core/tests/**/*", "crates/aptu-coder/tests/**/*"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["crates/code-analyze-core/benches/**/*"]
+path = ["crates/aptu-coder-core/benches/**/*"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["scripts/**/*"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["*.toml", "*.lock"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["*.json"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["*.yml", "*.yaml"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["*.md"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["LICENSE", "LICENSE.md", "LICENSE.txt"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["README*"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["CONTRIBUTING*", "SECURITY*"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = ["fuzz/**"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
 path = [".gitignore", ".gitattributes", ".editorconfig"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 code-analyze-mcp Contributors"
+SPDX-FileCopyrightText = "2026 aptu-coder Contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 

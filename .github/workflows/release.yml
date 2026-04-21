@@ -163,7 +163,7 @@ jobs:
       - name: Download SHA256 checksums
         run: |
           RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
-          RELEASE_URL="https://api.github.com/repos/clouatre-labs/code-analyze-mcp/releases/tags/${RELEASE_TAG}"
+          RELEASE_URL="https://api.github.com/repos/clouatre-labs/aptu-coder/releases/tags/${RELEASE_TAG}"
           
           # Get release assets
           ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$RELEASE_URL" | jq '.assets[] | select(.name | endswith(".tar.gz")) | {name: .name, url: .browser_download_url}')
@@ -186,35 +186,35 @@ jobs:
             shas["$filename"]="$sha"
           done < /tmp/checksums.txt
 
-          SHA_MACOS_ARM="${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz"]}"
-          SHA_LINUX_ARM="${shas["code-analyze-mcp-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}"
-          SHA_LINUX_X86="${shas["code-analyze-mcp-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}"
+          SHA_MACOS_ARM="${shas["aptu-coder-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz"]}"
+          SHA_LINUX_ARM="${shas["aptu-coder-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz"]}"
+          SHA_LINUX_X86="${shas["aptu-coder-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz"]}"
 
-          FORMULA="homebrew-tap/Formula/code-analyze-mcp.rb"
+          FORMULA="homebrew-tap/Formula/aptu-coder.rb"
 
           printf '%s\n' \
-            'class CodeAnalyzeMcp < Formula' \
+            'class AptuCoder < Formula' \
             '  desc "MCP server for code structure analysis using tree-sitter"' \
-            '  homepage "https://github.com/clouatre-labs/code-analyze-mcp"' \
+            '  homepage "https://github.com/clouatre-labs/aptu-coder"' \
             '  license "Apache-2.0"' \
             '' \
             '  if OS.mac? && Hardware::CPU.arm?' \
-            "    url \"https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/code-analyze-mcp-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz\"" \
+            "    url \"https://github.com/clouatre-labs/aptu-coder/releases/download/${RELEASE_TAG}/aptu-coder-${VERSION_NUMBER}-aarch64-apple-darwin.tar.gz\"" \
             "    sha256 \"${SHA_MACOS_ARM}\"" \
             '  elsif OS.linux? && Hardware::CPU.arm?' \
-            "    url \"https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/code-analyze-mcp-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz\"" \
+            "    url \"https://github.com/clouatre-labs/aptu-coder/releases/download/${RELEASE_TAG}/aptu-coder-${VERSION_NUMBER}-aarch64-unknown-linux-musl.tar.gz\"" \
             "    sha256 \"${SHA_LINUX_ARM}\"" \
             '  elsif OS.linux? && Hardware::CPU.intel?' \
-            "    url \"https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/code-analyze-mcp-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz\"" \
+            "    url \"https://github.com/clouatre-labs/aptu-coder/releases/download/${RELEASE_TAG}/aptu-coder-${VERSION_NUMBER}-x86_64-unknown-linux-musl.tar.gz\"" \
             "    sha256 \"${SHA_LINUX_X86}\"" \
             '  end' \
             '' \
             '  def install' \
-            '    bin.install "code-analyze-mcp"' \
+            '    bin.install "aptu-coder"' \
             '  end' \
             '' \
             '  test do' \
-            '    assert_match version.to_s, shell_output("#{bin}/code-analyze-mcp --version")' \
+            '    assert_match version.to_s, shell_output("#{bin}/aptu-coder --version")' \
             '  end' \
             'end' \
             > "$FORMULA"
@@ -223,7 +223,7 @@ jobs:
         run: |
           cd homebrew-tap
           RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
-          BRANCH_NAME="update-code-analyze-mcp-${RELEASE_TAG}"
+          BRANCH_NAME="update-aptu-coder-${RELEASE_TAG}"
           
           git config user.email "hugues@linux.com"
           git config user.name "Hugues Clouatre"
@@ -233,8 +233,9 @@ jobs:
             git push origin --delete "$BRANCH_NAME"
           fi
           git checkout -b "$BRANCH_NAME"
-          git add Formula/code-analyze-mcp.rb
-          git commit --signoff -m "Update code-analyze-mcp formula for ${RELEASE_TAG}"
+          git rm -f Formula/code-analyze-mcp.rb 2>/dev/null || true
+          git add Formula/aptu-coder.rb
+          git commit --signoff -m "Update aptu-coder formula for ${RELEASE_TAG}"
           git push origin "$BRANCH_NAME"
 
       - name: Create pull request with auto-merge
@@ -243,10 +244,10 @@ jobs:
         run: |
           cd homebrew-tap
           RELEASE_TAG="v${{ needs.create-release.outputs.version }}"
-          BRANCH_NAME="update-code-analyze-mcp-${RELEASE_TAG}"
+          BRANCH_NAME="update-aptu-coder-${RELEASE_TAG}"
           
           gh pr create \
-            --title "Update code-analyze-mcp formula for ${RELEASE_TAG}" \
+            --title "Update aptu-coder formula for ${RELEASE_TAG}" \
             --body "Automated formula update with SHA256 checksums for release ${RELEASE_TAG}" \
             --head "$BRANCH_NAME" \
             --base main
@@ -280,8 +281,8 @@ jobs:
             echo "Processing target: $target"
             
             # Download the release artifact
-            ARTIFACT_NAME="code-analyze-mcp-${VERSION}-${target}.tar.gz"
-            DOWNLOAD_URL="https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/${ARTIFACT_NAME}"
+            ARTIFACT_NAME="aptu-coder-${VERSION}-${target}.tar.gz"
+            DOWNLOAD_URL="https://github.com/clouatre-labs/aptu-coder/releases/download/${RELEASE_TAG}/${ARTIFACT_NAME}"
             
             if ! curl -fsSL "$DOWNLOAD_URL" -o "/tmp/${ARTIFACT_NAME}"; then
               echo "Error: Failed to download artifact from ${DOWNLOAD_URL}" >&2
@@ -301,16 +302,16 @@ jobs:
             # Create manifest.json
             printf '%s\n' \
               '{' \
-              '  "name": "code-analyze-mcp",' \
+              '  "name": "aptu-coder",' \
               "  \"version\": \"${VERSION}\"," \
               '  "description": "MCP server for code structure analysis using tree-sitter",' \
               '  "args": []' \
               '}' > "/tmp/mcpb-${target}/manifest.json"
             
             # Create the .mcpb zip file
-            MCPB_NAME="code-analyze-mcp-${VERSION}-${target}.mcpb"
+            MCPB_NAME="aptu-coder-${VERSION}-${target}.mcpb"
             cd "/tmp/mcpb-${target}"
-            zip -r "/tmp/${MCPB_NAME}" code-analyze-mcp manifest.json
+            zip -r "/tmp/${MCPB_NAME}" aptu-coder manifest.json
             cd -
             
             # Upload to GitHub release
@@ -342,8 +343,8 @@ jobs:
           declare -A shas
           
           for target in "${targets[@]}"; do
-            MCPB_NAME="code-analyze-mcp-${VERSION}-${target}.mcpb"
-            DOWNLOAD_URL="https://github.com/clouatre-labs/code-analyze-mcp/releases/download/${RELEASE_TAG}/${MCPB_NAME}"
+            MCPB_NAME="aptu-coder-${VERSION}-${target}.mcpb"
+            DOWNLOAD_URL="https://github.com/clouatre-labs/aptu-coder/releases/download/${RELEASE_TAG}/${MCPB_NAME}"
             
             curl -fsSL "$DOWNLOAD_URL" -o "/tmp/${MCPB_NAME}"
             
@@ -371,19 +372,19 @@ jobs:
              .packages = [
                {
                  "registryType": "mcpb",
-                 "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-apple-darwin.mcpb",
+                 "identifier": "https://github.com/clouatre-labs/aptu-coder/releases/download/v\($version)/aptu-coder-\($version)-aarch64-apple-darwin.mcpb",
                  "fileSha256": $sha_darwin,
                  "transport": {"type": "stdio"}
                },
                {
                  "registryType": "mcpb",
-                 "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-aarch64-unknown-linux-musl.mcpb",
+                 "identifier": "https://github.com/clouatre-labs/aptu-coder/releases/download/v\($version)/aptu-coder-\($version)-aarch64-unknown-linux-musl.mcpb",
                  "fileSha256": $sha_linux_arm,
                  "transport": {"type": "stdio"}
                },
                {
                  "registryType": "mcpb",
-                 "identifier": "https://github.com/clouatre-labs/code-analyze-mcp/releases/download/v\($version)/code-analyze-mcp-\($version)-x86_64-unknown-linux-musl.mcpb",
+                 "identifier": "https://github.com/clouatre-labs/aptu-coder/releases/download/v\($version)/aptu-coder-\($version)-x86_64-unknown-linux-musl.mcpb",
                  "fileSha256": $sha_linux_x86,
                  "transport": {"type": "stdio"}
                }
@@ -431,27 +432,44 @@ jobs:
         id: auth
         uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
 
-      - name: Publish code-analyze-core to crates.io
+      - name: Publish aptu-coder-core to crates.io
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-          if curl -sf -A "code-analyze-mcp-release/1.0" "https://crates.io/api/v1/crates/code-analyze-core/${VERSION}" > /dev/null; then
-            echo "code-analyze-core ${VERSION} already published to crates.io, skipping"
+          if curl -sf -A "aptu-coder-release/1.0" "https://crates.io/api/v1/crates/aptu-coder-core/${VERSION}" > /dev/null; then
+            echo "aptu-coder-core ${VERSION} already published to crates.io, skipping"
           else
-            cargo publish -p code-analyze-core
+            cargo publish -p aptu-coder-core
           fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Wait for index propagation
-        run: sleep 30
-
-      - name: Publish code-analyze-mcp to crates.io
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-          if curl -sf -A "code-analyze-mcp-release/1.0" "https://crates.io/api/v1/crates/code-analyze-mcp/${VERSION}" > /dev/null; then
-            echo "code-analyze-mcp ${VERSION} already published to crates.io, skipping"
+          MAX_ATTEMPTS=12
+          SLEEP_INTERVAL=10
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if curl -sf -A "aptu-coder-release/1.0" "https://crates.io/api/v1/crates/aptu-coder-core/${VERSION}" > /dev/null; then
+              echo "aptu-coder-core ${VERSION} found in crates.io index"
+              exit 0
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "Waiting for index propagation... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+              sleep $SLEEP_INTERVAL
+            fi
+          done
+          echo "Timeout waiting for aptu-coder-core to appear in crates.io index"
+          exit 1
+
+      - name: Publish aptu-coder to crates.io
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          if curl -sf -A "aptu-coder-release/1.0" "https://crates.io/api/v1/crates/aptu-coder/${VERSION}" > /dev/null; then
+            echo "aptu-coder ${VERSION} already published to crates.io, skipping"
           else
-            cargo publish -p code-analyze-mcp
+            cargo publish -p aptu-coder
           fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

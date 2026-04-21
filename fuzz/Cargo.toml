@@ -1,18 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2026 code-analyze-mcp Contributors
+# SPDX-FileCopyrightText: 2026 aptu-coder Contributors
 
 [workspace]
 members = []
 
 [package]
-name = "code-analyze-mcp-fuzz"
+name = "aptu-coder-fuzz"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
 [dependencies]
 libfuzzer-sys = "0.4"
-code-analyze-mcp = { path = "../crates/code-analyze-mcp" }
+aptu-coder = { path = "../crates/aptu-coder" }
 tempfile = "3"
 
 [[bin]]
