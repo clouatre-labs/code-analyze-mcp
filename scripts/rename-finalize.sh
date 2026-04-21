@@ -1,23 +1,19 @@
 #!/usr/bin/env bash
-# Post-merge: rename the GitHub repository from code-analyze-mcp to aptu-coder.
-# Idempotent: skips rename if the repository is already named aptu-coder.
+# Finalize the project rename from code-analyze-mcp to aptu-coder.
+# Idempotent: each step no-ops if already completed.
 set -euo pipefail
 
-if gh api repos/clouatre-labs/aptu-coder --silent 2>/dev/null; then
-  echo "Repository already renamed to aptu-coder. Nothing to do."
-  exit 0
-fi
-
-echo "Renaming repository code-analyze-mcp -> aptu-coder ..."
-gh api repos/clouatre-labs/code-analyze-mcp \
-  --method PATCH \
-  --field name=aptu-coder
-echo "Done. Update your remote: git remote set-url origin https://github.com/clouatre-labs/aptu-coder.git"
-
-# Step 1: rename repository (already performed above)
 step1() {
-  # The rename logic is already executed at script start
-  :
+  echo "==> Step 1: rename GitHub repository"
+  if gh api repos/clouatre-labs/aptu-coder --silent 2>/dev/null; then
+    echo "    Repository already renamed to aptu-coder -- skipping"
+    return 0
+  fi
+  echo "    Renaming code-analyze-mcp -> aptu-coder ..."
+  gh api repos/clouatre-labs/code-analyze-mcp \
+    --method PATCH \
+    --field name=aptu-coder
+  echo "    Done. Update your remote: git remote set-url origin https://github.com/clouatre-labs/aptu-coder.git"
 }
 
 step2() {
@@ -26,12 +22,16 @@ step2() {
   version=$(grep '^version' "$(git rev-parse --show-toplevel)/Cargo.toml" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
   local tag="v${version}"
 
-  # Idempotency: check if tag already pushed
-  if git ls-remote --tags origin "$tag" | grep -q "$tag"; then
-    echo "    Tag $tag already exists on origin -- skipping push"
+  # Idempotency: check local tag first, then origin
+  if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+    echo "    Local tag $tag already exists -- reusing it for push"
   else
     echo "    Creating GPG-signed annotated tag $tag..."
     git tag -s "$tag" -m "chore(release): $tag"
+  fi
+  if git ls-remote --tags origin "$tag" | grep -q "$tag"; then
+    echo "    Tag $tag already exists on origin -- skipping push"
+  else
     git push origin "$tag"
     echo "    Tag pushed. release.yml will publish aptu-coder-core and aptu-coder."
   fi
@@ -60,6 +60,7 @@ step2() {
 step2b() {
   echo "==> Step 2b: publish tombstone patch for old crate names"
   : "${CARGO_REGISTRY_TOKEN:?ERROR: CARGO_REGISTRY_TOKEN must be set}"
+  export CARGO_REGISTRY_TOKEN
 
   local tombstone_version="0.6.1"
   local repo_url="https://github.com/clouatre-labs/aptu-coder"
@@ -106,6 +107,7 @@ TOML
 step3() {
   echo "==> Step 3: yank all existing versions of old crate names"
   : "${CARGO_REGISTRY_TOKEN:?ERROR: CARGO_REGISTRY_TOKEN must be set}"
+  export CARGO_REGISTRY_TOKEN
 
   for crate in code-analyze-mcp code-analyze-core; do
     echo "    Fetching versions for ${crate}..."
@@ -155,7 +157,6 @@ step4() {
 }
 
 main() {
-  # Step 1 already executed at script start (rename)
   step1
 
   step2
