@@ -36,4 +36,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Automatic migration of legacy metrics directory on startup.
 
-[0.7.0]: https://github.com/clouatre-labs/code-analyze-mcp/releases/tag/v0.7.0
+[0.7.0]: https://github.com/clouatre-labs/aptu-coder/releases/tag/v0.7.0
