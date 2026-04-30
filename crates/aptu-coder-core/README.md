@@ -6,9 +6,8 @@
 Core library for code structure analysis using tree-sitter.
 
 <p align="center">
-  <a href="https://docs.rs/aptu-coder-core"><img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-code--analyze--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs" height="20"></a>
-  <a href="https://crates.io/crates/aptu-coder"><img alt="MCP server" src="https://img.shields.io/badge/MCP-code--analyze--mcp-fc8d62?style=flat-square&labelColor=555555&logo=rust" height="20"></a>
-  <a href="https://api.reuse.software/info/github.com/clouatre-labs/aptu-coder"><img alt="REUSE" src="https://img.shields.io/reuse/compliance/github.com/clouatre-labs/aptu-coder?style=for-the-badge" height="20"></a>
+  <a href="https://docs.rs/aptu-coder-core"><img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-aptu--coder--core-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs" height="20"></a>
+  <a href="https://crates.io/crates/aptu-coder"><img alt="MCP server" src="https://img.shields.io/badge/MCP-aptu--coder-fc8d62?style=flat-square&labelColor=555555&logo=rust" height="20"></a>
   <a href="https://www.bestpractices.dev/projects/12275"><img alt="OpenSSF Best Practices" src="https://img.shields.io/cii/level/12275?style=for-the-badge" height="20"></a>
 </p>
 
