@@ -144,7 +144,7 @@ Three tools with no tree-sitter dependency. These validate the BUILD agent workf
 - `write_file(path, content)` -- "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_file to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 - `edit_file(path, old_text, new_text)` -- "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once -- fix by making old_text longer and more specific. Use write_file to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 
-Cache invalidation: `write_file` and `edit_file` must ensure subsequent analyses do not reuse stale cached entries. The existing `AnalysisCache` is keyed by file mtime, so writes that update mtime will naturally bypass stale entries; if mtime-based invalidation proves insufficient, an explicit `cache.invalidate(path)` method will need to be added.
+Cache invalidation: `write_file` and `edit_file` must call `cache.invalidate_file(path)` after every write. mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations); explicit invalidation prevents stale reads within the same second.
 
 ### Phase 2: AST-backed tools
 
@@ -165,7 +165,7 @@ Per the Small-Model-First Constraint: all five tools must be evaluated against H
 
 ### Risks
 
-- **Cache staleness** -- mtime-based cache keys handle the common case; add explicit `cache.invalidate(path)` if mtime invalidation proves insufficient
+- **Cache staleness** -- mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations). `write_file` and `edit_file` must always call `cache.invalidate_file(path)` after every write to prevent stale reads within the same second.
 - **`rename_symbol` scope creep** -- directory-wide rename requires type information tree-sitter cannot provide; enforce single-file boundary in v1 with a clear error if a directory path is supplied
 - **Annotation posture drift** -- document the per-tool posture in this section; update REUSE.toml for any new source files
 - **SPDX headers** -- every new `.rs` file requires an SPDX header or `reuse lint` fails CI
