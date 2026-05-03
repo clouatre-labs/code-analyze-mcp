@@ -137,12 +137,34 @@ pub fn changed_files_from_git_ref(
     // Also reject refs containing whitespace or shell metacharacters.
     if git_ref.is_empty() || git_ref.starts_with('-') {
         return Err(TraversalError::GitError(
-            "invalid git_ref: must not be empty or start with '-'".to_string()
+            "invalid git_ref: must not be empty or start with '-'".to_string(),
         ));
     }
-    if git_ref.chars().any(|c| c.is_whitespace() || matches!(c, '|' | '&' | ';' | '>' | '<' | '`' | '$' | '(' | ')' | '{' | '}' | '[' | ']' | '*' | '?' | '\\' | '"' | '\'')) {
+    if git_ref.chars().any(|c| {
+        c.is_whitespace()
+            || matches!(
+                c,
+                '|' | '&'
+                    | ';'
+                    | '>'
+                    | '<'
+                    | '`'
+                    | '$'
+                    | '('
+                    | ')'
+                    | '{'
+                    | '}'
+                    | '['
+                    | ']'
+                    | '*'
+                    | '?'
+                    | '\\'
+                    | '"'
+                    | '\''
+            )
+    }) {
         return Err(TraversalError::GitError(
-            "invalid git_ref: contains forbidden characters".to_string()
+            "invalid git_ref: contains forbidden characters".to_string(),
         ));
     }
 
@@ -311,19 +333,28 @@ mod tests {
         let result = changed_files_from_git_ref(tmp_path, "HEAD~1");
         // We expect a git error (not a git repo), not a validation error
         if let Err(TraversalError::GitError(msg)) = result {
-            assert!(!msg.contains("invalid git_ref"), "HEAD~1 should pass validation");
+            assert!(
+                !msg.contains("invalid git_ref"),
+                "HEAD~1 should pass validation"
+            );
         }
 
         // main is valid
         let result = changed_files_from_git_ref(tmp_path, "main");
         if let Err(TraversalError::GitError(msg)) = result {
-            assert!(!msg.contains("invalid git_ref"), "main should pass validation");
+            assert!(
+                !msg.contains("invalid git_ref"),
+                "main should pass validation"
+            );
         }
 
         // abc123 is valid
         let result = changed_files_from_git_ref(tmp_path, "abc123");
         if let Err(TraversalError::GitError(msg)) = result {
-            assert!(!msg.contains("invalid git_ref"), "abc123 should pass validation");
+            assert!(
+                !msg.contains("invalid git_ref"),
+                "abc123 should pass validation"
+            );
         }
     }
 }
