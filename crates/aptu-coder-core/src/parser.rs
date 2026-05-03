@@ -184,6 +184,7 @@ fn get_compiled_queries(language: &str) -> Result<&'static CompiledQueries, Pars
 
 thread_local! {
     static PARSER: RefCell<Parser> = RefCell::new(Parser::new());
+    static QUERY_CURSOR: RefCell<QueryCursor> = RefCell::new(QueryCursor::new());
 }
 
 /// Canonical API for extracting element counts from source code.
@@ -214,21 +215,26 @@ impl ElementExtractor {
 
         let compiled = get_compiled_queries(language)?;
 
-        let mut cursor = QueryCursor::new();
-        let mut function_count = 0;
-        let mut class_count = 0;
+        let (function_count, class_count) = QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            let mut function_count = 0;
+            let mut class_count = 0;
 
-        let mut matches = cursor.matches(&compiled.element, tree.root_node(), source.as_bytes());
-        while let Some(mat) = matches.next() {
-            for capture in mat.captures {
-                let capture_name = compiled.element.capture_names()[capture.index as usize];
-                match capture_name {
-                    "function" => function_count += 1,
-                    "class" => class_count += 1,
-                    _ => {}
+            let mut matches =
+                cursor.matches(&compiled.element, tree.root_node(), source.as_bytes());
+            while let Some(mat) = matches.next() {
+                for capture in mat.captures {
+                    let capture_name = compiled.element.capture_names()[capture.index as usize];
+                    match capture_name {
+                        "function" => function_count += 1,
+                        "class" => class_count += 1,
+                        _ => {}
+                    }
                 }
             }
-        }
+            (function_count, class_count)
+        });
 
         tracing::debug!(language = %language, functions = function_count, classes = class_count, "parse complete");
 
@@ -568,127 +574,131 @@ impl SemanticExtractor {
         functions: &mut Vec<FunctionInfo>,
         classes: &mut Vec<ClassInfo>,
     ) {
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-        let mut matches = cursor.matches(&compiled.element, root, source.as_bytes());
         let mut seen_functions = std::collections::HashSet::new();
 
-        while let Some(mat) = matches.next() {
-            let mut func_node: Option<Node> = None;
-            let mut func_name_text: Option<String> = None;
-            let mut class_node: Option<Node> = None;
-            let mut class_name_text: Option<String> = None;
-
-            for capture in mat.captures {
-                let capture_name = compiled.element.capture_names()[capture.index as usize];
-                let node = capture.node;
-                match capture_name {
-                    "function" => func_node = Some(node),
-                    "func_name" | "method_name" => {
-                        func_name_text =
-                            Some(source[node.start_byte()..node.end_byte()].to_string());
-                    }
-                    "class" => class_node = Some(node),
-                    "class_name" | "type_name" => {
-                        class_name_text =
-                            Some(source[node.start_byte()..node.end_byte()].to_string());
-                    }
-                    _ => {}
-                }
+        QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
             }
+            let mut matches = cursor.matches(&compiled.element, root, source.as_bytes());
 
-            if let Some(func_node) = func_node {
-                // When a plain function_definition is nested inside a template_declaration,
-                // it is also matched by the explicit template_declaration pattern. Skip it
-                // here to avoid duplicates; the template_declaration match will emit it.
-                let parent_is_template = func_node
-                    .parent()
-                    .map(|p| p.kind() == "template_declaration")
-                    .unwrap_or(false);
-                if func_node.kind() == "function_definition" && parent_is_template {
-                    // Handled by the template_declaration @function match instead.
-                } else {
-                    // Resolve template_declaration to its inner function_definition for
-                    // declarator/field walks. The captured node may be the template wrapper.
-                    let func_def = if func_node.kind() == "template_declaration" {
-                        let mut cursor = func_node.walk();
-                        func_node
-                            .children(&mut cursor)
-                            .find(|n| n.kind() == "function_definition")
-                            .unwrap_or(func_node)
+            while let Some(mat) = matches.next() {
+                let mut func_node: Option<Node> = None;
+                let mut func_name_text: Option<String> = None;
+                let mut class_node: Option<Node> = None;
+                let mut class_name_text: Option<String> = None;
+
+                for capture in mat.captures {
+                    let capture_name = compiled.element.capture_names()[capture.index as usize];
+                    let node = capture.node;
+                    match capture_name {
+                        "function" => func_node = Some(node),
+                        "func_name" | "method_name" => {
+                            func_name_text =
+                                Some(source[node.start_byte()..node.end_byte()].to_string());
+                        }
+                        "class" => class_node = Some(node),
+                        "class_name" | "type_name" => {
+                            class_name_text =
+                                Some(source[node.start_byte()..node.end_byte()].to_string());
+                        }
+                        _ => {}
+                    }
+                }
+
+                if let Some(func_node) = func_node {
+                    // When a plain function_definition is nested inside a template_declaration,
+                    // it is also matched by the explicit template_declaration pattern. Skip it
+                    // here to avoid duplicates; the template_declaration match will emit it.
+                    let parent_is_template = func_node
+                        .parent()
+                        .map(|p| p.kind() == "template_declaration")
+                        .unwrap_or(false);
+                    if func_node.kind() == "function_definition" && parent_is_template {
+                        // Handled by the template_declaration @function match instead.
                     } else {
-                        func_node
-                    };
+                        // Resolve template_declaration to its inner function_definition for
+                        // declarator/field walks. The captured node may be the template wrapper.
+                        let func_def = if func_node.kind() == "template_declaration" {
+                            let mut cursor = func_node.walk();
+                            func_node
+                                .children(&mut cursor)
+                                .find(|n| n.kind() == "function_definition")
+                                .unwrap_or(func_node)
+                        } else {
+                            func_node
+                        };
 
-                    let name = func_name_text
+                        let name = func_name_text
+                            .or_else(|| {
+                                func_def
+                                    .child_by_field_name("name")
+                                    .map(|n| source[n.start_byte()..n.end_byte()].to_string())
+                            })
+                            .unwrap_or_default();
+
+                        let func_key = (name.clone(), func_node.start_position().row);
+                        if !name.is_empty() && seen_functions.insert(func_key) {
+                            // For C/C++: parameters live under declarator -> parameters.
+                            // For other languages: parameters is a direct child field.
+                            let params = func_def
+                                .child_by_field_name("declarator")
+                                .and_then(|d| d.child_by_field_name("parameters"))
+                                .or_else(|| func_def.child_by_field_name("parameters"))
+                                .map(|p| source[p.start_byte()..p.end_byte()].to_string())
+                                .unwrap_or_default();
+
+                            // Try "type" first (C/C++ uses this field for the return type);
+                            // fall back to "return_type" (Rust, Python, TypeScript, etc.).
+                            let return_type = func_def
+                                .child_by_field_name("type")
+                                .or_else(|| func_def.child_by_field_name("return_type"))
+                                .map(|r| source[r.start_byte()..r.end_byte()].to_string());
+
+                            functions.push(FunctionInfo {
+                                name,
+                                line: func_node.start_position().row + 1,
+                                end_line: func_node.end_position().row + 1,
+                                parameters: if params.is_empty() {
+                                    Vec::new()
+                                } else {
+                                    vec![params]
+                                },
+                                return_type,
+                            });
+                        }
+                    }
+                }
+
+                if let Some(class_node) = class_node {
+                    let name = class_name_text
                         .or_else(|| {
-                            func_def
+                            class_node
                                 .child_by_field_name("name")
                                 .map(|n| source[n.start_byte()..n.end_byte()].to_string())
                         })
                         .unwrap_or_default();
 
-                    let func_key = (name.clone(), func_node.start_position().row);
-                    if !name.is_empty() && seen_functions.insert(func_key) {
-                        // For C/C++: parameters live under declarator -> parameters.
-                        // For other languages: parameters is a direct child field.
-                        let params = func_def
-                            .child_by_field_name("declarator")
-                            .and_then(|d| d.child_by_field_name("parameters"))
-                            .or_else(|| func_def.child_by_field_name("parameters"))
-                            .map(|p| source[p.start_byte()..p.end_byte()].to_string())
-                            .unwrap_or_default();
-
-                        // Try "type" first (C/C++ uses this field for the return type);
-                        // fall back to "return_type" (Rust, Python, TypeScript, etc.).
-                        let return_type = func_def
-                            .child_by_field_name("type")
-                            .or_else(|| func_def.child_by_field_name("return_type"))
-                            .map(|r| source[r.start_byte()..r.end_byte()].to_string());
-
-                        functions.push(FunctionInfo {
+                    if !name.is_empty() {
+                        let inherits = if let Some(handler) = lang_info.extract_inheritance {
+                            handler(&class_node, source)
+                        } else {
+                            Vec::new()
+                        };
+                        classes.push(ClassInfo {
                             name,
-                            line: func_node.start_position().row + 1,
-                            end_line: func_node.end_position().row + 1,
-                            parameters: if params.is_empty() {
-                                Vec::new()
-                            } else {
-                                vec![params]
-                            },
-                            return_type,
+                            line: class_node.start_position().row + 1,
+                            end_line: class_node.end_position().row + 1,
+                            methods: Vec::new(),
+                            fields: Vec::new(),
+                            inherits,
                         });
                     }
                 }
             }
-
-            if let Some(class_node) = class_node {
-                let name = class_name_text
-                    .or_else(|| {
-                        class_node
-                            .child_by_field_name("name")
-                            .map(|n| source[n.start_byte()..n.end_byte()].to_string())
-                    })
-                    .unwrap_or_default();
-
-                if !name.is_empty() {
-                    let inherits = if let Some(handler) = lang_info.extract_inheritance {
-                        handler(&class_node, source)
-                    } else {
-                        Vec::new()
-                    };
-                    classes.push(ClassInfo {
-                        name,
-                        line: class_node.start_position().row + 1,
-                        end_line: class_node.end_position().row + 1,
-                        methods: Vec::new(),
-                        fields: Vec::new(),
-                        inherits,
-                    });
-                }
-            }
-        }
+        });
     }
 
     /// Returns the name of the enclosing function/method/subroutine for a given AST node,
@@ -748,62 +758,65 @@ impl SemanticExtractor {
         calls: &mut Vec<CallInfo>,
         call_frequency: &mut HashMap<String, usize>,
     ) {
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-        let mut matches = cursor.matches(&compiled.call, root, source.as_bytes());
-
-        while let Some(mat) = matches.next() {
-            for capture in mat.captures {
-                let capture_name = compiled.call.capture_names()[capture.index as usize];
-                if capture_name != "call" {
-                    continue;
-                }
-                let node = capture.node;
-                let call_name = source[node.start_byte()..node.end_byte()].to_string();
-                *call_frequency.entry(call_name.clone()).or_insert(0) += 1;
-
-                let caller = Self::enclosing_function_name(node, source)
-                    .unwrap_or_else(|| "<module>".to_string());
-
-                let mut arg_count = None;
-                let mut arg_node = node;
-                let mut hop = 0u32;
-                let mut cap_hit = false;
-                while let Some(parent) = arg_node.parent() {
-                    hop += 1;
-                    // Bounded parent traversal: cap at 16 hops to guard against pathological
-                    // walks on malformed/degenerate trees. Real call-expression nesting is
-                    // shallow (typically 1-3 levels). When the cap is hit we stop searching and
-                    // leave arg_count as None; the caller is still recorded, just without
-                    // argument-count information.
-                    if hop > 16 {
-                        cap_hit = true;
-                        break;
-                    }
-                    if parent.kind() == "call_expression" {
-                        if let Some(args) = parent.child_by_field_name("arguments") {
-                            arg_count = Some(args.named_child_count());
-                        }
-                        break;
-                    }
-                    arg_node = parent;
-                }
-                debug_assert!(
-                    !cap_hit,
-                    "extract_calls: parent traversal cap reached (hop > 16)"
-                );
-
-                calls.push(CallInfo {
-                    caller,
-                    callee: call_name,
-                    line: node.start_position().row + 1,
-                    column: node.start_position().column,
-                    arg_count,
-                });
+        QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
             }
-        }
+            let mut matches = cursor.matches(&compiled.call, root, source.as_bytes());
+
+            while let Some(mat) = matches.next() {
+                for capture in mat.captures {
+                    let capture_name = compiled.call.capture_names()[capture.index as usize];
+                    if capture_name != "call" {
+                        continue;
+                    }
+                    let node = capture.node;
+                    let call_name = source[node.start_byte()..node.end_byte()].to_string();
+                    *call_frequency.entry(call_name.clone()).or_insert(0) += 1;
+
+                    let caller = Self::enclosing_function_name(node, source)
+                        .unwrap_or_else(|| "<module>".to_string());
+
+                    let mut arg_count = None;
+                    let mut arg_node = node;
+                    let mut hop = 0u32;
+                    let mut cap_hit = false;
+                    while let Some(parent) = arg_node.parent() {
+                        hop += 1;
+                        // Bounded parent traversal: cap at 16 hops to guard against pathological
+                        // walks on malformed/degenerate trees. Real call-expression nesting is
+                        // shallow (typically 1-3 levels). When the cap is hit we stop searching and
+                        // leave arg_count as None; the caller is still recorded, just without
+                        // argument-count information.
+                        if hop > 16 {
+                            cap_hit = true;
+                            break;
+                        }
+                        if parent.kind() == "call_expression" {
+                            if let Some(args) = parent.child_by_field_name("arguments") {
+                                arg_count = Some(args.named_child_count());
+                            }
+                            break;
+                        }
+                        arg_node = parent;
+                    }
+                    debug_assert!(
+                        !cap_hit,
+                        "extract_calls: parent traversal cap reached (hop > 16)"
+                    );
+
+                    calls.push(CallInfo {
+                        caller,
+                        callee: call_name,
+                        line: node.start_position().row + 1,
+                        column: node.start_position().column,
+                        arg_count,
+                    });
+                }
+            }
+        });
     }
 
     fn extract_imports(
@@ -816,22 +829,25 @@ impl SemanticExtractor {
         let Some(ref import_query) = compiled.import else {
             return;
         };
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-        let mut matches = cursor.matches(import_query, root, source.as_bytes());
+        QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
+            }
+            let mut matches = cursor.matches(import_query, root, source.as_bytes());
 
-        while let Some(mat) = matches.next() {
-            for capture in mat.captures {
-                let capture_name = import_query.capture_names()[capture.index as usize];
-                if capture_name == "import_path" {
-                    let node = capture.node;
-                    let line = node.start_position().row + 1;
-                    extract_imports_from_node(&node, source, "", line, imports);
+            while let Some(mat) = matches.next() {
+                for capture in mat.captures {
+                    let capture_name = import_query.capture_names()[capture.index as usize];
+                    if capture_name == "import_path" {
+                        let node = capture.node;
+                        let line = node.start_position().row + 1;
+                        extract_imports_from_node(&node, source, "", line, imports);
+                    }
                 }
             }
-        }
+        });
     }
 
     fn extract_impl_methods(
@@ -844,61 +860,64 @@ impl SemanticExtractor {
         let Some(ref impl_query) = compiled.impl_block else {
             return;
         };
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-        let mut matches = cursor.matches(impl_query, root, source.as_bytes());
+        QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
+            }
+            let mut matches = cursor.matches(impl_query, root, source.as_bytes());
 
-        while let Some(mat) = matches.next() {
-            let mut impl_type_name = String::new();
-            let mut method_name = String::new();
-            let mut method_line = 0usize;
-            let mut method_end_line = 0usize;
-            let mut method_params = String::new();
-            let mut method_return_type: Option<String> = None;
+            while let Some(mat) = matches.next() {
+                let mut impl_type_name = String::new();
+                let mut method_name = String::new();
+                let mut method_line = 0usize;
+                let mut method_end_line = 0usize;
+                let mut method_params = String::new();
+                let mut method_return_type: Option<String> = None;
 
-            for capture in mat.captures {
-                let capture_name = impl_query.capture_names()[capture.index as usize];
-                let node = capture.node;
-                match capture_name {
-                    "impl_type" => {
-                        impl_type_name = source[node.start_byte()..node.end_byte()].to_string();
+                for capture in mat.captures {
+                    let capture_name = impl_query.capture_names()[capture.index as usize];
+                    let node = capture.node;
+                    match capture_name {
+                        "impl_type" => {
+                            impl_type_name = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "method_name" => {
+                            method_name = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "method_params" => {
+                            method_params = source[node.start_byte()..node.end_byte()].to_string();
+                        }
+                        "method" => {
+                            method_line = node.start_position().row + 1;
+                            method_end_line = node.end_position().row + 1;
+                            method_return_type = node
+                                .child_by_field_name("return_type")
+                                .map(|r| source[r.start_byte()..r.end_byte()].to_string());
+                        }
+                        _ => {}
                     }
-                    "method_name" => {
-                        method_name = source[node.start_byte()..node.end_byte()].to_string();
+                }
+
+                if !impl_type_name.is_empty() && !method_name.is_empty() {
+                    let func = FunctionInfo {
+                        name: method_name,
+                        line: method_line,
+                        end_line: method_end_line,
+                        parameters: if method_params.is_empty() {
+                            Vec::new()
+                        } else {
+                            vec![method_params]
+                        },
+                        return_type: method_return_type,
+                    };
+                    if let Some(class) = classes.iter_mut().find(|c| c.name == impl_type_name) {
+                        class.methods.push(func);
                     }
-                    "method_params" => {
-                        method_params = source[node.start_byte()..node.end_byte()].to_string();
-                    }
-                    "method" => {
-                        method_line = node.start_position().row + 1;
-                        method_end_line = node.end_position().row + 1;
-                        method_return_type = node
-                            .child_by_field_name("return_type")
-                            .map(|r| source[r.start_byte()..r.end_byte()].to_string());
-                    }
-                    _ => {}
                 }
             }
-
-            if !impl_type_name.is_empty() && !method_name.is_empty() {
-                let func = FunctionInfo {
-                    name: method_name,
-                    line: method_line,
-                    end_line: method_end_line,
-                    parameters: if method_params.is_empty() {
-                        Vec::new()
-                    } else {
-                        vec![method_params]
-                    },
-                    return_type: method_return_type,
-                };
-                if let Some(class) = classes.iter_mut().find(|c| c.name == impl_type_name) {
-                    class.methods.push(func);
-                }
-            }
-        }
+        });
     }
 
     fn extract_references(
@@ -911,31 +930,34 @@ impl SemanticExtractor {
         let Some(ref ref_query) = compiled.reference else {
             return;
         };
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
         let mut seen_refs = std::collections::HashSet::new();
-        let mut matches = cursor.matches(ref_query, root, source.as_bytes());
+        QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
+            }
+            let mut matches = cursor.matches(ref_query, root, source.as_bytes());
 
-        while let Some(mat) = matches.next() {
-            for capture in mat.captures {
-                let capture_name = ref_query.capture_names()[capture.index as usize];
-                if capture_name == "type_ref" {
-                    let node = capture.node;
-                    let type_ref = source[node.start_byte()..node.end_byte()].to_string();
-                    if seen_refs.insert(type_ref.clone()) {
-                        references.push(ReferenceInfo {
-                            symbol: type_ref,
-                            reference_type: ReferenceType::Usage,
-                            // location is intentionally empty here; set by the caller (analyze_file)
-                            location: String::new(),
-                            line: node.start_position().row + 1,
-                        });
+            while let Some(mat) = matches.next() {
+                for capture in mat.captures {
+                    let capture_name = ref_query.capture_names()[capture.index as usize];
+                    if capture_name == "type_ref" {
+                        let node = capture.node;
+                        let type_ref = source[node.start_byte()..node.end_byte()].to_string();
+                        if seen_refs.insert(type_ref.clone()) {
+                            references.push(ReferenceInfo {
+                                symbol: type_ref,
+                                reference_type: ReferenceType::Usage,
+                                // location is intentionally empty here; set by the caller (analyze_file)
+                                location: String::new(),
+                                line: node.start_position().row + 1,
+                            });
+                        }
                     }
                 }
             }
-        }
+        });
     }
 
     /// Extract impl-trait blocks from an already-parsed tree.
@@ -951,40 +973,43 @@ impl SemanticExtractor {
             return vec![];
         };
 
-        let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(query, root, source.as_bytes());
         let mut results = Vec::new();
+        QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            let mut matches = cursor.matches(query, root, source.as_bytes());
 
-        while let Some(mat) = matches.next() {
-            let mut trait_name = String::new();
-            let mut impl_type = String::new();
-            let mut line = 0usize;
+            while let Some(mat) = matches.next() {
+                let mut trait_name = String::new();
+                let mut impl_type = String::new();
+                let mut line = 0usize;
 
-            for capture in mat.captures {
-                let capture_name = query.capture_names()[capture.index as usize];
-                let node = capture.node;
-                let text = source[node.start_byte()..node.end_byte()].to_string();
-                match capture_name {
-                    "trait_name" => {
-                        trait_name = text;
-                        line = node.start_position().row + 1;
+                for capture in mat.captures {
+                    let capture_name = query.capture_names()[capture.index as usize];
+                    let node = capture.node;
+                    let text = source[node.start_byte()..node.end_byte()].to_string();
+                    match capture_name {
+                        "trait_name" => {
+                            trait_name = text;
+                            line = node.start_position().row + 1;
+                        }
+                        "impl_type" => {
+                            impl_type = text;
+                        }
+                        _ => {}
                     }
-                    "impl_type" => {
-                        impl_type = text;
-                    }
-                    _ => {}
+                }
+
+                if !trait_name.is_empty() && !impl_type.is_empty() {
+                    results.push(ImplTraitInfo {
+                        trait_name,
+                        impl_type,
+                        path: PathBuf::new(), // Path will be set by caller
+                        line,
+                    });
                 }
             }
-
-            if !trait_name.is_empty() && !impl_type.is_empty() {
-                results.push(ImplTraitInfo {
-                    trait_name,
-                    impl_type,
-                    path: PathBuf::new(), // Path will be set by caller
-                    line,
-                });
-            }
-        }
+        });
 
         results
     }
@@ -1013,86 +1038,92 @@ impl SemanticExtractor {
             return vec![];
         };
 
-        let mut cursor = QueryCursor::new();
-        if let Some(depth) = max_depth {
-            cursor.set_max_start_depth(Some(depth));
-        }
-        let mut matches = cursor.matches(defuse_query, root, source.as_bytes());
         let mut sites = Vec::new();
         let source_lines: Vec<&str> = source.lines().collect();
         // Track byte offsets that already have a write or writeread capture so
         // duplicate read captures for the same identifier are suppressed.
         let mut write_offsets = std::collections::HashSet::new();
 
-        while let Some(mat) = matches.next() {
-            for capture in mat.captures {
-                let capture_name = defuse_query.capture_names()[capture.index as usize];
-                let node = capture.node;
-                let node_text = node.utf8_text(source.as_bytes()).unwrap_or_default();
-
-                // Only collect if the captured node matches the target symbol
-                if node_text != symbol_name {
-                    continue;
-                }
-
-                // Classify capture by prefix
-                let kind = if capture_name.starts_with("write.") {
-                    crate::types::DefUseKind::Write
-                } else if capture_name.starts_with("read.") {
-                    crate::types::DefUseKind::Read
-                } else if capture_name.starts_with("writeread.") {
-                    crate::types::DefUseKind::WriteRead
-                } else {
-                    continue;
-                };
-
-                let byte_offset = node.start_byte();
-
-                // De-duplicate: skip read captures for offsets already captured as write/writeread
-                if kind == crate::types::DefUseKind::Read && write_offsets.contains(&byte_offset) {
-                    continue;
-                }
-                if kind != crate::types::DefUseKind::Read {
-                    write_offsets.insert(byte_offset);
-                }
-
-                // Get line number (1-indexed) and center-line snippet.
-                // Always produce a 3-line window so snippet_one_line (index 1) is safe.
-                let line = node.start_position().row + 1;
-                let snippet = {
-                    let row = node.start_position().row;
-                    let last_line = source_lines.len().saturating_sub(1);
-                    let prev = if row > 0 { row - 1 } else { 0 };
-                    let next = std::cmp::min(row + 1, last_line);
-                    let prev_text = if row == 0 {
-                        ""
-                    } else {
-                        source_lines[prev].trim_end()
-                    };
-                    let cur_text = source_lines[row].trim_end();
-                    let next_text = if row >= last_line {
-                        ""
-                    } else {
-                        source_lines[next].trim_end()
-                    };
-                    format!("{prev_text}\n{cur_text}\n{next_text}")
-                };
-
-                // Get enclosing function scope
-                let enclosing_scope = Self::enclosing_function_name(node, source);
-
-                let column = node.start_position().column;
-                sites.push(crate::types::DefUseSite {
-                    kind,
-                    symbol: node_text.to_string(),
-                    file: file_path.to_string(),
-                    line,
-                    column,
-                    snippet,
-                    enclosing_scope,
-                });
+        QUERY_CURSOR.with(|c| {
+            let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
+            if let Some(depth) = max_depth {
+                cursor.set_max_start_depth(Some(depth));
             }
-        }
+            let mut matches = cursor.matches(defuse_query, root, source.as_bytes());
+
+            while let Some(mat) = matches.next() {
+                for capture in mat.captures {
+                    let capture_name = defuse_query.capture_names()[capture.index as usize];
+                    let node = capture.node;
+                    let node_text = node.utf8_text(source.as_bytes()).unwrap_or_default();
+
+                    // Only collect if the captured node matches the target symbol
+                    if node_text != symbol_name {
+                        continue;
+                    }
+
+                    // Classify capture by prefix
+                    let kind = if capture_name.starts_with("write.") {
+                        crate::types::DefUseKind::Write
+                    } else if capture_name.starts_with("read.") {
+                        crate::types::DefUseKind::Read
+                    } else if capture_name.starts_with("writeread.") {
+                        crate::types::DefUseKind::WriteRead
+                    } else {
+                        continue;
+                    };
+
+                    let byte_offset = node.start_byte();
+
+                    // De-duplicate: skip read captures for offsets already captured as write/writeread
+                    if kind == crate::types::DefUseKind::Read
+                        && write_offsets.contains(&byte_offset)
+                    {
+                        continue;
+                    }
+                    if kind != crate::types::DefUseKind::Read {
+                        write_offsets.insert(byte_offset);
+                    }
+
+                    // Get line number (1-indexed) and center-line snippet.
+                    // Always produce a 3-line window so snippet_one_line (index 1) is safe.
+                    let line = node.start_position().row + 1;
+                    let snippet = {
+                        let row = node.start_position().row;
+                        let last_line = source_lines.len().saturating_sub(1);
+                        let prev = if row > 0 { row - 1 } else { 0 };
+                        let next = std::cmp::min(row + 1, last_line);
+                        let prev_text = if row == 0 {
+                            ""
+                        } else {
+                            source_lines[prev].trim_end()
+                        };
+                        let cur_text = source_lines[row].trim_end();
+                        let next_text = if row >= last_line {
+                            ""
+                        } else {
+                            source_lines[next].trim_end()
+                        };
+                        format!("{prev_text}\n{cur_text}\n{next_text}")
+                    };
+
+                    // Get enclosing function scope
+                    let enclosing_scope = Self::enclosing_function_name(node, source);
+
+                    let column = node.start_position().column;
+                    sites.push(crate::types::DefUseSite {
+                        kind,
+                        symbol: node_text.to_string(),
+                        file: file_path.to_string(),
+                        line,
+                        column,
+                        snippet,
+                        enclosing_scope,
+                    });
+                }
+            }
+        });
 
         sites
     }
@@ -1166,40 +1197,44 @@ pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
     };
 
     let root = tree.root_node();
-    let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(query, root, source.as_bytes());
     let mut results = Vec::new();
 
-    while let Some(mat) = matches.next() {
-        let mut trait_name = String::new();
-        let mut impl_type = String::new();
-        let mut line = 0usize;
+    QUERY_CURSOR.with(|c| {
+        let mut cursor = c.borrow_mut();
+        cursor.set_max_start_depth(None);
+        let mut matches = cursor.matches(query, root, source.as_bytes());
 
-        for capture in mat.captures {
-            let capture_name = query.capture_names()[capture.index as usize];
-            let node = capture.node;
-            let text = source[node.start_byte()..node.end_byte()].to_string();
-            match capture_name {
-                "trait_name" => {
-                    trait_name = text;
-                    line = node.start_position().row + 1;
+        while let Some(mat) = matches.next() {
+            let mut trait_name = String::new();
+            let mut impl_type = String::new();
+            let mut line = 0usize;
+
+            for capture in mat.captures {
+                let capture_name = query.capture_names()[capture.index as usize];
+                let node = capture.node;
+                let text = source[node.start_byte()..node.end_byte()].to_string();
+                match capture_name {
+                    "trait_name" => {
+                        trait_name = text;
+                        line = node.start_position().row + 1;
+                    }
+                    "impl_type" => {
+                        impl_type = text;
+                    }
+                    _ => {}
                 }
-                "impl_type" => {
-                    impl_type = text;
-                }
-                _ => {}
+            }
+
+            if !trait_name.is_empty() && !impl_type.is_empty() {
+                results.push(ImplTraitInfo {
+                    trait_name,
+                    impl_type,
+                    path: path.to_path_buf(),
+                    line,
+                });
             }
         }
-
-        if !trait_name.is_empty() && !impl_type.is_empty() {
-            results.push(ImplTraitInfo {
-                trait_name,
-                impl_type,
-                path: path.to_path_buf(),
-                line,
-            });
-        }
-    }
+    });
 
     results
 }
@@ -1228,26 +1263,29 @@ pub fn execute_query_impl(
     let query =
         Query::new(&ts_language, query_str).map_err(|e| ParserError::QueryError(e.to_string()))?;
 
-    let mut cursor = QueryCursor::new();
     let source_bytes = source.as_bytes();
 
     let mut captures = Vec::new();
-    let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
-    while let Some(m) = matches.next() {
-        for cap in m.captures {
-            let node = cap.node;
-            let capture_name = query.capture_names()[cap.index as usize].to_string();
-            let text = node.utf8_text(source_bytes).unwrap_or("").to_string();
-            captures.push(crate::QueryCapture {
-                capture_name,
-                text,
-                start_line: node.start_position().row,
-                end_line: node.end_position().row,
-                start_byte: node.start_byte(),
-                end_byte: node.end_byte(),
-            });
+    QUERY_CURSOR.with(|c| {
+        let mut cursor = c.borrow_mut();
+        cursor.set_max_start_depth(None);
+        let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
+        while let Some(m) = matches.next() {
+            for cap in m.captures {
+                let node = cap.node;
+                let capture_name = query.capture_names()[cap.index as usize].to_string();
+                let text = node.utf8_text(source_bytes).unwrap_or("").to_string();
+                captures.push(crate::QueryCapture {
+                    capture_name,
+                    text,
+                    start_line: node.start_position().row,
+                    end_line: node.end_position().row,
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                });
+            }
         }
-    }
+    });
     Ok(captures)
 }
 
