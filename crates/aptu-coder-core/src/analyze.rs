@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Main analysis engine for extracting code structure from files and directories.
 //!
-//! Implements the four MCP tools: `analyze_directory` (Overview), `analyze_file` (`FileDetails`),
-//! `analyze_symbol` (call graph), and `analyze_module` (lightweight index). Handles parallel processing and cancellation.
+//! Implements the five MCP tools: `analyze_directory` (Overview), `analyze_file` (`FileDetails`),
+//! `analyze_symbol` (call graph), `analyze_module` (lightweight index), and `analyze_raw` (raw file read). Handles parallel processing and cancellation.
 
 use crate::formatter::{
     format_file_details, format_focused_internal, format_focused_summary_internal, format_structure,
