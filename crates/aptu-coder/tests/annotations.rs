@@ -7,7 +7,7 @@ use serde_json::Value;
 fn test_all_tools_have_correct_annotations() {
     let tools = CodeAnalyzer::list_tools();
 
-    assert_eq!(tools.len(), 7, "expected 7 registered tools");
+    assert_eq!(tools.len(), 9, "expected 9 registered tools");
 
     let expected_names = [
         "analyze_directory",
@@ -17,6 +17,8 @@ fn test_all_tools_have_correct_annotations() {
         "read_file",
         "write_file",
         "edit_file",
+        "rename_symbol",
+        "insert_at_symbol",
     ];
 
     for tool in &tools {
@@ -32,8 +34,12 @@ fn test_all_tools_have_correct_annotations() {
             .as_ref()
             .unwrap_or_else(|| panic!("tool {} is missing annotations", name));
 
-        // write_file and edit_file are destructive; others are read-only
-        if name == "write_file" || name == "edit_file" {
+        // write_file, edit_file, rename_symbol, and insert_at_symbol are destructive; others are read-only
+        if name == "write_file"
+            || name == "edit_file"
+            || name == "rename_symbol"
+            || name == "insert_at_symbol"
+        {
             assert_eq!(
                 annotations.read_only_hint,
                 Some(false),

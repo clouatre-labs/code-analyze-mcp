@@ -827,3 +827,56 @@ pub struct EditFileOutput {
     /// File size in bytes after the edit.
     pub bytes_after: usize,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct RenameSymbolParams {
+    /// File path to modify.
+    pub path: String,
+    /// Current name of the symbol (identifier) to rename.
+    pub old_name: String,
+    /// New name for the symbol.
+    pub new_name: String,
+    /// Reserved for future use; currently not supported. Supplying a value returns an error.
+    pub kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct RenameSymbolOutput {
+    pub path: String,
+    pub old_name: String,
+    pub new_name: String,
+    pub occurrences_renamed: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub enum InsertPosition {
+    #[serde(rename = "before")]
+    Before,
+    #[serde(rename = "after")]
+    After,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct InsertAtSymbolParams {
+    /// File path to modify.
+    pub path: String,
+    /// Name of the symbol (identifier) to locate.
+    pub symbol_name: String,
+    /// Insert before or after the symbol.
+    pub position: InsertPosition,
+    /// Content to insert verbatim; include leading/trailing newlines as needed.
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct InsertAtSymbolOutput {
+    pub path: String,
+    pub symbol_name: String,
+    pub position: String,
+    pub byte_offset: usize,
+}

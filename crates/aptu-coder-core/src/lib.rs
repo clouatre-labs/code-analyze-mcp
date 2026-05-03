@@ -64,7 +64,10 @@ pub use analyze::{
     analyze_module_file, analyze_str,
 };
 pub use config::AnalysisConfig;
-pub use edit::{EditError, edit_file_replace, read_file_range, write_file_content};
+pub use edit::{
+    EditError, edit_file_replace, insert_at_symbol_in_file, read_file_range, rename_symbol_in_file,
+    write_file_content,
+};
 pub use lang::{language_for_extension, supported_languages};
 pub use parser::ParserError;
 pub use types::*;
