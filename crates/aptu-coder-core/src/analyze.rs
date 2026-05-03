@@ -28,6 +28,8 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
+pub const MAX_FILE_SIZE_BYTES: u64 = 10_000_000;
+
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AnalyzeError {
@@ -154,7 +156,10 @@ pub fn analyze_directory_with_progress(
     }
 
     // Detect language from file extension
-    let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
+    let file_entries: Vec<&WalkEntry> = entries
+        .iter()
+        .filter(|e| !e.is_dir && !e.is_symlink)
+        .collect();
 
     let start = Instant::now();
     tracing::debug!(file_count = file_entries.len(), root = %root.display(), "analysis start");
@@ -172,6 +177,13 @@ pub fn analyze_directory_with_progress(
 
             // Detect language from extension
             let ext = entry.path.extension().and_then(|e| e.to_str());
+
+            // Check file size before reading
+            if entry.path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+                tracing::debug!("skipping large file: {}", entry.path.display());
+                progress.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
 
             // Try to read file content; skip binary or unreadable files
             let Ok(source) = std::fs::read_to_string(&entry.path) else {
@@ -269,6 +281,15 @@ pub fn analyze_file(
     ast_recursion_limit: Option<usize>,
 ) -> Result<FileAnalysisOutput, AnalyzeError> {
     let start = Instant::now();
+
+    // Check file size before reading
+    if Path::new(path).metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+        tracing::debug!("skipping large file: {}", path);
+        return Err(AnalyzeError::Parser(
+            crate::parser::ParserError::ParseError("file too large".to_string()),
+        ));
+    }
+
     let source = std::fs::read_to_string(path)
         .map_err(|e| AnalyzeError::Parser(crate::parser::ParserError::ParseError(e.to_string())))?;
 
@@ -496,7 +517,10 @@ fn collect_file_analysis(
 
     // Use pre-walked entries (passed by caller)
     // Collect semantic analysis for all files in parallel
-    let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
+    let file_entries: Vec<&WalkEntry> = entries
+        .iter()
+        .filter(|e| !e.is_dir && !e.is_symlink)
+        .collect();
 
     let analysis_results: Vec<(PathBuf, SemanticAnalysis)> = file_entries
         .par_iter()
@@ -507,6 +531,13 @@ fn collect_file_analysis(
             }
 
             let ext = entry.path.extension().and_then(|e| e.to_str());
+
+            // Check file size before reading
+            if entry.path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+                tracing::debug!("skipping large file: {}", entry.path.display());
+                progress.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
 
             // Try to read file content
             let Ok(source) = std::fs::read_to_string(&entry.path) else {
@@ -968,7 +999,10 @@ fn collect_def_use_sites(
 ) -> Vec<crate::types::DefUseSite> {
     use crate::parser::SemanticExtractor;
 
-    let file_entries: Vec<&WalkEntry> = entries.iter().filter(|e| !e.is_dir).collect();
+    let file_entries: Vec<&WalkEntry> = entries
+        .iter()
+        .filter(|e| !e.is_dir && !e.is_symlink)
+        .collect();
 
     let mut sites: Vec<crate::types::DefUseSite> = file_entries
         .par_iter()
@@ -976,6 +1010,13 @@ fn collect_def_use_sites(
             if ct.is_cancelled() {
                 return None;
             }
+
+            // Check file size before reading
+            if entry.path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+                tracing::debug!("skipping large file: {}", entry.path.display());
+                return None;
+            }
+
             let Ok(source) = std::fs::read_to_string(&entry.path) else {
                 return None;
             };
@@ -1075,6 +1116,14 @@ pub fn analyze_focused(
 /// functions, imports) for lightweight code understanding.
 #[instrument(skip_all, fields(path))]
 pub fn analyze_module_file(path: &str) -> Result<crate::types::ModuleInfo, AnalyzeError> {
+    // Check file size before reading
+    if Path::new(path).metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+        tracing::debug!("skipping large file: {}", path);
+        return Err(AnalyzeError::Parser(
+            crate::parser::ParserError::ParseError("file too large".to_string()),
+        ));
+    }
+
     let source = std::fs::read_to_string(path)
         .map_err(|e| AnalyzeError::Parser(crate::parser::ParserError::ParseError(e.to_string())))?;
 
@@ -1140,7 +1189,8 @@ pub fn analyze_import_lookup(
     let mut matches: Vec<(PathBuf, usize)> = Vec::new();
 
     for entry in entries {
-        if entry.is_dir {
+        if entry.is_dir || entry.is_symlink {
+            tracing::debug!("skipping symlink: {}", entry.path.display());
             continue;
         }
         let ext = entry
@@ -1295,6 +1345,12 @@ fn locate_target_file(
 fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>> {
     use tree_sitter::Parser;
 
+    // Check file size before reading
+    if target_path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+        tracing::debug!("skipping large file: {}", target_path.display());
+        return None;
+    }
+
     let source = match std::fs::read_to_string(target_path) {
         Ok(s) => s,
         Err(e) => {
@@ -1414,6 +1470,15 @@ pub fn analyze_raw_range(
     if path.is_dir() {
         return Err(AnalyzeError::NotAFile(path.to_path_buf()));
     }
+
+    // Check file size before reading
+    if path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+        tracing::debug!("skipping large file: {}", path.display());
+        return Err(AnalyzeError::Parser(
+            crate::parser::ParserError::ParseError("file too large".to_string()),
+        ));
+    }
+
     let raw = std::fs::read_to_string(path)?;
     let lines: Vec<&str> = raw.lines().collect();
     let total = lines.len();

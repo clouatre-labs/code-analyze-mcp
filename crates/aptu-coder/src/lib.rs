@@ -114,6 +114,83 @@ fn no_cache_meta() -> Meta {
     Meta(m)
 }
 
+/// Validates that a path is within the current working directory.
+/// For `require_exists=true`, the path must exist and be canonicalizable.
+/// For `require_exists=false`, the parent directory must exist and be canonicalizable.
+fn validate_path(path: &str, require_exists: bool) -> Result<std::path::PathBuf, ErrorData> {
+    // Canonicalize the allowed root (CWD) to resolve symlinks
+    let allowed_root = std::fs::canonicalize(std::env::current_dir().map_err(|_| {
+        ErrorData::new(
+            rmcp::model::ErrorCode::INVALID_PARAMS,
+            "path is outside the allowed root".to_string(),
+            Some(error_meta(
+                "validation",
+                false,
+                "ensure the working directory is accessible",
+            )),
+        )
+    })?)
+    .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+
+    let canonical_path = if require_exists {
+        std::fs::canonicalize(path).map_err(|e| {
+            let msg = match e.kind() {
+                std::io::ErrorKind::NotFound => format!("path not found: {path}"),
+                std::io::ErrorKind::PermissionDenied => format!("permission denied: {path}"),
+                _ => "path is outside the allowed root".to_string(),
+            };
+            ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                msg,
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "provide a valid path within the working directory",
+                )),
+            )
+        })?
+    } else {
+        // For non-existent files (edit_overwrite), walk up the path until we find an existing ancestor
+        let p = std::path::Path::new(path);
+        let mut ancestor = p.to_path_buf();
+        let mut suffix = std::path::PathBuf::new();
+
+        loop {
+            if ancestor.exists() {
+                break;
+            }
+            if let Some(parent) = ancestor.parent() {
+                if let Some(file_name) = ancestor.file_name() {
+                    suffix = std::path::PathBuf::from(file_name).join(&suffix);
+                }
+                ancestor = parent.to_path_buf();
+            } else {
+                // No existing ancestor found — use allowed_root as anchor
+                ancestor = allowed_root.clone();
+                break;
+            }
+        }
+
+        let canonical_base =
+            std::fs::canonicalize(&ancestor).unwrap_or_else(|_| allowed_root.clone());
+        canonical_base.join(&suffix)
+    };
+
+    if !canonical_path.starts_with(&allowed_root) {
+        return Err(ErrorData::new(
+            rmcp::model::ErrorCode::INVALID_PARAMS,
+            "path is outside the allowed root".to_string(),
+            Some(error_meta(
+                "validation",
+                false,
+                "provide a path within the current working directory",
+            )),
+        ));
+    }
+
+    Ok(canonical_path)
+}
+
 /// Helper function for paginating focus chains (callers or callees).
 /// Returns (items, re-encoded_cursor_option).
 fn paginate_focus_chains(
@@ -812,6 +889,10 @@ impl CodeAnalyzer {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let ct = context.ct.clone();
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
@@ -968,6 +1049,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -1179,6 +1264,10 @@ impl CodeAnalyzer {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let ct = context.ct.clone();
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
@@ -1414,7 +1503,15 @@ impl CodeAnalyzer {
                 }
             }
             PaginationMode::Default => {
-                unreachable!("SymbolFocus should only use Callers or Callees modes")
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "invalid cursor: unknown pagination mode".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "use a cursor returned by a previous analyze_symbol call",
+                    )),
+                )));
             }
             PaginationMode::DefUse => {
                 let total_sites = output.def_use_sites.len();
@@ -1548,6 +1645,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -1782,6 +1883,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -1981,6 +2086,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, false) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -2155,6 +2264,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -2385,6 +2498,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -2666,6 +2783,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -3536,6 +3657,55 @@ mod tests {
         assert!(
             !formatted.contains("file_a.rs"),
             "git_ref=HEAD~1 output must exclude file_a.rs; got:\n{formatted}"
+        );
+    }
+
+    #[test]
+    fn test_validate_path_rejects_absolute_path_outside_cwd() {
+        // S4: Verify that absolute paths outside the current working directory are rejected.
+        // This test directly calls validate_path with /etc/passwd, which should fail.
+        let result = validate_path("/etc/passwd", true);
+        assert!(
+            result.is_err(),
+            "validate_path should reject /etc/passwd (outside CWD)"
+        );
+        let err = result.unwrap_err();
+        let err_msg = err.message.to_lowercase();
+        assert!(
+            err_msg.contains("outside") || err_msg.contains("not found"),
+            "Error message should mention 'outside' or 'not found': {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn test_validate_path_accepts_relative_path_in_cwd() {
+        // Happy path: relative path within CWD should be accepted.
+        // Use Cargo.toml which exists in the crate root.
+        let result = validate_path("Cargo.toml", true);
+        assert!(
+            result.is_ok(),
+            "validate_path should accept Cargo.toml (exists in CWD)"
+        );
+    }
+
+    #[test]
+    fn test_validate_path_creates_parent_for_nonexistent_file() {
+        // Edge case: non-existent file with non-existent parent should still be accepted
+        // if the ancestor chain leads back to CWD.
+        let result = validate_path("nonexistent_dir/nonexistent_file.txt", false);
+        assert!(
+            result.is_ok(),
+            "validate_path should accept non-existent file with non-existent parent (require_exists=false)"
+        );
+        let path = result.unwrap();
+        let cwd = std::env::current_dir().expect("should get cwd");
+        let canonical_cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+        assert!(
+            path.starts_with(&canonical_cwd),
+            "Resolved path should be within CWD: {:?} should start with {:?}",
+            path,
+            canonical_cwd
         );
     }
 }

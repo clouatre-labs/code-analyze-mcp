@@ -4393,3 +4393,112 @@ int Counter::get() {
         "expected qualified method 'get' (Counter::get) to be extracted"
     );
 }
+
+// S3: Pagination overflow tests
+#[test]
+fn test_paginate_slice_zero_page_size_error() {
+    use aptu_coder_core::pagination::{PaginationMode, paginate_slice};
+
+    let items: Vec<i32> = (0..100).collect();
+    let result = paginate_slice(&items, 0, 0, PaginationMode::Default);
+
+    assert!(result.is_err(), "page_size=0 should return an error");
+    match result {
+        Err(e) => {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("page_size") || msg.contains("at least 1"),
+                "error message should mention page_size constraint: {}",
+                msg
+            );
+        }
+        Ok(_) => panic!("expected error for page_size=0"),
+    }
+}
+
+#[test]
+fn test_paginate_slice_max_page_size_no_panic() {
+    use aptu_coder_core::pagination::{MAX_PAGE_SIZE, PaginationMode, paginate_slice};
+
+    let items: Vec<i32> = (0..20_000).collect();
+    let result = paginate_slice(&items, 0, usize::MAX, PaginationMode::Default);
+
+    assert!(result.is_ok(), "usize::MAX page_size should not panic");
+    let page = result.unwrap();
+    assert!(
+        page.items.len() <= MAX_PAGE_SIZE,
+        "returned items should not exceed MAX_PAGE_SIZE ({}), got {}",
+        MAX_PAGE_SIZE,
+        page.items.len()
+    );
+}
+
+// S5: Symlink filter test
+#[test]
+#[cfg(unix)]
+fn test_symlink_file_skipped_in_analyze_directory() {
+    use aptu_coder_core::analyze::analyze_directory;
+    use std::os::unix::fs as unix_fs;
+
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create a real Rust source file
+    let real_file = root.join("real.rs");
+    fs::write(&real_file, "fn hello() { println!(\"hello\"); }").unwrap();
+
+    // Create a symlink to the real file
+    let symlink_path = root.join("link.rs");
+    unix_fs::symlink(&real_file, &symlink_path).unwrap();
+
+    // Analyze the directory
+    let result = analyze_directory(root, None).unwrap();
+
+    // Verify the real file appears in the output
+    assert!(
+        result.files.iter().any(|f| f.path == real_file),
+        "real file should appear in analyze_directory output"
+    );
+
+    // Verify the symlink does NOT appear in the output
+    assert!(
+        !result.files.iter().any(|f| f.path == symlink_path),
+        "symlink should be excluded from analyze_directory output"
+    );
+}
+
+// S6: File size cap test
+#[test]
+fn test_large_file_skipped_no_panic() {
+    use aptu_coder_core::analyze::{MAX_FILE_SIZE_BYTES, analyze_directory};
+    use std::fs::File;
+    use std::io::Write;
+
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+
+    // Create a small valid source file
+    let small_file = root.join("small.rs");
+    fs::write(&small_file, "fn hello() { println!(\"hello\"); }").unwrap();
+
+    // Create a sparse file exceeding MAX_FILE_SIZE_BYTES without writing data
+    let large_file = root.join("large.rs");
+    let mut file = File::create(&large_file).unwrap();
+    file.set_len(MAX_FILE_SIZE_BYTES + 1).unwrap();
+    drop(file);
+
+    // Analyze the directory
+    let result = analyze_directory(root, None).unwrap();
+
+    // Verify the small file appears in the output
+    assert!(
+        result.files.iter().any(|f| f.path == small_file),
+        "small file should appear in analyze_directory output"
+    );
+
+    // Verify the large file does NOT appear in the output (guard filtered it)
+    assert!(
+        !result.files.iter().any(|f| f.path == large_file),
+        "large file exceeding MAX_FILE_SIZE_BYTES should be excluded from output"
+    );
+}
