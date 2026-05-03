@@ -952,7 +952,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "analyze_file",
-        description = "Functions, types, classes, and imports from a single source file; use analyze_directory for directories. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. Passing a directory path returns an error. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py.",
+        description = "Functions, types, classes, and imports from a single source file; use analyze_directory for directories. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. Passing a directory path returns INVALID_PARAMS; use analyze_directory instead. git_ref filtering is not supported for single-file analysis. Example queries: What functions are defined in src/lib.rs?; Show me the classes and their methods in src/analyzer.py.",
         output_schema = schema_for_type::<analyze::FileAnalysisOutput>(),
         annotations(
             title = "Analyze File",
@@ -974,6 +974,39 @@ impl CodeAnalyzer {
             .session_call_seq
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let sid = self.session_id.lock().await.clone();
+
+        // Check if path is a directory (not allowed for analyze_file)
+        if std::path::Path::new(&params.path).is_dir() {
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!(
+                    "'{}' is a directory; use analyze_directory instead",
+                    params.path
+                ),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "pass a file path, not a directory",
+                )),
+            )));
+        }
+
+        // summary=true and cursor are mutually exclusive
+        if summary_cursor_conflict(
+            params.output_control.summary,
+            params.pagination.cursor.as_deref(),
+        ) {
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "summary=true is incompatible with a pagination cursor; use one or the other"
+                    .to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "remove cursor or set summary=false",
+                )),
+            )));
+        }
 
         // Call handler for analysis and caching
         let (arc_output, file_cache_hit) = match self.handle_file_details_mode(&params).await {
@@ -1130,7 +1163,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, context))]
     #[tool(
         name = "analyze_symbol",
-        description = "Call graph for a named function/method across all files in a directory to trace usage. Returns direct callers and callees. Unknown symbols return error; symbols with no callers/callees return empty chains. Use import_lookup=true with symbol set to the module path to find all files that import a given module path instead of tracing a call graph. When def_use is true, returns write and read sites for the symbol in def_use_sites; write sites include assignments and initializations, read sites include all references, augmented assignments appear as kind write_read. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method; Find all files that import std::collections",
+        description = "Call graph for a named function/method across all files in a directory to trace usage. Returns direct callers and callees. Unknown symbols return error; symbols with no callers/callees return empty chains. Use import_lookup=true with symbol set to the module path to find all files that import a given module path instead of tracing a call graph. When def_use is true, returns write and read sites for the symbol in def_use_sites; write sites include assignments and initializations, read sites include all references, augmented assignments appear as kind write_read. Passing a file path returns INVALID_PARAMS. summary=true and cursor are mutually exclusive. Example queries: Find all callers of the parse_config function; Trace the call chain for MyClass.process_request up to 2 levels deep; Show only trait impl callers of the write method; Find all files that import std::collections",
         output_schema = schema_for_type::<analyze::FocusedAnalysisOutput>(),
         annotations(
             title = "Analyze Symbol",
@@ -1154,6 +1187,39 @@ impl CodeAnalyzer {
             .session_call_seq
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let sid = self.session_id.lock().await.clone();
+
+        // Check if path is a file (not allowed for analyze_symbol)
+        if std::path::Path::new(&params.path).is_file() {
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                format!(
+                    "'{}' is a file; analyze_symbol requires a directory path",
+                    params.path
+                ),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "pass a directory path, not a file",
+                )),
+            )));
+        }
+
+        // summary=true and cursor are mutually exclusive
+        if summary_cursor_conflict(
+            params.output_control.summary,
+            params.pagination.cursor.as_deref(),
+        ) {
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "summary=true is incompatible with a pagination cursor; use one or the other"
+                    .to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "remove cursor or set summary=false",
+                )),
+            )));
+        }
 
         // import_lookup=true is mutually exclusive with a non-empty symbol.
         if let Err(e) = Self::validate_import_lookup(params.import_lookup, &params.symbol) {
@@ -1273,7 +1339,10 @@ impl CodeAnalyzer {
             PaginationMode::Callers
         };
 
-        let use_summary = params.output_control.summary == Some(true);
+        let mut use_summary = params.output_control.summary == Some(true);
+        if params.output_control.force == Some(true) {
+            use_summary = false;
+        }
         let verbose = params.output_control.verbose.unwrap_or(false);
 
         let mut callee_cursor = match cursor_mode {
@@ -1463,7 +1532,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "analyze_module",
-        description = "Function and import index for a single source file with minimal token cost: name, line_count, language, function names with line numbers, import list only (~75% smaller than analyze_file). Use analyze_file when you need signatures, types, or class details. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. Pagination, summary, force, and verbose not supported. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs.",
+        description = "Function and import index for a single source file with minimal token cost: name, line_count, language, function names with line numbers, import list only (~75% smaller than analyze_file). Use analyze_file when you need signatures, types, or class details. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. Pagination, summary, force, and verbose not supported. git_ref filtering is not supported. Example queries: What functions are defined in src/analyze.rs?; List all imports in src/lib.rs.",
         output_schema = schema_for_type::<types::ModuleInfo>(),
         annotations(
             title = "Analyze Module",
@@ -1545,47 +1614,78 @@ impl CodeAnalyzer {
                 .and_then(aptu_coder_core::lang::language_for_extension)
                 .unwrap_or("unknown")
                 .to_string();
-            let mi = types::ModuleInfo {
-                name,
-                line_count: cached_file.line_count,
-                language,
-                functions: cached_file
-                    .semantic
-                    .functions
-                    .iter()
-                    .map(|f| types::ModuleFunctionInfo {
-                        name: f.name.clone(),
-                        line: f.line,
-                    })
-                    .collect(),
-                imports: cached_file
-                    .semantic
-                    .imports
-                    .iter()
-                    .map(|i| types::ModuleImportInfo {
-                        module: i.module.clone(),
-                        items: i.items.clone(),
-                    })
-                    .collect(),
-            };
+            let mut mi = types::ModuleInfo::default();
+            mi.name = name;
+            mi.line_count = cached_file.line_count;
+            mi.language = language;
+            mi.functions = cached_file
+                .semantic
+                .functions
+                .iter()
+                .map(|f| {
+                    let mut mfi = types::ModuleFunctionInfo::default();
+                    mfi.name = f.name.clone();
+                    mfi.line = f.line;
+                    mfi
+                })
+                .collect();
+            mi.imports = cached_file
+                .semantic
+                .imports
+                .iter()
+                .map(|i| {
+                    let mut mii = types::ModuleImportInfo::default();
+                    mii.module = i.module.clone();
+                    mii.items = i.items.clone();
+                    mii
+                })
+                .collect();
             (mi, true)
         } else {
             // Cache miss: call analyze_file (returns FileAnalysisOutput) so we can populate
             // the file cache for future calls. Then reconstruct ModuleInfo from the result,
             // mirroring the cache-hit path above.
-            let file_output = match analyze::analyze_file(&params.path, None).map_err(|e| {
-                ErrorData::new(
-                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                    format!("Failed to analyze module: {e}"),
-                    Some(error_meta(
-                        "validation",
-                        false,
-                        "ensure file exists, is readable, and has a supported extension",
-                    )),
-                )
-            }) {
+            let file_output = match analyze::analyze_file(&params.path, None) {
                 Ok(v) => v,
-                Err(e) => return Ok(err_to_tool_result(e)),
+                Err(e) => {
+                    let error_data = match &e {
+                        analyze::AnalyzeError::Io(io_err) => match io_err.kind() {
+                            std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {
+                                ErrorData::new(
+                                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                                    format!("Failed to analyze module: {e}"),
+                                    Some(error_meta(
+                                        "validation",
+                                        false,
+                                        "ensure file exists, is readable, and has a supported extension",
+                                    )),
+                                )
+                            }
+                            _ => ErrorData::new(
+                                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                                format!("Failed to analyze module: {e}"),
+                                Some(error_meta("internal", false, "report this as a bug")),
+                            ),
+                        },
+                        analyze::AnalyzeError::UnsupportedLanguage(_)
+                        | analyze::AnalyzeError::InvalidRange { .. }
+                        | analyze::AnalyzeError::NotAFile(_) => ErrorData::new(
+                            rmcp::model::ErrorCode::INVALID_PARAMS,
+                            format!("Failed to analyze module: {e}"),
+                            Some(error_meta(
+                                "validation",
+                                false,
+                                "ensure the path is a supported source file",
+                            )),
+                        ),
+                        _ => ErrorData::new(
+                            rmcp::model::ErrorCode::INTERNAL_ERROR,
+                            format!("Failed to analyze module: {e}"),
+                            Some(error_meta("internal", false, "report this as a bug")),
+                        ),
+                    };
+                    return Ok(err_to_tool_result(error_data));
+                }
             };
             let arc_output = std::sync::Arc::new(file_output);
             if let Some(key) = module_cache_key.clone() {
@@ -1603,29 +1703,32 @@ impl CodeAnalyzer {
                 .and_then(aptu_coder_core::lang::language_for_extension)
                 .unwrap_or("unknown")
                 .to_string();
-            let mi = types::ModuleInfo {
-                name,
-                line_count: arc_output.line_count,
-                language,
-                functions: arc_output
-                    .semantic
-                    .functions
-                    .iter()
-                    .map(|f| types::ModuleFunctionInfo {
-                        name: f.name.clone(),
-                        line: f.line,
-                    })
-                    .collect(),
-                imports: arc_output
-                    .semantic
-                    .imports
-                    .iter()
-                    .map(|i| types::ModuleImportInfo {
-                        module: i.module.clone(),
-                        items: i.items.clone(),
-                    })
-                    .collect(),
-            };
+            let mut mi = types::ModuleInfo::default();
+            mi.name = name;
+            mi.line_count = arc_output.line_count;
+            mi.language = language;
+            mi.functions = arc_output
+                .semantic
+                .functions
+                .iter()
+                .map(|f| {
+                    let mut mfi = types::ModuleFunctionInfo::default();
+                    mfi.name = f.name.clone();
+                    mfi.line = f.line;
+                    mfi
+                })
+                .collect();
+            mi.imports = arc_output
+                .semantic
+                .imports
+                .iter()
+                .map(|i| {
+                    let mut mii = types::ModuleImportInfo::default();
+                    mii.module = i.module.clone();
+                    mii.items = i.items.clone();
+                    mii
+                })
+                .collect();
             (mi, false)
         };
 
@@ -3157,27 +3260,23 @@ mod tests {
         let analyzer = make_analyzer();
 
         // Prime the file cache by calling handle_file_details_mode once
-        let file_params = aptu_coder_core::types::AnalyzeFileParams {
-            path: path.clone(),
-            ast_recursion_limit: None,
-            fields: None,
-            pagination: aptu_coder_core::types::PaginationParams {
-                cursor: None,
-                page_size: None,
-            },
-            output_control: aptu_coder_core::types::OutputControlParams {
-                summary: None,
-                force: None,
-                verbose: None,
-            },
-        };
+        let mut file_params = aptu_coder_core::types::AnalyzeFileParams::default();
+        file_params.path = path.clone();
+        file_params.ast_recursion_limit = None;
+        file_params.fields = None;
+        file_params.pagination.cursor = None;
+        file_params.pagination.page_size = None;
+        file_params.output_control.summary = None;
+        file_params.output_control.force = None;
+        file_params.output_control.verbose = None;
         let (_cached, _) = analyzer
             .handle_file_details_mode(&file_params)
             .await
             .unwrap();
 
         // Act: now call analyze_module; the cache key is mtime-based so same file = hit
-        let module_params = aptu_coder_core::types::AnalyzeModuleParams { path: path.clone() };
+        let mut module_params = aptu_coder_core::types::AnalyzeModuleParams::default();
+        module_params.path = path.clone();
 
         // Replicate the cache lookup the handler does (no public method; test via build path)
         let module_cache_key = std::fs::metadata(&path).ok().and_then(|meta| {

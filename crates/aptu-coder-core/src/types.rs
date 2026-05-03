@@ -18,6 +18,7 @@ pub struct CallEdge {
 }
 
 /// Information about an `impl Trait for Type` block found in Rust source.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ImplTraitInfo {
     pub trait_name: String,
@@ -60,7 +61,8 @@ pub struct DefUseSite {
 }
 
 /// Pagination parameters shared across all tools.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct PaginationParams {
     /// Pagination cursor from a previous response's `next_cursor` field. Pass unchanged to retrieve the next page. Omit on the first call.
@@ -74,7 +76,8 @@ pub struct PaginationParams {
 }
 
 /// Output control parameters shared across all tools.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct OutputControlParams {
     /// Return full output even when it exceeds the 50K char limit. Prefer summary=true or narrowing scope over force=true; force=true can produce very large responses.
@@ -130,7 +133,8 @@ pub enum AnalyzeFileField {
     Imports,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeFileParams {
     /// File path to analyze
@@ -158,7 +162,8 @@ pub struct AnalyzeFileParams {
     pub output_control: OutputControlParams,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeModuleParams {
     /// File path to analyze
@@ -251,6 +256,7 @@ pub struct AnalyzeSymbolParams {
     pub def_use: Option<bool>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalysisResult {
@@ -272,7 +278,8 @@ pub struct AnalysisResult {
     pub references: Vec<ReferenceInfo>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FileInfo {
     pub path: String,
@@ -296,7 +303,8 @@ pub struct FileInfo {
     pub is_test: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FunctionInfo {
     pub name: String,
@@ -354,7 +362,8 @@ impl FunctionInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ClassInfo {
     pub name: String,
@@ -378,6 +387,7 @@ pub struct ClassInfo {
     pub inherits: Vec<String>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct CallInfo {
@@ -402,6 +412,7 @@ pub struct CallInfo {
     pub arg_count: Option<usize>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ReferenceInfo {
@@ -449,6 +460,7 @@ pub struct CallChain {
     pub depth: u32,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FocusedAnalysisData {
@@ -458,7 +470,8 @@ pub struct FocusedAnalysisData {
     pub references: Vec<ReferenceInfo>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ImportInfo {
     /// Full module path excluding the imported symbol (e.g., `std::collections` for `use std::collections::HashMap`).
@@ -523,7 +536,8 @@ impl SemanticAnalysis {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ModuleFunctionInfo {
     /// Function name
@@ -537,7 +551,8 @@ pub struct ModuleFunctionInfo {
 }
 
 /// Minimal import info for `analyze_module`: module and items only.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ModuleImportInfo {
     /// Full module path (e.g., `std::collections` for `use std::collections::HashMap`)
@@ -547,7 +562,8 @@ pub struct ModuleImportInfo {
 }
 
 /// Minimal fixed schema for `analyze_module`: lightweight code understanding.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ModuleInfo {
     /// File name (basename only, e.g., 'lib.rs')
@@ -767,6 +783,7 @@ mod error_meta_tests {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeRawParams {
@@ -778,6 +795,7 @@ pub struct AnalyzeRawParams {
     pub end_line: Option<usize>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct AnalyzeRawOutput {
@@ -788,6 +806,7 @@ pub struct AnalyzeRawOutput {
     pub content: String,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditOverwriteParams {
@@ -797,6 +816,7 @@ pub struct EditOverwriteParams {
     pub content: String,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditOverwriteOutput {
@@ -806,6 +826,7 @@ pub struct EditOverwriteOutput {
     pub bytes_written: usize,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditReplaceParams {
@@ -817,6 +838,7 @@ pub struct EditReplaceParams {
     pub new_text: String,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditReplaceOutput {
@@ -828,6 +850,7 @@ pub struct EditReplaceOutput {
     pub bytes_after: usize,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditRenameParams {
@@ -841,6 +864,7 @@ pub struct EditRenameParams {
     pub kind: Option<String>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditRenameOutput {
@@ -859,6 +883,7 @@ pub enum InsertPosition {
     After,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditInsertParams {
@@ -872,6 +897,7 @@ pub struct EditInsertParams {
     pub content: String,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditInsertOutput {
