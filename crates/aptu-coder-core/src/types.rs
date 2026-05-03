@@ -787,3 +787,43 @@ pub struct ReadFileOutput {
     pub end_line: usize,
     pub content: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct WriteFileParams {
+    /// Path to the file to create or overwrite.
+    pub path: String,
+    /// UTF-8 content to write.
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct WriteFileOutput {
+    /// Path of the file that was written.
+    pub path: String,
+    /// Number of bytes written (UTF-8 byte length of content).
+    pub bytes_written: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct EditFileParams {
+    /// Path to the file to edit.
+    pub path: String,
+    /// Exact text block to find and replace. Must appear exactly once in the file.
+    pub old_text: String,
+    /// Replacement text.
+    pub new_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct EditFileOutput {
+    /// Path of the file that was edited.
+    pub path: String,
+    /// File size in bytes before the edit.
+    pub bytes_before: usize,
+    /// File size in bytes after the edit.
+    pub bytes_after: usize,
+}

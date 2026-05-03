@@ -7,7 +7,7 @@ use serde_json::Value;
 fn test_all_tools_have_correct_annotations() {
     let tools = CodeAnalyzer::list_tools();
 
-    assert_eq!(tools.len(), 5, "expected 5 registered tools");
+    assert_eq!(tools.len(), 7, "expected 7 registered tools");
 
     let expected_names = [
         "analyze_directory",
@@ -15,6 +15,8 @@ fn test_all_tools_have_correct_annotations() {
         "analyze_module",
         "analyze_symbol",
         "read_file",
+        "write_file",
+        "edit_file",
     ];
 
     for tool in &tools {
@@ -30,24 +32,57 @@ fn test_all_tools_have_correct_annotations() {
             .as_ref()
             .unwrap_or_else(|| panic!("tool {} is missing annotations", name));
 
-        assert_eq!(
-            annotations.read_only_hint,
-            Some(true),
-            "tool {} must have read_only_hint=true",
-            name
-        );
-        assert_eq!(
-            annotations.destructive_hint,
-            Some(false),
-            "tool {} must have destructive_hint=false",
-            name
-        );
-        assert_eq!(
-            annotations.idempotent_hint,
-            Some(true),
-            "tool {} must have idempotent_hint=true",
-            name
-        );
+        // write_file and edit_file are destructive; others are read-only
+        if name == "write_file" || name == "edit_file" {
+            assert_eq!(
+                annotations.read_only_hint,
+                Some(false),
+                "tool {} must have read_only_hint=false",
+                name
+            );
+            assert_eq!(
+                annotations.destructive_hint,
+                Some(true),
+                "tool {} must have destructive_hint=true",
+                name
+            );
+            assert_eq!(
+                annotations.idempotent_hint,
+                Some(false),
+                "tool {} must have idempotent_hint=false",
+                name
+            );
+        } else {
+            assert_eq!(
+                annotations.read_only_hint,
+                Some(true),
+                "tool {} must have read_only_hint=true",
+                name
+            );
+            assert_eq!(
+                annotations.destructive_hint,
+                Some(false),
+                "tool {} must have destructive_hint=false",
+                name
+            );
+            // analyze_directory is idempotent; others are not
+            if name == "analyze_directory" {
+                assert_eq!(
+                    annotations.idempotent_hint,
+                    Some(true),
+                    "tool {} must have idempotent_hint=true",
+                    name
+                );
+            } else {
+                assert_eq!(
+                    annotations.idempotent_hint,
+                    Some(true),
+                    "tool {} must have idempotent_hint=true",
+                    name
+                );
+            }
+        }
+
         assert_eq!(
             annotations.open_world_hint,
             Some(false),
