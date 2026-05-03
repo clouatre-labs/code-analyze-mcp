@@ -1667,6 +1667,17 @@ impl CodeAnalyzer {
                                 Some(error_meta("internal", false, "report this as a bug")),
                             ),
                         },
+                        analyze::AnalyzeError::UnsupportedLanguage(_)
+                        | analyze::AnalyzeError::InvalidRange { .. }
+                        | analyze::AnalyzeError::NotAFile(_) => ErrorData::new(
+                            rmcp::model::ErrorCode::INVALID_PARAMS,
+                            format!("Failed to analyze module: {e}"),
+                            Some(error_meta(
+                                "validation",
+                                false,
+                                "ensure the path is a supported source file",
+                            )),
+                        ),
                         _ => ErrorData::new(
                             rmcp::model::ErrorCode::INTERNAL_ERROR,
                             format!("Failed to analyze module: {e}"),
