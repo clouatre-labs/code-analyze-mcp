@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub const DEFAULT_PAGE_SIZE: usize = 100;
+pub const MAX_PAGE_SIZE: usize = 10_000;
 
 /// Selects which call-chain direction a pagination cursor tracks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,6 +97,12 @@ pub fn paginate_slice<T: Clone>(
     page_size: usize,
     mode: PaginationMode,
 ) -> Result<PaginationResult<T>, PaginationError> {
+    if page_size == 0 {
+        return Err(PaginationError::InvalidCursor(
+            "page_size must be at least 1".to_string(),
+        ));
+    }
+
     let total = items.len();
 
     if offset >= total {
@@ -106,7 +113,8 @@ pub fn paginate_slice<T: Clone>(
         });
     }
 
-    let end = std::cmp::min(offset + page_size, total);
+    let clamped_page_size = page_size.min(MAX_PAGE_SIZE);
+    let end = std::cmp::min(offset.saturating_add(clamped_page_size), total);
     let page_items = items[offset..end].to_vec();
 
     let next_cursor = if end < total {

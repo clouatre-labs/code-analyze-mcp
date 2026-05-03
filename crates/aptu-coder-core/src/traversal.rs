@@ -14,6 +14,8 @@ use std::time::Instant;
 use thiserror::Error;
 use tracing::instrument;
 
+pub const MAX_WALK_ENTRIES: usize = 50_000;
+
 #[derive(Debug, Clone)]
 pub struct WalkEntry {
     pub path: PathBuf,
@@ -84,6 +86,9 @@ pub fn walk_directory(
                     return ignore::WalkState::Skip;
                 };
                 guard.push(walk_entry);
+                if guard.len() >= MAX_WALK_ENTRIES {
+                    return ignore::WalkState::Quit;
+                }
                 ignore::WalkState::Continue
             }
             Err(e) => {
@@ -127,6 +132,20 @@ pub fn changed_files_from_git_ref(
     dir: &Path,
     git_ref: &str,
 ) -> Result<HashSet<PathBuf>, TraversalError> {
+    // Validate git_ref to prevent argument injection attacks.
+    // Reject refs that start with '-' (would be interpreted as flags).
+    // Also reject refs containing whitespace or shell metacharacters.
+    if git_ref.is_empty() || git_ref.starts_with('-') {
+        return Err(TraversalError::GitError(
+            "invalid git_ref: must not be empty or start with '-'".to_string()
+        ));
+    }
+    if git_ref.chars().any(|c| c.is_whitespace() || matches!(c, '|' | '&' | ';' | '>' | '<' | '`' | '$' | '(' | ')' | '{' | '}' | '[' | ']' | '*' | '?' | '\\' | '"' | '\'')) {
+        return Err(TraversalError::GitError(
+            "invalid git_ref: contains forbidden characters".to_string()
+        ));
+    }
+
     // Resolve the git repository root so that relative paths from `git diff` can
     // be anchored to an absolute base.
     let root_out = Command::new("git")
@@ -260,4 +279,51 @@ pub fn subtree_counts_from_entries(root: &Path, entries: &[WalkEntry]) -> Vec<(P
         }
     }
     counts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_git_ref_injection_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tmp_path = tmp.path();
+
+        // --output=/tmp/evil should be rejected (starts with -)
+        let result = changed_files_from_git_ref(tmp_path, "--output=/tmp/evil");
+        assert!(result.is_err(), "should reject git_ref starting with '-'");
+
+        // double-dash alone should be rejected (starts with -)
+        let result = changed_files_from_git_ref(tmp_path, "--");
+        assert!(result.is_err(), "should reject git_ref starting with '-'");
+
+        // git_ref with spaces should be rejected
+        let result = changed_files_from_git_ref(tmp_path, "main branch");
+        assert!(result.is_err(), "should reject git_ref with spaces");
+
+        // empty git_ref should be rejected
+        let result = changed_files_from_git_ref(tmp_path, "");
+        assert!(result.is_err(), "should reject empty git_ref");
+
+        // valid refs should pass validation (may fail on git not found, but not on validation)
+        // HEAD~1 is valid
+        let result = changed_files_from_git_ref(tmp_path, "HEAD~1");
+        // We expect a git error (not a git repo), not a validation error
+        if let Err(TraversalError::GitError(msg)) = result {
+            assert!(!msg.contains("invalid git_ref"), "HEAD~1 should pass validation");
+        }
+
+        // main is valid
+        let result = changed_files_from_git_ref(tmp_path, "main");
+        if let Err(TraversalError::GitError(msg)) = result {
+            assert!(!msg.contains("invalid git_ref"), "main should pass validation");
+        }
+
+        // abc123 is valid
+        let result = changed_files_from_git_ref(tmp_path, "abc123");
+        if let Err(TraversalError::GitError(msg)) = result {
+            assert!(!msg.contains("invalid git_ref"), "abc123 should pass validation");
+        }
+    }
 }

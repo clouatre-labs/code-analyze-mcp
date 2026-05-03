@@ -34,6 +34,19 @@ pub fn path_completions(root: &Path, prefix: &str) -> Vec<String> {
         return Vec::new();
     }
 
+    // Verify that search_dir is within root (path traversal check)
+    let canonical_root = match std::fs::canonicalize(root) {
+        Ok(p) => p,
+        Err(_) => return Vec::new(),
+    };
+    let canonical_search = match std::fs::canonicalize(&search_dir) {
+        Ok(p) => p,
+        Err(_) => return Vec::new(),
+    };
+    if !canonical_search.starts_with(&canonical_root) {
+        return Vec::new();
+    }
+
     let mut results = Vec::new();
 
     // Walk with depth 1 to get immediate children

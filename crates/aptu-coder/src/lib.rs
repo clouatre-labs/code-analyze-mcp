@@ -114,6 +114,67 @@ fn no_cache_meta() -> Meta {
     Meta(m)
 }
 
+/// Validates that a path is within the current working directory.
+/// For `require_exists=true`, the path must exist and be canonicalizable.
+/// For `require_exists=false`, the parent directory must exist and be canonicalizable.
+fn validate_path(path: &str, require_exists: bool) -> Result<std::path::PathBuf, ErrorData> {
+    let cwd = std::env::current_dir().map_err(|_| {
+        ErrorData::new(
+            rmcp::model::ErrorCode::INVALID_PARAMS,
+            "path is outside the allowed root".to_string(),
+            Some(error_meta(
+                "validation",
+                false,
+                "ensure the working directory is accessible",
+            )),
+        )
+    })?;
+
+    let canonical_path = if require_exists {
+        std::fs::canonicalize(path).map_err(|_| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "path is outside the allowed root".to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "provide a valid path within the working directory",
+                )),
+            )
+        })?
+    } else {
+        // For non-existent files (edit_overwrite), canonicalize the parent directory
+        let p = std::path::Path::new(path);
+        let parent = p.parent().unwrap_or(std::path::Path::new("."));
+        let canonical_parent = std::fs::canonicalize(parent).map_err(|_| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "path is outside the allowed root".to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "provide a valid path within the working directory",
+                )),
+            )
+        })?;
+        canonical_parent.join(p.file_name().unwrap_or_default())
+    };
+
+    if !canonical_path.starts_with(&cwd) {
+        return Err(ErrorData::new(
+            rmcp::model::ErrorCode::INVALID_PARAMS,
+            "path is outside the allowed root".to_string(),
+            Some(error_meta(
+                "validation",
+                false,
+                "provide a path within the current working directory",
+            )),
+        ));
+    }
+
+    Ok(canonical_path)
+}
+
 /// Helper function for paginating focus chains (callers or callees).
 /// Returns (items, re-encoded_cursor_option).
 fn paginate_focus_chains(
@@ -812,6 +873,10 @@ impl CodeAnalyzer {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let ct = context.ct.clone();
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
@@ -968,6 +1033,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -1179,6 +1248,10 @@ impl CodeAnalyzer {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let ct = context.ct.clone();
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
@@ -1414,7 +1487,15 @@ impl CodeAnalyzer {
                 }
             }
             PaginationMode::Default => {
-                unreachable!("SymbolFocus should only use Callers or Callees modes")
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "invalid cursor: unknown pagination mode".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "use a cursor returned by a previous analyze_symbol call",
+                    )),
+                )));
             }
             PaginationMode::DefUse => {
                 let total_sites = output.def_use_sites.len();
@@ -1548,6 +1629,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -1782,6 +1867,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -1981,6 +2070,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, false) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -2155,6 +2248,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -2385,6 +2482,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
@@ -2666,6 +2767,10 @@ impl CodeAnalyzer {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
+        let _validated_path = match validate_path(&params.path, true) {
+            Ok(p) => p,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
         let t_start = std::time::Instant::now();
         let param_path = params.path.clone();
         let seq = self
