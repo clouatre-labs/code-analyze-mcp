@@ -1723,7 +1723,7 @@ impl CodeAnalyzer {
 
         let output = match handle.await {
             Ok(Ok(v)) => v,
-            Ok(Err(aptu_coder_core::EditError::InvalidRange { start, end, total })) => {
+            Ok(Err(aptu_coder_core::AnalyzeError::InvalidRange { start, end, total })) => {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
@@ -1748,7 +1748,7 @@ impl CodeAnalyzer {
                     )),
                 )));
             }
-            Ok(Err(aptu_coder_core::EditError::NotAFile(_))) => {
+            Ok(Err(aptu_coder_core::AnalyzeError::NotAFile(_))) => {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),

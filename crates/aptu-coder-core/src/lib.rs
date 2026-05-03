@@ -61,12 +61,12 @@ pub use analyze::{
     AnalysisOutput, AnalyzeError, CallChainEntry, FileAnalysisOutput, FocusedAnalysisConfig,
     FocusedAnalysisOutput, analyze_directory, analyze_directory_with_progress, analyze_file,
     analyze_focused, analyze_focused_with_progress, analyze_focused_with_progress_with_entries,
-    analyze_module_file, analyze_str,
+    analyze_module_file, analyze_raw_range, analyze_str,
 };
 pub use config::AnalysisConfig;
 pub use edit::{
-    EditError, analyze_raw_range, edit_insert_at_symbol, edit_overwrite_content,
-    edit_rename_in_file, edit_replace_block,
+    EditError, edit_insert_at_symbol, edit_overwrite_content, edit_rename_in_file,
+    edit_replace_block,
 };
 pub use lang::{language_for_extension, supported_languages};
 pub use parser::ParserError;

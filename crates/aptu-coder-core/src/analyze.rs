@@ -43,6 +43,16 @@ pub enum AnalyzeError {
     Cancelled,
     #[error("unsupported language: {0}")]
     UnsupportedLanguage(String),
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("invalid range: start ({start}) > end ({end}); file has {total} lines")]
+    InvalidRange {
+        start: usize,
+        end: usize,
+        total: usize,
+    },
+    #[error("path is a directory, not a file: {0}")]
+    NotAFile(PathBuf),
 }
 
 /// Result of directory analysis containing both formatted output and file data.
@@ -1384,6 +1394,59 @@ fn extract_string_list_from_list_node(
     }
 }
 
+/// Read a file and return its raw content with line numbers for a specified range.
+///
+/// # Arguments
+/// - `path`: File path to read
+/// - `start_line`: Starting line (1-indexed, optional; defaults to 1)
+/// - `end_line`: Ending line (1-indexed, optional; defaults to total lines)
+///
+/// # Returns
+/// - `Ok(AnalyzeRawOutput)` with formatted content and metadata
+/// - `Err(AnalyzeError::NotAFile)` if path is a directory
+/// - `Err(AnalyzeError::InvalidRange)` if start > end
+/// - `Err(AnalyzeError::Io)` for file I/O errors
+pub fn analyze_raw_range(
+    path: &Path,
+    start_line: Option<usize>,
+    end_line: Option<usize>,
+) -> Result<crate::types::AnalyzeRawOutput, AnalyzeError> {
+    if path.is_dir() {
+        return Err(AnalyzeError::NotAFile(path.to_path_buf()));
+    }
+    let raw = std::fs::read_to_string(path)?;
+    let lines: Vec<&str> = raw.lines().collect();
+    let total = lines.len();
+    if total == 0 {
+        return Ok(crate::types::AnalyzeRawOutput {
+            path: path.display().to_string(),
+            total_lines: 0,
+            start_line: 0,
+            end_line: 0,
+            content: String::new(),
+        });
+    }
+    let start = start_line.unwrap_or(1).max(1).min(total.max(1));
+    let end = end_line.unwrap_or(total).min(total).max(1);
+    if start > end {
+        return Err(AnalyzeError::InvalidRange { start, end, total });
+    }
+    let width = end.to_string().len();
+    let content = lines[start - 1..end]
+        .iter()
+        .enumerate()
+        .map(|(i, line)| format!("{:>width$}: {}", start + i, line, width = width))
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(crate::types::AnalyzeRawOutput {
+        path: path.display().to_string(),
+        total_lines: total,
+        start_line: start,
+        end_line: end,
+        content,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1848,5 +1911,60 @@ fn caller_c() { target(); }
             output.formatted.contains("DEF-USE SITES"),
             "formatted output should contain DEF-USE SITES"
         );
+    }
+
+    fn make_temp_file(content: &str) -> tempfile::NamedTempFile {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        use std::io::Write;
+        f.write_all(content.as_bytes()).unwrap();
+        f.flush().unwrap();
+        f
+    }
+
+    #[test]
+    fn test_analyze_raw_full_file() {
+        let f = make_temp_file("line1\nline2\nline3\n");
+        let out = analyze_raw_range(f.path(), None, None).unwrap();
+        assert_eq!(out.total_lines, 3);
+        assert_eq!(out.start_line, 1);
+        assert_eq!(out.end_line, 3);
+        assert!(out.content.contains("line1"));
+        assert!(out.content.contains("line3"));
+    }
+
+    #[test]
+    fn test_analyze_raw_partial_range() {
+        let f = make_temp_file("a\nb\nc\nd\ne\n");
+        let out = analyze_raw_range(f.path(), Some(2), Some(4)).unwrap();
+        assert_eq!(out.start_line, 2);
+        assert_eq!(out.end_line, 4);
+        assert!(out.content.contains("b"));
+        assert!(out.content.contains("d"));
+        assert!(!out.content.contains("a"));
+        assert!(!out.content.contains("e"));
+    }
+
+    #[test]
+    fn test_analyze_raw_invalid_range() {
+        let f = make_temp_file("a\nb\nc\n");
+        let err = analyze_raw_range(f.path(), Some(3), Some(1)).unwrap_err();
+        assert!(matches!(err, AnalyzeError::InvalidRange { .. }));
+    }
+
+    #[test]
+    fn test_analyze_raw_clamped_range() {
+        let f = make_temp_file("x\ny\nz\n");
+        // end_line beyond total should clamp
+        let out = analyze_raw_range(f.path(), Some(1), Some(999)).unwrap();
+        assert_eq!(out.end_line, 3);
+        assert_eq!(out.total_lines, 3);
+    }
+
+    #[test]
+    fn test_analyze_raw_empty_file() {
+        let f = make_temp_file("");
+        let out = analyze_raw_range(f.path(), None, None).unwrap();
+        assert_eq!(out.total_lines, 0);
+        assert_eq!(out.content, "");
     }
 }
