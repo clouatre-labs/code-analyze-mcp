@@ -3,8 +3,8 @@
 //! File read utilities for the edit tools.
 
 use crate::types::{
-    EditFileOutput, InsertAtSymbolOutput, InsertPosition, ReadFileOutput, RenameSymbolOutput,
-    WriteFileOutput,
+    AnalyzeRawOutput, EditInsertOutput, EditOverwriteOutput, EditRenameOutput, EditReplaceOutput,
+    InsertPosition,
 };
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -47,11 +47,11 @@ pub enum EditError {
 
 const IDENTIFIER_QUERY: &str = "(identifier) @name";
 
-pub fn read_file_range(
+pub fn analyze_raw_range(
     path: &Path,
     start_line: Option<usize>,
     end_line: Option<usize>,
-) -> Result<ReadFileOutput, EditError> {
+) -> Result<AnalyzeRawOutput, EditError> {
     if path.is_dir() {
         return Err(EditError::NotAFile(path.to_path_buf()));
     }
@@ -59,7 +59,7 @@ pub fn read_file_range(
     let lines: Vec<&str> = raw.lines().collect();
     let total = lines.len();
     if total == 0 {
-        return Ok(ReadFileOutput {
+        return Ok(AnalyzeRawOutput {
             path: path.display().to_string(),
             total_lines: 0,
             start_line: 0,
@@ -79,7 +79,7 @@ pub fn read_file_range(
         .map(|(i, line)| format!("{:>width$}: {}", start + i, line, width = width))
         .collect::<Vec<_>>()
         .join("\n");
-    Ok(ReadFileOutput {
+    Ok(AnalyzeRawOutput {
         path: path.display().to_string(),
         total_lines: total,
         start_line: start,
@@ -88,7 +88,10 @@ pub fn read_file_range(
     })
 }
 
-pub fn write_file_content(path: &Path, content: &str) -> Result<WriteFileOutput, EditError> {
+pub fn edit_overwrite_content(
+    path: &Path,
+    content: &str,
+) -> Result<EditOverwriteOutput, EditError> {
     if path.is_dir() {
         return Err(EditError::NotAFile(path.to_path_buf()));
     }
@@ -98,17 +101,17 @@ pub fn write_file_content(path: &Path, content: &str) -> Result<WriteFileOutput,
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(path, content)?;
-    Ok(WriteFileOutput {
+    Ok(EditOverwriteOutput {
         path: path.display().to_string(),
         bytes_written: content.len(),
     })
 }
 
-pub fn edit_file_replace(
+pub fn edit_replace_block(
     path: &Path,
     old_text: &str,
     new_text: &str,
-) -> Result<EditFileOutput, EditError> {
+) -> Result<EditReplaceOutput, EditError> {
     if path.is_dir() {
         return Err(EditError::NotAFile(path.to_path_buf()));
     }
@@ -132,19 +135,19 @@ pub fn edit_file_replace(
     let updated = content.replacen(old_text, new_text, 1);
     let bytes_after = updated.len();
     std::fs::write(path, &updated)?;
-    Ok(EditFileOutput {
+    Ok(EditReplaceOutput {
         path: path.display().to_string(),
         bytes_before,
         bytes_after,
     })
 }
 
-pub fn rename_symbol_in_file(
+pub fn edit_rename_in_file(
     path: &Path,
     old_name: &str,
     new_name: &str,
     kind: Option<&str>,
-) -> Result<RenameSymbolOutput, EditError> {
+) -> Result<EditRenameOutput, EditError> {
     if kind.is_some() {
         return Err(EditError::KindFilterUnsupported);
     }
@@ -194,7 +197,7 @@ pub fn rename_symbol_in_file(
 
     std::fs::write(path, &updated)?;
 
-    Ok(RenameSymbolOutput {
+    Ok(EditRenameOutput {
         path: path.display().to_string(),
         old_name: old_name.to_string(),
         new_name: new_name.to_string(),
@@ -202,12 +205,12 @@ pub fn rename_symbol_in_file(
     })
 }
 
-pub fn insert_at_symbol_in_file(
+pub fn edit_insert_at_symbol(
     path: &Path,
     symbol_name: &str,
     position: InsertPosition,
     content: &str,
-) -> Result<InsertAtSymbolOutput, EditError> {
+) -> Result<EditInsertOutput, EditError> {
     if path.is_dir() {
         return Err(EditError::NotAFile(path.to_path_buf()));
     }
@@ -255,7 +258,7 @@ pub fn insert_at_symbol_in_file(
         InsertPosition::After => "after",
     };
 
-    Ok(InsertAtSymbolOutput {
+    Ok(EditInsertOutput {
         path: path.display().to_string(),
         symbol_name: symbol_name.to_string(),
         position: position_str.to_string(),
@@ -276,9 +279,9 @@ mod tests {
     }
 
     #[test]
-    fn test_read_full_file() {
+    fn test_analyze_raw_full_file() {
         let f = make_temp_file("line1\nline2\nline3\n");
-        let out = read_file_range(f.path(), None, None).unwrap();
+        let out = analyze_raw_range(f.path(), None, None).unwrap();
         assert_eq!(out.total_lines, 3);
         assert_eq!(out.start_line, 1);
         assert_eq!(out.end_line, 3);
@@ -287,9 +290,9 @@ mod tests {
     }
 
     #[test]
-    fn test_read_partial_range() {
+    fn test_analyze_raw_partial_range() {
         let f = make_temp_file("a\nb\nc\nd\ne\n");
-        let out = read_file_range(f.path(), Some(2), Some(4)).unwrap();
+        let out = analyze_raw_range(f.path(), Some(2), Some(4)).unwrap();
         assert_eq!(out.start_line, 2);
         assert_eq!(out.end_line, 4);
         assert!(out.content.contains("b"));
@@ -299,97 +302,97 @@ mod tests {
     }
 
     #[test]
-    fn test_read_invalid_range() {
+    fn test_analyze_raw_invalid_range() {
         let f = make_temp_file("a\nb\nc\n");
-        let err = read_file_range(f.path(), Some(3), Some(1)).unwrap_err();
+        let err = analyze_raw_range(f.path(), Some(3), Some(1)).unwrap_err();
         assert!(matches!(err, EditError::InvalidRange { .. }));
     }
 
     #[test]
-    fn test_read_clamped_range() {
+    fn test_analyze_raw_clamped_range() {
         let f = make_temp_file("x\ny\nz\n");
         // end_line beyond total should clamp
-        let out = read_file_range(f.path(), Some(1), Some(999)).unwrap();
+        let out = analyze_raw_range(f.path(), Some(1), Some(999)).unwrap();
         assert_eq!(out.end_line, 3);
         assert_eq!(out.total_lines, 3);
     }
 
     #[test]
-    fn test_read_empty_file() {
+    fn test_analyze_raw_empty_file() {
         let f = make_temp_file("");
-        let out = read_file_range(f.path(), None, None).unwrap();
+        let out = analyze_raw_range(f.path(), None, None).unwrap();
         assert_eq!(out.total_lines, 0);
         assert_eq!(out.content, "");
     }
 
     #[test]
-    fn write_file_content_creates_new_file() {
+    fn edit_overwrite_content_creates_new_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("new.txt");
-        let result = write_file_content(&path, "hello world").unwrap();
+        let result = edit_overwrite_content(&path, "hello world").unwrap();
         assert_eq!(result.bytes_written, 11);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello world");
     }
 
     #[test]
-    fn write_file_content_overwrites_existing() {
+    fn edit_overwrite_content_overwrites_existing() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("existing.txt");
         std::fs::write(&path, "old content").unwrap();
-        let result = write_file_content(&path, "new content").unwrap();
+        let result = edit_overwrite_content(&path, "new content").unwrap();
         assert_eq!(result.bytes_written, 11);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "new content");
     }
 
     #[test]
-    fn write_file_content_creates_parent_dirs() {
+    fn edit_overwrite_content_creates_parent_dirs() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("a").join("b").join("c.txt");
-        let result = write_file_content(&path, "nested").unwrap();
+        let result = edit_overwrite_content(&path, "nested").unwrap();
         assert_eq!(result.bytes_written, 6);
         assert!(path.exists());
     }
 
     #[test]
-    fn write_file_content_directory_guard() {
+    fn edit_overwrite_content_directory_guard() {
         let dir = tempfile::tempdir().unwrap();
-        let err = write_file_content(dir.path(), "content").unwrap_err();
+        let err = edit_overwrite_content(dir.path(), "content").unwrap_err();
         assert!(matches!(err, EditError::NotAFile(_)));
     }
 
     #[test]
-    fn edit_file_replace_happy_path() {
+    fn edit_replace_block_happy_path() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("file.txt");
         std::fs::write(&path, "foo bar baz").unwrap();
-        let result = edit_file_replace(&path, "bar", "qux").unwrap();
+        let result = edit_replace_block(&path, "bar", "qux").unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "foo qux baz");
         assert_eq!(result.bytes_before, 11);
         assert_eq!(result.bytes_after, 11);
     }
 
     #[test]
-    fn edit_file_replace_not_found() {
+    fn edit_replace_block_not_found() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("file.txt");
         std::fs::write(&path, "foo bar baz").unwrap();
-        let err = edit_file_replace(&path, "missing", "x").unwrap_err();
+        let err = edit_replace_block(&path, "missing", "x").unwrap_err();
         assert!(matches!(err, EditError::NotFound { .. }));
     }
 
     #[test]
-    fn edit_file_replace_ambiguous() {
+    fn edit_replace_block_ambiguous() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("file.txt");
         std::fs::write(&path, "foo foo baz").unwrap();
-        let err = edit_file_replace(&path, "foo", "x").unwrap_err();
+        let err = edit_replace_block(&path, "foo", "x").unwrap_err();
         assert!(matches!(err, EditError::Ambiguous { count: 2, .. }));
     }
 
     #[test]
-    fn edit_file_replace_directory_guard() {
+    fn edit_replace_block_directory_guard() {
         let dir = tempfile::tempdir().unwrap();
-        let err = edit_file_replace(dir.path(), "old", "new").unwrap_err();
+        let err = edit_replace_block(dir.path(), "old", "new").unwrap_err();
         assert!(matches!(err, EditError::NotAFile(_)));
     }
 
@@ -401,10 +404,10 @@ mod tests {
     }
 
     #[test]
-    fn rename_symbol_renames_identifier_not_comment() {
+    fn edit_rename_in_file_renames_identifier_not_comment() {
         let src = "fn foo() {}\n// foo is a function\n";
         let f = write_temp(src, ".rs");
-        let out = rename_symbol_in_file(f.path(), "foo", "bar", None).unwrap();
+        let out = edit_rename_in_file(f.path(), "foo", "bar", None).unwrap();
         assert_eq!(out.occurrences_renamed, 1);
         let updated = std::fs::read_to_string(f.path()).unwrap();
         assert!(updated.contains("fn bar()"));
@@ -412,61 +415,59 @@ mod tests {
     }
 
     #[test]
-    fn rename_symbol_not_found_error() {
+    fn edit_rename_in_file_not_found_error() {
         let f = write_temp("fn foo() {}\n", ".rs");
-        let err = rename_symbol_in_file(f.path(), "missing", "bar", None).unwrap_err();
+        let err = edit_rename_in_file(f.path(), "missing", "bar", None).unwrap_err();
         assert!(matches!(err, EditError::SymbolNotFound { .. }));
     }
 
     #[test]
-    fn rename_symbol_kind_returns_kind_filter_unsupported() {
+    fn edit_rename_in_file_kind_returns_kind_filter_unsupported() {
         let f = write_temp("fn foo() {}\n", ".rs");
-        let err = rename_symbol_in_file(f.path(), "foo", "bar", Some("function")).unwrap_err();
+        let err = edit_rename_in_file(f.path(), "foo", "bar", Some("function")).unwrap_err();
         assert!(matches!(err, EditError::KindFilterUnsupported));
     }
 
     #[test]
-    fn rename_symbol_unsupported_extension() {
+    fn edit_rename_in_file_unsupported_extension() {
         let f = write_temp("foo bar\n", ".txt");
-        let err = rename_symbol_in_file(f.path(), "foo", "bar", None).unwrap_err();
+        let err = edit_rename_in_file(f.path(), "foo", "bar", None).unwrap_err();
         assert!(matches!(err, EditError::UnsupportedLanguage(_)));
     }
 
     #[test]
-    fn insert_before_symbol() {
+    fn edit_insert_at_symbol_before() {
         let src = "fn foo() {}\n";
         let f = write_temp(src, ".rs");
-        let out =
-            insert_at_symbol_in_file(f.path(), "foo", InsertPosition::Before, "bar_").unwrap();
+        let out = edit_insert_at_symbol(f.path(), "foo", InsertPosition::Before, "bar_").unwrap();
         let updated = std::fs::read_to_string(f.path()).unwrap();
         assert!(updated.contains("fn bar_foo()"));
         assert_eq!(out.position, "before");
     }
 
     #[test]
-    fn insert_after_symbol() {
+    fn edit_insert_at_symbol_after() {
         let src = "fn foo() {}\n";
         let f = write_temp(src, ".rs");
         let out =
-            insert_at_symbol_in_file(f.path(), "foo", InsertPosition::After, "_renamed").unwrap();
+            edit_insert_at_symbol(f.path(), "foo", InsertPosition::After, "_renamed").unwrap();
         let updated = std::fs::read_to_string(f.path()).unwrap();
         assert!(updated.contains("fn foo_renamed()"));
         assert_eq!(out.position, "after");
     }
 
     #[test]
-    fn insert_symbol_not_found_error() {
+    fn edit_insert_at_symbol_not_found_error() {
         let f = write_temp("fn foo() {}\n", ".rs");
         let err =
-            insert_at_symbol_in_file(f.path(), "missing", InsertPosition::Before, "x").unwrap_err();
+            edit_insert_at_symbol(f.path(), "missing", InsertPosition::Before, "x").unwrap_err();
         assert!(matches!(err, EditError::SymbolNotFound { .. }));
     }
 
     #[test]
-    fn insert_unsupported_extension() {
+    fn edit_insert_at_symbol_unsupported_extension() {
         let f = write_temp("foo bar\n", ".txt");
-        let err =
-            insert_at_symbol_in_file(f.path(), "foo", InsertPosition::Before, "x").unwrap_err();
+        let err = edit_insert_at_symbol(f.path(), "foo", InsertPosition::Before, "x").unwrap_err();
         assert!(matches!(err, EditError::UnsupportedLanguage(_)));
     }
 }

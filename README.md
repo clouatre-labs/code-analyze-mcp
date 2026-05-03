@@ -224,6 +224,79 @@ analyze_symbol path: /path/to/project symbol: my_function follow_depth: 3
 analyze_symbol path: /path/to/project symbol: my_function max_depth: 3 follow_depth: 2
 ```
 
+### `analyze_raw`
+
+Read a file or range of lines from a file. Returns the file content with line numbers. Specify start_line and end_line (1-indexed, inclusive) to read a range; omit for full file.
+
+**Required:** `path` *(string)* -- file to read
+
+**Additional optional:**
+- `start_line` *(integer, optional)* -- starting line number (1-indexed, inclusive). Defaults to 1 if omitted.
+- `end_line` *(integer, optional)* -- ending line number (1-indexed, inclusive). Defaults to the last line if omitted.
+
+```bash
+analyze_raw path: /path/to/file.rs
+analyze_raw path: /path/to/file.rs start_line: 1 end_line: 50
+analyze_raw path: /path/to/file.rs start_line: 100 end_line: 150
+```
+
+### `edit_overwrite`
+
+Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use `edit_replace` to replace a specific block instead of the whole file.
+
+**Required:**
+- `path` *(string)* -- file to create or overwrite
+- `content` *(string)* -- UTF-8 content to write
+
+```bash
+edit_overwrite path: tests/foo_test.rs content: "..."
+edit_overwrite path: src/config.rs content: "..."
+```
+
+### `edit_replace`
+
+Replace a unique exact text block in a file. Errors if `old_text` appears zero times or more than once; fix by making `old_text` longer and more specific. Use `edit_overwrite` to replace the whole file.
+
+**Required:**
+- `path` *(string)* -- file to edit
+- `old_text` *(string)* -- exact text block to find and replace (must appear exactly once)
+- `new_text` *(string)* -- replacement text
+
+```bash
+edit_replace path: src/main.rs old_text: "..." new_text: "..."
+```
+
+### `edit_rename`
+
+AST-aware rename within a single file. Matches only syntactic identifiers -- identifiers in string literals and comments are excluded. Errors if `old_name` not found. Note: the `kind` parameter is reserved for future use; supplying it currently returns an error.
+
+**Required:**
+- `path` *(string)* -- file to modify
+- `old_name` *(string)* -- current name of the symbol (identifier) to rename
+- `new_name` *(string)* -- new name for the symbol
+
+**Additional optional:** `kind` *(string, optional)* -- reserved for future use; currently returns an error if supplied.
+
+```bash
+edit_rename path: src/config.rs old_name: parse_config new_name: load_config
+edit_rename path: src/client.rs old_name: timeout new_name: timeout_ms
+```
+
+### `edit_insert`
+
+Insert content immediately before or after a named AST node. `position` is `before` or `after`. The caller is responsible for including necessary newlines in `content`. Uses the first occurrence if `symbol_name` appears multiple times.
+
+**Required:**
+- `path` *(string)* -- file to modify
+- `symbol_name` *(string)* -- name of the symbol (identifier) to locate
+- `position` *(string)* -- `before` or `after`
+- `content` *(string)* -- content to insert verbatim; include leading/trailing newlines as needed
+
+```bash
+edit_insert path: src/lib.rs symbol_name: handle_request position: before content: "#[instrument]\n"
+edit_insert path: src/types.rs symbol_name: MyStruct position: after content: "\n#[derive(Debug)]\n"
+```
+
 ## Output Management
 
 For large codebases, two mechanisms prevent context overflow:
@@ -269,7 +342,7 @@ The server's own instructions expose a 4-step recommended workflow for unknown r
 
 ## Observability
 
-All four tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/aptu-coder/` (fallback: `~/.local/share/aptu-coder/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
+All nine tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/aptu-coder/` (fallback: `~/.local/share/aptu-coder/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
 
 ## Documentation
 

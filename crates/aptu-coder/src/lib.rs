@@ -46,11 +46,11 @@ use aptu_coder_core::traversal::{
 };
 use aptu_coder_core::types::{
     AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
-    AnalyzeSymbolParams, EditFileOutput, EditFileParams, InsertAtSymbolOutput,
-    InsertAtSymbolParams, RenameSymbolOutput, RenameSymbolParams, SymbolMatchMode, WriteFileOutput,
-    WriteFileParams,
+    AnalyzeSymbolParams, EditInsertOutput, EditInsertParams, EditOverwriteOutput,
+    EditOverwriteParams, EditRenameOutput, EditRenameParams, EditReplaceOutput, EditReplaceParams,
+    SymbolMatchMode,
 };
-use aptu_coder_core::{insert_at_symbol_in_file, rename_symbol_in_file};
+use aptu_coder_core::{edit_insert_at_symbol, edit_rename_in_file};
 use logging::LogEvent;
 use rmcp::handler::server::tool::{ToolRouter, schema_for_type};
 use rmcp::handler::server::wrapper::Parameters;
@@ -1662,20 +1662,20 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, _context))]
     #[tool(
-        name = "read_file",
+        name = "analyze_raw",
         description = "Read a file or range of lines from a file. Returns the file content with line numbers. Specify start_line and end_line (1-indexed, inclusive) to read a range; omit for full file. Example queries: Read the first 50 lines of src/main.rs; Show lines 100-150 of src/lib.rs.",
-        output_schema = schema_for_type::<types::ReadFileOutput>(),
+        output_schema = schema_for_type::<types::AnalyzeRawOutput>(),
         annotations(
-            title = "Read File",
+            title = "Analyze Raw",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
             open_world_hint = false
         )
     )]
-    async fn read_file(
+    async fn analyze_raw(
         &self,
-        params: Parameters<types::ReadFileParams>,
+        params: Parameters<types::AnalyzeRawParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
@@ -1694,7 +1694,7 @@ impl CodeAnalyzer {
             let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
-                tool: "read_file",
+                tool: "analyze_raw",
                 duration_ms: dur,
                 output_chars: 0,
                 param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1718,7 +1718,7 @@ impl CodeAnalyzer {
 
         let path = std::path::PathBuf::from(&params.path);
         let handle = tokio::task::spawn_blocking(move || {
-            aptu_coder_core::read_file_range(&path, params.start_line, params.end_line)
+            aptu_coder_core::analyze_raw_range(&path, params.start_line, params.end_line)
         });
 
         let output = match handle.await {
@@ -1727,7 +1727,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "read_file",
+                    tool: "analyze_raw",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1752,7 +1752,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "read_file",
+                    tool: "analyze_raw",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1777,7 +1777,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "read_file",
+                    tool: "analyze_raw",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1802,7 +1802,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "read_file",
+                    tool: "analyze_raw",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1845,7 +1845,7 @@ impl CodeAnalyzer {
         let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
-            tool: "read_file",
+            tool: "analyze_raw",
             duration_ms: dur,
             output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1861,20 +1861,20 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, _context))]
     #[tool(
-        name = "write_file",
-        description = "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_file to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content.",
-        output_schema = schema_for_type::<WriteFileOutput>(),
+        name = "edit_overwrite",
+        description = "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_replace to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content.",
+        output_schema = schema_for_type::<EditOverwriteOutput>(),
         annotations(
-            title = "Write File",
+            title = "Edit Overwrite",
             read_only_hint = false,
             destructive_hint = true,
             idempotent_hint = false,
             open_world_hint = false
         )
     )]
-    async fn write_file(
+    async fn edit_overwrite(
         &self,
-        params: Parameters<WriteFileParams>,
+        params: Parameters<EditOverwriteParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
@@ -1893,7 +1893,7 @@ impl CodeAnalyzer {
             let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
-                tool: "write_file",
+                tool: "edit_overwrite",
                 duration_ms: dur,
                 output_chars: 0,
                 param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1918,7 +1918,7 @@ impl CodeAnalyzer {
         let path = std::path::PathBuf::from(&params.path);
         let content = params.content.clone();
         let handle = tokio::task::spawn_blocking(move || {
-            aptu_coder_core::write_file_content(&path, &content)
+            aptu_coder_core::edit_overwrite_content(&path, &content)
         });
 
         let output = match handle.await {
@@ -1927,7 +1927,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "write_file",
+                    tool: "edit_overwrite",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1952,7 +1952,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "write_file",
+                    tool: "edit_overwrite",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -1977,7 +1977,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "write_file",
+                    tool: "edit_overwrite",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2019,7 +2019,7 @@ impl CodeAnalyzer {
         let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
-            tool: "write_file",
+            tool: "edit_overwrite",
             duration_ms: dur,
             output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2035,20 +2035,20 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, _context))]
     #[tool(
-        name = "edit_file",
-        description = "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once — fix by making old_text longer and more specific. Use write_file to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs.",
-        output_schema = schema_for_type::<EditFileOutput>(),
+        name = "edit_replace",
+        description = "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once — fix by making old_text longer and more specific. Use edit_overwrite to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs.",
+        output_schema = schema_for_type::<EditReplaceOutput>(),
         annotations(
-            title = "Edit File",
+            title = "Edit Replace",
             read_only_hint = false,
             destructive_hint = true,
             idempotent_hint = false,
             open_world_hint = false
         )
     )]
-    async fn edit_file(
+    async fn edit_replace(
         &self,
-        params: Parameters<EditFileParams>,
+        params: Parameters<EditReplaceParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
@@ -2067,7 +2067,7 @@ impl CodeAnalyzer {
             let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
-                tool: "edit_file",
+                tool: "edit_replace",
                 duration_ms: dur,
                 output_chars: 0,
                 param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2093,7 +2093,7 @@ impl CodeAnalyzer {
         let old_text = params.old_text.clone();
         let new_text = params.new_text.clone();
         let handle = tokio::task::spawn_blocking(move || {
-            aptu_coder_core::edit_file_replace(&path, &old_text, &new_text)
+            aptu_coder_core::edit_replace_block(&path, &old_text, &new_text)
         });
 
         let output = match handle.await {
@@ -2102,7 +2102,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "edit_file",
+                    tool: "edit_replace",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2127,7 +2127,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "edit_file",
+                    tool: "edit_replace",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2154,7 +2154,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "edit_file",
+                    tool: "edit_replace",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2179,7 +2179,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "edit_file",
+                    tool: "edit_replace",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2204,7 +2204,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "edit_file",
+                    tool: "edit_replace",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2249,7 +2249,7 @@ impl CodeAnalyzer {
         let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
-            tool: "edit_file",
+            tool: "edit_replace",
             duration_ms: dur,
             output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2265,20 +2265,20 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, _context))]
     #[tool(
-        name = "rename_symbol",
+        name = "edit_rename",
         description = "AST-aware rename within a single file. Matches only syntactic identifiers — identifiers in string literals and comments are excluded. Errors if old_name not found. Note: the kind parameter is reserved for future use; supplying it currently returns an error. Example queries: Rename function parse_config to load_config in src/config.rs; Rename variable timeout to timeout_ms in src/client.rs.",
-        output_schema = schema_for_type::<RenameSymbolOutput>(),
+        output_schema = schema_for_type::<EditRenameOutput>(),
         annotations(
-            title = "Rename Symbol",
+            title = "Edit Rename",
             read_only_hint = false,
             destructive_hint = true,
             idempotent_hint = false,
             open_world_hint = false
         )
     )]
-    async fn rename_symbol(
+    async fn edit_rename(
         &self,
-        params: Parameters<RenameSymbolParams>,
+        params: Parameters<EditRenameParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
@@ -2297,7 +2297,7 @@ impl CodeAnalyzer {
             let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
-                tool: "rename_symbol",
+                tool: "edit_rename",
                 duration_ms: dur,
                 output_chars: 0,
                 param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2310,7 +2310,7 @@ impl CodeAnalyzer {
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
-                "rename_symbol operates on a single file — provide a file path, not a directory"
+                "edit_rename operates on a single file — provide a file path, not a directory"
                     .to_string(),
                 Some(error_meta(
                     "validation",
@@ -2325,7 +2325,7 @@ impl CodeAnalyzer {
         let new_name = params.new_name.clone();
         let kind = params.kind.clone();
         let handle = tokio::task::spawn_blocking(move || {
-            rename_symbol_in_file(&path, &old_name, &new_name, kind.as_deref())
+            edit_rename_in_file(&path, &old_name, &new_name, kind.as_deref())
         });
 
         let output = match handle.await {
@@ -2334,7 +2334,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "rename_symbol",
+                    tool: "edit_rename",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2359,7 +2359,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "rename_symbol",
+                    tool: "edit_rename",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2384,7 +2384,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "rename_symbol",
+                    tool: "edit_rename",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2409,7 +2409,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "rename_symbol",
+                    tool: "edit_rename",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2435,7 +2435,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "rename_symbol",
+                    tool: "edit_rename",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2460,7 +2460,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "rename_symbol",
+                    tool: "edit_rename",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2485,7 +2485,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "rename_symbol",
+                    tool: "edit_rename",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2530,7 +2530,7 @@ impl CodeAnalyzer {
         let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
-            tool: "rename_symbol",
+            tool: "edit_rename",
             duration_ms: dur,
             output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2546,20 +2546,20 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, _context))]
     #[tool(
-        name = "insert_at_symbol",
+        name = "edit_insert",
         description = "Insert content immediately before or after a named AST node. position is before or after. The caller is responsible for including necessary newlines in content. Uses the first occurrence if symbol_name appears multiple times. Example queries: Insert a #[instrument] attribute before the handle_request function; Add a derive macro after the MyStruct definition. Note: content is inserted verbatim at the byte boundary — include leading/trailing newlines as needed.",
-        output_schema = schema_for_type::<InsertAtSymbolOutput>(),
+        output_schema = schema_for_type::<EditInsertOutput>(),
         annotations(
-            title = "Insert At Symbol",
+            title = "Edit Insert",
             read_only_hint = false,
             destructive_hint = true,
             idempotent_hint = false,
             open_world_hint = false
         )
     )]
-    async fn insert_at_symbol(
+    async fn edit_insert(
         &self,
-        params: Parameters<InsertAtSymbolParams>,
+        params: Parameters<EditInsertParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
@@ -2578,7 +2578,7 @@ impl CodeAnalyzer {
             let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
             self.metrics_tx.send(crate::metrics::MetricEvent {
                 ts: crate::metrics::unix_ms(),
-                tool: "insert_at_symbol",
+                tool: "edit_insert",
                 duration_ms: dur,
                 output_chars: 0,
                 param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2591,7 +2591,7 @@ impl CodeAnalyzer {
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
-                "insert_at_symbol operates on a single file — provide a file path, not a directory"
+                "edit_insert operates on a single file — provide a file path, not a directory"
                     .to_string(),
                 Some(error_meta(
                     "validation",
@@ -2606,7 +2606,7 @@ impl CodeAnalyzer {
         let position = params.position;
         let content = params.content.clone();
         let handle = tokio::task::spawn_blocking(move || {
-            insert_at_symbol_in_file(&path, &symbol_name, position, &content)
+            edit_insert_at_symbol(&path, &symbol_name, position, &content)
         });
 
         let output = match handle.await {
@@ -2615,7 +2615,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "insert_at_symbol",
+                    tool: "edit_insert",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2640,7 +2640,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "insert_at_symbol",
+                    tool: "edit_insert",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2665,7 +2665,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "insert_at_symbol",
+                    tool: "edit_insert",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2690,7 +2690,7 @@ impl CodeAnalyzer {
                 let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
                 self.metrics_tx.send(crate::metrics::MetricEvent {
                     ts: crate::metrics::unix_ms(),
-                    tool: "insert_at_symbol",
+                    tool: "edit_insert",
                     duration_ms: dur,
                     output_chars: 0,
                     param_path_depth: crate::metrics::path_component_count(&param_path),
@@ -2735,7 +2735,7 @@ impl CodeAnalyzer {
         let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
-            tool: "insert_at_symbol",
+            tool: "edit_insert",
             duration_ms: dur,
             output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&param_path),
