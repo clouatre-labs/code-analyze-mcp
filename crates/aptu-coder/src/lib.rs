@@ -46,7 +46,8 @@ use aptu_coder_core::traversal::{
 };
 use aptu_coder_core::types::{
     AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
-    AnalyzeSymbolParams, SymbolMatchMode,
+    AnalyzeSymbolParams, EditFileOutput, EditFileParams, SymbolMatchMode, WriteFileOutput,
+    WriteFileParams,
 };
 use logging::LogEvent;
 use rmcp::handler::server::tool::{ToolRouter, schema_for_type};
@@ -1843,6 +1844,410 @@ impl CodeAnalyzer {
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "read_file",
+            duration_ms: dur,
+            output_chars: text.len(),
+            param_path_depth: crate::metrics::path_component_count(&param_path),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: sid,
+            seq: Some(seq),
+            cache_hit: None,
+        });
+        Ok(result)
+    }
+
+    #[instrument(skip(self, _context))]
+    #[tool(
+        name = "write_file",
+        description = "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_file to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content.",
+        output_schema = schema_for_type::<WriteFileOutput>(),
+        annotations(
+            title = "Write File",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn write_file(
+        &self,
+        params: Parameters<WriteFileParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sid = self.session_id.lock().await.clone();
+
+        // Guard against directory paths
+        if std::fs::metadata(&params.path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
+            let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+            self.metrics_tx.send(crate::metrics::MetricEvent {
+                ts: crate::metrics::unix_ms(),
+                tool: "write_file",
+                duration_ms: dur,
+                output_chars: 0,
+                param_path_depth: crate::metrics::path_component_count(&param_path),
+                max_depth: None,
+                result: "error",
+                error_type: Some("invalid_params".to_string()),
+                session_id: sid.clone(),
+                seq: Some(seq),
+                cache_hit: None,
+            });
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "path is a directory; cannot write to a directory".to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "provide a file path, not a directory",
+                )),
+            )));
+        }
+
+        let path = std::path::PathBuf::from(&params.path);
+        let content = params.content.clone();
+        let handle = tokio::task::spawn_blocking(move || {
+            aptu_coder_core::write_file_content(&path, &content)
+        });
+
+        let output = match handle.await {
+            Ok(Ok(v)) => v,
+            Ok(Err(aptu_coder_core::EditError::NotAFile(_))) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "write_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "path is a directory".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "provide a file path, not a directory",
+                    )),
+                )));
+            }
+            Ok(Err(e)) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "write_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+            Err(e) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "write_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+        };
+
+        let text = format!("Wrote {} bytes to {}", output.bytes_written, output.path);
+        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
+            .with_meta(Some(no_cache_meta()));
+        let structured = match serde_json::to_value(&output).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("serialization failed: {e}"),
+                Some(error_meta("internal", false, "report this as a bug")),
+            )
+        }) {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
+        result.structured_content = Some(structured);
+        self.cache
+            .invalidate_file(&std::path::PathBuf::from(&param_path));
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "write_file",
+            duration_ms: dur,
+            output_chars: text.len(),
+            param_path_depth: crate::metrics::path_component_count(&param_path),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: sid,
+            seq: Some(seq),
+            cache_hit: None,
+        });
+        Ok(result)
+    }
+
+    #[instrument(skip(self, _context))]
+    #[tool(
+        name = "edit_file",
+        description = "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once — fix by making old_text longer and more specific. Use write_file to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs.",
+        output_schema = schema_for_type::<EditFileOutput>(),
+        annotations(
+            title = "Edit File",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn edit_file(
+        &self,
+        params: Parameters<EditFileParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sid = self.session_id.lock().await.clone();
+
+        // Guard against directory paths
+        if std::fs::metadata(&params.path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
+            let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+            self.metrics_tx.send(crate::metrics::MetricEvent {
+                ts: crate::metrics::unix_ms(),
+                tool: "edit_file",
+                duration_ms: dur,
+                output_chars: 0,
+                param_path_depth: crate::metrics::path_component_count(&param_path),
+                max_depth: None,
+                result: "error",
+                error_type: Some("invalid_params".to_string()),
+                session_id: sid.clone(),
+                seq: Some(seq),
+                cache_hit: None,
+            });
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "path is a directory; cannot edit a directory".to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "provide a file path, not a directory",
+                )),
+            )));
+        }
+
+        let path = std::path::PathBuf::from(&params.path);
+        let old_text = params.old_text.clone();
+        let new_text = params.new_text.clone();
+        let handle = tokio::task::spawn_blocking(move || {
+            aptu_coder_core::edit_file_replace(&path, &old_text, &new_text)
+        });
+
+        let output = match handle.await {
+            Ok(Ok(v)) => v,
+            Ok(Err(aptu_coder_core::EditError::NotFound { path: _ })) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "edit_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "old_text not found in file — verify the text matches exactly, including whitespace and newlines".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "check that old_text appears in the file",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::Ambiguous { count, path: _ })) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "edit_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    format!(
+                        "old_text appears {count} times in file — make old_text longer and more specific to uniquely identify the block"
+                    ),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "include more context in old_text to make it unique",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::NotAFile(_))) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "edit_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "path is a directory".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "provide a file path, not a directory",
+                    )),
+                )));
+            }
+            Ok(Err(e)) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "edit_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+            Err(e) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "edit_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+        };
+
+        let text = format!(
+            "Edited {}: {} bytes -> {} bytes",
+            output.path, output.bytes_before, output.bytes_after
+        );
+        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
+            .with_meta(Some(no_cache_meta()));
+        let structured = match serde_json::to_value(&output).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("serialization failed: {e}"),
+                Some(error_meta("internal", false, "report this as a bug")),
+            )
+        }) {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
+        result.structured_content = Some(structured);
+        self.cache
+            .invalidate_file(&std::path::PathBuf::from(&param_path));
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "edit_file",
             duration_ms: dur,
             output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&param_path),
