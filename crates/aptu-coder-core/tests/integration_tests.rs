@@ -2827,22 +2827,19 @@ pub fn world() {}
     use aptu_coder_core::types::SemanticAnalysis;
 
     let mut semantic = SemanticAnalysis::default();
-    semantic.functions = vec![
-        aptu_coder_core::types::FunctionInfo {
-            name: "hello".to_string(),
-            line: 2,
-            end_line: 2,
-            parameters: vec![],
-            return_type: None,
-        },
-        aptu_coder_core::types::FunctionInfo {
-            name: "world".to_string(),
-            line: 4,
-            end_line: 4,
-            parameters: vec![],
-            return_type: None,
-        },
-    ];
+    let mut fi1 = aptu_coder_core::types::FunctionInfo::default();
+    fi1.name = "hello".to_string();
+    fi1.line = 2;
+    fi1.end_line = 2;
+    fi1.parameters = vec![];
+    fi1.return_type = None;
+    let mut fi2 = aptu_coder_core::types::FunctionInfo::default();
+    fi2.name = "world".to_string();
+    fi2.line = 4;
+    fi2.end_line = 4;
+    fi2.parameters = vec![];
+    fi2.return_type = None;
+    semantic.functions = vec![fi1, fi2];
 
     let summary = format_file_details_summary(&semantic, "src/lib.rs", 5);
 
@@ -2864,13 +2861,13 @@ fn test_file_details_force_bypasses_summary() {
 
     let mut functions = Vec::new();
     for i in 0..50 {
-        functions.push(FunctionInfo {
-            name: format!("function_{}", i),
-            line: i * 10,
-            end_line: i * 10 + 5,
-            parameters: vec![],
-            return_type: None,
-        });
+        let mut fi = FunctionInfo::default();
+        fi.name = format!("function_{}", i);
+        fi.line = i * 10;
+        fi.end_line = i * 10 + 5;
+        fi.parameters = vec![];
+        fi.return_type = None;
+        functions.push(fi);
     }
 
     let mut semantic = SemanticAnalysis::default();
@@ -2899,13 +2896,15 @@ fn test_format_file_details_summary_many_classes() {
     use aptu_coder_core::types::{ClassInfo, SemanticAnalysis};
 
     let classes: Vec<ClassInfo> = (0..15)
-        .map(|i| ClassInfo {
-            name: format!("Class{}", i),
-            line: i * 10,
-            end_line: i * 10 + 5,
-            methods: vec![],
-            fields: vec![],
-            inherits: vec![],
+        .map(|i| {
+            let mut ci = ClassInfo::default();
+            ci.name = format!("Class{}", i);
+            ci.line = i * 10;
+            ci.end_line = i * 10 + 5;
+            ci.methods = vec![];
+            ci.fields = vec![];
+            ci.inherits = vec![];
+            ci
         })
         .collect();
 
@@ -2937,12 +2936,14 @@ fn test_file_details_pagination_first_page() {
 
     // Arrange: 25 functions, page_size=10
     let functions: Vec<FunctionInfo> = (0..25)
-        .map(|i| FunctionInfo {
-            name: format!("fn_{:02}", i),
-            line: i + 1,
-            end_line: i + 5,
-            parameters: vec![],
-            return_type: None,
+        .map(|i| {
+            let mut fi = FunctionInfo::default();
+            fi.name = format!("fn_{:02}", i);
+            fi.line = i + 1;
+            fi.end_line = i + 5;
+            fi.parameters = vec![];
+            fi.return_type = None;
+            fi
         })
         .collect();
 
@@ -2993,12 +2994,14 @@ fn test_file_details_pagination_last_page() {
 
     // Arrange: 25 functions, page 2 starts at offset 10 with page_size 20 -> 15 items remaining
     let functions: Vec<FunctionInfo> = (0..25)
-        .map(|i| FunctionInfo {
-            name: format!("fn_{:02}", i),
-            line: i + 1,
-            end_line: i + 5,
-            parameters: vec![],
-            return_type: None,
+        .map(|i| {
+            let mut fi = FunctionInfo::default();
+            fi.name = format!("fn_{:02}", i);
+            fi.line = i + 1;
+            fi.end_line = i + 5;
+            fi.parameters = vec![];
+            fi.return_type = None;
+            fi
         })
         .collect();
 
@@ -3048,12 +3051,14 @@ fn test_file_details_single_page_no_cursor() {
 
     // Arrange: 5 functions, page_size=100
     let functions: Vec<FunctionInfo> = (0..5)
-        .map(|i| FunctionInfo {
-            name: format!("fn_{}", i),
-            line: i + 1,
-            end_line: i + 5,
-            parameters: vec![],
-            return_type: None,
+        .map(|i| {
+            let mut fi = FunctionInfo::default();
+            fi.name = format!("fn_{}", i);
+            fi.line = i + 1;
+            fi.end_line = i + 5;
+            fi.parameters = vec![];
+            fi.return_type = None;
+            fi
         })
         .collect();
 
@@ -3090,12 +3095,14 @@ fn test_format_file_details_paginated_unit() {
 
     // Arrange: simulate page 2 of 3 (functions 11-20 of 30)
     let all_functions: Vec<FunctionInfo> = (0..30)
-        .map(|i| FunctionInfo {
-            name: format!("fn_{:02}", i),
-            line: i + 1,
-            end_line: i + 5,
-            parameters: vec![],
-            return_type: None,
+        .map(|i| {
+            let mut fi = FunctionInfo::default();
+            fi.name = format!("fn_{:02}", i);
+            fi.line = i + 1;
+            fi.end_line = i + 5;
+            fi.parameters = vec![];
+            fi.return_type = None;
+            fi
         })
         .collect();
 
@@ -3103,19 +3110,19 @@ fn test_format_file_details_paginated_unit() {
 
     let mut semantic = SemanticAnalysis::default();
     semantic.functions = all_functions;
-    semantic.classes = vec![ClassInfo {
-        name: "MyClass".to_string(),
-        line: 100,
-        end_line: 150,
-        methods: vec![],
-        fields: vec![],
-        inherits: vec![],
-    }];
-    semantic.imports = vec![ImportInfo {
-        module: "std".to_string(),
-        items: vec![],
-        line: 1,
-    }];
+    let mut ci = ClassInfo::default();
+    ci.name = "MyClass".to_string();
+    ci.line = 100;
+    ci.end_line = 150;
+    ci.methods = vec![];
+    ci.fields = vec![];
+    ci.inherits = vec![];
+    semantic.classes = vec![ci];
+    let mut ii = ImportInfo::default();
+    ii.module = "std".to_string();
+    ii.items = vec![];
+    ii.line = 1;
+    semantic.imports = vec![ii];
 
     // Act: format page 2 (offset=10)
     let formatted = format_file_details_paginated(
@@ -3629,14 +3636,14 @@ fn test_analyze_directory_verbose_no_summary() {
     use aptu_coder_core::formatter::format_structure_paginated;
     use aptu_coder_core::types::FileInfo;
 
-    let files = vec![FileInfo {
-        path: "src/main.rs".to_string(),
-        language: "rust".to_string(),
-        line_count: 10,
-        function_count: 1,
-        class_count: 0,
-        is_test: false,
-    }];
+    let mut fi = FileInfo::default();
+    fi.path = "src/main.rs".to_string();
+    fi.language = "rust".to_string();
+    fi.line_count = 10;
+    fi.function_count = 1;
+    fi.class_count = 0;
+    fi.is_test = false;
+    let files = vec![fi];
 
     // verbose=true: format_structure_paginated must emit PAGINATED header, not SUMMARY
     let output = format_structure_paginated(&files, 1, None, None, true);
