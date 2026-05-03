@@ -1663,7 +1663,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "analyze_raw",
-        description = "Read a file or range of lines from a file. Returns the file content with line numbers. Specify start_line and end_line (1-indexed, inclusive) to read a range; omit for full file. Example queries: Read the first 50 lines of src/main.rs; Show lines 100-150 of src/lib.rs.",
+        description = "No AST parsing performed; returns raw UTF-8 file content with line numbers. Output fields: path, total_lines, start_line, end_line, content. Accepts any file extension; errors on non-UTF-8 or binary files. Use analyze_file or analyze_module for AST-structured output; use analyze_raw when you need exact text content without semantic overhead. Passing a directory path returns an error. Example queries: Read the first 50 lines of src/main.rs; Show lines 100-150 of src/lib.rs; Read the full content of a config file.",
         output_schema = schema_for_type::<types::AnalyzeRawOutput>(),
         annotations(
             title = "Analyze Raw",
@@ -1862,7 +1862,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "edit_overwrite",
-        description = "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_replace to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content.",
+        description = "Creates or overwrites a file with UTF-8 content; creates parent directories if needed. AST-unaware (no language constraint). Cross-ref: use edit_replace for targeted single-block edits, or edit_rename/edit_insert for AST-targeted changes. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content; Create a new module file with boilerplate.",
         output_schema = schema_for_type::<EditOverwriteOutput>(),
         annotations(
             title = "Edit Overwrite",
@@ -2036,7 +2036,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "edit_replace",
-        description = "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once — fix by making old_text longer and more specific. Use edit_overwrite to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs.",
+        description = "Replaces a unique exact text block; old_text must match character-for-character and appear exactly once. Errors if zero or multiple matches; fix by extending old_text to be more specific. Whitespace-sensitive exact match. Cross-ref: use edit_overwrite to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs; Fix a specific import statement.",
         output_schema = schema_for_type::<EditReplaceOutput>(),
         annotations(
             title = "Edit Replace",
@@ -2266,7 +2266,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "edit_rename",
-        description = "AST-aware rename within a single file. Matches only syntactic identifiers — identifiers in string literals and comments are excluded. Errors if old_name not found. Note: the kind parameter is reserved for future use; supplying it currently returns an error. Example queries: Rename function parse_config to load_config in src/config.rs; Rename variable timeout to timeout_ms in src/client.rs.",
+        description = "AST-aware rename within a single file. Matches syntactic identifiers only -- occurrences in string literals and comments are excluded. Errors if old_name is not found. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. kind parameter reserved for future use; supplying it returns an error. Example queries: Rename function parse_config to load_config in src/config.rs; Rename variable timeout to timeout_ms in src/client.rs; Rename a struct field across all methods.",
         output_schema = schema_for_type::<EditRenameOutput>(),
         annotations(
             title = "Edit Rename",
@@ -2547,7 +2547,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "edit_insert",
-        description = "Insert content immediately before or after a named AST node. position is before or after. The caller is responsible for including necessary newlines in content. Uses the first occurrence if symbol_name appears multiple times. Example queries: Insert a #[instrument] attribute before the handle_request function; Add a derive macro after the MyStruct definition. Note: content is inserted verbatim at the byte boundary — include leading/trailing newlines as needed.",
+        description = "Insert content immediately before or after a named identifier in a source file. position is \"before\" or \"after\"; symbol_name must be an identifier (not a keyword or punctuation). Locates the first matching identifier token and inserts content verbatim at that token's byte boundary -- include leading/trailing newlines as needed. Uses the first occurrence if symbol_name appears multiple times. Supported: Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C/C++, C#. Example queries: Insert a #[instrument] attribute before the handle_request function; Add a derive macro after the MyStruct definition; Insert a docstring before the process method.",
         output_schema = schema_for_type::<EditInsertOutput>(),
         annotations(
             title = "Edit Insert",
