@@ -217,6 +217,7 @@ impl ElementExtractor {
 
         let (function_count, class_count) = QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             let mut function_count = 0;
             let mut class_count = 0;
 
@@ -577,6 +578,7 @@ impl SemanticExtractor {
 
         QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
@@ -758,6 +760,7 @@ impl SemanticExtractor {
     ) {
         QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
@@ -828,6 +831,7 @@ impl SemanticExtractor {
         };
         QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
@@ -858,6 +862,7 @@ impl SemanticExtractor {
         };
         QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
@@ -928,6 +933,7 @@ impl SemanticExtractor {
         let mut seen_refs = std::collections::HashSet::new();
         QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
@@ -970,6 +976,7 @@ impl SemanticExtractor {
         let mut results = Vec::new();
         QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             let mut matches = cursor.matches(query, root, source.as_bytes());
 
             while let Some(mat) = matches.next() {
@@ -1039,6 +1046,7 @@ impl SemanticExtractor {
 
         QUERY_CURSOR.with(|c| {
             let mut cursor = c.borrow_mut();
+            cursor.set_max_start_depth(None);
             if let Some(depth) = max_depth {
                 cursor.set_max_start_depth(Some(depth));
             }
@@ -1193,6 +1201,7 @@ pub fn extract_impl_traits(source: &str, path: &Path) -> Vec<ImplTraitInfo> {
 
     QUERY_CURSOR.with(|c| {
         let mut cursor = c.borrow_mut();
+        cursor.set_max_start_depth(None);
         let mut matches = cursor.matches(query, root, source.as_bytes());
 
         while let Some(mat) = matches.next() {
@@ -1259,6 +1268,7 @@ pub fn execute_query_impl(
     let mut captures = Vec::new();
     QUERY_CURSOR.with(|c| {
         let mut cursor = c.borrow_mut();
+        cursor.set_max_start_depth(None);
         let mut matches = cursor.matches(&query, tree.root_node(), source_bytes);
         while let Some(m) = matches.next() {
             for cap in m.captures {

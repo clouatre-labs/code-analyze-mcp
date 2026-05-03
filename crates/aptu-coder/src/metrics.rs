@@ -106,8 +106,18 @@ impl MetricsWriter {
                 && let Some(parent) = path.parent()
                 && !parent.as_os_str().is_empty()
             {
-                tokio::fs::create_dir_all(parent).await.ok();
-                self.dir_created = true;
+                match tokio::fs::create_dir_all(parent).await {
+                    Ok(()) => {
+                        self.dir_created = true;
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            path = %parent.display(),
+                            "metrics: failed to create directory; will retry next batch"
+                        );
+                    }
+                }
             }
 
             // Open file once per batch
