@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //! File read utilities for the edit tools.
 
-use crate::types::{EditFileOutput, ReadFileOutput, WriteFileOutput};
+use crate::types::{
+    EditFileOutput, InsertAtSymbolOutput, InsertPosition, ReadFileOutput, RenameSymbolOutput,
+    WriteFileOutput,
+};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -26,7 +29,23 @@ pub enum EditError {
         "old_text appears {count} times in {path} — make old_text longer and more specific to uniquely identify the block"
     )]
     Ambiguous { count: usize, path: String },
+    #[error("symbol '{name}' not found in {path}")]
+    SymbolNotFound { name: String, path: String },
+    #[error("symbol '{name}' matches multiple node kinds in {path} — supply kind to disambiguate")]
+    AmbiguousKind {
+        name: String,
+        kinds: Vec<String>,
+        path: String,
+    },
+    #[error("unsupported file extension for AST operations: {0}")]
+    UnsupportedLanguage(String),
+    #[error(
+        "kind filtering is not supported with the current identifier query infrastructure; omit kind to rename all occurrences"
+    )]
+    KindFilterUnsupported,
 }
+
+const IDENTIFIER_QUERY: &str = "(identifier) @name";
 
 pub fn read_file_range(
     path: &Path,
@@ -117,6 +136,130 @@ pub fn edit_file_replace(
         path: path.display().to_string(),
         bytes_before,
         bytes_after,
+    })
+}
+
+pub fn rename_symbol_in_file(
+    path: &Path,
+    old_name: &str,
+    new_name: &str,
+    kind: Option<&str>,
+) -> Result<RenameSymbolOutput, EditError> {
+    if kind.is_some() {
+        return Err(EditError::KindFilterUnsupported);
+    }
+
+    if path.is_dir() {
+        return Err(EditError::NotAFile(path.to_path_buf()));
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| EditError::UnsupportedLanguage("no extension".to_string()))?;
+
+    let language = crate::lang::language_for_extension(ext)
+        .ok_or_else(|| EditError::UnsupportedLanguage(ext.to_string()))?;
+
+    let source = std::fs::read_to_string(path)?;
+
+    let captures = crate::execute_query(language, &source, IDENTIFIER_QUERY)
+        .map_err(|_| EditError::UnsupportedLanguage(language.to_string()))?;
+
+    let matching_captures: Vec<_> = captures.iter().filter(|c| c.text == old_name).collect();
+
+    if matching_captures.is_empty() {
+        return Err(EditError::SymbolNotFound {
+            name: old_name.to_string(),
+            path: path.display().to_string(),
+        });
+    }
+
+    let mut bytes: Vec<u8> = source.into_bytes();
+    let mut sorted_captures = matching_captures.clone();
+    sorted_captures.sort_by_key(|b| std::cmp::Reverse(b.start_byte));
+
+    for capture in sorted_captures {
+        let start = capture.start_byte;
+        let end = capture.end_byte;
+        bytes.splice(start..end, new_name.bytes());
+    }
+
+    let updated = String::from_utf8(bytes).map_err(|_| {
+        EditError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "invalid UTF-8 after rename",
+        ))
+    })?;
+
+    std::fs::write(path, &updated)?;
+
+    Ok(RenameSymbolOutput {
+        path: path.display().to_string(),
+        old_name: old_name.to_string(),
+        new_name: new_name.to_string(),
+        occurrences_renamed: matching_captures.len(),
+    })
+}
+
+pub fn insert_at_symbol_in_file(
+    path: &Path,
+    symbol_name: &str,
+    position: InsertPosition,
+    content: &str,
+) -> Result<InsertAtSymbolOutput, EditError> {
+    if path.is_dir() {
+        return Err(EditError::NotAFile(path.to_path_buf()));
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| EditError::UnsupportedLanguage("no extension".to_string()))?;
+
+    let language = crate::lang::language_for_extension(ext)
+        .ok_or_else(|| EditError::UnsupportedLanguage(ext.to_string()))?;
+
+    let source = std::fs::read_to_string(path)?;
+
+    let captures = crate::execute_query(language, &source, IDENTIFIER_QUERY)
+        .map_err(|_| EditError::UnsupportedLanguage(language.to_string()))?;
+
+    let target = captures
+        .iter()
+        .find(|c| c.text == symbol_name)
+        .ok_or_else(|| EditError::SymbolNotFound {
+            name: symbol_name.to_string(),
+            path: path.display().to_string(),
+        })?;
+
+    let byte_offset = match position {
+        InsertPosition::Before => target.start_byte,
+        InsertPosition::After => target.end_byte,
+    };
+
+    let mut bytes: Vec<u8> = source.into_bytes();
+    bytes.splice(byte_offset..byte_offset, content.bytes());
+
+    let updated = String::from_utf8(bytes).map_err(|_| {
+        EditError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "invalid UTF-8 after insert",
+        ))
+    })?;
+
+    std::fs::write(path, &updated)?;
+
+    let position_str = match position {
+        InsertPosition::Before => "before",
+        InsertPosition::After => "after",
+    };
+
+    Ok(InsertAtSymbolOutput {
+        path: path.display().to_string(),
+        symbol_name: symbol_name.to_string(),
+        position: position_str.to_string(),
+        byte_offset,
     })
 }
 
@@ -248,5 +391,82 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let err = edit_file_replace(dir.path(), "old", "new").unwrap_err();
         assert!(matches!(err, EditError::NotAFile(_)));
+    }
+
+    fn write_temp(content: &str, ext: &str) -> tempfile::NamedTempFile {
+        let mut f = tempfile::Builder::new().suffix(ext).tempfile().unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        f.flush().unwrap();
+        f
+    }
+
+    #[test]
+    fn rename_symbol_renames_identifier_not_comment() {
+        let src = "fn foo() {}\n// foo is a function\n";
+        let f = write_temp(src, ".rs");
+        let out = rename_symbol_in_file(f.path(), "foo", "bar", None).unwrap();
+        assert_eq!(out.occurrences_renamed, 1);
+        let updated = std::fs::read_to_string(f.path()).unwrap();
+        assert!(updated.contains("fn bar()"));
+        assert!(updated.contains("// foo is a function"));
+    }
+
+    #[test]
+    fn rename_symbol_not_found_error() {
+        let f = write_temp("fn foo() {}\n", ".rs");
+        let err = rename_symbol_in_file(f.path(), "missing", "bar", None).unwrap_err();
+        assert!(matches!(err, EditError::SymbolNotFound { .. }));
+    }
+
+    #[test]
+    fn rename_symbol_kind_returns_kind_filter_unsupported() {
+        let f = write_temp("fn foo() {}\n", ".rs");
+        let err = rename_symbol_in_file(f.path(), "foo", "bar", Some("function")).unwrap_err();
+        assert!(matches!(err, EditError::KindFilterUnsupported));
+    }
+
+    #[test]
+    fn rename_symbol_unsupported_extension() {
+        let f = write_temp("foo bar\n", ".txt");
+        let err = rename_symbol_in_file(f.path(), "foo", "bar", None).unwrap_err();
+        assert!(matches!(err, EditError::UnsupportedLanguage(_)));
+    }
+
+    #[test]
+    fn insert_before_symbol() {
+        let src = "fn foo() {}\n";
+        let f = write_temp(src, ".rs");
+        let out =
+            insert_at_symbol_in_file(f.path(), "foo", InsertPosition::Before, "bar_").unwrap();
+        let updated = std::fs::read_to_string(f.path()).unwrap();
+        assert!(updated.contains("fn bar_foo()"));
+        assert_eq!(out.position, "before");
+    }
+
+    #[test]
+    fn insert_after_symbol() {
+        let src = "fn foo() {}\n";
+        let f = write_temp(src, ".rs");
+        let out =
+            insert_at_symbol_in_file(f.path(), "foo", InsertPosition::After, "_renamed").unwrap();
+        let updated = std::fs::read_to_string(f.path()).unwrap();
+        assert!(updated.contains("fn foo_renamed()"));
+        assert_eq!(out.position, "after");
+    }
+
+    #[test]
+    fn insert_symbol_not_found_error() {
+        let f = write_temp("fn foo() {}\n", ".rs");
+        let err =
+            insert_at_symbol_in_file(f.path(), "missing", InsertPosition::Before, "x").unwrap_err();
+        assert!(matches!(err, EditError::SymbolNotFound { .. }));
+    }
+
+    #[test]
+    fn insert_unsupported_extension() {
+        let f = write_temp("foo bar\n", ".txt");
+        let err =
+            insert_at_symbol_in_file(f.path(), "foo", InsertPosition::Before, "x").unwrap_err();
+        assert!(matches!(err, EditError::UnsupportedLanguage(_)));
     }
 }

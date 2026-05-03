@@ -46,9 +46,11 @@ use aptu_coder_core::traversal::{
 };
 use aptu_coder_core::types::{
     AnalysisMode, AnalyzeDirectoryParams, AnalyzeFileParams, AnalyzeModuleParams,
-    AnalyzeSymbolParams, EditFileOutput, EditFileParams, SymbolMatchMode, WriteFileOutput,
+    AnalyzeSymbolParams, EditFileOutput, EditFileParams, InsertAtSymbolOutput,
+    InsertAtSymbolParams, RenameSymbolOutput, RenameSymbolParams, SymbolMatchMode, WriteFileOutput,
     WriteFileParams,
 };
+use aptu_coder_core::{insert_at_symbol_in_file, rename_symbol_in_file};
 use logging::LogEvent;
 use rmcp::handler::server::tool::{ToolRouter, schema_for_type};
 use rmcp::handler::server::wrapper::Parameters;
@@ -2248,6 +2250,492 @@ impl CodeAnalyzer {
         self.metrics_tx.send(crate::metrics::MetricEvent {
             ts: crate::metrics::unix_ms(),
             tool: "edit_file",
+            duration_ms: dur,
+            output_chars: text.len(),
+            param_path_depth: crate::metrics::path_component_count(&param_path),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: sid,
+            seq: Some(seq),
+            cache_hit: None,
+        });
+        Ok(result)
+    }
+
+    #[instrument(skip(self, _context))]
+    #[tool(
+        name = "rename_symbol",
+        description = "AST-aware rename within a single file. Matches only syntactic identifiers — identifiers in string literals and comments are excluded. Errors if old_name not found. Note: the kind parameter is reserved for future use; supplying it currently returns an error. Example queries: Rename function parse_config to load_config in src/config.rs; Rename variable timeout to timeout_ms in src/client.rs.",
+        output_schema = schema_for_type::<RenameSymbolOutput>(),
+        annotations(
+            title = "Rename Symbol",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn rename_symbol(
+        &self,
+        params: Parameters<RenameSymbolParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sid = self.session_id.lock().await.clone();
+
+        // Guard against directory paths
+        if std::fs::metadata(&params.path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
+            let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+            self.metrics_tx.send(crate::metrics::MetricEvent {
+                ts: crate::metrics::unix_ms(),
+                tool: "rename_symbol",
+                duration_ms: dur,
+                output_chars: 0,
+                param_path_depth: crate::metrics::path_component_count(&param_path),
+                max_depth: None,
+                result: "error",
+                error_type: Some("invalid_params".to_string()),
+                session_id: sid.clone(),
+                seq: Some(seq),
+                cache_hit: None,
+            });
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "rename_symbol operates on a single file — provide a file path, not a directory"
+                    .to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "provide a file path, not a directory",
+                )),
+            )));
+        }
+
+        let path = std::path::PathBuf::from(&params.path);
+        let old_name = params.old_name.clone();
+        let new_name = params.new_name.clone();
+        let kind = params.kind.clone();
+        let handle = tokio::task::spawn_blocking(move || {
+            rename_symbol_in_file(&path, &old_name, &new_name, kind.as_deref())
+        });
+
+        let output = match handle.await {
+            Ok(Ok(v)) => v,
+            Ok(Err(aptu_coder_core::EditError::SymbolNotFound { .. })) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "rename_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "symbol not found in file".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "verify the symbol name and file path",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::AmbiguousKind { .. })) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "rename_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "symbol name is ambiguous".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "verify the symbol name is unique",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::UnsupportedLanguage(_))) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "rename_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "file language is not supported".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "check that the file has a supported language extension",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::KindFilterUnsupported)) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "rename_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "kind filtering is not supported with the current identifier query infrastructure"
+                        .to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "omit the kind parameter",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::NotAFile(_))) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "rename_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "path is a directory".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "provide a file path, not a directory",
+                    )),
+                )));
+            }
+            Ok(Err(e)) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "rename_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+            Err(e) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "rename_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+        };
+
+        let text = format!(
+            "Renamed '{}' to '{}' in {} ({} occurrence(s))",
+            output.old_name, output.new_name, output.path, output.occurrences_renamed
+        );
+        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
+            .with_meta(Some(no_cache_meta()));
+        let structured = match serde_json::to_value(&output).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("serialization failed: {e}"),
+                Some(error_meta("internal", false, "report this as a bug")),
+            )
+        }) {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
+        result.structured_content = Some(structured);
+        self.cache
+            .invalidate_file(&std::path::PathBuf::from(&param_path));
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "rename_symbol",
+            duration_ms: dur,
+            output_chars: text.len(),
+            param_path_depth: crate::metrics::path_component_count(&param_path),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: sid,
+            seq: Some(seq),
+            cache_hit: None,
+        });
+        Ok(result)
+    }
+
+    #[instrument(skip(self, _context))]
+    #[tool(
+        name = "insert_at_symbol",
+        description = "Insert content immediately before or after a named AST node. position is before or after. The caller is responsible for including necessary newlines in content. Uses the first occurrence if symbol_name appears multiple times. Example queries: Insert a #[instrument] attribute before the handle_request function; Add a derive macro after the MyStruct definition. Note: content is inserted verbatim at the byte boundary — include leading/trailing newlines as needed.",
+        output_schema = schema_for_type::<InsertAtSymbolOutput>(),
+        annotations(
+            title = "Insert At Symbol",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn insert_at_symbol(
+        &self,
+        params: Parameters<InsertAtSymbolParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sid = self.session_id.lock().await.clone();
+
+        // Guard against directory paths
+        if std::fs::metadata(&params.path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
+            let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+            self.metrics_tx.send(crate::metrics::MetricEvent {
+                ts: crate::metrics::unix_ms(),
+                tool: "insert_at_symbol",
+                duration_ms: dur,
+                output_chars: 0,
+                param_path_depth: crate::metrics::path_component_count(&param_path),
+                max_depth: None,
+                result: "error",
+                error_type: Some("invalid_params".to_string()),
+                session_id: sid.clone(),
+                seq: Some(seq),
+                cache_hit: None,
+            });
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "insert_at_symbol operates on a single file — provide a file path, not a directory"
+                    .to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "provide a file path, not a directory",
+                )),
+            )));
+        }
+
+        let path = std::path::PathBuf::from(&params.path);
+        let symbol_name = params.symbol_name.clone();
+        let position = params.position;
+        let content = params.content.clone();
+        let handle = tokio::task::spawn_blocking(move || {
+            insert_at_symbol_in_file(&path, &symbol_name, position, &content)
+        });
+
+        let output = match handle.await {
+            Ok(Ok(v)) => v,
+            Ok(Err(aptu_coder_core::EditError::SymbolNotFound { .. })) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "insert_at_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "symbol not found in file".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "verify the symbol name and file path",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::UnsupportedLanguage(_))) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "insert_at_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "file language is not supported".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "check that the file has a supported language extension",
+                    )),
+                )));
+            }
+            Ok(Err(e)) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "insert_at_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+            Err(e) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "insert_at_symbol",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+        };
+
+        let text = format!(
+            "Inserted content {} '{}' in {} (at byte offset {})",
+            output.position, output.symbol_name, output.path, output.byte_offset
+        );
+        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
+            .with_meta(Some(no_cache_meta()));
+        let structured = match serde_json::to_value(&output).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("serialization failed: {e}"),
+                Some(error_meta("internal", false, "report this as a bug")),
+            )
+        }) {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
+        result.structured_content = Some(structured);
+        self.cache
+            .invalidate_file(&std::path::PathBuf::from(&param_path));
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "insert_at_symbol",
             duration_ms: dur,
             output_chars: text.len(),
             param_path_depth: crate::metrics::path_component_count(&param_path),
