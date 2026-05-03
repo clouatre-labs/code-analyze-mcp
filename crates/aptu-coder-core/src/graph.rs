@@ -11,9 +11,6 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::{debug, instrument};
 
-/// Type info for a function: (path, line, parameters, `return_type`)
-type FunctionSignatureEntry = (PathBuf, usize, Vec<String>, Option<String>);
-
 const MAX_CANDIDATES_IN_ERROR: usize = 20;
 
 fn format_candidates(candidates: &[String]) -> String {
@@ -214,8 +211,6 @@ pub struct CallGraph {
     pub callees: HashMap<String, Vec<CallEdge>>,
     /// Definitions map: `function_name` -> vec of (`file_path`, `line_number`).
     pub definitions: HashMap<String, Vec<(PathBuf, usize)>>,
-    /// Internal: maps function name to type info for type-aware disambiguation.
-    function_types: HashMap<String, Vec<FunctionSignatureEntry>>,
     /// Index for O(1) case-insensitive symbol lookup: lowercased -> vec of originals.
     lowercase_index: HashMap<String, Vec<String>>,
 }
@@ -227,7 +222,6 @@ impl CallGraph {
             callers: HashMap::new(),
             callees: HashMap::new(),
             definitions: HashMap::new(),
-            function_types: HashMap::new(),
             lowercase_index: HashMap::new(),
         }
     }
@@ -245,7 +239,6 @@ impl CallGraph {
         _call_line: usize,
         _arg_count: Option<usize>,
         definitions: &HashMap<String, Vec<(PathBuf, usize)>>,
-        _function_types: &HashMap<String, Vec<FunctionSignatureEntry>>,
     ) -> String {
         // Try raw callee name first
         if let Some(_defs) = definitions.get(callee) {
@@ -277,7 +270,7 @@ impl CallGraph {
     ) -> Result<Self, GraphError> {
         let mut graph = CallGraph::new();
 
-        // Build definitions and function_types maps first
+        // Build definitions map first
         for (path, analysis) in &results {
             for func in &analysis.functions {
                 graph
@@ -285,16 +278,6 @@ impl CallGraph {
                     .entry(func.name.clone())
                     .or_default()
                     .push((path.clone(), func.line));
-                graph
-                    .function_types
-                    .entry(func.name.clone())
-                    .or_default()
-                    .push((
-                        path.clone(),
-                        func.line,
-                        func.parameters.clone(),
-                        func.return_type.clone(),
-                    ));
             }
             for class in &analysis.classes {
                 graph
@@ -302,11 +285,6 @@ impl CallGraph {
                     .entry(class.name.clone())
                     .or_default()
                     .push((path.clone(), class.line));
-                graph
-                    .function_types
-                    .entry(class.name.clone())
-                    .or_default()
-                    .push((path.clone(), class.line, vec![], None));
             }
         }
 
@@ -319,7 +297,6 @@ impl CallGraph {
                     call.line,
                     call.arg_count,
                     &graph.definitions,
-                    &graph.function_types,
                 );
 
                 graph

@@ -9,8 +9,7 @@ use ignore::WalkBuilder;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -24,6 +23,8 @@ pub struct WalkEntry {
     pub is_dir: bool,
     pub is_symlink: bool,
     pub symlink_target: Option<PathBuf>,
+    pub mtime: Option<SystemTime>,
+    pub canonical_path: PathBuf,
 }
 
 #[derive(Debug, Error)]
@@ -56,11 +57,10 @@ pub fn walk_directory(
         builder.max_depth(Some(depth as usize));
     }
 
-    let entries = Arc::new(Mutex::new(Vec::new()));
-    let entries_clone = Arc::clone(&entries);
+    let (sender, receiver) = std::sync::mpsc::channel::<WalkEntry>();
 
     builder.build_parallel().run(move || {
-        let entries = Arc::clone(&entries_clone);
+        let sender = sender.clone();
         Box::new(move |result| match result {
             Ok(entry) => {
                 let path = entry.path().to_path_buf();
@@ -74,26 +74,19 @@ pub fn walk_directory(
                     None
                 };
 
+                let mtime = entry.metadata().ok().and_then(|m| m.modified().ok());
+                let canonical_path = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+
                 let walk_entry = WalkEntry {
                     path,
                     depth,
                     is_dir,
                     is_symlink,
                     symlink_target,
+                    mtime,
+                    canonical_path,
                 };
-                let Ok(mut guard) = entries.lock() else {
-                    tracing::debug!("mutex poisoned in parallel walker, skipping entry");
-                    return ignore::WalkState::Skip;
-                };
-                guard.push(walk_entry);
-                if guard.len() >= MAX_WALK_ENTRIES {
-                    tracing::warn!(
-                        "walk truncated at {} entries (MAX_WALK_ENTRIES={}); results are partial",
-                        MAX_WALK_ENTRIES,
-                        MAX_WALK_ENTRIES
-                    );
-                    return ignore::WalkState::Quit;
-                }
+                sender.send(walk_entry).ok();
                 ignore::WalkState::Continue
             }
             Err(e) => {
@@ -103,12 +96,14 @@ pub fn walk_directory(
         })
     });
 
-    let mut entries = Arc::try_unwrap(entries)
-        .map_err(|_| {
-            TraversalError::Internal("arc unwrap failed: strong references still live".to_string())
-        })?
-        .into_inner()
-        .map_err(|_| TraversalError::Internal("mutex poisoned".to_string()))?;
+    let mut entries: Vec<WalkEntry> = receiver.try_iter().collect();
+    if entries.len() >= MAX_WALK_ENTRIES {
+        tracing::warn!(
+            "walk truncated at {} entries (MAX_WALK_ENTRIES={}); results are partial",
+            MAX_WALK_ENTRIES,
+            MAX_WALK_ENTRIES
+        );
+    }
 
     let dir_count = entries.iter().filter(|e| e.is_dir).count();
     let file_count = entries.iter().filter(|e| !e.is_dir).count();
@@ -266,11 +261,10 @@ pub fn filter_entries_by_git_ref(
     entries
         .into_iter()
         .filter(|e| {
-            let canonical_path = std::fs::canonicalize(&e.path).unwrap_or_else(|_| e.path.clone());
             if e.is_dir {
-                ancestor_dirs.contains(&canonical_path)
+                ancestor_dirs.contains(&e.canonical_path)
             } else {
-                canonical_changed.contains(&canonical_path)
+                canonical_changed.contains(&e.canonical_path)
             }
         })
         .collect()

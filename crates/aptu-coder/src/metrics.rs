@@ -47,6 +47,7 @@ impl MetricsSender {
 pub struct MetricsWriter {
     rx: tokio::sync::mpsc::UnboundedReceiver<MetricEvent>,
     base_dir: PathBuf,
+    dir_created: bool,
 }
 
 impl MetricsWriter {
@@ -55,7 +56,11 @@ impl MetricsWriter {
         base_dir: Option<PathBuf>,
     ) -> Self {
         let dir = base_dir.unwrap_or_else(xdg_metrics_dir);
-        Self { rx, base_dir: dir }
+        Self {
+            rx,
+            base_dir: dir,
+            dir_created: false,
+        }
     }
 
     pub async fn run(mut self) {
@@ -84,6 +89,7 @@ impl MetricsWriter {
             if new_date != current_date {
                 current_date = new_date;
                 current_file = None;
+                self.dir_created = false;
             }
 
             if current_file.is_none() {
@@ -95,11 +101,13 @@ impl MetricsWriter {
 
             let path = current_file.as_ref().unwrap();
 
-            // Create directory once per batch
-            if let Some(parent) = path.parent()
+            // Create directory once per day
+            if !self.dir_created
+                && let Some(parent) = path.parent()
                 && !parent.as_os_str().is_empty()
             {
                 tokio::fs::create_dir_all(parent).await.ok();
+                self.dir_created = true;
             }
 
             // Open file once per batch

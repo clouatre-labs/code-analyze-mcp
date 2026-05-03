@@ -10,7 +10,6 @@ use crate::traversal::WalkEntry;
 use crate::types::AnalysisMode;
 use lru::LruCache;
 use rayon::prelude::*;
-use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -51,9 +50,7 @@ impl DirectoryCacheKey {
             .par_iter()
             .filter(|e| !e.is_dir)
             .map(|e| {
-                let mtime = fs::metadata(&e.path)
-                    .and_then(|m| m.modified())
-                    .unwrap_or(SystemTime::UNIX_EPOCH);
+                let mtime = e.mtime.unwrap_or(SystemTime::UNIX_EPOCH);
                 (e.path.clone(), mtime)
             })
             .collect();
@@ -237,6 +234,8 @@ mod tests {
                 is_dir: true,
                 is_symlink: false,
                 symlink_target: None,
+                mtime: None,
+                canonical_path: PathBuf::new(),
             },
             WalkEntry {
                 path: file_path.clone(),
@@ -244,6 +243,8 @@ mod tests {
                 is_dir: false,
                 is_symlink: false,
                 symlink_target: None,
+                mtime: None,
+                canonical_path: PathBuf::new(),
             },
         ];
 

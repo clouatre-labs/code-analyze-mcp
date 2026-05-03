@@ -63,7 +63,7 @@ use rmcp::model::{
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{Peer, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tracing::{instrument, warn};
@@ -1317,62 +1317,84 @@ impl CodeAnalyzer {
 
         // import_lookup mode: scan for files importing `params.symbol` as a module path.
         if params.import_lookup == Some(true) {
-            let path = Path::new(&params.path);
-            let raw_entries = match walk_directory(path, params.max_depth) {
-                Ok(e) => e,
-                Err(e) => {
-                    return Ok(err_to_tool_result(ErrorData::new(
-                        rmcp::model::ErrorCode::INTERNAL_ERROR,
-                        format!("Failed to walk directory: {e}"),
-                        Some(error_meta(
-                            "resource",
-                            false,
-                            "check path permissions and availability",
-                        )),
-                    )));
-                }
-            };
-            // Apply git_ref filter when requested (non-empty string only).
-            let entries = if let Some(ref git_ref) = params.git_ref
-                && !git_ref.is_empty()
-            {
-                let changed = match changed_files_from_git_ref(path, git_ref) {
-                    Ok(c) => c,
+            let path_owned = PathBuf::from(&params.path);
+            let symbol = params.symbol.clone();
+            let git_ref = params.git_ref.clone();
+            let max_depth = params.max_depth;
+            let ast_recursion_limit = params.ast_recursion_limit;
+
+            let handle = tokio::task::spawn_blocking(move || {
+                let path = path_owned.as_path();
+                let raw_entries = match walk_directory(path, max_depth) {
+                    Ok(e) => e,
                     Err(e) => {
-                        return Ok(err_to_tool_result(ErrorData::new(
-                            rmcp::model::ErrorCode::INVALID_PARAMS,
-                            format!("git_ref filter failed: {e}"),
+                        return Err(ErrorData::new(
+                            rmcp::model::ErrorCode::INTERNAL_ERROR,
+                            format!("Failed to walk directory: {e}"),
                             Some(error_meta(
                                 "resource",
                                 false,
-                                "ensure git is installed and path is inside a git repository",
+                                "check path permissions and availability",
                             )),
-                        )));
+                        ));
                     }
                 };
-                filter_entries_by_git_ref(raw_entries, &changed, path)
-            } else {
-                raw_entries
-            };
-            let output = match analyze::analyze_import_lookup(
-                path,
-                &params.symbol,
-                &entries,
-                params.ast_recursion_limit,
-            ) {
-                Ok(v) => v,
+                // Apply git_ref filter when requested (non-empty string only).
+                let entries = if let Some(ref git_ref_val) = git_ref
+                    && !git_ref_val.is_empty()
+                {
+                    let changed = match changed_files_from_git_ref(path, git_ref_val) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Err(ErrorData::new(
+                                rmcp::model::ErrorCode::INVALID_PARAMS,
+                                format!("git_ref filter failed: {e}"),
+                                Some(error_meta(
+                                    "resource",
+                                    false,
+                                    "ensure git is installed and path is inside a git repository",
+                                )),
+                            ));
+                        }
+                    };
+                    filter_entries_by_git_ref(raw_entries, &changed, path)
+                } else {
+                    raw_entries
+                };
+                let output = match analyze::analyze_import_lookup(
+                    path,
+                    &symbol,
+                    &entries,
+                    ast_recursion_limit,
+                ) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Err(ErrorData::new(
+                            rmcp::model::ErrorCode::INTERNAL_ERROR,
+                            format!("import_lookup failed: {e}"),
+                            Some(error_meta(
+                                "resource",
+                                false,
+                                "check path and file permissions",
+                            )),
+                        ));
+                    }
+                };
+                Ok(output)
+            });
+
+            let output = match handle.await {
+                Ok(Ok(v)) => v,
+                Ok(Err(e)) => return Ok(err_to_tool_result(e)),
                 Err(e) => {
                     return Ok(err_to_tool_result(ErrorData::new(
                         rmcp::model::ErrorCode::INTERNAL_ERROR,
-                        format!("import_lookup failed: {e}"),
-                        Some(error_meta(
-                            "resource",
-                            false,
-                            "check path and file permissions",
-                        )),
+                        format!("spawn_blocking failed: {e}"),
+                        Some(error_meta("resource", false, "internal error")),
                     )));
                 }
             };
+
             let final_text = output.formatted.clone();
             let mut result = CallToolResult::success(vec![Content::text(final_text.clone())])
                 .with_meta(Some(no_cache_meta()));

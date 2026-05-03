@@ -1186,34 +1186,28 @@ pub fn analyze_import_lookup(
     entries: &[WalkEntry],
     ast_recursion_limit: Option<usize>,
 ) -> Result<FocusedAnalysisOutput, AnalyzeError> {
-    let mut matches: Vec<(PathBuf, usize)> = Vec::new();
-
-    for entry in entries {
-        if entry.is_dir || entry.is_symlink {
-            tracing::debug!("skipping symlink: {}", entry.path.display());
-            continue;
-        }
-        let ext = entry
-            .path
-            .extension()
-            .and_then(|e| e.to_str())
-            .and_then(crate::lang::language_for_extension);
-        let Some(lang) = ext else {
-            continue;
-        };
-        let Ok(source) = std::fs::read_to_string(&entry.path) else {
-            continue;
-        };
-        let Ok(semantic) = SemanticExtractor::extract(&source, lang, ast_recursion_limit) else {
-            continue;
-        };
-        for import in &semantic.imports {
-            if import.module == module || import.items.iter().any(|item| item == module) {
-                matches.push((entry.path.clone(), import.line));
-                break;
+    let matches: Vec<(PathBuf, usize)> = entries
+        .par_iter()
+        .filter_map(|entry| {
+            if entry.is_dir || entry.is_symlink {
+                tracing::debug!("skipping symlink: {}", entry.path.display());
+                return None;
             }
-        }
-    }
+            let ext = entry
+                .path
+                .extension()
+                .and_then(|e| e.to_str())
+                .and_then(crate::lang::language_for_extension)?;
+            let source = std::fs::read_to_string(&entry.path).ok()?;
+            let semantic = SemanticExtractor::extract(&source, ext, ast_recursion_limit).ok()?;
+            for import in &semantic.imports {
+                if import.module == module || import.items.iter().any(|item| item == module) {
+                    return Some((entry.path.clone(), import.line));
+                }
+            }
+            None
+        })
+        .collect();
 
     let mut text = format!("IMPORT_LOOKUP: {module}\n");
     text.push_str(&format!("ROOT: {}\n", root.display()));
