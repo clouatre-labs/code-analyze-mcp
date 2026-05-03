@@ -187,6 +187,24 @@ impl AnalysisCache {
             }
         });
     }
+
+    /// Invalidate all cache entries for a given file path.
+    /// Removes all entries regardless of modification time or analysis mode.
+    #[instrument(skip(self), fields(path = ?path))]
+    pub fn invalidate_file(&self, path: &std::path::Path) {
+        lock_or_recover(&self.cache, self.file_capacity, |guard| {
+            let keys: Vec<CacheKey> = guard
+                .iter()
+                .filter(|(k, _)| k.path == path)
+                .map(|(k, _)| k.clone())
+                .collect();
+            for key in keys {
+                guard.pop(&key);
+            }
+            let cache_size = guard.len();
+            debug!(cache_event = "invalidate_file", cache_size = cache_size, path = ?path);
+        });
+    }
 }
 
 impl Clone for AnalysisCache {
@@ -203,6 +221,7 @@ impl Clone for AnalysisCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::SemanticAnalysis;
 
     #[test]
     fn test_from_entries_skips_dirs() {
@@ -235,5 +254,62 @@ mod tests {
         // The directory entry should be filtered out
         assert_eq!(key.files.len(), 1);
         assert_eq!(key.files[0].0, file_path);
+    }
+
+    #[test]
+    fn test_invalidate_file_single_mode() {
+        // Arrange: create a cache and insert one entry for a path
+        let cache = AnalysisCache::new(10);
+        let path = PathBuf::from("/test/file.rs");
+        let key = CacheKey {
+            path: path.clone(),
+            modified: SystemTime::UNIX_EPOCH,
+            mode: AnalysisMode::Overview,
+        };
+        let output = Arc::new(FileAnalysisOutput::new(
+            String::new(),
+            SemanticAnalysis::default(),
+            0,
+            None,
+        ));
+        cache.put(key.clone(), output);
+
+        // Act: invalidate the file
+        cache.invalidate_file(&path);
+
+        // Assert: the entry should be removed
+        assert!(cache.get(&key).is_none());
+    }
+
+    #[test]
+    fn test_invalidate_file_multi_mode() {
+        // Arrange: create a cache and insert two entries for the same path with different modes
+        let cache = AnalysisCache::new(10);
+        let path = PathBuf::from("/test/file.rs");
+        let key1 = CacheKey {
+            path: path.clone(),
+            modified: SystemTime::UNIX_EPOCH,
+            mode: AnalysisMode::Overview,
+        };
+        let key2 = CacheKey {
+            path: path.clone(),
+            modified: SystemTime::UNIX_EPOCH,
+            mode: AnalysisMode::FileDetails,
+        };
+        let output = Arc::new(FileAnalysisOutput::new(
+            String::new(),
+            SemanticAnalysis::default(),
+            0,
+            None,
+        ));
+        cache.put(key1.clone(), output.clone());
+        cache.put(key2.clone(), output);
+
+        // Act: invalidate the file
+        cache.invalidate_file(&path);
+
+        // Assert: both entries should be removed
+        assert!(cache.get(&key1).is_none());
+        assert!(cache.get(&key2).is_none());
     }
 }
