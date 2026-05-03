@@ -766,3 +766,24 @@ mod error_meta_tests {
         assert!(meta.is_retryable);
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct ReadFileParams {
+    /// Path to the file to read (must be a file, not a directory).
+    pub path: String,
+    /// Starting line number (1-indexed, inclusive). Defaults to 1 if omitted.
+    pub start_line: Option<usize>,
+    /// Ending line number (1-indexed, inclusive). Defaults to the last line if omitted.
+    pub end_line: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct ReadFileOutput {
+    pub path: String,
+    pub total_lines: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub content: String,
+}

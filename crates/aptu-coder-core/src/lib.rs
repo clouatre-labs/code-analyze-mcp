@@ -30,6 +30,7 @@ pub mod analyze;
 pub mod cache;
 pub mod completion;
 mod config;
+pub mod edit;
 pub mod formatter;
 pub mod formatter_defuse;
 pub mod graph;
@@ -63,6 +64,7 @@ pub use analyze::{
     analyze_module_file, analyze_str,
 };
 pub use config::AnalysisConfig;
+pub use edit::{EditError, read_file_range};
 pub use lang::{language_for_extension, supported_languages};
 pub use parser::ParserError;
 pub use types::*;

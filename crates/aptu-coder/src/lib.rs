@@ -1656,6 +1656,205 @@ impl CodeAnalyzer {
         });
         Ok(result)
     }
+
+    #[instrument(skip(self, _context))]
+    #[tool(
+        name = "read_file",
+        description = "Read a file or range of lines from a file. Returns the file content with line numbers. Specify start_line and end_line (1-indexed, inclusive) to read a range; omit for full file. Example queries: Read the first 50 lines of src/main.rs; Show lines 100-150 of src/lib.rs.",
+        output_schema = schema_for_type::<types::ReadFileOutput>(),
+        annotations(
+            title = "Read File",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn read_file(
+        &self,
+        params: Parameters<types::ReadFileParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let params = params.0;
+        let t_start = std::time::Instant::now();
+        let param_path = params.path.clone();
+        let seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sid = self.session_id.lock().await.clone();
+
+        // Guard against directory paths
+        if std::fs::metadata(&params.path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
+            let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+            self.metrics_tx.send(crate::metrics::MetricEvent {
+                ts: crate::metrics::unix_ms(),
+                tool: "read_file",
+                duration_ms: dur,
+                output_chars: 0,
+                param_path_depth: crate::metrics::path_component_count(&param_path),
+                max_depth: None,
+                result: "error",
+                error_type: Some("invalid_params".to_string()),
+                session_id: sid.clone(),
+                seq: Some(seq),
+                cache_hit: None,
+            });
+            return Ok(err_to_tool_result(ErrorData::new(
+                rmcp::model::ErrorCode::INVALID_PARAMS,
+                "path is a directory; use analyze_directory instead".to_string(),
+                Some(error_meta(
+                    "validation",
+                    false,
+                    "pass a file path, not a directory",
+                )),
+            )));
+        }
+
+        let path = std::path::PathBuf::from(&params.path);
+        let handle = tokio::task::spawn_blocking(move || {
+            aptu_coder_core::read_file_range(&path, params.start_line, params.end_line)
+        });
+
+        let output = match handle.await {
+            Ok(Ok(v)) => v,
+            Ok(Err(aptu_coder_core::EditError::InvalidRange { start, end, total })) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "read_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    format!("invalid range: start ({start}) > end ({end}); file has {total} lines"),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "ensure start_line <= end_line",
+                    )),
+                )));
+            }
+            Ok(Err(aptu_coder_core::EditError::NotAFile(_))) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "read_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("invalid_params".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INVALID_PARAMS,
+                    "path is not a file".to_string(),
+                    Some(error_meta(
+                        "validation",
+                        false,
+                        "provide a file path, not a directory",
+                    )),
+                )));
+            }
+            Ok(Err(e)) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "read_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+            Err(e) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "read_file",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(&param_path),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    e.to_string(),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check file path and permissions",
+                    )),
+                )));
+            }
+        };
+
+        let text = format!(
+            "File: {} (total: {} lines, showing: {}-{})\n\n{}",
+            output.path, output.total_lines, output.start_line, output.end_line, output.content
+        );
+        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
+            .with_meta(Some(no_cache_meta()));
+        let structured = match serde_json::to_value(&output).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("serialization failed: {e}"),
+                Some(error_meta("internal", false, "report this as a bug")),
+            )
+        }) {
+            Ok(v) => v,
+            Err(e) => return Ok(err_to_tool_result(e)),
+        };
+        result.structured_content = Some(structured);
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "read_file",
+            duration_ms: dur,
+            output_chars: text.len(),
+            param_path_depth: crate::metrics::path_component_count(&param_path),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: sid,
+            seq: Some(seq),
+            cache_hit: None,
+        });
+        Ok(result)
+    }
 }
 
 // Parameters for focused analysis task.
