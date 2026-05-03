@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 aptu-coder contributors
 // SPDX-License-Identifier: Apache-2.0
-//! File read utilities for the edit tools.
+//! File read and write utilities for the `analyze_raw`, `edit_overwrite`, `edit_replace`, `edit_rename`, and `edit_insert` tools.
 
 use crate::types::{
     AnalyzeRawOutput, EditInsertOutput, EditOverwriteOutput, EditRenameOutput, EditReplaceOutput,
