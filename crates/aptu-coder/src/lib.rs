@@ -118,7 +118,8 @@ fn no_cache_meta() -> Meta {
 /// For `require_exists=true`, the path must exist and be canonicalizable.
 /// For `require_exists=false`, the parent directory must exist and be canonicalizable.
 fn validate_path(path: &str, require_exists: bool) -> Result<std::path::PathBuf, ErrorData> {
-    let cwd = std::env::current_dir().map_err(|_| {
+    // Canonicalize the allowed root (CWD) to resolve symlinks
+    let allowed_root = std::fs::canonicalize(std::env::current_dir().map_err(|_| {
         ErrorData::new(
             rmcp::model::ErrorCode::INVALID_PARAMS,
             "path is outside the allowed root".to_string(),
@@ -128,13 +129,19 @@ fn validate_path(path: &str, require_exists: bool) -> Result<std::path::PathBuf,
                 "ensure the working directory is accessible",
             )),
         )
-    })?;
+    })?)
+    .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
 
     let canonical_path = if require_exists {
-        std::fs::canonicalize(path).map_err(|_| {
+        std::fs::canonicalize(path).map_err(|e| {
+            let msg = match e.kind() {
+                std::io::ErrorKind::NotFound => format!("path not found: {path}"),
+                std::io::ErrorKind::PermissionDenied => format!("permission denied: {path}"),
+                _ => "path is outside the allowed root".to_string(),
+            };
             ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
-                "path is outside the allowed root".to_string(),
+                msg,
                 Some(error_meta(
                     "validation",
                     false,
@@ -143,24 +150,33 @@ fn validate_path(path: &str, require_exists: bool) -> Result<std::path::PathBuf,
             )
         })?
     } else {
-        // For non-existent files (edit_overwrite), canonicalize the parent directory
+        // For non-existent files (edit_overwrite), walk up the path until we find an existing ancestor
         let p = std::path::Path::new(path);
-        let parent = p.parent().unwrap_or(std::path::Path::new("."));
-        let canonical_parent = std::fs::canonicalize(parent).map_err(|_| {
-            ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_PARAMS,
-                "path is outside the allowed root".to_string(),
-                Some(error_meta(
-                    "validation",
-                    false,
-                    "provide a valid path within the working directory",
-                )),
-            )
-        })?;
-        canonical_parent.join(p.file_name().unwrap_or_default())
+        let mut ancestor = p.to_path_buf();
+        let mut suffix = std::path::PathBuf::new();
+
+        loop {
+            if ancestor.exists() {
+                break;
+            }
+            if let Some(parent) = ancestor.parent() {
+                if let Some(file_name) = ancestor.file_name() {
+                    suffix = std::path::PathBuf::from(file_name).join(&suffix);
+                }
+                ancestor = parent.to_path_buf();
+            } else {
+                // No existing ancestor found — use allowed_root as anchor
+                ancestor = allowed_root.clone();
+                break;
+            }
+        }
+
+        let canonical_base =
+            std::fs::canonicalize(&ancestor).unwrap_or_else(|_| allowed_root.clone());
+        canonical_base.join(&suffix)
     };
 
-    if !canonical_path.starts_with(&cwd) {
+    if !canonical_path.starts_with(&allowed_root) {
         return Err(ErrorData::new(
             rmcp::model::ErrorCode::INVALID_PARAMS,
             "path is outside the allowed root".to_string(),
@@ -3641,6 +3657,55 @@ mod tests {
         assert!(
             !formatted.contains("file_a.rs"),
             "git_ref=HEAD~1 output must exclude file_a.rs; got:\n{formatted}"
+        );
+    }
+
+    #[test]
+    fn test_validate_path_rejects_absolute_path_outside_cwd() {
+        // S4: Verify that absolute paths outside the current working directory are rejected.
+        // This test directly calls validate_path with /etc/passwd, which should fail.
+        let result = validate_path("/etc/passwd", true);
+        assert!(
+            result.is_err(),
+            "validate_path should reject /etc/passwd (outside CWD)"
+        );
+        let err = result.unwrap_err();
+        let err_msg = err.message.to_lowercase();
+        assert!(
+            err_msg.contains("outside") || err_msg.contains("not found"),
+            "Error message should mention 'outside' or 'not found': {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn test_validate_path_accepts_relative_path_in_cwd() {
+        // Happy path: relative path within CWD should be accepted.
+        // Use Cargo.toml which exists in the crate root.
+        let result = validate_path("Cargo.toml", true);
+        assert!(
+            result.is_ok(),
+            "validate_path should accept Cargo.toml (exists in CWD)"
+        );
+    }
+
+    #[test]
+    fn test_validate_path_creates_parent_for_nonexistent_file() {
+        // Edge case: non-existent file with non-existent parent should still be accepted
+        // if the ancestor chain leads back to CWD.
+        let result = validate_path("nonexistent_dir/nonexistent_file.txt", false);
+        assert!(
+            result.is_ok(),
+            "validate_path should accept non-existent file with non-existent parent (require_exists=false)"
+        );
+        let path = result.unwrap();
+        let cwd = std::env::current_dir().expect("should get cwd");
+        let canonical_cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+        assert!(
+            path.starts_with(&canonical_cwd),
+            "Resolved path should be within CWD: {:?} should start with {:?}",
+            path,
+            canonical_cwd
         );
     }
 }

@@ -87,6 +87,11 @@ pub fn walk_directory(
                 };
                 guard.push(walk_entry);
                 if guard.len() >= MAX_WALK_ENTRIES {
+                    tracing::warn!(
+                        "walk truncated at {} entries (MAX_WALK_ENTRIES={}); results are partial",
+                        MAX_WALK_ENTRIES,
+                        MAX_WALK_ENTRIES
+                    );
                     return ignore::WalkState::Quit;
                 }
                 ignore::WalkState::Continue

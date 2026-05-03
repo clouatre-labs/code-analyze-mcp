@@ -169,4 +169,28 @@ mod tests {
             "expected empty results for empty prefix"
         );
     }
+
+    #[test]
+    fn test_path_completions_rejects_parent_traversal() {
+        // Edge case: prefix with ../ should be rejected by canonicalize guard
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+
+        // Create a file in the temp dir
+        fs::write(root.join("file.rs"), "fn main() {}").unwrap();
+
+        // Try to traverse outside root with ../
+        let results = path_completions(root, "../");
+        assert!(
+            results.is_empty(),
+            "expected empty results for parent traversal attempt (../)"
+        );
+
+        // Try with ../../
+        let results = path_completions(root, "../../");
+        assert!(
+            results.is_empty(),
+            "expected empty results for parent traversal attempt (../../)"
+        );
+    }
 }

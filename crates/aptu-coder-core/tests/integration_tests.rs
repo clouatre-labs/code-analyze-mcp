@@ -4436,69 +4436,69 @@ fn test_paginate_slice_max_page_size_no_panic() {
 // S5: Symlink filter test
 #[test]
 #[cfg(unix)]
-fn test_symlink_file_skipped_in_walk() {
-    use aptu_coder_core::traversal::walk_directory;
+fn test_symlink_file_skipped_in_analyze_directory() {
+    use aptu_coder_core::analyze::analyze_directory;
     use std::os::unix::fs as unix_fs;
 
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
 
-    // Create a real file
-    let real_file = root.join("real.txt");
-    fs::write(&real_file, "real content").unwrap();
+    // Create a real Rust source file
+    let real_file = root.join("real.rs");
+    fs::write(&real_file, "fn hello() { println!(\"hello\"); }").unwrap();
 
     // Create a symlink to the real file
-    let symlink_path = root.join("link.txt");
+    let symlink_path = root.join("link.rs");
     unix_fs::symlink(&real_file, &symlink_path).unwrap();
 
-    // Walk the directory
-    let entries = walk_directory(root, None).unwrap();
+    // Analyze the directory
+    let result = analyze_directory(root, None).unwrap();
 
-    // Verify symlink is marked as symlink
-    let symlink_entry = entries.iter().find(|e| e.path == symlink_path);
-    assert!(symlink_entry.is_some(), "symlink should be in walk results");
+    // Verify the real file appears in the output
     assert!(
-        symlink_entry.unwrap().is_symlink,
-        "symlink should be marked as is_symlink=true"
+        result.files.iter().any(|f| f.path == real_file),
+        "real file should appear in analyze_directory output"
     );
 
-    // Verify that when filtering for files (not dirs, not symlinks), symlink is excluded
-    let file_entries: Vec<_> = entries
-        .iter()
-        .filter(|e| !e.is_dir && !e.is_symlink)
-        .collect();
+    // Verify the symlink does NOT appear in the output
     assert!(
-        !file_entries.iter().any(|e| e.path == symlink_path),
-        "symlink should be filtered out when using !e.is_symlink"
+        !result.files.iter().any(|f| f.path == symlink_path),
+        "symlink should be excluded from analyze_directory output"
     );
 }
 
 // S6: File size cap test
 #[test]
 fn test_large_file_skipped_no_panic() {
-    use aptu_coder_core::analyze::MAX_FILE_SIZE_BYTES;
+    use aptu_coder_core::analyze::{MAX_FILE_SIZE_BYTES, analyze_directory};
+    use std::fs::File;
+    use std::io::Write;
 
-    // Verify the constant exists and is reasonable
-    assert!(
-        MAX_FILE_SIZE_BYTES > 0,
-        "MAX_FILE_SIZE_BYTES should be positive"
-    );
-    assert!(
-        MAX_FILE_SIZE_BYTES >= 1_000_000,
-        "MAX_FILE_SIZE_BYTES should be at least 1 MB"
-    );
-    assert!(
-        MAX_FILE_SIZE_BYTES <= 100_000_000,
-        "MAX_FILE_SIZE_BYTES should be at most 100 MB"
-    );
-
-    // Test that analyze_file returns an error for a file exceeding the limit
-    // (We create a small file and verify the guard logic is in place via code inspection)
     let temp_dir = TempDir::new().unwrap();
-    let small_file = temp_dir.path().join("small.rs");
-    fs::write(&small_file, "fn main() {}").unwrap();
+    let root = temp_dir.path();
 
-    // This should succeed (file is small)
-    let result = aptu_coder_core::analyze::analyze_file(small_file.to_str().unwrap(), None);
-    assert!(result.is_ok(), "small file should be analyzed successfully");
+    // Create a small valid source file
+    let small_file = root.join("small.rs");
+    fs::write(&small_file, "fn hello() { println!(\"hello\"); }").unwrap();
+
+    // Create a sparse file exceeding MAX_FILE_SIZE_BYTES without writing data
+    let large_file = root.join("large.rs");
+    let mut file = File::create(&large_file).unwrap();
+    file.set_len(MAX_FILE_SIZE_BYTES + 1).unwrap();
+    drop(file);
+
+    // Analyze the directory
+    let result = analyze_directory(root, None).unwrap();
+
+    // Verify the small file appears in the output
+    assert!(
+        result.files.iter().any(|f| f.path == small_file),
+        "small file should appear in analyze_directory output"
+    );
+
+    // Verify the large file does NOT appear in the output (guard filtered it)
+    assert!(
+        !result.files.iter().any(|f| f.path == large_file),
+        "large file exceeding MAX_FILE_SIZE_BYTES should be excluded from output"
+    );
 }

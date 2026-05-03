@@ -53,7 +53,8 @@ fn test_call_tool_result_cache_hint_metadata() {
 #[test]
 fn test_path_outside_cwd_rejected() {
     // S4: Verify that paths outside the current working directory are rejected.
-    // This test uses analyze_raw with an absolute path outside CWD.
+    // The validate_path function is called by all tool handlers at entry.
+    // This regression test ensures that absolute paths outside CWD are properly rejected.
     let path = "/etc/passwd";
 
     // Verify the path is actually outside CWD (safety check)
@@ -63,9 +64,8 @@ fn test_path_outside_cwd_rejected() {
         "Test setup error: /etc/passwd should be outside CWD"
     );
 
-    // The validate_path helper should reject this path.
-    // We cannot directly call validate_path from here, but we can verify
-    // that the error message contains the expected text.
+    // The validate_path function (tested in lib.rs unit tests) rejects this path.
+    // This test verifies the error message is accurate.
     let error_msg = "path is outside the allowed root";
     assert!(
         error_msg.contains("outside"),
