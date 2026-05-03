@@ -140,22 +140,22 @@ The `ToolRouter::merge()` / `Add` / `AddAssign` API (verified against rmcp 1.5.0
 
 Three tools with no tree-sitter dependency. These validate the BUILD agent workflow and establish the write-path integration before adding AST complexity.
 
-- `read_file(path, start_line?, end_line?)` -- "Raw file content with optional line range. Prefer start_line/end_line to limit tokens on large files; omit both for full content. Use analyze_file for structure, not content. Example queries: Read lines 10-40 of src/lib.rs; Show the full contents of config.toml." `read_only_hint=true`, `idempotent_hint=true`
-- `write_file(path, content)` -- "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_file to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
-- `edit_file(path, old_text, new_text)` -- "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once -- fix by making old_text longer and more specific. Use write_file to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `analyze_raw(path, start_line?, end_line?)` -- "Raw file content with optional line range. Prefer start_line/end_line to limit tokens on large files; omit both for full content. Use analyze_file for structure, not content. Example queries: Read lines 10-40 of src/lib.rs; Show the full contents of config.toml." `read_only_hint=true`, `idempotent_hint=true`
+- `edit_overwrite(path, content)` -- "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_replace to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `edit_replace(path, old_text, new_text)` -- "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once -- fix by making old_text longer and more specific. Use edit_overwrite to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 
-Cache invalidation: `write_file` and `edit_file` must call `cache.invalidate_file(path)` after every write. mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations); explicit invalidation prevents stale reads within the same second.
+Cache invalidation: `edit_overwrite` and `edit_replace` must call `cache.invalidate_file(path)` after every write. mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations); explicit invalidation prevents stale reads within the same second.
 
 ### Phase 2: AST-backed tools
 
 Two tools that require `aptu-coder-core` (formerly `code-analyze-core`) capture data. These are the primary justification for keeping editing in the same crate rather than a separate repository.
 
-- `rename_symbol(path, old_name, new_name, kind?)` -- "AST-aware rename within a single file. Matches by node kind, not string -- identifiers in string literals and comments are excluded. Errors if old_name not found; supply kind to disambiguate (function, variable, type). Directory-wide rename not supported in v1. Example queries: Rename function parse_config to load_config in src/config.rs; Rename struct field timeout to timeout_ms." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
-- `insert_at_symbol(path, symbol_name, position, content)` -- "Insert content immediately before or after a named AST node. position is before|after. Uses start_byte/end_byte from the capture pipeline; errors if symbol_name not found in file. Example queries: Insert a tracing span before the handle_request function; Add a derive macro after the MyStruct definition." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `edit_rename(path, old_name, new_name, kind?)` -- "AST-aware rename within a single file. Matches by node kind, not string -- identifiers in string literals and comments are excluded. Errors if old_name not found; supply kind to disambiguate (function, variable, type). Directory-wide rename not supported in v1. Example queries: Rename function parse_config to load_config in src/config.rs; Rename struct field timeout to timeout_ms." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
+- `edit_insert(path, symbol_name, position, content)` -- "Insert content immediately before or after a named AST node. position is before|after. Uses start_byte/end_byte from the capture pipeline; errors if symbol_name not found in file. Example queries: Insert a tracing span before the handle_request function; Add a derive macro after the MyStruct definition." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 
 ### Annotation posture update
 
-Wave 9 write tools are the exception to the annotation freeze established in the Annotation Posture Policy section. Write tools (`write_file`, `edit_file`, `rename_symbol`, and `insert_at_symbol`) carry `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`. Read tools (`read_file`, and all existing analysis tools) retain `read_only_hint=true`. The per-tool `#[tool(annotations(...))]` macro attribute in rmcp 1.5.0 is confirmed to support mixed postures within one server.
+Wave 9 write tools are the exception to the annotation freeze established in the Annotation Posture Policy section. Write tools (`edit_overwrite`, `edit_replace`, `edit_rename`, and `edit_insert`) carry `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`. Read tools (`analyze_raw`, and all existing analysis tools) retain `read_only_hint=true`. The per-tool `#[tool(annotations(...))]` macro attribute in rmcp 1.5.0 is confirmed to support mixed postures within one server.
 
 Note: `read_only_hint` is a hint surfaced to MCP clients in `tools/list`; rmcp 1.5.0 has no per-tool access control enforcement.
 
@@ -165,7 +165,7 @@ Per the Small-Model-First Constraint: all five tools must be evaluated against H
 
 ### Risks
 
-- **Cache staleness** -- mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations). `write_file` and `edit_file` must always call `cache.invalidate_file(path)` after every write to prevent stale reads within the same second.
-- **`rename_symbol` scope creep** -- directory-wide rename requires type information tree-sitter cannot provide; enforce single-file boundary in v1 with a clear error if a directory path is supplied
+- **Cache staleness** -- mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations). `edit_overwrite` and `edit_replace` must always call `cache.invalidate_file(path)` after every write to prevent stale reads within the same second.
+- **`edit_rename` scope creep** -- directory-wide rename requires type information tree-sitter cannot provide; enforce single-file boundary in v1 with a clear error if a directory path is supplied
 - **Annotation posture drift** -- document the per-tool posture in this section; update REUSE.toml for any new source files
 - **SPDX headers** -- every new `.rs` file requires an SPDX header or `reuse lint` fails CI

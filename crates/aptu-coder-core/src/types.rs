@@ -769,7 +769,7 @@ mod error_meta_tests {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct ReadFileParams {
+pub struct AnalyzeRawParams {
     /// Path to the file to read (must be a file, not a directory).
     pub path: String,
     /// Starting line number (1-indexed, inclusive). Defaults to 1 if omitted.
@@ -780,7 +780,7 @@ pub struct ReadFileParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct ReadFileOutput {
+pub struct AnalyzeRawOutput {
     pub path: String,
     pub total_lines: usize,
     pub start_line: usize,
@@ -790,7 +790,7 @@ pub struct ReadFileOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct WriteFileParams {
+pub struct EditOverwriteParams {
     /// Path to the file to create or overwrite.
     pub path: String,
     /// UTF-8 content to write.
@@ -799,7 +799,7 @@ pub struct WriteFileParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct WriteFileOutput {
+pub struct EditOverwriteOutput {
     /// Path of the file that was written.
     pub path: String,
     /// Number of bytes written (UTF-8 byte length of content).
@@ -808,7 +808,7 @@ pub struct WriteFileOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct EditFileParams {
+pub struct EditReplaceParams {
     /// Path to the file to edit.
     pub path: String,
     /// Exact text block to find and replace. Must appear exactly once in the file.
@@ -819,7 +819,7 @@ pub struct EditFileParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct EditFileOutput {
+pub struct EditReplaceOutput {
     /// Path of the file that was edited.
     pub path: String,
     /// File size in bytes before the edit.
@@ -830,7 +830,7 @@ pub struct EditFileOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct RenameSymbolParams {
+pub struct EditRenameParams {
     /// File path to modify.
     pub path: String,
     /// Current name of the symbol (identifier) to rename.
@@ -843,7 +843,7 @@ pub struct RenameSymbolParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct RenameSymbolOutput {
+pub struct EditRenameOutput {
     pub path: String,
     pub old_name: String,
     pub new_name: String,
@@ -861,7 +861,7 @@ pub enum InsertPosition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct InsertAtSymbolParams {
+pub struct EditInsertParams {
     /// File path to modify.
     pub path: String,
     /// Name of the symbol (identifier) to locate.
@@ -874,7 +874,7 @@ pub struct InsertAtSymbolParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct InsertAtSymbolOutput {
+pub struct EditInsertOutput {
     pub path: String,
     pub symbol_name: String,
     pub position: String,

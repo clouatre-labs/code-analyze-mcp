@@ -147,7 +147,7 @@ extensions:
     name: developer
     blocked_tools:
       - shell
-      - write_file
+      - edit_overwrite
 ```
 
 Blocked calls would return a structured error visible to the agent rather than silently

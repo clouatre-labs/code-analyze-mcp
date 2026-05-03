@@ -14,11 +14,11 @@ fn test_all_tools_have_correct_annotations() {
         "analyze_file",
         "analyze_module",
         "analyze_symbol",
-        "read_file",
-        "write_file",
-        "edit_file",
-        "rename_symbol",
-        "insert_at_symbol",
+        "analyze_raw",
+        "edit_overwrite",
+        "edit_replace",
+        "edit_rename",
+        "edit_insert",
     ];
 
     for tool in &tools {
@@ -34,11 +34,11 @@ fn test_all_tools_have_correct_annotations() {
             .as_ref()
             .unwrap_or_else(|| panic!("tool {} is missing annotations", name));
 
-        // write_file, edit_file, rename_symbol, and insert_at_symbol are destructive; others are read-only
-        if name == "write_file"
-            || name == "edit_file"
-            || name == "rename_symbol"
-            || name == "insert_at_symbol"
+        // edit_overwrite, edit_replace, edit_rename, and edit_insert are destructive; others are read-only
+        if name == "edit_overwrite"
+            || name == "edit_replace"
+            || name == "edit_rename"
+            || name == "edit_insert"
         {
             assert_eq!(
                 annotations.read_only_hint,
