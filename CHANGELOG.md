@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- GitHub Actions workflow for automated issue triage using [aptu](https://github.com/clouatre-labs/aptu) (`clouatre-labs/aptu@v0.5.1`)
-- GitHub Actions workflow for automated PR review using aptu with Gemini primary and OpenRouter Mercury-2 fallback
+- GitHub Actions workflow for automated issue triage using [aptu](https://github.com/clouatre-labs/aptu) (pinned to `9cdcf9ac` = v0.5.1)
+- GitHub Actions workflow for automated PR review using aptu (pinned to `9cdcf9ac` = v0.5.1) with Gemini primary and OpenRouter Mercury-2 fallback
 
 ### Changed
 

@@ -1,4 +1,4 @@
-name: Triage Pull Requests
+name: Review Pull Requests
 
 on:
   pull_request:
@@ -7,6 +7,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   label:
     runs-on: ubuntu-24.04
@@ -14,12 +18,11 @@ jobs:
       pull-requests: write
       issues: write
       contents: read
-      attestations: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Triage PR
+      - name: Review PR
         uses: clouatre-labs/aptu@9cdcf9ac5f62b88345a20f1f6748e622df7a9798 # v0.5.1
         continue-on-error: true  # Non-blocking - AI review is advisory
         with:
