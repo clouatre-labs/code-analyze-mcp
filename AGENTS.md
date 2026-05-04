@@ -47,6 +47,9 @@ Canonical parameter lists live in the `types` module (`crates/aptu-coder-core/sr
 - `summary=true` and `cursor` are mutually exclusive; passing both returns INVALID_PARAMS.
 - `impl_only=true` restricts `analyze_symbol` callers to `impl Trait for Type` blocks; returns INVALID_PARAMS for non-Rust directories.
 - `analyze_module` supports `path` only -- pagination, summary, force, and verbose are not supported.
+- `import_lookup=true` on `analyze_symbol` requires a non-empty `symbol` (the module path to search for); returns INVALID_PARAMS if symbol is empty. Mutually exclusive with normal call-graph lookup.
+- `def_use=true` on `analyze_symbol` triggers def-use extraction; `def_use_sites` is populated in `structuredContent` only when paginating in DefUse cursor mode, not on the initial call (the handler clears it on the first response and bootstraps a cursor to page through def-use results).
+- `git_ref` is supported on both `analyze_directory` and `analyze_symbol` to restrict analysis to files changed relative to a git ref.
 
 ## Do not
 

@@ -145,7 +145,9 @@ Walks a directory tree, counts lines of code, functions, and classes per file. R
 
 **Required:** `path` *(string)* -- directory to analyze
 
-**Additional optional:** `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
+**Additional optional:**
+- `max_depth` *(integer, default unlimited)* -- recursion limit; use 2-3 for large monorepos
+- `git_ref` *(string, optional)* -- Restrict analysis to files changed relative to this git ref (branch, tag, or commit SHA). Empty string or unset means no filtering.
 
 
 
@@ -205,6 +207,9 @@ Builds a call graph for a named symbol across all files in a directory. Uses sen
   - `prefix`: Case-insensitive prefix match; returns an error listing candidates when multiple symbols match
   - `contains`: Case-insensitive substring match; returns an error listing candidates when multiple symbols match
   All non-exact modes return an error with candidate names when the match is ambiguous; use the listed candidates to refine to a unique match.
+- `import_lookup` *(boolean, optional)* -- When true, find all files in the directory that import the module named by `symbol`. Mutually exclusive with call-graph mode.
+- `git_ref` *(string, optional)* -- Restrict analysis to files changed relative to this git ref (branch, tag, or commit SHA). Empty string or unset means no filtering.
+- `def_use` *(boolean, optional)* -- When true, extract definition and use sites for the symbol. The initial response returns callers and callees as usual and includes a cursor that, when followed, pages through `def_use_sites` (each with `kind`, `symbol`, `file`, `line`, `column`, `snippet`, `enclosing_scope`). `def_use_sites` is empty in `structuredContent` until the client follows that cursor into def-use pagination mode.
 
 The tool also returns `structuredContent` with typed arrays for programmatic consumption: `callers` (production callers), `test_callers` (callers from test files), and `callees` (direct callees), each as `Option<Vec<CallChainEntry>>`. A `CallChainEntry` has three fields: `symbol` (string), `file` (string), and `line` (JSON integer; `usize` in the Rust API). These arrays represent depth-1 relationships only; `follow_depth` does not affect them.
 

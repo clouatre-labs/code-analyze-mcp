@@ -1,5 +1,5 @@
 ---
-applyTo: "src/languages/**/*.rs"
+applyTo: "crates/**/src/languages/**/*.rs"
 excludeAgent: "coding-agent"
 description: "tree-sitter query conventions and language handler patterns"
 ---
