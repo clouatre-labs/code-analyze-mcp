@@ -17,11 +17,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the module map, [MCP-BEST-PRACTICES.m
 
 ## 2. Tool Architecture Decisions
 
-### Why Four Tools Instead of One
+### Why Nine Tools Instead of One
 
 **Principle:** Each tool does one thing well. Non-overlapping interfaces eliminate ambiguous routing. When two tools can satisfy the same request, the model must guess; that is a reliability failure, not a model failure. (See [MCP-BEST-PRACTICES.md](MCP-BEST-PRACTICES.md), section 3.2.)
 
-*Example: This server has four tools — `analyze_directory`, `analyze_file`, `analyze_module`, and `analyze_symbol` — each with a distinct, non-overlapping responsibility. A single auto-detecting tool was rejected because it required the model to infer the correct mode from context, which failed under small models.*
+*Example: This server has nine tools — `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol`, `analyze_raw` (analysis family); `edit_overwrite`, `edit_replace`, `edit_rename`, `edit_insert` (editing family) — each with a distinct, non-overlapping responsibility. A single auto-detecting tool was rejected because it required the model to infer the correct mode from context, which failed under small models.*
 
 ```mermaid
 graph TD
@@ -44,12 +44,17 @@ graph TD
 | `analyze_file` | Functions with signatures, classes, imports, type references | Call graph traversal, directory walking |
 | `analyze_module` | Minimal function/import index (~75% smaller than `analyze_file`) | Signatures, types, class details, call graphs |
 | `analyze_symbol` | Call graph for a named function/method across a directory | File-level details, directory counts |
+| `analyze_raw` | Raw file content with optional line range | AST parsing, structure extraction |
+| `edit_overwrite` | Create or overwrite a file | AST awareness, incremental updates |
+| `edit_replace` | Replace exact text block in a file | AST awareness, directory-wide changes |
+| `edit_rename` | AST-aware rename within a single file | Directory-wide rename, type-aware refactoring |
+| `edit_insert` | Insert content before/after a named identifier | Directory-wide insertion, AST-unaware insertion |
 
-*Table 1: The four tools, their purpose, and what each intentionally excludes.*
+*Table 1: The nine tools, their purpose, and what each intentionally excludes.*
 
 ### Single Responsibility Trade-off
 
-Splitting into four tools adds surface area (four tool descriptions to maintain, four output schemas). The benefit is deterministic routing: an agent that asks about a symbol never accidentally triggers a directory walk, and an agent orienting on a codebase never waits for a full semantic parse.
+Splitting into nine tools adds surface area (nine tool descriptions to maintain, nine output schemas). The benefit is deterministic routing: an agent that asks about a symbol never accidentally triggers a directory walk, and an agent orienting on a codebase never waits for a full semantic parse. Write tools are separated from analysis tools to allow clients to apply different confirmation policies.
 
 ## 3. Designing for Small Models
 
@@ -195,16 +200,14 @@ Score outputs without seeing condition labels. Reveal assignments post-scoring. 
 
 The annotation posture for this server is stable and locked until new MCP SEPs land:
 
-| Annotation | Value | Rationale |
-|---|---|---|
-| `readOnlyHint` | `true` | All tools are read-only filesystem operations |
-| `destructiveHint` | `false` | No writes, no side effects |
-| `idempotentHint` | `true` | Same input produces same output |
-| `openWorldHint` | `false` | Results are bounded by the input path |
+| Tool Family | `readOnlyHint` | `destructiveHint` | `idempotentHint` | `openWorldHint` | Rationale |
+|---|---|---|---|---|---|
+| `analyze_*` | `true` | `false` | `true` | `false` | Read-only, deterministic, bounded by input path |
+| `edit_*` | `false` | `true` | `false` | `false` | Write-capable, non-idempotent, bounded by input path |
 
-*Table 4: Tool annotation posture. See [ROADMAP.md](ROADMAP.md) for the rationale and SEP tracking references.*
+*Table 4: Tool annotation posture by family. See [ROADMAP.md](ROADMAP.md) for the rationale and SEP tracking references.*
 
-`readOnlyHint: true` allows clients to call all four tools autonomously without a confirmation step, which is the correct behavior for a passive code analysis server. `openWorldHint: false` signals that results are deterministic given the input path, not dependent on external network state.
+`readOnlyHint: true` on `analyze_*` tools allows clients to call them autonomously without a confirmation step, which is the correct behavior for a passive code analysis server. `readOnlyHint: false` on `edit_*` tools signals that they perform writes; cautious clients may require confirmation before execution. `openWorldHint: false` on all tools signals that results are deterministic given the input path, not dependent on external network state.
 
 ### 7.1 rmcp Compile-Time Limitations
 
@@ -259,7 +262,7 @@ Ordered checklist for building a new MCP server applying the principles in this 
 6. **Design for small models first.** Write descriptions and error messages as if only Haiku or Mistral Small will read them. Test with small models before testing with Sonnet.
 7. **Add cursor pagination.** Any output that can exceed a token budget should support `cursor` + `page_size` for resumable chunked output.
 8. **Add summary mode.** Any output that agents use for orientation should have a compact `summary=true` mode.
-9. **Set annotation posture.** Set `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` on every tool before shipping.
+9. **Set annotation posture.** Set `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` on every tool before shipping. Use different postures for different tool families (e.g., read-only vs. write-capable).
 10. **Add observability.** Instrument each tool handler with a fire-and-forget channel metric. Do not block the hot path.
 11. **Benchmark before shipping.** Define a condition matrix (model × tool set), run blind scoring, report rank-biserial effect sizes. A wave that improves large models but regresses small models does not ship.
 12. **Add annotation quality tests.** Add a `list_tools()` test asserting non-empty description on every tool and every `inputSchema` property. Add a flatten propagation test for any parameter struct using `#[serde(flatten)]`. These run inside `cargo test` with no additional CI overhead and catch regressions the compiler cannot detect.

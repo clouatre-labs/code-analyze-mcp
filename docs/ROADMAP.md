@@ -113,6 +113,8 @@ Current settings are stable and reflect ground truth:
 | `idempotentHint` | `true` | Same input produces same output (verified by #347) |
 | `openWorldHint` | `false` | Results are bounded by the input path |
 
+**Exception:** The five `edit_*` tools (Wave 9) deviate from the default posture. They carry `readOnlyHint=false`, `destructiveHint=true`, and `idempotentHint=false` to accurately reflect their write-capable, non-idempotent nature.
+
 No annotation changes until new MCP SEPs land (tracked in #1913, #1984, #1561, #1560, #1487). Validated against external MCP Blog 2 reference (2026-03-16).
 
 ---
@@ -124,11 +126,9 @@ Unimplemented and pertinent:
 - MCP SEP adoption: #1487 (`trustedHint`), #1561 (`unsafeOutputHint`), #1913 (trust/sensitivity annotations), #1984 (governance annotations) -- open upstream; no action until specs stabilize. #1560 (`secretHint`) closed 2026-03-23; evaluate adoption once merged into spec.
 - Streamable HTTP transport: add `--http` flag exposing `StreamableHttpService` (axum + rmcp `transport-streamable-http-server` + `transport-streamable-http-server-session` features) alongside existing stdio. Tower middleware: `RequestBodyLimitLayer` (4 MB) + `tower-governor` (per-token rate limit) + static Bearer token from env var. Target deployment: GCP e2-micro Always Free (us-central1) behind Cloudflare proxy (free tier, TLS termination, WAF, 5 rate-limit rules). No changes to tool handlers or session logic required.
 
-## Wave 9: Editing Tools
+## Wave 9: Editing Tools [Complete]
 
-Augments aptu-coder with five mechanical code-editing tools in two phases. The existing analysis tools and composition API remain unchanged. This wave completes the read-analyze-write loop that the coder-build agent (#664, #665) requires without introducing a second MCP server.
-
-**Prerequisite:** the rename PR (#664) must merge before this wave begins.
+Augmented aptu-coder with five mechanical code-editing tools in two phases. The existing analysis tools and composition API remain unchanged. This wave completes the read-analyze-write loop that the coder-build agent (#664, #665) requires without introducing a second MCP server.
 
 ### Rationale
 
@@ -136,17 +136,17 @@ Both a combined server and two separate servers inject into the same model conte
 
 The `ToolRouter::merge()` / `Add` / `AddAssign` API (verified against rmcp 1.5.0 source) supports multi-group composition with no breaking changes from 1.1.0. Write tools are placed in a second `#[tool_router(router = write_router, vis = "pub")]` impl block and merged at construction.
 
-### Phase 1: Mechanical tools [no AST required]
+### Phase 1: Mechanical tools [Complete]
 
-Three tools with no tree-sitter dependency. These validate the BUILD agent workflow and establish the write-path integration before adding AST complexity.
+Three tools with no tree-sitter dependency. These validated the BUILD agent workflow and established the write-path integration before adding AST complexity.
 
 - `analyze_raw(path, start_line?, end_line?)` -- "Raw file content with optional line range. Prefer start_line/end_line to limit tokens on large files; omit both for full content. Use analyze_file for structure, not content. Example queries: Read lines 10-40 of src/lib.rs; Show the full contents of config.toml." `read_only_hint=true`, `idempotent_hint=true`
 - `edit_overwrite(path, content)` -- "Create or overwrite a file at path with content. Creates parent directories if needed. Overwrites without confirmation; use edit_replace to replace a specific block instead of the whole file. Example queries: Write a new test file at tests/foo_test.rs; Overwrite src/config.rs with updated content." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 - `edit_replace(path, old_text, new_text)` -- "Replace a unique exact text block in a file. Errors if old_text appears zero times or more than once -- fix by making old_text longer and more specific. Use edit_overwrite to replace the whole file. Example queries: Replace the error handling block in src/main.rs; Update the function signature in lib.rs." `read_only_hint=false`, `destructive_hint=true`, `idempotent_hint=false`
 
-Cache invalidation: `edit_overwrite` and `edit_replace` must call `cache.invalidate_file(path)` after every write. mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations); explicit invalidation prevents stale reads within the same second.
+Cache invalidation: `edit_overwrite` and `edit_replace` call `cache.invalidate_file(path)` after every write. mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations); explicit invalidation prevents stale reads within the same second.
 
-### Phase 2: AST-backed tools
+### Phase 2: AST-backed tools [Complete]
 
 Two tools that require `aptu-coder-core` (formerly `code-analyze-core`) capture data. These are the primary justification for keeping editing in the same crate rather than a separate repository.
 
@@ -163,9 +163,4 @@ Note: `read_only_hint` is a hint surfaced to MCP clients in `tools/list`; rmcp 1
 
 Per the Small-Model-First Constraint: all five tools must be evaluated against Haiku, Mistral-small-2603, and MiniMax-M2.5 before Sonnet in a Wave 9 benchmark. Tool descriptions must follow literal-instruction style -- SML models follow tool descriptions literally.
 
-### Risks
 
-- **Cache staleness** -- mtime-based cache keys self-invalidate in the common case, but mtime granularity is 1 second on some filesystems (HFS+, some ext4 configurations). `edit_overwrite` and `edit_replace` must always call `cache.invalidate_file(path)` after every write to prevent stale reads within the same second.
-- **`edit_rename` scope creep** -- directory-wide rename requires type information tree-sitter cannot provide; enforce single-file boundary in v1 with a clear error if a directory path is supplied
-- **Annotation posture drift** -- document the per-tool posture in this section; update REUSE.toml for any new source files
-- **SPDX headers** -- every new `.rs` file requires an SPDX header or `reuse lint` fails CI
