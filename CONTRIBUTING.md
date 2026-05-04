@@ -103,6 +103,22 @@ All changes go through a pull request; no direct pushes to main are permitted.
 - No unresolved review comments
 - Reviewer approves or all raised issues are addressed
 
+## Automated Review Tooling
+
+This repository uses [aptu](https://github.com/clouatre-labs/aptu) for automated issue triage and pull request review via GitHub Actions.
+
+### Issue triage
+
+Every new issue triggers `.github/workflows/issue-triage.yml`, which runs `aptu issue triage`. The workflow applies type and priority labels. No comment is posted to the issue.
+
+### Pull request review
+
+Every opened or updated pull request triggers `.github/workflows/pr-review.yml`, which runs `aptu pr review`. The review is advisory (`continue-on-error: true`) and never blocks merging. The workflow uses Gemini as the primary provider and OpenRouter Mercury-2 as the fallback.
+
+### Copilot code review
+
+GitHub Copilot code review is intentionally disabled for this repository. The `copilot_code_review` rule has been removed from the `Protect main branch` ruleset (id 13342306). To keep it disabled, ensure the rule is absent from that ruleset; do not re-add it.
+
 ## Branch Protection
 
 See [docs/REPO-STANDARDS.md](docs/REPO-STANDARDS.md) for ruleset configuration, required status checks, signed-commit enforcement, branch protection rationale, and the repo merge strategy.
