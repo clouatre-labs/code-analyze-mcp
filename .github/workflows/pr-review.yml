@@ -1,0 +1,37 @@
+name: Review Pull Requests
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch: # Manual trigger for testing
+
+permissions: {}
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Review PR
+        uses: clouatre-labs/aptu@9cdcf9ac5f62b88345a20f1f6748e622df7a9798 # v0.5.1
+        continue-on-error: true  # Non-blocking - AI review is advisory
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          provider: gemini
+          model: gemini-3.1-flash-lite-preview
+          skip-labeled: 'false'
+          fallback-provider: 'openrouter'
+          fallback-model: 'inception/mercury-2'
+          repo-path: ${{ github.workspace }}
