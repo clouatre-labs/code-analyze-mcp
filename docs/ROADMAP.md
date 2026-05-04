@@ -113,7 +113,7 @@ Current settings are stable and reflect ground truth:
 | `idempotentHint` | `true` | Same input produces same output (verified by #347) |
 | `openWorldHint` | `false` | Results are bounded by the input path |
 
-**Exception:** The five `edit_*` tools (Wave 9) deviate from the default posture. They carry `readOnlyHint=false`, `destructiveHint=true`, and `idempotentHint=false` to accurately reflect their write-capable, non-idempotent nature.
+**Exception:** The four `edit_*` tools (Wave 9) deviate from the default posture. They carry `readOnlyHint=false`, `destructiveHint=true`, and `idempotentHint=false` to accurately reflect their write-capable, non-idempotent nature.
 
 No annotation changes until new MCP SEPs land (tracked in #1913, #1984, #1561, #1560, #1487). Validated against external MCP Blog 2 reference (2026-03-16).
 
@@ -128,7 +128,7 @@ Unimplemented and pertinent:
 
 ## Wave 9: Editing Tools [Complete]
 
-Augmented aptu-coder with five mechanical code-editing tools in two phases. The existing analysis tools and composition API remain unchanged. This wave completes the read-analyze-write loop that the coder-build agent (#664, #665) requires without introducing a second MCP server.
+Augmented aptu-coder with five tools in two phases: one read-only file-content tool (`analyze_raw`) and four mechanical code-editing tools (`edit_overwrite`, `edit_replace`, `edit_rename`, `edit_insert`). The existing analysis tools and composition API remain unchanged. This wave completes the read-analyze-write loop that the coder-build agent (#664, #665) requires without introducing a second MCP server.
 
 ### Rationale
 

@@ -91,7 +91,7 @@ graph TD
 3. Parallel parse with rayon: extract function/class counts via ElementExtractor
 4. Format as tree with LOC and counts per file
 
-When `git_ref` is set, `changed_files_from_git_ref()` runs `git diff` to get the set of changed files, and `filter_entries_by_git_ref()` restricts the walk to those files before analysis begins.
+When `git_ref` is set, `changed_files_from_git_ref()` runs `git diff` to get the set of changed files; `filter_entries_by_git_ref()` then post-filters the already-walked entries to those files before formatting begins.
 
 ### analyze_file (File Details)
 
@@ -134,7 +134,7 @@ Exported from `aptu_coder_core` as a public API for library consumers that hold 
 
 **Git ref filtering:** When `git_ref` is set, `changed_files_from_git_ref()` runs `git diff` to get the set of changed files, and `filter_entries_by_git_ref()` restricts the analysis to those files before the graph is built.
 
-**Def-use mode:** When `def_use=true`, instead of (or in addition to) the call graph, the tool extracts definition and use sites for the symbol. Populates `def_use_sites` in the structured output as a `Vec<DefUseSite>`. Each `DefUseSite` has: `kind` (write/read/write_read), `symbol`, `file`, `line`, `column`, `snippet`, `enclosing_scope`.
+**Def-use mode:** When `def_use=true`, the tool computes definition and use sites alongside the call graph. However, `def_use_sites` is cleared (`Vec::new()`) in `structuredContent` on the initial response. Once the callers and callees pages are exhausted, the handler automatically emits a `{mode: defuse, offset: 0}` cursor. Following that cursor enters `PaginationMode::DefUse`, where `def_use_sites` is populated as `Vec<DefUseSite>` and sliced per page. Each `DefUseSite` has: `kind` (write/read/write_read), `symbol`, `file`, `line`, `column`, `snippet`, `enclosing_scope`.
 
 ## Language Handler System
 
