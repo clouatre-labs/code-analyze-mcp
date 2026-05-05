@@ -1,0 +1,9 @@
+{
+  "version": "wave9-sml",
+  "rubric": {
+    "dimensions": ["implementation_completeness", "correctness", "code_quality"],
+    "max_per_dimension": 3,
+    "max_total": 9
+  },
+  "runs": []
+}
