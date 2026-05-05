@@ -9,13 +9,15 @@ async fn exec_command_happy_path() {
     // Act: execute the command via a mock handler
     // Since we can't directly call the tool handler without a full server setup,
     // we'll test the core logic by spawning the command directly
-    let mut child = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(command)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("should spawn command");
+    let mut child = std::process::Command::new(
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
+    )
+    .arg("-c")
+    .arg(command)
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped())
+    .spawn()
+    .expect("should spawn command");
 
     let stdout = child
         .stdout
@@ -55,13 +57,15 @@ async fn exec_command_nonzero_exit() {
     let command = "exit 42";
 
     // Act
-    let mut child = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(command)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("should spawn command");
+    let mut child = std::process::Command::new(
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
+    )
+    .arg("-c")
+    .arg(command)
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped())
+    .spawn()
+    .expect("should spawn command");
 
     let _stdout = child
         .stdout
@@ -101,13 +105,15 @@ async fn exec_command_timeout() {
     let wait_result = tokio::time::timeout(
         timeout_duration,
         tokio::task::spawn_blocking(move || {
-            let mut child = std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&cmd)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()
-                .expect("should spawn command");
+            let mut child = std::process::Command::new(
+                std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
+            )
+            .arg("-c")
+            .arg(&cmd)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("should spawn command");
 
             let _stdout = child
                 .stdout
@@ -167,13 +173,15 @@ async fn exec_command_output_truncation() {
     let command = "seq 1 3000";
 
     // Act
-    let mut child = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(command)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("should spawn command");
+    let mut child = std::process::Command::new(
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
+    )
+    .arg("-c")
+    .arg(command)
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped())
+    .spawn()
+    .expect("should spawn command");
 
     let stdout = child
         .stdout

@@ -2997,7 +2997,7 @@ impl CodeAnalyzer {
 
     #[tool(
         name = "exec_command",
-        description = "WARNING: This tool executes arbitrary shell commands via bash -c. The working_dir parameter restricts the initial process working directory only -- it does not prevent shell-level escape via cd or absolute paths within the command string. Set open_world_hint=true in your MCP client configuration to surface this warning.",
+        description = "WARNING: This tool executes arbitrary shell commands via sh -c (or $SHELL if set). The working_dir parameter restricts the initial process working directory only -- it does not prevent shell-level escape via cd or absolute paths within the command string. Set open_world_hint=true in your MCP client configuration to surface this warning.",
         output_schema = schema_for_type::<types::ShellOutput>(),
         annotations(
             title = "Exec Command",
@@ -3051,7 +3051,9 @@ impl CodeAnalyzer {
         let timeout_secs = params.timeout_secs.unwrap_or(30);
 
         // Spawn the command using tokio::process::Command for proper async handling
-        let mut cmd = tokio::process::Command::new("bash");
+        let mut cmd = tokio::process::Command::new(
+            std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
+        );
         cmd.arg("-c").arg(&command);
 
         if let Some(ref wd) = working_dir_path {

@@ -911,7 +911,7 @@ pub struct EditInsertOutput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ExecCommandParams {
-    /// Shell command to execute via bash -c.
+    /// Shell command to execute via sh -c (or $SHELL if set).
     pub command: String,
     /// Timeout in seconds before SIGKILL (default: 30).
     pub timeout_secs: Option<u64>,
@@ -926,6 +926,17 @@ impl ExecCommandParams {
             command,
             timeout_secs,
             working_dir,
+        }
+    }
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for ExecCommandParams {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            timeout_secs: None,
+            working_dir: None,
         }
     }
 }
