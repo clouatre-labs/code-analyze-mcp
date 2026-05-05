@@ -248,7 +248,7 @@ pub struct CodeAnalyzer {
     // Accessed by rmcp macro-generated tool dispatch, but this field still triggers
     // `dead_code` in this crate, so keep the targeted suppression.
     #[allow(dead_code)]
-    tool_router: ToolRouter<Self>,
+    pub(crate) tool_router: ToolRouter<Self>,
     cache: AnalysisCache,
     peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
     log_level_filter: Arc<Mutex<LevelFilter>>,
@@ -2993,6 +2993,245 @@ impl CodeAnalyzer {
             cache_hit: None,
         });
         Ok(result)
+    }
+
+    #[tool(
+        name = "exec_command",
+        description = "WARNING: This tool executes arbitrary shell commands via sh -c (or $SHELL if set). The working_dir parameter restricts the initial process working directory only -- it does not prevent shell-level escape via cd or absolute paths within the command string. Set open_world_hint=true in your MCP client configuration to surface this warning.",
+        output_schema = schema_for_type::<types::ShellOutput>(),
+        annotations(
+            title = "Exec Command",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = true
+        )
+    )]
+    pub async fn exec_command(
+        &self,
+        params: Parameters<types::ExecCommandParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let t_start = std::time::Instant::now();
+        let params = params.0;
+
+        // Validate working_dir if provided
+        let working_dir_path = if let Some(ref wd) = params.working_dir {
+            match validate_path(wd, true) {
+                Ok(p) => {
+                    // Verify it's a directory
+                    if !std::fs::metadata(&p).map(|m| m.is_dir()).unwrap_or(false) {
+                        return Ok(err_to_tool_result(ErrorData::new(
+                            rmcp::model::ErrorCode::INVALID_PARAMS,
+                            "working_dir must be a directory".to_string(),
+                            Some(error_meta(
+                                "validation",
+                                false,
+                                "provide a valid directory path",
+                            )),
+                        )));
+                    }
+                    Some(p)
+                }
+                Err(e) => {
+                    return Ok(err_to_tool_result(e));
+                }
+            }
+        } else {
+            None
+        };
+
+        let param_path = params.working_dir.clone();
+        let seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sid = self.session_id.lock().await.clone();
+
+        let command = params.command.clone();
+        let timeout_secs = params.timeout_secs.unwrap_or(30);
+
+        // Spawn the command using tokio::process::Command for proper async handling
+        let mut cmd = tokio::process::Command::new(
+            std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
+        );
+        cmd.arg("-c").arg(&command);
+
+        if let Some(ref wd) = working_dir_path {
+            cmd.current_dir(wd);
+        }
+
+        cmd.stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "exec_command",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(
+                        param_path.as_deref().unwrap_or(""),
+                    ),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("failed to spawn command: {e}"),
+                    Some(error_meta(
+                        "resource",
+                        false,
+                        "check command syntax and permissions",
+                    )),
+                )));
+            }
+        };
+
+        // Wait for the command with timeout using tokio::select! to race wait against sleep
+        let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+        const MAX_BYTES: usize = 50 * 1024;
+        let (stdout_str, stderr_str, exit_code, timed_out) = tokio::select! {
+            result = async {
+                use tokio::io::AsyncReadExt;
+                let mut stdout = child.stdout.take();
+                let mut stderr = child.stderr.take();
+
+                let stdout_bytes = if let Some(ref mut s) = stdout {
+                    let mut stdout_reader = s.take(MAX_BYTES as u64);
+                    let mut stdout_buf = Vec::new();
+                    let _ = stdout_reader.read_to_end(&mut stdout_buf).await;
+                    stdout_buf
+                } else {
+                    Vec::new()
+                };
+
+                let stderr_bytes = if let Some(ref mut s) = stderr {
+                    let mut stderr_reader = s.take(MAX_BYTES as u64);
+                    let mut stderr_buf = Vec::new();
+                    let _ = stderr_reader.read_to_end(&mut stderr_buf).await;
+                    stderr_buf
+                } else {
+                    Vec::new()
+                };
+
+                let status = child.wait().await.ok();
+                (stdout_bytes, stderr_bytes, status)
+            } => {
+                let stdout_str = String::from_utf8_lossy(&result.0).to_string();
+                let stderr_str = String::from_utf8_lossy(&result.1).to_string();
+                let exit_code = result.2.and_then(|s| s.code());
+                (stdout_str, stderr_str, exit_code, false)
+            }
+            _ = tokio::time::sleep(timeout_duration) => {
+                // Timeout occurred: kill the process and return empty output
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                ("".to_string(), "".to_string(), None, true)
+            }
+        };
+
+        // Truncate output if needed
+        const MAX_LINES: usize = 2000;
+
+        let (stdout, stdout_truncated) = truncate_output(&stdout_str, MAX_LINES, MAX_BYTES);
+        let (stderr, stderr_truncated) = truncate_output(&stderr_str, MAX_LINES, MAX_BYTES);
+        let output_truncated = stdout_truncated || stderr_truncated;
+
+        let output =
+            types::ShellOutput::new(stdout, stderr, exit_code, timed_out, output_truncated);
+
+        let text = format!(
+            "Command: {}\nExit code: {}\nTimed out: {}\nOutput truncated: {}\n\nStdout:\n{}\n\nStderr:\n{}",
+            params.command,
+            exit_code
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "null".to_string()),
+            timed_out,
+            output_truncated,
+            output.stdout,
+            output.stderr
+        );
+
+        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
+            .with_meta(Some(no_cache_meta()));
+
+        let structured = match serde_json::to_value(&output).map_err(|e| {
+            ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("serialization failed: {e}"),
+                Some(error_meta("internal", false, "report this as a bug")),
+            )
+        }) {
+            Ok(v) => v,
+            Err(e) => {
+                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+                self.metrics_tx.send(crate::metrics::MetricEvent {
+                    ts: crate::metrics::unix_ms(),
+                    tool: "exec_command",
+                    duration_ms: dur,
+                    output_chars: 0,
+                    param_path_depth: crate::metrics::path_component_count(
+                        param_path.as_deref().unwrap_or(""),
+                    ),
+                    max_depth: None,
+                    result: "error",
+                    error_type: Some("internal_error".to_string()),
+                    session_id: sid.clone(),
+                    seq: Some(seq),
+                    cache_hit: None,
+                });
+                return Ok(err_to_tool_result(e));
+            }
+        };
+
+        result.structured_content = Some(structured);
+        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
+        self.metrics_tx.send(crate::metrics::MetricEvent {
+            ts: crate::metrics::unix_ms(),
+            tool: "exec_command",
+            duration_ms: dur,
+            output_chars: text.len(),
+            param_path_depth: crate::metrics::path_component_count(
+                param_path.as_deref().unwrap_or(""),
+            ),
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: sid,
+            seq: Some(seq),
+            cache_hit: None,
+        });
+        Ok(result)
+    }
+}
+
+/// Truncates output to a maximum number of lines and bytes.
+/// Returns (truncated_output, was_truncated).
+fn truncate_output(output: &str, max_lines: usize, max_bytes: usize) -> (String, bool) {
+    let lines: Vec<&str> = output.lines().collect();
+
+    let output_to_use = if lines.len() > max_lines {
+        lines[..max_lines].join("\n")
+    } else {
+        output.to_string()
+    };
+
+    if output_to_use.len() > max_bytes {
+        // Find the last valid UTF-8 char boundary at or before max_bytes
+        let safe_end = (0..=max_bytes.min(output_to_use.len()))
+            .rev()
+            .find(|&i| output_to_use.is_char_boundary(i))
+            .unwrap_or(0);
+        (output_to_use[..safe_end].to_string(), true)
+    } else {
+        (output_to_use, lines.len() > max_lines)
     }
 }
 

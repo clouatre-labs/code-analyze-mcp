@@ -906,3 +906,72 @@ pub struct EditInsertOutput {
     pub position: String,
     pub byte_offset: usize,
 }
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct ExecCommandParams {
+    /// Shell command to execute via sh -c (or $SHELL if set).
+    pub command: String,
+    /// Timeout in seconds before SIGKILL (default: 30).
+    pub timeout_secs: Option<u64>,
+    /// Working directory relative to server CWD. Validated against path traversal, but best-effort only -- does not sandbox the process.
+    pub working_dir: Option<String>,
+}
+
+impl ExecCommandParams {
+    /// Creates a new ExecCommandParams with the given command.
+    pub fn new(command: String, timeout_secs: Option<u64>, working_dir: Option<String>) -> Self {
+        Self {
+            command,
+            timeout_secs,
+            working_dir,
+        }
+    }
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for ExecCommandParams {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            timeout_secs: None,
+            working_dir: None,
+        }
+    }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct ShellOutput {
+    /// Standard output from the command.
+    pub stdout: String,
+    /// Standard error from the command.
+    pub stderr: String,
+    /// Exit code; null if killed by timeout.
+    pub exit_code: Option<i32>,
+    /// True if the command was killed due to timeout.
+    pub timed_out: bool,
+    /// True if stdout or stderr was truncated due to size limits.
+    pub output_truncated: bool,
+}
+
+impl ShellOutput {
+    /// Creates a new ShellOutput with the given parameters.
+    pub fn new(
+        stdout: String,
+        stderr: String,
+        exit_code: Option<i32>,
+        timed_out: bool,
+        output_truncated: bool,
+    ) -> Self {
+        Self {
+            stdout,
+            stderr,
+            exit_code,
+            timed_out,
+            output_truncated,
+        }
+    }
+}
