@@ -9,4 +9,13 @@ FORBIDDEN TOOLS: mcp__aptu-coder__analyze_directory, mcp__aptu-coder__analyze_fi
 
 Do not run `cargo test`, `cargo build`, or any other build commands.
 
+## Recommended workflow
+
+1. Read `crates/aptu-coder-core/src/languages/java.rs` -- this is the reference template for kotlin.rs
+2. Read `crates/aptu-coder-core/src/lang.rs` -- find the EXTENSION_MAP pattern and supported_languages() slice
+3. Read `crates/aptu-coder-core/src/languages/mod.rs` -- find the get_language_info() and get_ts_language() arms pattern
+4. Read `Cargo.toml` (workspace root) -- find the [workspace.dependencies] section
+5. Read `crates/aptu-coder-core/Cargo.toml` -- find the [features] and [dependencies] sections
+6. Create `crates/aptu-coder-core/src/languages/kotlin.rs` modeled on java.rs, then modify Cargo.toml, mod.rs, and lang.rs
+
 [SYSTEM PROMPT END - Condition D: claude-haiku-4-5 + native tools]

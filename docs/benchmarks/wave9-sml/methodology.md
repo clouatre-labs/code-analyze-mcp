@@ -104,6 +104,17 @@ conditions (B, D) use empty MCP config. Tool isolation is validated by parsing s
 - **Condition C:** claude-haiku-4-5 + MCP tools
 - **Condition D:** claude-haiku-4-5 + native tools
 
+## Prompt Symmetry
+
+Each condition receives workflow guidance appropriate to its tool set. MCP conditions (A, C) include
+a recommended MCP tool call sequence. Native conditions (B, D) include an equivalent file-read
+workflow using native tools covering the same files in the same order. Task information is identical
+across all conditions; only operational scaffolding differs.
+
+This design follows established benchmark methodology: each condition is evaluated at its best under
+its own operational constraints. Giving one condition sub-optimal scaffolding would introduce a
+confound against that condition and make the comparison uninterpretable.
+
 ## Rubric
 
 3 dimensions x 3 points = 9 max.
