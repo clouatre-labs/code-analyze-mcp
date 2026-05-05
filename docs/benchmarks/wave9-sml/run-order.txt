@@ -1,0 +1,22 @@
+# Wave 9 SML Run Order (seed=42)
+# Pilots run first (4 runs) to verify task clarity and calibrate rubric.
+# Scored runs follow in randomized order (8 runs, seed=42).
+#
+# Usage: bash scripts/bench-wave9-run.sh <CONDITION_ID> <RUN_ID>
+# CONDITION_ID is the letter (A-D); RUN_ID is the filename label.
+
+# --- Pilot runs (execute in order before any scored run) ---
+ 1. bash scripts/bench-wave9-run.sh A A-pilot
+ 2. bash scripts/bench-wave9-run.sh B B-pilot
+ 3. bash scripts/bench-wave9-run.sh C C-pilot
+ 4. bash scripts/bench-wave9-run.sh D D-pilot
+
+# --- Scored runs (randomized, seed=42) ---
+ 5. bash scripts/bench-wave9-run.sh C C-scored-1
+ 6. bash scripts/bench-wave9-run.sh B B-scored-2
+ 7. bash scripts/bench-wave9-run.sh A A-scored-2
+ 8. bash scripts/bench-wave9-run.sh C C-scored-2
+ 9. bash scripts/bench-wave9-run.sh D D-scored-2
+10. bash scripts/bench-wave9-run.sh B B-scored-1
+11. bash scripts/bench-wave9-run.sh A A-scored-1
+12. bash scripts/bench-wave9-run.sh D D-scored-1
