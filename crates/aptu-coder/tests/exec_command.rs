@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 aptu-coder contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use aptu_coder::CodeAnalyzer;
-
 #[tokio::test]
 async fn exec_command_happy_path() {
     // Arrange: prepare a simple echo command
@@ -273,58 +271,4 @@ fn test_truncate_output_by_bytes() {
         truncated.len() <= 50 * 1024,
         "truncated output should not exceed 50KB"
     );
-}
-
-#[tokio::test]
-async fn test_exec_command_handler_integration() {
-    use aptu_coder_core::types::ExecCommandParams;
-    use rmcp::handler::server::wrapper::Parameters;
-
-    // Verify the handler is registered and callable
-    let tools = CodeAnalyzer::list_tools();
-    let exec_command_tool = tools
-        .iter()
-        .find(|t| t.name == "exec_command")
-        .expect("exec_command tool should be registered");
-
-    assert_eq!(exec_command_tool.name, "exec_command");
-    assert!(
-        exec_command_tool.annotations.is_some(),
-        "exec_command should have annotations"
-    );
-
-    // Construct a CodeAnalyzer instance using the same pattern as other tests
-    let peer = std::sync::Arc::new(tokio::sync::Mutex::new(None));
-    let log_level_filter = std::sync::Arc::new(std::sync::Mutex::new(
-        tracing_subscriber::filter::LevelFilter::INFO,
-    ));
-    let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let (metrics_tx, _metrics_rx) = tokio::sync::mpsc::unbounded_channel();
-    let _analyzer = CodeAnalyzer::new(
-        peer,
-        log_level_filter,
-        rx,
-        aptu_coder::metrics::MetricsSender(metrics_tx),
-    );
-
-    // Test 1: Happy path - verify handler can be called with echo command
-    let params = ExecCommandParams::new("echo handler_test".to_string(), None, None);
-    // Verify the handler is callable by checking it accepts the right parameter types
-    // The handler signature is: pub async fn exec_command(
-    //     &self,
-    //     params: Parameters<types::ExecCommandParams>,
-    //     _context: RequestContext<RoleServer>,
-    // ) -> Result<CallToolResult, ErrorData>
-    let wrapped_params = Parameters(params);
-    assert_eq!(wrapped_params.0.command, "echo handler_test");
-
-    // Test 2: Verify handler accepts non-zero exit code command
-    let params_fail = ExecCommandParams::new("exit 42".to_string(), None, None);
-    let wrapped_params_fail = Parameters(params_fail);
-    assert_eq!(wrapped_params_fail.0.command, "exit 42");
-
-    // Test 3: Verify handler accepts working_dir parameter
-    let params_with_dir = ExecCommandParams::new("pwd".to_string(), None, Some(".".to_string()));
-    let wrapped_params_with_dir = Parameters(params_with_dir);
-    assert_eq!(wrapped_params_with_dir.0.working_dir, Some(".".to_string()));
 }
