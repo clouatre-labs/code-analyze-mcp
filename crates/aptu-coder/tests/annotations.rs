@@ -73,22 +73,12 @@ fn test_all_tools_have_correct_annotations() {
                 "tool {} must have destructive_hint=false",
                 name
             );
-            // analyze_directory is idempotent; others are not
-            if name == "analyze_directory" {
-                assert_eq!(
-                    annotations.idempotent_hint,
-                    Some(true),
-                    "tool {} must have idempotent_hint=true",
-                    name
-                );
-            } else {
-                assert_eq!(
-                    annotations.idempotent_hint,
-                    Some(true),
-                    "tool {} must have idempotent_hint=true",
-                    name
-                );
-            }
+            assert_eq!(
+                annotations.idempotent_hint,
+                Some(true),
+                "tool {} must have idempotent_hint=true",
+                name
+            );
         }
 
         // exec_command has open_world_hint=true; others have open_world_hint=false
