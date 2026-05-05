@@ -919,6 +919,18 @@ pub struct ExecCommandParams {
     pub working_dir: Option<String>,
 }
 
+impl ExecCommandParams {
+    /// Creates a new ExecCommandParams with the given command.
+    pub fn new(command: String, timeout_secs: Option<u64>, working_dir: Option<String>) -> Self {
+        Self {
+            command,
+            timeout_secs,
+            working_dir,
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ShellOutput {
@@ -932,4 +944,23 @@ pub struct ShellOutput {
     pub timed_out: bool,
     /// True if stdout or stderr was truncated due to size limits.
     pub output_truncated: bool,
+}
+
+impl ShellOutput {
+    /// Creates a new ShellOutput with the given parameters.
+    pub fn new(
+        stdout: String,
+        stderr: String,
+        exit_code: Option<i32>,
+        timed_out: bool,
+        output_truncated: bool,
+    ) -> Self {
+        Self {
+            stdout,
+            stderr,
+            exit_code,
+            timed_out,
+            output_truncated,
+        }
+    }
 }

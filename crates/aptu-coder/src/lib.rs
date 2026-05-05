@@ -248,7 +248,7 @@ pub struct CodeAnalyzer {
     // Accessed by rmcp macro-generated tool dispatch, but this field still triggers
     // `dead_code` in this crate, so keep the targeted suppression.
     #[allow(dead_code)]
-    pub tool_router: ToolRouter<Self>,
+    pub(crate) tool_router: ToolRouter<Self>,
     cache: AnalysisCache,
     peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
     log_level_filter: Arc<Mutex<LevelFilter>>,
@@ -3012,12 +3012,8 @@ impl CodeAnalyzer {
         params: Parameters<types::ExecCommandParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
-        let params = params.0;
         let t_start = std::time::Instant::now();
-        let seq = self
-            .session_call_seq
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let sid = self.session_id.lock().await.clone();
+        let params = params.0;
 
         // Validate working_dir if provided
         let working_dir_path = if let Some(ref wd) = params.working_dir {
@@ -3025,20 +3021,6 @@ impl CodeAnalyzer {
                 Ok(p) => {
                     // Verify it's a directory
                     if !std::fs::metadata(&p).map(|m| m.is_dir()).unwrap_or(false) {
-                        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-                        self.metrics_tx.send(crate::metrics::MetricEvent {
-                            ts: crate::metrics::unix_ms(),
-                            tool: "exec_command",
-                            duration_ms: dur,
-                            output_chars: 0,
-                            param_path_depth: 0,
-                            max_depth: None,
-                            result: "error",
-                            error_type: Some("invalid_params".to_string()),
-                            session_id: sid.clone(),
-                            seq: Some(seq),
-                            cache_hit: None,
-                        });
                         return Ok(err_to_tool_result(ErrorData::new(
                             rmcp::model::ErrorCode::INVALID_PARAMS,
                             "working_dir must be a directory".to_string(),
@@ -3052,26 +3034,18 @@ impl CodeAnalyzer {
                     Some(p)
                 }
                 Err(e) => {
-                    let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-                    self.metrics_tx.send(crate::metrics::MetricEvent {
-                        ts: crate::metrics::unix_ms(),
-                        tool: "exec_command",
-                        duration_ms: dur,
-                        output_chars: 0,
-                        param_path_depth: 0,
-                        max_depth: None,
-                        result: "error",
-                        error_type: Some("invalid_params".to_string()),
-                        session_id: sid.clone(),
-                        seq: Some(seq),
-                        cache_hit: None,
-                    });
                     return Ok(err_to_tool_result(e));
                 }
             }
         } else {
             None
         };
+
+        let param_path = params.working_dir.clone();
+        let seq = self
+            .session_call_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let sid = self.session_id.lock().await.clone();
 
         let command = params.command.clone();
         let timeout_secs = params.timeout_secs.unwrap_or(30);
@@ -3096,7 +3070,9 @@ impl CodeAnalyzer {
                     tool: "exec_command",
                     duration_ms: dur,
                     output_chars: 0,
-                    param_path_depth: 0,
+                    param_path_depth: crate::metrics::path_component_count(
+                        param_path.as_deref().unwrap_or(""),
+                    ),
                     max_depth: None,
                     result: "error",
                     error_type: Some("internal_error".to_string()),
@@ -3118,6 +3094,7 @@ impl CodeAnalyzer {
 
         // Wait for the command with timeout using tokio::select! to race wait against sleep
         let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+        const MAX_BYTES: usize = 50 * 1024;
         let (stdout_str, stderr_str, exit_code, timed_out) = tokio::select! {
             result = async {
                 use tokio::io::AsyncReadExt;
@@ -3125,17 +3102,19 @@ impl CodeAnalyzer {
                 let mut stderr = child.stderr.take();
 
                 let stdout_bytes = if let Some(ref mut s) = stdout {
-                    let mut buf = Vec::new();
-                    let _ = s.read_to_end(&mut buf).await;
-                    buf
+                    let mut stdout_reader = s.take(MAX_BYTES as u64);
+                    let mut stdout_buf = Vec::new();
+                    let _ = stdout_reader.read_to_end(&mut stdout_buf).await;
+                    stdout_buf
                 } else {
                     Vec::new()
                 };
 
                 let stderr_bytes = if let Some(ref mut s) = stderr {
-                    let mut buf = Vec::new();
-                    let _ = s.read_to_end(&mut buf).await;
-                    buf
+                    let mut stderr_reader = s.take(MAX_BYTES as u64);
+                    let mut stderr_buf = Vec::new();
+                    let _ = stderr_reader.read_to_end(&mut stderr_buf).await;
+                    stderr_buf
                 } else {
                     Vec::new()
                 };
@@ -3158,19 +3137,13 @@ impl CodeAnalyzer {
 
         // Truncate output if needed
         const MAX_LINES: usize = 2000;
-        const MAX_BYTES: usize = 50 * 1024;
 
         let (stdout, stdout_truncated) = truncate_output(&stdout_str, MAX_LINES, MAX_BYTES);
         let (stderr, stderr_truncated) = truncate_output(&stderr_str, MAX_LINES, MAX_BYTES);
         let output_truncated = stdout_truncated || stderr_truncated;
 
-        let output = types::ShellOutput {
-            stdout,
-            stderr,
-            exit_code,
-            timed_out,
-            output_truncated,
-        };
+        let output =
+            types::ShellOutput::new(stdout, stderr, exit_code, timed_out, output_truncated);
 
         let text = format!(
             "Command: {}\nExit code: {}\nTimed out: {}\nOutput truncated: {}\n\nStdout:\n{}\n\nStderr:\n{}",
@@ -3202,7 +3175,9 @@ impl CodeAnalyzer {
                     tool: "exec_command",
                     duration_ms: dur,
                     output_chars: 0,
-                    param_path_depth: 0,
+                    param_path_depth: crate::metrics::path_component_count(
+                        param_path.as_deref().unwrap_or(""),
+                    ),
                     max_depth: None,
                     result: "error",
                     error_type: Some("internal_error".to_string()),
@@ -3221,7 +3196,9 @@ impl CodeAnalyzer {
             tool: "exec_command",
             duration_ms: dur,
             output_chars: text.len(),
-            param_path_depth: 0,
+            param_path_depth: crate::metrics::path_component_count(
+                param_path.as_deref().unwrap_or(""),
+            ),
             max_depth: None,
             result: "ok",
             error_type: None,
@@ -3245,7 +3222,12 @@ fn truncate_output(output: &str, max_lines: usize, max_bytes: usize) -> (String,
     };
 
     if output_to_use.len() > max_bytes {
-        (output_to_use[..max_bytes].to_string(), true)
+        // Find the last valid UTF-8 char boundary at or before max_bytes
+        let safe_end = (0..=max_bytes.min(output_to_use.len()))
+            .rev()
+            .find(|&i| output_to_use.is_char_boundary(i))
+            .unwrap_or(0);
+        (output_to_use[..safe_end].to_string(), true)
     } else {
         (output_to_use, lines.len() > max_lines)
     }
