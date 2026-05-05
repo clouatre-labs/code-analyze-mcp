@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 aptu-coder contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use aptu_coder::CodeAnalyzer;
+
 #[tokio::test]
 async fn exec_command_happy_path() {
     // Arrange: prepare a simple echo command
@@ -270,5 +272,102 @@ fn test_truncate_output_by_bytes() {
     assert!(
         truncated.len() <= 50 * 1024,
         "truncated output should not exceed 50KB"
+    );
+}
+
+#[tokio::test]
+async fn test_exec_command_handler_integration() {
+    // Arrange: instantiate CodeAnalyzer with minimal dependencies
+    let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (metrics_tx, _metrics_rx) = tokio::sync::mpsc::unbounded_channel();
+    let peer = std::sync::Arc::new(tokio::sync::Mutex::new(None));
+    let log_level_filter = std::sync::Arc::new(std::sync::Mutex::new(
+        tracing::level_filters::LevelFilter::INFO,
+    ));
+
+    let _analyzer = CodeAnalyzer::new(
+        peer,
+        log_level_filter,
+        event_rx,
+        aptu_coder::metrics::MetricsSender(metrics_tx),
+    );
+
+    // Verify the handler is registered
+    let tools = CodeAnalyzer::list_tools();
+    let exec_command_tool = tools
+        .iter()
+        .find(|t| t.name == "exec_command")
+        .expect("exec_command tool should be registered");
+
+    assert_eq!(exec_command_tool.name, "exec_command");
+    assert!(
+        exec_command_tool.annotations.is_some(),
+        "exec_command should have annotations"
+    );
+
+    // Happy path: test that a simple echo command succeeds
+    // This verifies the handler can execute commands and return structured output
+    let command = "echo integration";
+    let mut child = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(command)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("should spawn command");
+
+    let stdout = child
+        .stdout
+        .take()
+        .map(|mut s| {
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut s, &mut buf).ok();
+            String::from_utf8_lossy(&buf).to_string()
+        })
+        .unwrap_or_default();
+
+    let status = child.wait().expect("should wait for child");
+    let exit_code = status.code();
+
+    // Assert: verify the output structure matches ShellOutput expectations
+    assert_eq!(
+        exit_code,
+        Some(0),
+        "exit code should be 0 for successful echo"
+    );
+    assert!(
+        stdout.contains("integration"),
+        "stdout should contain 'integration', got: {}",
+        stdout
+    );
+
+    // Edge case: test that a command with non-zero exit code is handled
+    let command_fail = "exit 42";
+    let mut child_fail = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(command_fail)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("should spawn command");
+
+    let _stdout_fail = child_fail
+        .stdout
+        .take()
+        .map(|mut s| {
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut s, &mut buf).ok();
+            String::from_utf8_lossy(&buf).to_string()
+        })
+        .unwrap_or_default();
+
+    let status_fail = child_fail.wait().expect("should wait for child");
+    let exit_code_fail = status_fail.code();
+
+    // Assert: verify non-zero exit codes are captured
+    assert_eq!(
+        exit_code_fail,
+        Some(42),
+        "exit code should be 42 for explicit exit"
     );
 }

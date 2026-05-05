@@ -248,7 +248,7 @@ pub struct CodeAnalyzer {
     // Accessed by rmcp macro-generated tool dispatch, but this field still triggers
     // `dead_code` in this crate, so keep the targeted suppression.
     #[allow(dead_code)]
-    tool_router: ToolRouter<Self>,
+    pub tool_router: ToolRouter<Self>,
     cache: AnalysisCache,
     peer: Arc<TokioMutex<Option<Peer<RoleServer>>>>,
     log_level_filter: Arc<Mutex<LevelFilter>>,
@@ -3007,7 +3007,7 @@ impl CodeAnalyzer {
             open_world_hint = true
         )
     )]
-    async fn exec_command(
+    pub async fn exec_command(
         &self,
         params: Parameters<types::ExecCommandParams>,
         _context: RequestContext<RoleServer>,
@@ -3151,6 +3151,7 @@ impl CodeAnalyzer {
             _ = tokio::time::sleep(timeout_duration) => {
                 // Timeout occurred: kill the process and return empty output
                 let _ = child.kill().await;
+                let _ = child.wait().await;
                 ("".to_string(), "".to_string(), None, true)
             }
         };
