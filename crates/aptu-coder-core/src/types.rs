@@ -915,7 +915,7 @@ pub struct ExecCommandParams {
     pub command: String,
     /// Timeout in seconds before SIGKILL (default: 30).
     pub timeout_secs: Option<u64>,
-    /// Working directory relative to server CWD; validated to prevent escape.
+    /// Working directory relative to server CWD. Validated against path traversal, but best-effort only -- does not sandbox the process.
     pub working_dir: Option<String>,
 }
 
