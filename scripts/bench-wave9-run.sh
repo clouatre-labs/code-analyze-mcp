@@ -24,6 +24,8 @@
 #                                     (default: claude-haiku-4-5)
 #                                     e.g. global.anthropic.claude-haiku-4-5-20251001-v1:0
 #   CARGO_TARGET_DIR               -- optional shared target directory for faster builds
+#   WAVE9_WORKTREE_BASE            -- base directory for temporary run worktrees
+#                                     (default: /tmp; override on systems with small tmpfs)
 
 set -euo pipefail
 
@@ -66,7 +68,10 @@ fi
 # ---------------------------------------------------------------------------
 # Each run gets a fresh temporary worktree from origin/main to prevent
 # cross-run contamination. Changes made by the agent are captured via git diff.
-RUN_WORKTREE="/tmp/wave9-run-${RUN_ID}"
+# WAVE9_WORKTREE_BASE overrides the default /tmp location (e.g. for systems
+# with small tmpfs or shared CI runners where /tmp is not appropriate).
+WAVE9_WORKTREE_BASE="${WAVE9_WORKTREE_BASE:-/tmp}"
+RUN_WORKTREE="${WAVE9_WORKTREE_BASE}/wave9-run-${RUN_ID}"
 
 if [[ -d "$RUN_WORKTREE" ]]; then
   git -C "$REPO_ROOT" worktree remove --force "$RUN_WORKTREE" 2>/dev/null || rm -rf "$RUN_WORKTREE"
