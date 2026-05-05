@@ -24,7 +24,7 @@ thiserror = "2.0.18"
 tracing = "0.1"
 tokio-util = "0.7"
 rmcp = { version = "1", features = ["server", "macros", "transport-io"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "fs", "process"] }
 async-trait = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 schemars = { version = "1", features = ["derive"] }

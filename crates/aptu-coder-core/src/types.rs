@@ -906,3 +906,30 @@ pub struct EditInsertOutput {
     pub position: String,
     pub byte_offset: usize,
 }
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct ExecCommandParams {
+    /// Shell command to execute via bash -c.
+    pub command: String,
+    /// Timeout in seconds before SIGKILL (default: 30).
+    pub timeout_secs: Option<u64>,
+    /// Working directory relative to server CWD; validated to prevent escape.
+    pub working_dir: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(JsonSchema))]
+pub struct ShellOutput {
+    /// Standard output from the command.
+    pub stdout: String,
+    /// Standard error from the command.
+    pub stderr: String,
+    /// Exit code; null if killed by timeout.
+    pub exit_code: Option<i32>,
+    /// True if the command was killed due to timeout.
+    pub timed_out: bool,
+    /// True if stdout or stderr was truncated due to size limits.
+    pub output_truncated: bool,
+}

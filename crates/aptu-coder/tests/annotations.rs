@@ -7,7 +7,7 @@ use serde_json::Value;
 fn test_all_tools_have_correct_annotations() {
     let tools = CodeAnalyzer::list_tools();
 
-    assert_eq!(tools.len(), 9, "expected 9 registered tools");
+    assert_eq!(tools.len(), 10, "expected 10 registered tools");
 
     let expected_names = [
         "analyze_directory",
@@ -19,6 +19,7 @@ fn test_all_tools_have_correct_annotations() {
         "edit_replace",
         "edit_rename",
         "edit_insert",
+        "exec_command",
     ];
 
     for tool in &tools {
@@ -34,11 +35,12 @@ fn test_all_tools_have_correct_annotations() {
             .as_ref()
             .unwrap_or_else(|| panic!("tool {} is missing annotations", name));
 
-        // edit_overwrite, edit_replace, edit_rename, and edit_insert are destructive; others are read-only
+        // edit_overwrite, edit_replace, edit_rename, edit_insert, and exec_command are destructive; others are read-only
         if name == "edit_overwrite"
             || name == "edit_replace"
             || name == "edit_rename"
             || name == "edit_insert"
+            || name == "exec_command"
         {
             assert_eq!(
                 annotations.read_only_hint,
@@ -89,12 +91,22 @@ fn test_all_tools_have_correct_annotations() {
             }
         }
 
-        assert_eq!(
-            annotations.open_world_hint,
-            Some(false),
-            "tool {} must have open_world_hint=false",
-            name
-        );
+        // exec_command has open_world_hint=true; others have open_world_hint=false
+        if name == "exec_command" {
+            assert_eq!(
+                annotations.open_world_hint,
+                Some(true),
+                "tool {} must have open_world_hint=true",
+                name
+            );
+        } else {
+            assert_eq!(
+                annotations.open_world_hint,
+                Some(false),
+                "tool {} must have open_world_hint=false",
+                name
+            );
+        }
     }
 }
 
