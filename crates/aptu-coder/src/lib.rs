@@ -1889,7 +1889,7 @@ impl CodeAnalyzer {
     #[instrument(skip(self, _context))]
     #[tool(
         name = "analyze_raw",
-        description = "No AST parsing performed; returns raw UTF-8 file content with line numbers. Output fields: path, total_lines, start_line, end_line, content. Accepts any file extension; errors on non-UTF-8 or binary files. Use analyze_file or analyze_module for AST-structured output; use analyze_raw when you need exact text content without semantic overhead. Passing a directory path returns an error. Example queries: Read the first 50 lines of src/main.rs; Show lines 100-150 of src/lib.rs; Read the full content of a config file.",
+        description = "Raw UTF-8 file content with line numbers; no AST parsing. Accepts any file extension; errors on non-UTF-8 or binary files. Use analyze_file or analyze_module for AST-structured output. Passing a directory path returns an error. Example queries: Read the first 50 lines of src/main.rs; Show lines 100-150 of src/lib.rs; Read a specific block from a config file.",
         output_schema = schema_for_type::<types::AnalyzeRawOutput>(),
         annotations(
             title = "Analyze Raw",
