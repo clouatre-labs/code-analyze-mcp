@@ -2997,7 +2997,7 @@ impl CodeAnalyzer {
 
     #[tool(
         name = "exec_command",
-        description = "Executes arbitrary shell commands via sh -c (or $SHELL if set). The working_dir parameter restricts the initial process working directory only -- it does not prevent shell-level escape via cd or absolute paths within the command string.",
+        description = "Execute shell command via sh -c (or $SHELL if set). Returns stdout, stderr, exit_code, timed_out, and output_truncated. Output capped at 2000 lines and 50 KB per stream; use timeout_secs to limit execution time. working_dir sets initial working directory; cd and absolute paths in command string bypass this restriction. Example queries: Run the test suite and capture output; Build the project and check exit code; Execute a linter and inspect stderr for warnings.",
         output_schema = schema_for_type::<types::ShellOutput>(),
         annotations(
             title = "Exec Command",
