@@ -302,6 +302,25 @@ edit_insert path: src/lib.rs symbol_name: handle_request position: before conten
 edit_insert path: src/types.rs symbol_name: MyStruct position: after content: "\n#[derive(Debug)]\n"
 ```
 
+### `exec_command`
+
+> [!WARNING]
+> This tool executes arbitrary shell commands via `sh -c` (or `$SHELL` if set). The `working_dir` parameter restricts the initial process working directory only -- it does not prevent shell-level escape via `cd` or absolute paths within the command string. Set `open_world_hint=true` in your MCP client configuration to surface this warning.
+
+Run a shell command and return its combined stdout/stderr output. Intended for orchestrator BUILD agents that need to compile, test, or lint without a separate shell tool. Annotations: `destructive_hint=true`, `open_world_hint=true`.
+
+**Required:** `command` *(string)* -- shell command to execute via `sh -c` (or `$SHELL` if set)
+
+**Additional optional:**
+- `timeout_secs` *(integer, default 30)* -- seconds before SIGKILL is sent to the process
+- `working_dir` *(string, optional)* -- initial working directory for the process; path-validated and relative to the server's CWD. Does not restrict shell-level escapes.
+
+```bash
+exec_command command: "cargo test --workspace"
+exec_command command: "cargo clippy -- -D warnings" working_dir: "crates/aptu-coder"
+exec_command command: "cargo build --release" timeout_secs: 120
+```
+
 ## Output Management
 
 For large codebases, two mechanisms prevent context overflow:
@@ -347,7 +366,7 @@ The server's own instructions expose a 4-step recommended workflow for unknown r
 
 ## Observability
 
-All nine tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/aptu-coder/` (fallback: `~/.local/share/aptu-coder/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
+All ten tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/aptu-coder/` (fallback: `~/.local/share/aptu-coder/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full schema.
 
 ## Documentation
 

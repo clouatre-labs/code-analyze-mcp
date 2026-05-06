@@ -17,11 +17,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the module map, [MCP-BEST-PRACTICES.m
 
 ## 2. Tool Architecture Decisions
 
-### Why Nine Tools Instead of One
+### Why Ten Tools Instead of One
 
 **Principle:** Each tool does one thing well. Non-overlapping interfaces eliminate ambiguous routing. When two tools can satisfy the same request, the model must guess; that is a reliability failure, not a model failure. (See [MCP-BEST-PRACTICES.md](MCP-BEST-PRACTICES.md), section 3.2.)
 
-*Example: This server has nine tools — `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol`, `analyze_raw` (analysis family); `edit_overwrite`, `edit_replace`, `edit_rename`, `edit_insert` (editing family) — each with a distinct, non-overlapping responsibility. A single auto-detecting tool was rejected because it required the model to infer the correct mode from context, which failed under small models.*
+*Example: This server has ten tools — `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol`, `analyze_raw` (analysis family); `edit_overwrite`, `edit_replace`, `edit_rename`, `edit_insert` (editing family); `exec_command` (exec family) — each with a distinct, non-overlapping responsibility. A single auto-detecting tool was rejected because it required the model to infer the correct mode from context, which failed under small models.*
 
 ```mermaid
 graph TD
@@ -49,12 +49,13 @@ graph TD
 | `edit_replace` | Replace exact text block in a file | AST awareness, directory-wide changes |
 | `edit_rename` | AST-aware rename within a single file | Directory-wide rename, type-aware refactoring |
 | `edit_insert` | Insert content before/after a named identifier | Directory-wide insertion, AST-unaware insertion |
+| `exec_command` | Execute arbitrary shell commands | Output parsing, scripting language support, interactive sessions |
 
-*Table 1: The nine tools, their purpose, and what each intentionally excludes.*
+*Table 1: The ten tools, their purpose, and what each intentionally excludes.*
 
 ### Single Responsibility Trade-off
 
-Splitting into nine tools adds surface area (nine tool descriptions to maintain, nine output schemas). The benefit is deterministic routing: an agent that asks about a symbol never accidentally triggers a directory walk, and an agent orienting on a codebase never waits for a full semantic parse. Write tools are separated from analysis tools to allow clients to apply different confirmation policies.
+Splitting into ten tools adds surface area (ten tool descriptions to maintain, ten output schemas). The benefit is deterministic routing: an agent that asks about a symbol never accidentally triggers a directory walk, and an agent orienting on a codebase never waits for a full semantic parse. Write tools are separated from analysis tools to allow clients to apply different confirmation policies.
 
 ## 3. Designing for Small Models
 
@@ -204,6 +205,7 @@ The annotation posture for this server is stable and locked until new MCP SEPs l
 |---|---|---|---|---|---|
 | `analyze_*` | `true` | `false` | `true` | `false` | Read-only, deterministic, bounded by input path |
 | `edit_*` | `false` | `true` | `false` | `false` | Write-capable, non-idempotent, bounded by input path |
+| `exec_*` | `false` | `true` | `false` | `true` | Executes arbitrary shell commands; open_world_hint surfaces the safety warning to MCP clients |
 
 *Table 4: Tool annotation posture by family. See [ROADMAP.md](ROADMAP.md) for the rationale and SEP tracking references.*
 
