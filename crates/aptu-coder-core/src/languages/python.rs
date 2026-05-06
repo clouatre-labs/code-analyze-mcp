@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 /// Tree-sitter query for extracting Python elements (functions and classes).
 pub const ELEMENT_QUERY: &str = r"
-(function_definition
-  name: (identifier) @func_name) @function
+[(decorated_definition
+   definition: (function_definition
+     name: (identifier) @func_name)) @function
+ (function_definition
+   name: (identifier) @func_name) @function]
 (class_definition
   name: (identifier) @class_name) @class
 ";

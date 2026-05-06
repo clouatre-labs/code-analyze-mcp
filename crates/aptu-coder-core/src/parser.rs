@@ -609,23 +609,27 @@ impl SemanticExtractor {
                 }
 
                 if let Some(func_node) = func_node {
-                    // When a plain function_definition is nested inside a template_declaration,
-                    // it is also matched by the explicit template_declaration pattern. Skip it
-                    // here to avoid duplicates; the template_declaration match will emit it.
-                    let parent_is_template = func_node
-                        .parent()
-                        .map(|p| p.kind() == "template_declaration")
+                    // When a plain function_definition is nested inside a template_declaration
+                    // or decorated_definition, it is also matched by the explicit wrapper pattern.
+                    // Skip it here to avoid duplicates; the wrapper match will emit it.
+                    let parent_kind = func_node.parent().map(|p| p.kind());
+                    let parent_is_wrapper = parent_kind
+                        .map(|k| k == "template_declaration" || k == "decorated_definition")
                         .unwrap_or(false);
-                    if func_node.kind() == "function_definition" && parent_is_template {
-                        // Handled by the template_declaration @function match instead.
+                    if func_node.kind() == "function_definition" && parent_is_wrapper {
+                        // Handled by the template_declaration or decorated_definition @function match instead.
                     } else {
-                        // Resolve template_declaration to its inner function_definition for
-                        // declarator/field walks. The captured node may be the template wrapper.
+                        // Resolve template_declaration or decorated_definition to inner function_definition
+                        // for declarator/field walks. The captured node may be a wrapper.
                         let func_def = if func_node.kind() == "template_declaration" {
                             let mut cursor = func_node.walk();
                             func_node
                                 .children(&mut cursor)
                                 .find(|n| n.kind() == "function_definition")
+                                .unwrap_or(func_node)
+                        } else if func_node.kind() == "decorated_definition" {
+                            func_node
+                                .child_by_field_name("definition")
                                 .unwrap_or(func_node)
                         } else {
                             func_node
@@ -657,9 +661,30 @@ impl SemanticExtractor {
                                 .or_else(|| func_def.child_by_field_name("return_type"))
                                 .map(|r| source[r.start_byte()..r.end_byte()].to_string());
 
+                            // Walk backward through contiguous attribute_item siblings
+                            // to find the first attribute line (Rust only).
+                            let first_line = if func_node.kind() == "function_item" {
+                                let mut attrs: Vec<Node> = Vec::new();
+                                let mut sib = func_node.prev_named_sibling();
+                                while let Some(s) = sib {
+                                    if s.kind() == "attribute_item" {
+                                        attrs.push(s);
+                                        sib = s.prev_named_sibling();
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                attrs
+                                    .last()
+                                    .map(|n| n.start_position().row + 1)
+                                    .unwrap_or_else(|| func_node.start_position().row + 1)
+                            } else {
+                                func_node.start_position().row + 1
+                            };
+
                             functions.push(FunctionInfo {
                                 name,
-                                line: func_node.start_position().row + 1,
+                                line: first_line,
                                 end_line: func_node.end_position().row + 1,
                                 parameters: if params.is_empty() {
                                     Vec::new()
@@ -890,7 +915,20 @@ impl SemanticExtractor {
                             method_params = source[node.start_byte()..node.end_byte()].to_string();
                         }
                         "method" => {
-                            method_line = node.start_position().row + 1;
+                            let mut method_attrs: Vec<Node> = Vec::new();
+                            let mut msib = node.prev_named_sibling();
+                            while let Some(s) = msib {
+                                if s.kind() == "attribute_item" {
+                                    method_attrs.push(s);
+                                    msib = s.prev_named_sibling();
+                                } else {
+                                    break;
+                                }
+                            }
+                            method_line = method_attrs
+                                .last()
+                                .map(|n| n.start_position().row + 1)
+                                .unwrap_or_else(|| node.start_position().row + 1);
                             method_end_line = node.end_position().row + 1;
                             method_return_type = node
                                 .child_by_field_name("return_type")
