@@ -1,6 +1,97 @@
 // SPDX-FileCopyrightText: 2026 aptu-coder contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::{Arc, Mutex};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::Mutex as TokioMutex;
+use tracing_subscriber::filter::LevelFilter;
+
+fn make_test_analyzer() -> aptu_coder::CodeAnalyzer {
+    let peer = Arc::new(TokioMutex::new(None));
+    let log_level_filter = Arc::new(Mutex::new(LevelFilter::INFO));
+    let (_tx, rx) = tokio::sync::mpsc::unbounded_channel::<aptu_coder::logging::LogEvent>();
+    let (metrics_tx, _metrics_rx) = tokio::sync::mpsc::unbounded_channel();
+    aptu_coder::CodeAnalyzer::new(
+        peer,
+        log_level_filter,
+        rx,
+        aptu_coder::metrics::MetricsSender(metrics_tx),
+    )
+}
+
+async fn call_exec_command_raw(params: serde_json::Value) -> serde_json::Value {
+    let analyzer = make_test_analyzer();
+    let (client, server) = tokio::io::duplex(65536);
+
+    // Spawn the analyzer server on the server half
+    let _server_handle = tokio::spawn(async move {
+        let (server_rx, server_tx) = tokio::io::split(server);
+        match rmcp::serve_server(analyzer, (server_rx, server_tx)).await {
+            Ok(service) => {
+                let _ = service.waiting().await;
+            }
+            Err(_) => {}
+        }
+    });
+
+    let (client_rx, mut client_tx) = tokio::io::split(client);
+    let mut reader = BufReader::new(client_rx).lines();
+
+    // Step 1: Send initialize request
+    let init = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "test-client", "version": "0.1.0"}
+        }
+    })
+    .to_string()
+        + "\n";
+    client_tx.write_all(init.as_bytes()).await.unwrap();
+    client_tx.flush().await.unwrap();
+
+    // Step 2: Read initialize response (discard)
+    let _resp = reader.next_line().await.unwrap().unwrap();
+
+    // Step 3: Send initialized notification (no id)
+    let notif = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized",
+        "params": {}
+    })
+    .to_string()
+        + "\n";
+    client_tx.write_all(notif.as_bytes()).await.unwrap();
+    client_tx.flush().await.unwrap();
+
+    // Step 4: Send tools/call
+    let call = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "exec_command",
+            "arguments": params
+        }
+    })
+    .to_string()
+        + "\n";
+    client_tx.write_all(call.as_bytes()).await.unwrap();
+    client_tx.flush().await.unwrap();
+
+    // Step 5: Read response (skip any notification lines without an id)
+    loop {
+        let line = reader.next_line().await.unwrap().unwrap();
+        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if v.get("id") == Some(&serde_json::json!(2)) {
+            return v;
+        }
+    }
+}
+
 #[tokio::test]
 async fn exec_command_happy_path() {
     // Arrange: prepare a simple echo command
@@ -278,5 +369,64 @@ fn test_truncate_output_by_bytes() {
     assert!(
         truncated.len() <= 50 * 1024,
         "truncated output should not exceed 50KB"
+    );
+}
+
+// Handler-level integration tests via MCP JSON-RPC
+// These tests verify the five key behaviors of exec_command at the integration level
+
+#[tokio::test]
+async fn test_handler_structured_output() {
+    let resp = call_exec_command_raw(serde_json::json!({"command": "echo hello"})).await;
+    let sc = &resp["result"]["structuredContent"];
+    assert_eq!(sc["exit_code"], 0, "exit_code mismatch: {sc}");
+    assert!(
+        sc["stdout"].as_str().unwrap_or("").contains("hello"),
+        "stdout missing 'hello': {sc}"
+    );
+    assert!(
+        !sc["timed_out"].as_bool().unwrap_or(true),
+        "unexpected timed_out: {sc}"
+    );
+}
+
+#[tokio::test]
+async fn test_handler_timeout_respected() {
+    let resp =
+        call_exec_command_raw(serde_json::json!({"command": "sleep 10", "timeout_secs": 1})).await;
+    let sc = &resp["result"]["structuredContent"];
+    assert!(
+        sc["timed_out"].as_bool().unwrap_or(false),
+        "expected timed_out=true: {sc}"
+    );
+}
+
+#[tokio::test]
+async fn test_handler_invalid_working_dir() {
+    let resp = call_exec_command_raw(serde_json::json!({
+        "command": "echo hi",
+        "working_dir": "/nonexistent-absolute-path-for-test"
+    }))
+    .await;
+    assert!(
+        resp["result"]["isError"].as_bool().unwrap_or(false),
+        "expected isError=true: {resp}"
+    );
+}
+
+#[tokio::test]
+async fn test_handler_nonzero_exit() {
+    let resp = call_exec_command_raw(serde_json::json!({"command": "exit 42"})).await;
+    let sc = &resp["result"]["structuredContent"];
+    assert_eq!(sc["exit_code"], 42, "exit_code mismatch: {sc}");
+}
+
+#[tokio::test]
+async fn test_handler_stderr_populated() {
+    let resp = call_exec_command_raw(serde_json::json!({"command": "sh -c 'echo err >&2'"})).await;
+    let sc = &resp["result"]["structuredContent"];
+    assert!(
+        sc["stderr"].as_str().unwrap_or("").contains("err"),
+        "stderr missing 'err': {sc}"
     );
 }

@@ -2997,7 +2997,7 @@ impl CodeAnalyzer {
 
     #[tool(
         name = "exec_command",
-        description = "WARNING: This tool executes arbitrary shell commands via sh -c (or $SHELL if set). The working_dir parameter restricts the initial process working directory only -- it does not prevent shell-level escape via cd or absolute paths within the command string. Set open_world_hint=true in your MCP client configuration to surface this warning.",
+        description = "Executes arbitrary shell commands via sh -c (or $SHELL if set). The working_dir parameter restricts the initial process working directory only -- it does not prevent shell-level escape via cd or absolute paths within the command string.",
         output_schema = schema_for_type::<types::ShellOutput>(),
         annotations(
             title = "Exec Command",
