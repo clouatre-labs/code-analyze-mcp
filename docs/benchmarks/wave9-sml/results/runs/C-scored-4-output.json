@@ -1,0 +1,28 @@
+{
+  "run_id": "C-scored-4",
+  "condition": "C",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info (lines 112-127) and get_ts_language (lines 240-241) functions"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping to EXTENSION_MAP (line 56-57) and tsx to supported_languages (line 90-91)"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree_sitter_typescript",
+  "ts_crate_version": "unknown",
+  "ts_entry_point": "tree_sitter_typescript::LANGUAGE_TSX",
+  "queries_written": [],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx"
+  ],
+  "test_names": [],
+  "compile_belief": "yes",
+  "compile_belief_reason": "All four required edits have been applied correctly: (1) tsx arm added to get_language_info with proper LANGUAGE_TSX constant and typescript:: query references, (2) tsx arm added to get_ts_language returning LANGUAGE_TSX, (3) extension mapping added mapping .tsx files to tsx language, (4) tsx added to supported_languages list. All edits use the lang-tsx feature flag and follow the exact patterns of existing language implementations. No namespace mismatches, no duplicate pub mod declarations, correct LANGUAGE_TSX suffix used throughout.",
+  "tool_calls_total": 8
+}

@@ -1,0 +1,28 @@
+{
+  "run_id": "D-scored-1",
+  "condition": "D",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info and get_ts_language functions"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping and tsx entry to supported_languages function"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree-sitter-typescript",
+  "ts_crate_version": "unknown",
+  "ts_entry_point": "LANGUAGE_TSX",
+  "queries_written": [],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx"
+  ],
+  "test_names": [],
+  "compile_belief": "tsx language support has been successfully re-wired into the aptu-coder codebase. All four required code locations have been updated with proper feature-gating and correct constant/namespace references.",
+  "compile_belief_reason": "The implementation follows the exact template specifications: (1) get_language_info uses LANGUAGE_TSX constant and typescript:: namespace, (2) get_ts_language arm maps 'tsx' to LANGUAGE_TSX, (3) EXTENSION_MAP registers 'tsx' extension, (4) supported_languages includes 'tsx'. All changes are properly feature-gated with #[cfg(feature = \\\"lang-tsx\\\")]. The shared pub mod typescript pattern is respected\u2014no new module declaration was added.",
+  "tool_calls_total": 6
+}

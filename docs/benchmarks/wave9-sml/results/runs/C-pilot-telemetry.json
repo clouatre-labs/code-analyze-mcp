@@ -1,0 +1,21 @@
+{
+  "wall_time_ms": 83776,
+  "api_time_ms": 83484,
+  "num_turns": 36,
+  "cost_usd": 0.900284,
+  "input_tokens": 861399,
+  "output_tokens": 7777,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 0,
+  "verification": {
+    "grep_mod_rs_tsx_arm": true,
+    "grep_mod_rs_language_tsx": true,
+    "grep_lang_rs_extension": true,
+    "grep_lang_rs_supported": true,
+    "grep_no_spurious_pub_mod": true,
+    "git_diff_stat": " 1 file changed, 3 insertions(+), 1 deletion(-)",
+    "changed_files": [
+      "crates/aptu-coder-core/src/languages/mod.rs"
+    ]
+  }
+}

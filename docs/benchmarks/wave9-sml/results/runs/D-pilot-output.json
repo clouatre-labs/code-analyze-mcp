@@ -1,0 +1,53 @@
+{
+  "run_id": "D-pilot",
+  "condition": "D",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info and get_ts_language"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping and supported language entry"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree_sitter_typescript",
+  "ts_crate_version": "unknown",
+  "ts_entry_point": "tree_sitter_typescript::LANGUAGE_TSX",
+  "queries_written": [
+    {
+      "name": "typescript::ELEMENT_QUERY",
+      "language": "tsx"
+    },
+    {
+      "name": "typescript::CALL_QUERY",
+      "language": "tsx"
+    },
+    {
+      "name": "typescript::REFERENCE_QUERY",
+      "language": "tsx"
+    },
+    {
+      "name": "typescript::IMPORT_QUERY",
+      "language": "tsx"
+    },
+    {
+      "name": "typescript::DEFUSE_QUERY",
+      "language": "tsx"
+    }
+  ],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx"
+  ],
+  "test_names": [
+    "test_language_for_extension_happy_path",
+    "test_get_language_info_known",
+    "test_get_ts_language_known"
+  ],
+  "compile_belief": "PROBABLE",
+  "compile_belief_reason": "All tsx arms correctly added with proper feature gating, namespace prefixes, and LANGUAGE_TSX constant. No syntax errors introduced. Existing tests remain unchanged.",
+  "tool_calls_total": 6
+}

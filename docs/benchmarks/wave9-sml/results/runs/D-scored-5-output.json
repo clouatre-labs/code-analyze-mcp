@@ -1,0 +1,28 @@
+{
+  "run_id": "D-scored-5",
+  "condition": "D",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info (lines 112-127) and get_ts_language (lines 240-241)"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping (lines 56-57) and tsx entry in supported_languages (lines 90-91)"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree_sitter_typescript",
+  "ts_crate_version": "unknown",
+  "ts_entry_point": "tree_sitter_typescript::LANGUAGE_TSX",
+  "queries_written": [],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx"
+  ],
+  "test_names": [],
+  "compile_belief": "All modifications follow exact specifications and use correct constants (LANGUAGE_TSX, not LANGUAGE_TYPESCRIPT)",
+  "compile_belief_reason": "All tsx arms use typescript:: namespace for queries (correct pattern, not tsx::), reuse typescript module queries, and properly gate with #[cfg(feature = \\\"lang-tsx\\\")]. LANGUAGE_TSX is the correct tree-sitter constant for the JSX variant. The shared pub mod typescript declaration is untouched, as specified.",
+  "tool_calls_total": 4
+}

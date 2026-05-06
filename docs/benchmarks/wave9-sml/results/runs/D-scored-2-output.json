@@ -1,0 +1,28 @@
+{
+  "run_id": "D-scored-2",
+  "condition": "D",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info (lines 112-127) and get_ts_language (lines 240-241)"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping to EXTENSION_MAP (lines 56-57) and 'tsx' entry to supported_languages (lines 90-91)"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree_sitter_typescript",
+  "ts_crate_version": "N/A",
+  "ts_entry_point": "tree_sitter_typescript::LANGUAGE_TSX",
+  "queries_written": [],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx"
+  ],
+  "test_names": [],
+  "compile_belief": "High confidence that tsx support is correctly re-wired. All four required modifications have been made: (1) tsx arm in get_language_info with proper Language, query fields, and handlers using typescript:: namespace; (2) tsx arm in get_ts_language returning LANGUAGE_TSX; (3) tsx extension mapping in EXTENSION_MAP; (4) 'tsx' added to supported_languages array. All changes respect feature flags and follow the established TypeScript patterns without namespace conflicts.",
+  "compile_belief_reason": "The implementation follows the exact specification with no deviations. Each modification mirrors the typescript arm but with LANGUAGE_TSX instead of LANGUAGE_TYPESCRIPT, maintaining consistency with the typescript module's shared queries. The feature flag structure (#[cfg(feature = \\\"lang-tsx\\\")]) is correctly applied throughout. The namespace traps were avoided: using typescript:: for queries (not tsx::), not adding a separate pub mod tsx, and using the correct LANGUAGE_TSX constant. The modification is minimal, surgical, and does not risk breaking existing code paths.",
+  "tool_calls_total": 10
+}

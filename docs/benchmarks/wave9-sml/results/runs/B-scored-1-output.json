@@ -1,0 +1,28 @@
+{
+  "run_id": "B-scored-1",
+  "condition": "B",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info and get_ts_language"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping and supported language entry"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree_sitter_typescript",
+  "ts_crate_version": "inferred from existing typescript arm",
+  "ts_entry_point": "tree_sitter_typescript::LANGUAGE_TSX",
+  "queries_written": [],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx -> tsx"
+  ],
+  "test_names": [],
+  "compile_belief": "high",
+  "compile_belief_reason": "All four insertion points mirror the existing typescript arm exactly, using the correct LANGUAGE_TSX constant, typescript:: namespace for queries, no new pub mod declaration, and feature gates matching the existing lang-tsx usage already present in the file.",
+  "tool_calls_total": 8
+}
