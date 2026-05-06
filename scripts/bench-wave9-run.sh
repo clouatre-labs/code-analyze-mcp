@@ -80,6 +80,131 @@ fi
 git -C "$REPO_ROOT" fetch origin main --quiet
 git -C "$REPO_ROOT" worktree add "$RUN_WORKTREE" origin/main 2>&1
 
+# ---------------------------------------------------------------------------
+# Worktree preparation: strip tsx wiring before agent runs
+# ---------------------------------------------------------------------------
+# The task is to re-wire tsx support. We strip it first so the agent must
+# add it back correctly. Stripping is idempotent (safe to run multiple times).
+
+python3 << 'STRIP_TSX_EOF'
+def strip_tsx_language_info_arm(lines):
+    """Remove the tsx arm from get_language_info using anchor-based matching.
+
+    Anchors: opening line is '#[cfg(feature = "lang-tsx")]' immediately
+    followed by '"tsx" => Some(LanguageInfo {'; closing line is '        }),'.
+    No assumptions about content between anchors.
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '        #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and lines[i + 1].rstrip() == '        "tsx" => Some(LanguageInfo {'):
+            # Skip lines until the closing arm delimiter
+            i += 2
+            while i < len(lines) and lines[i].rstrip() != '        }),':
+                i += 1
+            i += 1  # skip the closing '}),' line
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+def strip_tsx_ts_language_arm(lines):
+    """Remove the tsx arm from get_ts_language using anchor-based matching.
+
+    The arm is exactly two lines:
+      #[cfg(feature = "lang-tsx")]
+      "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '        #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and '"tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX' in lines[i + 1]):
+            i += 2  # skip both lines
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+def strip_tsx_extension_map_entry(lines):
+    """Remove the tsx entry from EXTENSION_MAP using anchor-based matching.
+
+    The entry is exactly two lines:
+      #[cfg(feature = "lang-tsx")]
+      ("tsx", "tsx"),
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '    #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and lines[i + 1].rstrip() == '    ("tsx", "tsx"),'):
+            i += 2
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+def strip_tsx_supported_languages_entry(lines):
+    """Remove the tsx entry from supported_languages using anchor-based matching.
+
+    The entry is exactly two lines:
+      #[cfg(feature = "lang-tsx")]
+      "tsx",
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '        #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and lines[i + 1].rstrip() == '        "tsx",'):
+            i += 2
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+mod_rs_path = "$RUN_WORKTREE/crates/aptu-coder-core/src/languages/mod.rs"
+with open(mod_rs_path) as f:
+    lines = f.readlines()
+lines = strip_tsx_language_info_arm(lines)
+lines = strip_tsx_ts_language_arm(lines)
+with open(mod_rs_path, 'w') as f:
+    f.writelines(lines)
+
+lang_rs_path = "$RUN_WORKTREE/crates/aptu-coder-core/src/lang.rs"
+with open(lang_rs_path) as f:
+    lines = f.readlines()
+lines = strip_tsx_extension_map_entry(lines)
+lines = strip_tsx_supported_languages_entry(lines)
+with open(lang_rs_path, 'w') as f:
+    f.writelines(lines)
+
+with open(lang_rs_path, 'w') as f:
+    f.write(lang_rs_content)
+
+print("tsx wiring stripped from mod.rs and lang.rs")
+STRIP_TSX_EOF
+
+# Validate stripped files are still syntactically valid Rust.
+# rustfmt --check is fast (<1s) and catches broken braces/syntax before the agent runs.
+for _rs_file in \
+    "$RUN_WORKTREE/crates/aptu-coder-core/src/languages/mod.rs" \
+    "$RUN_WORKTREE/crates/aptu-coder-core/src/lang.rs"; do
+  if ! rustfmt --edition 2024 --check "$_rs_file" > /dev/null 2>&1; then
+    echo "ERROR: $_rs_file is not valid Rust after tsx stripping" >&2
+    exit 1
+  fi
+done
+echo "Syntax validation: mod.rs and lang.rs are valid Rust after stripping"
+
 if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
   export CARGO_TARGET_DIR
 fi
@@ -315,50 +440,60 @@ print(f"Telemetry: {tel_path}")
 PYEOF
 
 # ---------------------------------------------------------------------------
-# Post-run verification
+# Post-run verification: grep checks for tsx re-wiring
 # ---------------------------------------------------------------------------
 CHANGED_FILES_STAT=$(git -C "$RUN_WORKTREE" diff --stat HEAD 2>/dev/null | tail -1 || echo "")
 CHANGED_FILES_LIST=$(git -C "$RUN_WORKTREE" diff --name-only HEAD 2>/dev/null || echo "")
 
-CARGO_TEST_PASSED=false
-CARGO_TEST_TAIL=""
-if [[ -f "$RUN_WORKTREE/Cargo.toml" ]]; then
-  CARGO_TEST_TAIL=$(cd "$RUN_WORKTREE" && cargo test -p aptu-coder-core --features lang-kotlin 2>&1 | tail -5) && CARGO_TEST_PASSED=true || true
-fi
-
-SPDX_PRESENT=false
-KOTLIN_FILE="$RUN_WORKTREE/crates/aptu-coder-core/src/languages/kotlin.rs"
-[[ -f "$KOTLIN_FILE" ]] && grep -q "SPDX-FileCopyrightText" "$KOTLIN_FILE" && SPDX_PRESENT=true || true
-
-# Check mod.rs has get_language_info arm for kotlin
-MOD_RS_LANGUAGE_INFO=false
 MOD_RS_FILE="$RUN_WORKTREE/crates/aptu-coder-core/src/languages/mod.rs"
-[[ -f "$MOD_RS_FILE" ]] && grep -q '"kotlin"' "$MOD_RS_FILE" && MOD_RS_LANGUAGE_INFO=true || true
-
-# Check lang.rs has .kt extension
-LANG_RS_KT=false
 LANG_RS_FILE="$RUN_WORKTREE/crates/aptu-coder-core/src/lang.rs"
-[[ -f "$LANG_RS_FILE" ]] && grep -q '\.kt' "$LANG_RS_FILE" && LANG_RS_KT=true || true
+
+# Five grep checks for tsx re-wiring correctness:
+# 1. mod.rs has tsx arm in get_language_info with correct namespace (typescript::)
+# 2. mod.rs has tsx arm in get_ts_language with LANGUAGE_TSX
+# 3. lang.rs has tsx in EXTENSION_MAP
+# 4. lang.rs has tsx in supported_languages
+# 5. No spurious pub mod tsx in mod.rs (should only be in feature gate)
+
+GREP_1=false
+GREP_2=false
+GREP_3=false
+GREP_4=false
+GREP_5=false
+
+[[ -f "$MOD_RS_FILE" ]] && grep -q '"tsx" => Some(LanguageInfo {' "$MOD_RS_FILE" && grep -q 'element_query: typescript::ELEMENT_QUERY,' "$MOD_RS_FILE" && GREP_1=true || true
+
+[[ -f "$MOD_RS_FILE" ]] && grep -q '"tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX' "$MOD_RS_FILE" && GREP_2=true || true
+
+[[ -f "$LANG_RS_FILE" ]] && grep -q '("tsx", "tsx")' "$LANG_RS_FILE" && GREP_3=true || true
+
+[[ -f "$LANG_RS_FILE" ]] && grep -q '"tsx",' "$LANG_RS_FILE" && GREP_4=true || true
+
+# Check that pub mod tsx is NOT present (should only be in feature gate, not as standalone)
+if [[ -f "$MOD_RS_FILE" ]]; then
+  ! grep -q '^pub mod tsx;' "$MOD_RS_FILE" && GREP_5=true || true
+fi
 
 python3 -c "
 import json, sys
 tel_path = '$TELEMETRY_FILE'
 ver_path = '$VERIFICATION_FILE'
 v = {
-    'cargo_test_passed': '$CARGO_TEST_PASSED' == 'true',
-    'cargo_test_output': '''$CARGO_TEST_TAIL''',
+    'grep_mod_rs_tsx_arm': '$GREP_1' == 'true',
+    'grep_mod_rs_language_tsx': '$GREP_2' == 'true',
+    'grep_lang_rs_extension': '$GREP_3' == 'true',
+    'grep_lang_rs_supported': '$GREP_4' == 'true',
+    'grep_no_spurious_pub_mod': '$GREP_5' == 'true',
     'git_diff_stat': '$CHANGED_FILES_STAT',
     'changed_files': [f for f in '''$CHANGED_FILES_LIST'''.splitlines() if f.strip()],
-    'spdx_header_present': '$SPDX_PRESENT' == 'true',
-    'mod_rs_kotlin_arm': '$MOD_RS_LANGUAGE_INFO' == 'true',
-    'lang_rs_kt_extension': '$LANG_RS_KT' == 'true',
 }
 with open(ver_path, 'w') as f: json.dump(v, f, indent=2)
 if __import__('os').path.exists(tel_path):
     t = json.load(open(tel_path))
     t['verification'] = v
     json.dump(t, open(tel_path, 'w'), indent=2)
-print('Verification: cargo_test=' + ('PASS' if v['cargo_test_passed'] else 'FAIL') + ' spdx=' + str(v['spdx_header_present']) + ' files=' + str(len(v['changed_files'])))
+all_pass = all([v['grep_mod_rs_tsx_arm'], v['grep_mod_rs_language_tsx'], v['grep_lang_rs_extension'], v['grep_lang_rs_supported'], v['grep_no_spurious_pub_mod']])
+print('Verification: grep_checks=' + ('PASS' if all_pass else 'FAIL') + ' files=' + str(len(v['changed_files'])))
 "
 
 # ---------------------------------------------------------------------------

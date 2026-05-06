@@ -1,7 +1,7 @@
 {
   "version": "wave9-sml",
   "rubric": {
-    "dimensions": ["implementation_completeness", "correctness", "code_quality"],
+    "dimensions": ["namespace_correctness", "extension_registration", "structural_fidelity"],
     "max_per_dimension": 3,
     "max_total": 9
   },
