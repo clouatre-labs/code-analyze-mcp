@@ -440,3 +440,66 @@ async fn test_handler_stderr_populated() {
         "stderr missing 'err': {sc}"
     );
 }
+
+#[tokio::test]
+async fn test_handler_resource_limits_none_unchanged() {
+    // Arrange: memory_limit_mb=None and cpu_limit_secs=None -> same behavior as before
+    let resp = call_exec_command_raw(serde_json::json!({
+        "command": "echo test",
+        "memory_limit_mb": null,
+        "cpu_limit_secs": null
+    }))
+    .await;
+
+    // Act & Assert: command should complete successfully
+    let sc = &resp["result"]["structuredContent"];
+    assert_eq!(sc["exit_code"], 0, "exit code should be 0: {sc}");
+    assert!(
+        sc["stdout"].as_str().unwrap_or("").contains("test"),
+        "stdout should contain 'test': {sc}"
+    );
+    assert!(
+        !sc["timed_out"].as_bool().unwrap_or(true),
+        "should not timeout: {sc}"
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn test_handler_cpu_limit_kills_spin() {
+    // Arrange: cpu_limit_secs=1, command spins CPU
+    let resp = call_exec_command_raw(serde_json::json!({
+        "command": "sh -c 'while true; do :; done'",
+        "cpu_limit_secs": 1,
+        "timeout_secs": 10
+    }))
+    .await;
+
+    // Act & Assert: process should be killed (non-zero exit or error)
+    let sc = &resp["result"]["structuredContent"];
+    let exit_code = sc["exit_code"].as_i64();
+    // SIGXCPU (signal 24) or SIGKILL (signal 9) should result in non-zero exit
+    // On some systems, the exit code may be 137 (128 + 9 for SIGKILL) or similar
+    assert!(
+        exit_code.is_some() && exit_code != Some(0),
+        "exit code should be non-zero (killed by signal): {sc}"
+    );
+}
+
+#[tokio::test]
+async fn test_handler_memory_limit_accepted() {
+    // Arrange: memory_limit_mb=Some(512), simple echo command
+    let resp = call_exec_command_raw(serde_json::json!({
+        "command": "echo hello",
+        "memory_limit_mb": 512
+    }))
+    .await;
+
+    // Act & Assert: command should complete normally (limit not triggered)
+    let sc = &resp["result"]["structuredContent"];
+    assert_eq!(sc["exit_code"], 0, "exit code should be 0: {sc}");
+    assert!(
+        sc["stdout"].as_str().unwrap_or("").contains("hello"),
+        "stdout should contain 'hello': {sc}"
+    );
+}
