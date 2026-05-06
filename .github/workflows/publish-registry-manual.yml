@@ -92,10 +92,14 @@ jobs:
             server.json > server.json.tmp && mv server.json.tmp server.json
 
       - name: Install mcp-publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.7.8/mcp-publisher_linux_amd64.tar.gz" \
-            -o /tmp/mcp-publisher.tar.gz
+          gh release download v1.7.8 \
+            --repo modelcontextprotocol/registry \
+            --pattern "mcp-publisher_linux_amd64.tar.gz" \
+            --output /tmp/mcp-publisher.tar.gz
           echo "48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c  /tmp/mcp-publisher.tar.gz" | sha256sum --check
           tar -xzf /tmp/mcp-publisher.tar.gz -C /tmp mcp-publisher
           test -f /tmp/mcp-publisher || { echo "mcp-publisher binary not found in tarball"; exit 1; }
