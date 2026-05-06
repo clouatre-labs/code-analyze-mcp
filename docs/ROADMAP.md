@@ -113,7 +113,7 @@ Current settings are stable and reflect ground truth:
 | `idempotentHint` | `true` | Same input produces same output (verified by #347) |
 | `openWorldHint` | `false` | Results are bounded by the input path |
 
-**Exception:** The four `edit_*` tools (Wave 9) deviate from the default posture. They carry `readOnlyHint=false`, `destructiveHint=true`, and `idempotentHint=false` to accurately reflect their write-capable, non-idempotent nature.
+**Exception:** The four `edit_*` tools (Wave 9) and the `exec_command` tool deviate from the default posture. Write tools (`edit_overwrite`, `edit_replace`, `edit_rename`, and `edit_insert`) carry `readOnlyHint=false`, `destructiveHint=true`, and `idempotentHint=false` to accurately reflect their write-capable, non-idempotent nature. The `exec_command` tool additionally sets `openWorldHint=true` to surface the shell-execution safety warning to MCP clients.
 
 No annotation changes until new MCP SEPs land (tracked in #1913, #1984, #1561, #1560, #1487). Validated against external MCP Blog 2 reference (2026-03-16).
 

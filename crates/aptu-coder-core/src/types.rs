@@ -231,7 +231,7 @@ pub struct AnalyzeSymbolParams {
     #[serde(default)]
     pub impl_only: Option<bool>,
 
-    /// Scan directory for files that import the given module path instead of building a call graph. Mutually exclusive with non-empty symbol; returns INVALID_PARAMS if symbol is non-empty.
+    /// When true, find all files in the directory that import the module named by symbol. symbol must be non-empty (it holds the module path to search for). Mutually exclusive with normal call-graph lookup.
     #[serde(default)]
     #[cfg_attr(
         feature = "schemars",
