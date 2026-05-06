@@ -24,13 +24,10 @@ async fn call_exec_command_raw(params: serde_json::Value) -> serde_json::Value {
     let (client, server) = tokio::io::duplex(65536);
 
     // Spawn the analyzer server on the server half
-    let _server_handle = tokio::spawn(async move {
+    let mut server_handle = tokio::spawn(async move {
         let (server_rx, server_tx) = tokio::io::split(server);
-        match rmcp::serve_server(analyzer, (server_rx, server_tx)).await {
-            Ok(service) => {
-                let _ = service.waiting().await;
-            }
-            Err(_) => {}
+        if let Ok(service) = rmcp::serve_server(analyzer, (server_rx, server_tx)).await {
+            let _ = service.waiting().await;
         }
     });
 
@@ -82,12 +79,25 @@ async fn call_exec_command_raw(params: serde_json::Value) -> serde_json::Value {
     client_tx.write_all(call.as_bytes()).await.unwrap();
     client_tx.flush().await.unwrap();
 
-    // Step 5: Read response (skip any notification lines without an id)
-    loop {
-        let line = reader.next_line().await.unwrap().unwrap();
-        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
-        if v.get("id") == Some(&serde_json::json!(2)) {
-            return v;
+    // Step 5: Race response loop against server handle to surface server panics
+    tokio::select! {
+        result = async {
+            loop {
+                let line = reader.next_line().await.unwrap().unwrap();
+                let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+                if v.get("id") == Some(&serde_json::json!(2)) {
+                    return v;
+                }
+            }
+        } => {
+            server_handle.abort();
+            result
+        }
+        outcome = &mut server_handle => {
+            match outcome {
+                Ok(_) => panic!("server task exited unexpectedly before tool response"),
+                Err(e) => panic!("server task panicked: {e}"),
+            }
         }
     }
 }
