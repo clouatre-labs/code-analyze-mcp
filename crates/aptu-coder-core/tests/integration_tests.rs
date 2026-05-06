@@ -4502,3 +4502,147 @@ fn test_large_file_skipped_no_panic() {
         "large file exceeding MAX_FILE_SIZE_BYTES should be excluded from output"
     );
 }
+
+// Test additions for attribute/decorator line reporting
+
+#[cfg(feature = "lang-rust")]
+#[test]
+fn test_rust_function_attribute_line_reported() {
+    use aptu_coder_core::parser::SemanticExtractor;
+
+    let source = "#[instrument]\nfn foo() {}";
+    let result =
+        SemanticExtractor::extract(source, "rust", None).expect("should extract Rust code");
+
+    assert!(
+        !result.functions.is_empty(),
+        "should extract at least one function"
+    );
+    assert_eq!(result.functions[0].name, "foo");
+    assert_eq!(
+        result.functions[0].line, 1,
+        "should report attribute line 1, not fn line 2"
+    );
+}
+
+#[cfg(feature = "lang-rust")]
+#[test]
+fn test_rust_function_no_attribute_unchanged() {
+    use aptu_coder_core::parser::SemanticExtractor;
+
+    let source = "fn foo() {}";
+    let result =
+        SemanticExtractor::extract(source, "rust", None).expect("should extract Rust code");
+
+    assert!(!result.functions.is_empty());
+    assert_eq!(result.functions[0].name, "foo");
+    assert_eq!(
+        result.functions[0].line, 1,
+        "plain function should report its own line"
+    );
+}
+
+#[cfg(feature = "lang-rust")]
+#[test]
+fn test_rust_function_multiple_stacked_attributes() {
+    use aptu_coder_core::parser::SemanticExtractor;
+
+    let source = "#[a]\n#[b]\nfn foo() {}";
+    let result =
+        SemanticExtractor::extract(source, "rust", None).expect("should extract Rust code");
+
+    assert!(!result.functions.is_empty());
+    assert_eq!(result.functions[0].name, "foo");
+    assert_eq!(
+        result.functions[0].line, 1,
+        "should report first attribute line 1, not fn line 3"
+    );
+}
+
+#[cfg(feature = "lang-rust")]
+#[test]
+fn test_rust_impl_method_attribute_line_reported() {
+    use aptu_coder_core::parser::SemanticExtractor;
+
+    let source = "struct Foo;\nimpl Foo {\n  #[attr]\n  fn bar() {}\n}";
+    let result =
+        SemanticExtractor::extract(source, "rust", None).expect("should extract Rust code");
+
+    assert!(!result.classes.is_empty());
+    let class = &result.classes[0];
+    assert!(!class.methods.is_empty());
+    let method = &class.methods[0];
+    assert_eq!(method.name, "bar");
+    assert_eq!(
+        method.line, 3,
+        "method should report attribute line 3, not fn line 4"
+    );
+}
+
+#[cfg(feature = "lang-python")]
+#[test]
+fn test_python_decorated_function_reports_decorator_line() {
+    use aptu_coder_core::parser::SemanticExtractor;
+
+    let source = "@decorator\ndef foo(): pass";
+    let result =
+        SemanticExtractor::extract(source, "python", None).expect("should extract Python code");
+
+    assert!(!result.functions.is_empty());
+    assert_eq!(result.functions[0].name, "foo");
+    assert_eq!(
+        result.functions[0].line, 1,
+        "should report decorator line 1, not def line 2"
+    );
+}
+
+#[cfg(feature = "lang-python")]
+#[test]
+fn test_python_plain_function_reports_def_line() {
+    use aptu_coder_core::parser::SemanticExtractor;
+
+    let source = "def foo(): pass";
+    let result =
+        SemanticExtractor::extract(source, "python", None).expect("should extract Python code");
+
+    assert!(!result.functions.is_empty());
+    assert_eq!(result.functions[0].name, "foo");
+    assert_eq!(
+        result.functions[0].line, 1,
+        "plain function should report its own line"
+    );
+}
+
+#[cfg(feature = "lang-rust")]
+#[test]
+fn test_regression_analyze_raw_attribute_line() {
+    use aptu_coder_core::parser::SemanticExtractor;
+    use std::fs;
+    use std::path::PathBuf;
+
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    let workspace_root = PathBuf::from(&manifest_dir)
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .expect("should resolve workspace root");
+
+    let lib_path = workspace_root.join("crates/aptu-coder/src/lib.rs");
+    assert!(lib_path.exists(), "lib.rs should exist at {:?}", lib_path);
+
+    let source = fs::read_to_string(&lib_path).expect("should read lib.rs");
+
+    let result = SemanticExtractor::extract(&source, "rust", None)
+        .expect("should extract Rust code from lib.rs");
+
+    let analyze_raw = result
+        .functions
+        .iter()
+        .find(|f| f.name == "analyze_raw")
+        .expect("should find analyze_raw function");
+
+    assert_eq!(
+        analyze_raw.line, 1889,
+        "analyze_raw should report the first attribute line 1889, not the fn line 1902"
+    );
+}
