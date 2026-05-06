@@ -1,45 +1,77 @@
-## Task: Kotlin Language Support Implementation
+## Task: TypeScript JSX (TSX) Language Support Re-wiring
 
-You are implementing Kotlin grammar support in the aptu-coder repository to enable symbol extraction
-for .kt and .kts source files.
+You are re-wiring TypeScript JSX (tsx) language support in the aptu-coder repository. The tsx feature
+has been partially stripped from the codebase, and your task is to restore it correctly.
 
 Repository: clouatre-labs/aptu-coder
 Working directory: REPO_PATH_PLACEHOLDER
 
-Issue #649 specifies this feature. The correct tree-sitter crate is `tree-sitter-kotlin-ng = "1.1.0"`
-(NOT tree-sitter-kotlin 0.3.8 which is incompatible with the workspace tree-sitter version).
+The task requires modifying two files to re-add tsx support:
 
-Your task:
+1. **crates/aptu-coder-core/src/languages/mod.rs** (lines 112-127 and 240-241)
+   - Add tsx arm to `get_language_info()` function (after typescript arm)
+   - Add tsx arm to `get_ts_language()` function (after typescript arm)
 
-1. Add `tree-sitter-kotlin-ng = "1.1.0"` to `[workspace.dependencies]` in the root `Cargo.toml`.
+2. **crates/aptu-coder-core/src/lang.rs** (lines 56-57 and 90-91)
+   - Add tsx extension mapping to `EXTENSION_MAP`
+   - Add "tsx" to `supported_languages()` function
 
-2. In `crates/aptu-coder-core/Cargo.toml`:
-   - Add `tree-sitter-kotlin-ng = { workspace = true, optional = true }` to `[dependencies]`
-   - Add `lang-kotlin = ["dep:tree-sitter-kotlin-ng"]` to `[features]`
-   - Add `lang-kotlin` to the `default` feature set
+## Exact Targets
 
-3. Create `crates/aptu-coder-core/src/languages/kotlin.rs` with:
-   - SPDX-FileCopyrightText header (Apache-2.0, same format as java.rs)
-   - `ELEMENT_QUERY` constant (function_declaration, class_declaration, interface_declaration, enum_class_declaration, object_declaration node kinds)
-   - `CALL_QUERY` constant (call_expression node kind)
-   - `REFERENCE_QUERY` constant (identifier node kind)
-   - `IMPORT_QUERY` constant (import_header node kind)
-   - `DEFUSE_QUERY` constant (modeled after java.rs)
-   - `extract_inheritance` function (walks delegation_specifiers; distinguish superclass with parens from interfaces without parens)
-   - At least 3 unit tests under `#[cfg(all(test, feature = "lang-kotlin"))]` covering: element extraction, inheritance extraction, call extraction
+**mod.rs - get_language_info() arm (insert after typescript arm, before go arm):**
+```rust
+        #[cfg(feature = "lang-tsx")]
+        "tsx" => Some(LanguageInfo {
+            name: "tsx",
+            language: tree_sitter_typescript::LANGUAGE_TSX.into(),
+            element_query: typescript::ELEMENT_QUERY,
+            call_query: typescript::CALL_QUERY,
+            reference_query: Some(typescript::REFERENCE_QUERY),
+            import_query: Some(typescript::IMPORT_QUERY),
+            impl_query: None,
+            impl_trait_query: None,
+            defuse_query: Some(typescript::DEFUSE_QUERY),
+            extract_function_name: None,
+            find_method_for_receiver: None,
+            find_receiver_type: None,
+            extract_inheritance: Some(typescript::extract_inheritance),
+        }),
+```
 
-4. In `crates/aptu-coder-core/src/languages/mod.rs`:
-   - Add `#[cfg(feature = "lang-kotlin")] pub mod kotlin;`
-   - Add `"kotlin"` arm to `get_language_info()` returning a complete `LanguageInfo` struct
-   - Add `"kotlin"` arm to `get_ts_language()`
+**mod.rs - get_ts_language() arm (insert after typescript arm, before go arm):**
+```rust
+        #[cfg(feature = "lang-tsx")]
+        "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
+```
 
-5. In `crates/aptu-coder-core/src/lang.rs`:
-   - Add `.kt` and `.kts` extensions to `EXTENSION_MAP` behind `#[cfg(feature = "lang-kotlin")]`
-   - Add `"kotlin"` to `supported_languages()`
+**lang.rs - EXTENSION_MAP entry (insert after typescript entries):**
+```rust
+    #[cfg(feature = "lang-tsx")]
+    ("tsx", "tsx"),
+```
 
-**Do not run `cargo test` or any build commands.** The benchmark infrastructure will verify compilation and test results externally after you complete your implementation.
+**lang.rs - supported_languages() entry (insert after typescript entries):**
+```rust
+        #[cfg(feature = "lang-tsx")]
+        "tsx",
+```
 
-All 5 query types (ELEMENT_QUERY, CALL_QUERY, REFERENCE_QUERY, IMPORT_QUERY, DEFUSE_QUERY) must be present in queries_written.
+## Three Genuine Traps
+
+Be aware of these common mistakes that will cause verification to fail:
+
+1. **Namespace mismatch:** Use `typescript::` prefix for queries and functions (not `tsx::`).
+   The queries come from the typescript module, not a separate tsx module.
+
+2. **Shared pub mod:** The `pub mod typescript;` declaration in mod.rs is shared between
+   typescript and tsx features. Do NOT add a separate `pub mod tsx;` -- only add the
+   feature-gated arms in the match statements.
+
+3. **LANGUAGE_TSX suffix:** Use `tree_sitter_typescript::LANGUAGE_TSX` (not LANGUAGE_TYPESCRIPT).
+   This is the correct constant name for the JSX variant.
+
+**Do not run `cargo test` or any build commands.** The benchmark infrastructure will verify
+the re-wiring externally after you complete your implementation.
 
 Output must be valid JSON matching this exact schema:
 
@@ -47,28 +79,15 @@ Output must be valid JSON matching this exact schema:
 {
   "run_id": "RUN_ID_PLACEHOLDER",
   "condition": "CONDITION_PLACEHOLDER",
-  "files_created": [
-    {"path": "path/relative/to/repo/root", "line_count": 0, "has_spdx_header": true}
-  ],
   "files_modified": [
-    {"path": "path/relative/to/repo/root", "changes_description": "what was changed"}
+    {"path": "crates/aptu-coder-core/src/languages/mod.rs", "changes_description": "Added tsx arms to get_language_info and get_ts_language"},
+    {"path": "crates/aptu-coder-core/src/lang.rs", "changes_description": "Added tsx extension mapping and supported language entry"}
   ],
-  "feature_flag_name": "lang-kotlin",
-  "ts_crate_used": "tree-sitter-kotlin-ng",
-  "ts_crate_version": "1.1.0",
-  "ts_entry_point": "tree_sitter_kotlin_ng::LANGUAGE",
-  "queries_written": [
-    {"query_name": "ELEMENT_QUERY", "present": true, "node_kinds": ["function_declaration", "class_declaration", "interface_declaration", "enum_class_declaration", "object_declaration"]},
-    {"query_name": "CALL_QUERY", "present": true, "node_kinds": ["call_expression"]},
-    {"query_name": "REFERENCE_QUERY", "present": true, "node_kinds": ["identifier"]},
-    {"query_name": "IMPORT_QUERY", "present": true, "node_kinds": ["import_header"]},
-    {"query_name": "DEFUSE_QUERY", "present": true, "node_kinds": ["...modeled after java.rs"]}
-  ],
-  "extract_inheritance_present": true,
-  "extension_registrations": [".kt", ".kts"],
-  "test_names": ["test_kotlin_element_query", "..."],
-  "compile_belief": "confident_pass",
-  "compile_belief_reason": "used kotlin-ng 1.1.0 compatible with tree-sitter 0.26.x",
+  "tsx_wiring_complete": true,
+  "mod_rs_get_language_info_arm_added": true,
+  "mod_rs_get_ts_language_arm_added": true,
+  "lang_rs_extension_map_added": true,
+  "lang_rs_supported_languages_added": true,
   "tool_calls_total": 0
 }
 ```
