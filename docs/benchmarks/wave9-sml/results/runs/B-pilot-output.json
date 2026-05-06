@@ -1,0 +1,28 @@
+{
+  "run_id": "B-pilot",
+  "condition": "B",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info and get_ts_language"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping and supported language entry"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree_sitter_typescript",
+  "ts_crate_version": "inferred from Cargo.toml",
+  "ts_entry_point": "tree_sitter_typescript::LANGUAGE_TSX",
+  "queries_written": [],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx -> tsx"
+  ],
+  "test_names": [],
+  "compile_belief": "high",
+  "compile_belief_reason": "All four insertion points mirror the existing typescript arm exactly, using LANGUAGE_TSX constant and typescript:: module prefix. The pub mod typescript; is already guarded by any(lang-typescript, lang-tsx) so no separate mod declaration is needed. No new dependencies added.",
+  "tool_calls_total": 8
+}

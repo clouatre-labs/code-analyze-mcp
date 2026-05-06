@@ -1,0 +1,957 @@
+{
+  "experiment": "wave9-sml",
+  "generated_at": "2026-05-06",
+  "design": "2x2 factorial: model_tier x tool_modality",
+  "task": "tsx re-wiring (4 edits to 2 files)",
+  "randomization_seed": 42,
+  "conditions": {
+    "A": {
+      "model": "global.anthropic.claude-sonnet-4-6",
+      "tools": "mcp",
+      "n_scored": 5
+    },
+    "B": {
+      "model": "global.anthropic.claude-sonnet-4-6",
+      "tools": "native",
+      "n_scored": 5
+    },
+    "C": {
+      "model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "tools": "mcp",
+      "n_scored": 5
+    },
+    "D": {
+      "model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "tools": "native",
+      "n_scored": 5
+    }
+  },
+  "rubric_dimensions": [
+    "namespace_correctness",
+    "extension_registration",
+    "structural_fidelity"
+  ],
+  "max_score_per_run": 9,
+  "scored_runs": [
+    {
+      "run_id": "A-scored-1",
+      "condition": "A",
+      "is_pilot": false,
+      "input_tokens": 308841,
+      "output_tokens": 3500,
+      "cost_usd": 0.9790230000000001,
+      "num_turns": 15,
+      "wall_time_ms": 62786,
+      "api_time_ms": 62580,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 8,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "A-scored-2",
+      "condition": "A",
+      "is_pilot": false,
+      "input_tokens": 225292,
+      "output_tokens": 2858,
+      "cost_usd": 0.7187460000000001,
+      "num_turns": 10,
+      "wall_time_ms": 48314,
+      "api_time_ms": 48169,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 7,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "A-scored-3",
+      "condition": "A",
+      "is_pilot": false,
+      "input_tokens": 223431,
+      "output_tokens": 2587,
+      "cost_usd": 0.709098,
+      "num_turns": 10,
+      "wall_time_ms": 47937,
+      "api_time_ms": 47831,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "A-scored-4",
+      "condition": "A",
+      "is_pilot": false,
+      "input_tokens": 241077,
+      "output_tokens": 2942,
+      "cost_usd": 0.767361,
+      "num_turns": 11,
+      "wall_time_ms": 51216,
+      "api_time_ms": 51084,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 7,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "A-scored-5",
+      "condition": "A",
+      "is_pilot": false,
+      "input_tokens": 225560,
+      "output_tokens": 2958,
+      "cost_usd": 0.72105,
+      "num_turns": 10,
+      "wall_time_ms": 46991,
+      "api_time_ms": 46892,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "B-scored-1",
+      "condition": "B",
+      "is_pilot": false,
+      "input_tokens": 246005,
+      "output_tokens": 2709,
+      "cost_usd": 0.77865,
+      "num_turns": 11,
+      "wall_time_ms": 47965,
+      "api_time_ms": 47756,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 8,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "B-scored-2",
+      "condition": "B",
+      "is_pilot": false,
+      "input_tokens": 129140,
+      "output_tokens": 2140,
+      "cost_usd": 0.41951999999999995,
+      "num_turns": 8,
+      "wall_time_ms": 37091,
+      "api_time_ms": 36961,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "B-scored-3",
+      "condition": "B",
+      "is_pilot": false,
+      "input_tokens": 191328,
+      "output_tokens": 2537,
+      "cost_usd": 0.612039,
+      "num_turns": 11,
+      "wall_time_ms": 42268,
+      "api_time_ms": 42121,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "B-scored-4",
+      "condition": "B",
+      "is_pilot": false,
+      "input_tokens": 245646,
+      "output_tokens": 2536,
+      "cost_usd": 0.774978,
+      "num_turns": 11,
+      "wall_time_ms": 48975,
+      "api_time_ms": 48784,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 8,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "B-scored-5",
+      "condition": "B",
+      "is_pilot": false,
+      "input_tokens": 193132,
+      "output_tokens": 2806,
+      "cost_usd": 0.621486,
+      "num_turns": 11,
+      "wall_time_ms": 45263,
+      "api_time_ms": 45127,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "C-scored-1",
+      "condition": "C",
+      "is_pilot": false,
+      "input_tokens": 428183,
+      "output_tokens": 4134,
+      "cost_usd": 0.448853,
+      "num_turns": 17,
+      "wall_time_ms": 43825,
+      "api_time_ms": 43675,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "C-scored-2",
+      "condition": "C",
+      "is_pilot": false,
+      "input_tokens": 414989,
+      "output_tokens": 3254,
+      "cost_usd": 0.43125900000000006,
+      "num_turns": 12,
+      "wall_time_ms": 37193,
+      "api_time_ms": 37057,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 4,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "C-scored-3",
+      "condition": "C",
+      "is_pilot": false,
+      "input_tokens": 528088,
+      "output_tokens": 5630,
+      "cost_usd": 0.556238,
+      "num_turns": 22,
+      "wall_time_ms": 50675,
+      "api_time_ms": 50471,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 9,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "C-scored-4",
+      "condition": "C",
+      "is_pilot": false,
+      "input_tokens": 524838,
+      "output_tokens": 4535,
+      "cost_usd": 0.547513,
+      "num_turns": 17,
+      "wall_time_ms": 48120,
+      "api_time_ms": 47999,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 8,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "C-scored-5",
+      "condition": "C",
+      "is_pilot": false,
+      "input_tokens": 617088,
+      "output_tokens": 4617,
+      "cost_usd": 0.6401729999999999,
+      "num_turns": 17,
+      "wall_time_ms": 54979,
+      "api_time_ms": 54826,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 4,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "D-scored-1",
+      "condition": "D",
+      "is_pilot": false,
+      "input_tokens": 391227,
+      "output_tokens": 3411,
+      "cost_usd": 0.408282,
+      "num_turns": 12,
+      "wall_time_ms": 39245,
+      "api_time_ms": 39082,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "D-scored-2",
+      "condition": "D",
+      "is_pilot": false,
+      "input_tokens": 442239,
+      "output_tokens": 3370,
+      "cost_usd": 0.459089,
+      "num_turns": 13,
+      "wall_time_ms": 42719,
+      "api_time_ms": 42502,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 10,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "D-scored-3",
+      "condition": "D",
+      "is_pilot": false,
+      "input_tokens": 442316,
+      "output_tokens": 3039,
+      "cost_usd": 0.45751100000000006,
+      "num_turns": 11,
+      "wall_time_ms": 39587,
+      "api_time_ms": 39427,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 4,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "D-scored-4",
+      "condition": "D",
+      "is_pilot": false,
+      "input_tokens": 441864,
+      "output_tokens": 3213,
+      "cost_usd": 0.45792900000000003,
+      "num_turns": 13,
+      "wall_time_ms": 37563,
+      "api_time_ms": 37394,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "D-scored-5",
+      "condition": "D",
+      "is_pilot": false,
+      "input_tokens": 495225,
+      "output_tokens": 3328,
+      "cost_usd": 0.511865,
+      "num_turns": 14,
+      "wall_time_ms": 41748,
+      "api_time_ms": 41550,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 4,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    }
+  ],
+  "pilot_runs": [
+    {
+      "run_id": "A-pilot",
+      "condition": "A",
+      "is_pilot": true,
+      "input_tokens": 223497,
+      "output_tokens": 2644,
+      "cost_usd": 0.7101510000000001,
+      "num_turns": 10,
+      "wall_time_ms": 48503,
+      "api_time_ms": 48381,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 7,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "B-pilot",
+      "condition": "B",
+      "is_pilot": true,
+      "input_tokens": 246426,
+      "output_tokens": 2692,
+      "cost_usd": 0.779658,
+      "num_turns": 11,
+      "wall_time_ms": 51499,
+      "api_time_ms": 51346,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 8,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    },
+    {
+      "run_id": "C-pilot",
+      "condition": "C",
+      "is_pilot": true,
+      "input_tokens": 861399,
+      "output_tokens": 7777,
+      "cost_usd": 0.900284,
+      "num_turns": 36,
+      "wall_time_ms": 83776,
+      "api_time_ms": 83484,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 8,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": " 1 file changed, 3 insertions(+), 1 deletion(-)",
+        "changed_files": [
+          "crates/aptu-coder-core/src/languages/mod.rs"
+        ]
+      }
+    },
+    {
+      "run_id": "D-pilot",
+      "condition": "D",
+      "is_pilot": true,
+      "input_tokens": 395559,
+      "output_tokens": 3490,
+      "cost_usd": 0.413009,
+      "num_turns": 14,
+      "wall_time_ms": 40793,
+      "api_time_ms": 40633,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 0,
+      "tool_calls_total": 6,
+      "scores": {
+        "namespace_correctness": 3.0,
+        "extension_registration": 3.0,
+        "structural_fidelity": 3.0,
+        "total": 9.0
+      },
+      "all_checks_pass": true,
+      "verification": {
+        "grep_mod_rs_tsx_arm": true,
+        "grep_mod_rs_language_tsx": true,
+        "grep_lang_rs_extension": true,
+        "grep_lang_rs_supported": true,
+        "grep_no_spurious_pub_mod": true,
+        "git_diff_stat": "",
+        "changed_files": []
+      }
+    }
+  ],
+  "accuracy": {
+    "all_scored_runs_perfect": true,
+    "ceiling_reached": true,
+    "by_condition": {
+      "A": {
+        "n": 5,
+        "mean_score": 9.0,
+        "sd_score": 0.0,
+        "all_perfect": true
+      },
+      "B": {
+        "n": 5,
+        "mean_score": 9.0,
+        "sd_score": 0.0,
+        "all_perfect": true
+      },
+      "C": {
+        "n": 5,
+        "mean_score": 9.0,
+        "sd_score": 0.0,
+        "all_perfect": true
+      },
+      "D": {
+        "n": 5,
+        "mean_score": 9.0,
+        "sd_score": 0.0,
+        "all_perfect": true
+      }
+    }
+  },
+  "efficiency": {
+    "by_condition": {
+      "A": {
+        "input_tokens": {
+          "mean": 244840.2,
+          "sd": 36477.651222
+        },
+        "output_tokens": {
+          "mean": 2969.0,
+          "sd": 332.060235
+        },
+        "cost_usd": {
+          "mean": 0.779056,
+          "sd": 0.114039
+        },
+        "num_turns": {
+          "mean": 11.2,
+          "sd": 2.167948
+        },
+        "tool_calls_total": {
+          "mean": 6.8,
+          "sd": 0.83666
+        }
+      },
+      "B": {
+        "input_tokens": {
+          "mean": 201050.2,
+          "sd": 48316.703501
+        },
+        "output_tokens": {
+          "mean": 2545.6,
+          "sd": 254.551174
+        },
+        "cost_usd": {
+          "mean": 0.641335,
+          "sd": 0.147623
+        },
+        "num_turns": {
+          "mean": 10.4,
+          "sd": 1.341641
+        },
+        "tool_calls_total": {
+          "mean": 6.8,
+          "sd": 1.095445
+        }
+      },
+      "C": {
+        "input_tokens": {
+          "mean": 502637.2,
+          "sd": 82863.199345
+        },
+        "output_tokens": {
+          "mean": 4434.0,
+          "sd": 859.724665
+        },
+        "cost_usd": {
+          "mean": 0.524807,
+          "sd": 0.085634
+        },
+        "num_turns": {
+          "mean": 17.0,
+          "sd": 3.535534
+        },
+        "tool_calls_total": {
+          "mean": 6.2,
+          "sd": 2.280351
+        }
+      },
+      "D": {
+        "input_tokens": {
+          "mean": 442574.2,
+          "sd": 36774.057088
+        },
+        "output_tokens": {
+          "mean": 3272.2,
+          "sd": 149.858934
+        },
+        "cost_usd": {
+          "mean": 0.458935,
+          "sd": 0.036641
+        },
+        "num_turns": {
+          "mean": 12.6,
+          "sd": 1.140175
+        },
+        "tool_calls_total": {
+          "mean": 6.0,
+          "sd": 2.44949
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "sonnet_mcp_vs_native_cost": {
+      "label": "A (MCP) vs B (native), Sonnet, cost_usd",
+      "metric": "cost_usd",
+      "x_label": "B (native)",
+      "y_label": "A (MCP)",
+      "mean_x": 0.641335,
+      "mean_y": 0.779056,
+      "mean_diff": 0.137721,
+      "pct_diff": 21.474,
+      "pooled_sd": 0.131904,
+      "cohens_d": 1.0441,
+      "t_statistic": 1.6509,
+      "df_welch": 7.52,
+      "p_value": 0.139778,
+      "ci_95_low": -0.056811,
+      "ci_95_high": 0.332253,
+      "se": 0.083424
+    },
+    "haiku_mcp_vs_native_cost": {
+      "label": "C (MCP) vs D (native), Haiku, cost_usd",
+      "metric": "cost_usd",
+      "x_label": "D (native)",
+      "y_label": "C (MCP)",
+      "mean_x": 0.458935,
+      "mean_y": 0.524807,
+      "mean_diff": 0.065872,
+      "pct_diff": 14.353,
+      "pooled_sd": 0.065863,
+      "cohens_d": 1.0001,
+      "t_statistic": 1.5814,
+      "df_welch": 5.42,
+      "p_value": 0.170151,
+      "ci_95_low": -0.038773,
+      "ci_95_high": 0.170517,
+      "se": 0.041655
+    },
+    "sonnet_mcp_vs_native_input_tokens": {
+      "label": "A (MCP) vs B (native), Sonnet, input_tokens",
+      "metric": "input_tokens",
+      "x_label": "B (native)",
+      "y_label": "A (MCP)",
+      "mean_x": 201050.2,
+      "mean_y": 244840.2,
+      "mean_diff": 43790.0,
+      "pct_diff": 21.781,
+      "pooled_sd": 42808.427184,
+      "cohens_d": 1.0229,
+      "t_statistic": 1.6174,
+      "df_welch": 7.44,
+      "p_value": 0.147281,
+      "ci_95_low": -19468.514923,
+      "ci_95_high": 107048.514923,
+      "se": 27074.42659
+    },
+    "haiku_mcp_vs_native_input_tokens": {
+      "label": "C (MCP) vs D (native), Haiku, input_tokens",
+      "metric": "input_tokens",
+      "x_label": "D (native)",
+      "y_label": "C (MCP)",
+      "mean_x": 442574.2,
+      "mean_y": 502637.2,
+      "mean_diff": 60063.0,
+      "pct_diff": 13.571,
+      "pooled_sd": 64103.982249,
+      "cohens_d": 0.937,
+      "t_statistic": 1.4815,
+      "df_welch": 5.52,
+      "p_value": 0.193209,
+      "ci_95_low": -41286.869886,
+      "ci_95_high": 161412.869886,
+      "se": 40542.918199
+    }
+  }
+}

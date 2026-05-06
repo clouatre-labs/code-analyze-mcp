@@ -1,0 +1,111 @@
+{
+  "benchmark": "wave9-sml",
+  "generated_at": "2026-05-06",
+  "tokenizer": "cl100k_base",
+  "tokenizer_note": "cl100k_base (tiktoken) is an approximation. Claude uses its own internal tokenizer, which is not publicly available. cl100k_base is the closest publicly available proxy and typically agrees within \u00b15% on English/code text.",
+  "server_version": "aptu-coder (from PATH)",
+  "per_tool": [
+    {
+      "name": "analyze_symbol",
+      "tokens_name": 2,
+      "tokens_desc": 170,
+      "tokens_input_schema": 1017,
+      "tokens_output_schema": 807,
+      "tokens_total": 1996
+    },
+    {
+      "name": "analyze_file",
+      "tokens_name": 2,
+      "tokens_desc": 95,
+      "tokens_input_schema": 612,
+      "tokens_output_schema": 987,
+      "tokens_total": 1696
+    },
+    {
+      "name": "analyze_directory",
+      "tokens_name": 2,
+      "tokens_desc": 72,
+      "tokens_input_schema": 449,
+      "tokens_output_schema": 279,
+      "tokens_total": 802
+    },
+    {
+      "name": "analyze_module",
+      "tokens_name": 2,
+      "tokens_desc": 117,
+      "tokens_input_schema": 62,
+      "tokens_output_schema": 405,
+      "tokens_total": 586
+    },
+    {
+      "name": "edit_insert",
+      "tokens_name": 2,
+      "tokens_desc": 134,
+      "tokens_input_schema": 172,
+      "tokens_output_schema": 104,
+      "tokens_total": 412
+    },
+    {
+      "name": "exec_command",
+      "tokens_name": 2,
+      "tokens_desc": 65,
+      "tokens_input_schema": 161,
+      "tokens_output_schema": 179,
+      "tokens_total": 407
+    },
+    {
+      "name": "analyze_raw",
+      "tokens_name": 2,
+      "tokens_desc": 85,
+      "tokens_input_schema": 168,
+      "tokens_output_schema": 143,
+      "tokens_total": 398
+    },
+    {
+      "name": "edit_rename",
+      "tokens_name": 2,
+      "tokens_desc": 103,
+      "tokens_input_schema": 148,
+      "tokens_output_schema": 110,
+      "tokens_total": 363
+    },
+    {
+      "name": "edit_replace",
+      "tokens_name": 2,
+      "tokens_desc": 83,
+      "tokens_input_schema": 118,
+      "tokens_output_schema": 140,
+      "tokens_total": 343
+    },
+    {
+      "name": "edit_overwrite",
+      "tokens_name": 3,
+      "tokens_desc": 81,
+      "tokens_input_schema": 89,
+      "tokens_output_schema": 109,
+      "tokens_total": 282
+    }
+  ],
+  "totals": {
+    "full_set_tokens": 7285,
+    "server_instructions_tokens": 182,
+    "full_set_plus_instructions": 7467,
+    "edit_profile_tools": [
+      "analyze_raw",
+      "edit_overwrite",
+      "edit_replace",
+      "exec_command"
+    ],
+    "edit_profile_tokens": 1430,
+    "edit_profile_savings": 5855,
+    "analyze_profile_tools": [
+      "analyze_directory",
+      "analyze_file",
+      "analyze_module",
+      "analyze_raw",
+      "analyze_symbol"
+    ],
+    "analyze_profile_tokens": 5478,
+    "analyze_profile_savings": 1807
+  }
+}

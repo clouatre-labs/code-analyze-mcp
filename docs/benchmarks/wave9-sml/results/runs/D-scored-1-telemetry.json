@@ -1,0 +1,19 @@
+{
+  "wall_time_ms": 39245,
+  "api_time_ms": 39082,
+  "num_turns": 12,
+  "cost_usd": 0.408282,
+  "input_tokens": 391227,
+  "output_tokens": 3411,
+  "cache_read_tokens": 0,
+  "cache_creation_tokens": 0,
+  "verification": {
+    "grep_mod_rs_tsx_arm": true,
+    "grep_mod_rs_language_tsx": true,
+    "grep_lang_rs_extension": true,
+    "grep_lang_rs_supported": true,
+    "grep_no_spurious_pub_mod": true,
+    "git_diff_stat": "",
+    "changed_files": []
+  }
+}

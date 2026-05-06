@@ -1,0 +1,28 @@
+{
+  "run_id": "C-scored-1",
+  "condition": "C",
+  "files_created": [],
+  "files_modified": [
+    {
+      "path": "crates/aptu-coder-core/src/languages/mod.rs",
+      "changes_description": "Added tsx arms to get_language_info (lines 112-127) and get_ts_language (lines 240-241) functions using tree_sitter_typescript::LANGUAGE_TSX and typescript:: query prefix"
+    },
+    {
+      "path": "crates/aptu-coder-core/src/lang.rs",
+      "changes_description": "Added tsx extension mapping (lines 56-57) to EXTENSION_MAP and tsx entry (lines 90-91) to supported_languages function"
+    }
+  ],
+  "feature_flag_name": "lang-tsx",
+  "ts_crate_used": "tree_sitter_typescript",
+  "ts_crate_version": "0.23.2",
+  "ts_entry_point": "tree_sitter_typescript::LANGUAGE_TSX",
+  "queries_written": [],
+  "extract_inheritance_present": true,
+  "extension_registrations": [
+    "tsx"
+  ],
+  "test_names": [],
+  "compile_belief": "The re-wiring is complete and should compile successfully when the lang-tsx feature is enabled. All four modification sites follow existing patterns in the codebase.",
+  "compile_belief_reason": "All edits use the correct tree-sitter API (LANGUAGE_TSX), properly reference the shared typescript module queries, include feature guards, and maintain consistency with existing language support patterns for typescript and other languages.",
+  "tool_calls_total": 6
+}
