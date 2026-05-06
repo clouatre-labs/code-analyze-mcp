@@ -86,7 +86,7 @@ git -C "$REPO_ROOT" worktree add "$RUN_WORKTREE" origin/main 2>&1
 # The task is to re-wire tsx support. We strip it first so the agent must
 # add it back correctly. Stripping is idempotent (safe to run multiple times).
 
-python3 << 'STRIP_TSX_EOF'
+python3 << STRIP_TSX_EOF
 def strip_tsx_language_info_arm(lines):
     """Remove the tsx arm from get_language_info using anchor-based matching.
 
@@ -186,9 +186,6 @@ lines = strip_tsx_extension_map_entry(lines)
 lines = strip_tsx_supported_languages_entry(lines)
 with open(lang_rs_path, 'w') as f:
     f.writelines(lines)
-
-with open(lang_rs_path, 'w') as f:
-    f.write(lang_rs_content)
 
 print("tsx wiring stripped from mod.rs and lang.rs")
 STRIP_TSX_EOF
@@ -371,7 +368,7 @@ rm -rf "$RUN_WORKTREE/docs/benchmarks/wave9-sml/results/runs/"* 2>/dev/null || t
   -p \
   --model "$MODEL" \
   --system-prompt "$SYSTEM_PROMPT" \
-  "${MCP_FLAGS[@]}" \
+  ${MCP_FLAGS:+"${MCP_FLAGS[@]}"} \
   --allowedTools "$ALLOWED_TOOLS" \
   --dangerously-skip-permissions \
   --output-format json \
