@@ -87,49 +87,105 @@ git -C "$REPO_ROOT" worktree add "$RUN_WORKTREE" origin/main 2>&1
 # add it back correctly. Stripping is idempotent (safe to run multiple times).
 
 python3 << 'STRIP_TSX_EOF'
-import re
+def strip_tsx_language_info_arm(lines):
+    """Remove the tsx arm from get_language_info using anchor-based matching.
 
-# Strip tsx arm from mod.rs (lines 112-127)
+    Anchors: opening line is '#[cfg(feature = "lang-tsx")]' immediately
+    followed by '"tsx" => Some(LanguageInfo {'; closing line is '        }),'.
+    No assumptions about content between anchors.
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '        #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and lines[i + 1].rstrip() == '        "tsx" => Some(LanguageInfo {'):
+            # Skip lines until the closing arm delimiter
+            i += 2
+            while i < len(lines) and lines[i].rstrip() != '        }),':
+                i += 1
+            i += 1  # skip the closing '}),' line
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+def strip_tsx_ts_language_arm(lines):
+    """Remove the tsx arm from get_ts_language using anchor-based matching.
+
+    The arm is exactly two lines:
+      #[cfg(feature = "lang-tsx")]
+      "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '        #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and '"tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX' in lines[i + 1]):
+            i += 2  # skip both lines
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+def strip_tsx_extension_map_entry(lines):
+    """Remove the tsx entry from EXTENSION_MAP using anchor-based matching.
+
+    The entry is exactly two lines:
+      #[cfg(feature = "lang-tsx")]
+      ("tsx", "tsx"),
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '    #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and lines[i + 1].rstrip() == '    ("tsx", "tsx"),'):
+            i += 2
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
+def strip_tsx_supported_languages_entry(lines):
+    """Remove the tsx entry from supported_languages using anchor-based matching.
+
+    The entry is exactly two lines:
+      #[cfg(feature = "lang-tsx")]
+      "tsx",
+    """
+    result = []
+    i = 0
+    while i < len(lines):
+        if (lines[i].rstrip() == '        #[cfg(feature = "lang-tsx")]'
+                and i + 1 < len(lines)
+                and lines[i + 1].rstrip() == '        "tsx",'):
+            i += 2
+        else:
+            result.append(lines[i])
+            i += 1
+    return result
+
+
 mod_rs_path = "$RUN_WORKTREE/crates/aptu-coder-core/src/languages/mod.rs"
-with open(mod_rs_path, 'r') as f:
-    mod_rs_content = f.read()
-
-# Remove the tsx arm in get_language_info (lines 112-127)
-mod_rs_content = re.sub(
-    r'        #\[cfg\(feature = "lang-tsx"\)\]\n        "tsx" => Some\(LanguageInfo \{[^}]*extract_inheritance: Some\(typescript::extract_inheritance\),\n        \}\),\n',
-    '',
-    mod_rs_content,
-    flags=re.DOTALL
-)
-
-# Remove the tsx arm in get_ts_language (lines 240-241)
-mod_rs_content = re.sub(
-    r'        #\[cfg\(feature = "lang-tsx"\)\]\n        "tsx" => Some\(tree_sitter_typescript::LANGUAGE_TSX\.into\(\)\),\n',
-    '',
-    mod_rs_content
-)
-
+with open(mod_rs_path) as f:
+    lines = f.readlines()
+lines = strip_tsx_language_info_arm(lines)
+lines = strip_tsx_ts_language_arm(lines)
 with open(mod_rs_path, 'w') as f:
-    f.write(mod_rs_content)
+    f.writelines(lines)
 
-# Strip tsx entries from lang.rs
 lang_rs_path = "$RUN_WORKTREE/crates/aptu-coder-core/src/lang.rs"
-with open(lang_rs_path, 'r') as f:
-    lang_rs_content = f.read()
-
-# Remove tsx from EXTENSION_MAP (lines 56-57)
-lang_rs_content = re.sub(
-    r'    #\[cfg\(feature = "lang-tsx"\)\]\n    \("tsx", "tsx"\),\n',
-    '',
-    lang_rs_content
-)
-
-# Remove tsx from supported_languages (lines 90-91)
-lang_rs_content = re.sub(
-    r'        #\[cfg\(feature = "lang-tsx"\)\]\n        "tsx",\n',
-    '',
-    lang_rs_content
-)
+with open(lang_rs_path) as f:
+    lines = f.readlines()
+lines = strip_tsx_extension_map_entry(lines)
+lines = strip_tsx_supported_languages_entry(lines)
+with open(lang_rs_path, 'w') as f:
+    f.writelines(lines)
 
 with open(lang_rs_path, 'w') as f:
     f.write(lang_rs_content)
