@@ -193,6 +193,18 @@ with open(lang_rs_path, 'w') as f:
 print("tsx wiring stripped from mod.rs and lang.rs")
 STRIP_TSX_EOF
 
+# Validate stripped files are still syntactically valid Rust.
+# rustfmt --check is fast (<1s) and catches broken braces/syntax before the agent runs.
+for _rs_file in \
+    "$RUN_WORKTREE/crates/aptu-coder-core/src/languages/mod.rs" \
+    "$RUN_WORKTREE/crates/aptu-coder-core/src/lang.rs"; do
+  if ! rustfmt --edition 2024 --check "$_rs_file" > /dev/null 2>&1; then
+    echo "ERROR: $_rs_file is not valid Rust after tsx stripping" >&2
+    exit 1
+  fi
+done
+echo "Syntax validation: mod.rs and lang.rs are valid Rust after stripping"
+
 if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
   export CARGO_TARGET_DIR
 fi
