@@ -394,7 +394,8 @@ pub fn analyze_str(
 }
 
 /// Single entry in a call chain (depth-1 direct caller or callee).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct CallChainEntry {
     #[cfg_attr(

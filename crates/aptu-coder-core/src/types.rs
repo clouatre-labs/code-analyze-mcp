@@ -12,7 +12,7 @@ pub const STDIN_MAX_BYTES: usize = 1_048_576;
 
 /// A single edge in the call graph with impl-trait metadata.
 /// `neighbor_name` holds the caller name in `callers` maps and the callee name in `callees` maps.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CallEdge {
     pub path: PathBuf,
     pub line: usize,
@@ -22,7 +22,7 @@ pub struct CallEdge {
 
 /// Information about an `impl Trait for Type` block found in Rust source.
 #[non_exhaustive]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImplTraitInfo {
     pub trait_name: String,
     pub impl_type: String,
@@ -124,6 +124,7 @@ pub struct AnalyzeDirectoryParams {
 }
 
 /// Output section selector for `analyze_file` fields projection.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
@@ -134,6 +135,8 @@ pub enum AnalyzeFileField {
     Classes,
     /// Include import statements.
     Imports,
+    /// Include all sections (equivalent to omitting fields parameter).
+    All,
 }
 
 #[non_exhaustive]
@@ -143,14 +146,14 @@ pub struct AnalyzeFileParams {
     /// File path to analyze
     pub path: String,
 
-    /// AST traversal depth limit for tree-sitter queries. Leave unset in normal use; increase only for deeply nested generated code. 0=unlimited, min 1.
+    /// AST traversal depth limit for tree-sitter queries. Leave unset in normal use; increase only for deeply nested generated code. None=library default, 0=unlimited, n=limit to n levels.
     #[cfg_attr(
         feature = "schemars",
         schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")
     )]
     pub ast_recursion_limit: Option<usize>,
 
-    /// Limit output to specific sections. Valid values: "functions", "classes", "imports".
+    /// Limit output to specific sections. Valid values: "functions", "classes", "imports", "all".
     /// The FILE header (path, line count, section counts) is always emitted regardless.
     /// Omitting this field returns all sections (current behavior).
     /// Ignored when summary=true (summary takes precedence).
@@ -174,7 +177,7 @@ pub struct AnalyzeModuleParams {
 }
 
 /// Symbol name matching strategy for `analyze_symbol`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SymbolMatchMode {
@@ -217,7 +220,7 @@ pub struct AnalyzeSymbolParams {
     )]
     pub max_depth: Option<u32>,
 
-    /// AST traversal depth limit for tree-sitter queries. Leave unset in normal use; increase only for deeply nested generated code. 0=unlimited, min 1.
+    /// AST traversal depth limit for tree-sitter queries. Leave unset in normal use; increase only for deeply nested generated code. None=library default, 0=unlimited, n=limit to n levels.
     #[cfg_attr(
         feature = "schemars",
         schemars(schema_with = "crate::schema_helpers::option_ast_limit_schema")
@@ -282,7 +285,7 @@ pub struct AnalysisResult {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FileInfo {
     pub path: String,
@@ -307,7 +310,7 @@ pub struct FileInfo {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FunctionInfo {
     pub name: String,
@@ -366,7 +369,7 @@ impl FunctionInfo {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ClassInfo {
     pub name: String,
@@ -391,7 +394,7 @@ pub struct ClassInfo {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct CallInfo {
     pub caller: String,
@@ -416,7 +419,7 @@ pub struct CallInfo {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct ReferenceInfo {
     pub symbol: String,
@@ -429,7 +432,8 @@ pub struct ReferenceInfo {
     pub line: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum ReferenceType {
@@ -440,6 +444,7 @@ pub enum ReferenceType {
 }
 
 /// Analysis mode for generating output.
+#[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
@@ -452,7 +457,8 @@ pub enum AnalysisMode {
     SymbolFocus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct CallChain {
     pub chain: Vec<CallInfo>,
@@ -464,7 +470,7 @@ pub struct CallChain {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FocusedAnalysisData {
     pub symbol: String,
@@ -718,29 +724,57 @@ mod tests {
             "summary must be top-level in AnalyzeSymbolParams schema"
         );
 
-        // Verify ast_recursion_limit enforces minimum: 1 in both parameter schemas.
+        // Verify ast_recursion_limit enforces minimum: 0 in both parameter schemas.
         let file_ast = file_props
             .get("ast_recursion_limit")
             .expect("ast_recursion_limit must be present in AnalyzeFileParams schema");
         assert_eq!(
             file_ast.get("minimum").and_then(|v| v.as_u64()),
-            Some(1),
-            "ast_recursion_limit in AnalyzeFileParams must have minimum: 1"
+            Some(0),
+            "ast_recursion_limit in AnalyzeFileParams must have minimum: 0"
         );
         let symbol_ast = symbol_props
             .get("ast_recursion_limit")
             .expect("ast_recursion_limit must be present in AnalyzeSymbolParams schema");
         assert_eq!(
             symbol_ast.get("minimum").and_then(|v| v.as_u64()),
-            Some(1),
-            "ast_recursion_limit in AnalyzeSymbolParams must have minimum: 1"
+            Some(0),
+            "ast_recursion_limit in AnalyzeSymbolParams must have minimum: 0"
+        );
+    }
+
+    #[test]
+    fn test_edit_insert_output_position_serde() {
+        let before = EditInsertOutput {
+            path: "test.rs".to_string(),
+            symbol_name: "foo".to_string(),
+            position: InsertPosition::Before,
+            byte_offset: 42,
+        };
+        let json = serde_json::to_string(&before).unwrap();
+        assert!(
+            json.contains("\"before\""),
+            "InsertPosition::Before should serialize to 'before', got: {json}"
+        );
+
+        let after = EditInsertOutput {
+            path: "test.rs".to_string(),
+            symbol_name: "foo".to_string(),
+            position: InsertPosition::After,
+            byte_offset: 42,
+        };
+        let json = serde_json::to_string(&after).unwrap();
+        assert!(
+            json.contains("\"after\""),
+            "InsertPosition::After should serialize to 'after', got: {json}"
         );
     }
 }
 
 /// Structured error metadata for MCP error responses.
 /// Serializes to camelCase JSON for inclusion in `ErrorData.data`.
-#[derive(Debug, serde::Serialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorMeta {
     pub error_category: &'static str,
@@ -866,18 +900,18 @@ pub struct EditRenameParams {
     pub old_name: String,
     /// New name for the symbol.
     pub new_name: String,
-    /// Reserved for future use; currently not supported. Supplying a value returns an error.
-    pub kind: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FileRenameResult {
     pub path: String,
     pub occurrences_renamed: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct FileRenameError {
     pub path: String,
@@ -897,7 +931,7 @@ pub struct EditRenameOutput {
     pub errors: Option<Vec<FileRenameError>>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub enum InsertPosition {
     #[serde(rename = "before")]
@@ -926,7 +960,7 @@ pub struct EditInsertParams {
 pub struct EditInsertOutput {
     pub path: String,
     pub symbol_name: String,
-    pub position: String,
+    pub position: InsertPosition,
     pub byte_offset: usize,
 }
 

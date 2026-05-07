@@ -2579,28 +2579,25 @@ impl CodeAnalyzer {
         let path = std::path::PathBuf::from(&params.path);
         let old_name = params.old_name.clone();
         let new_name = params.new_name.clone();
-        let kind = params.kind.clone();
 
         let handle = if is_dir {
             tokio::task::spawn_blocking(move || {
-                edit_rename_directory(&path, &old_name, &new_name, kind.as_deref()).map(
-                    |(results, errors)| {
-                        let total_occurrences: usize =
-                            results.iter().map(|r| r.occurrences_renamed).sum();
-                        aptu_coder_core::types::EditRenameOutput {
-                            path: path.display().to_string(),
-                            old_name,
-                            new_name,
-                            occurrences_renamed: total_occurrences,
-                            files_changed: Some(results),
-                            errors: Some(errors),
-                        }
-                    },
-                )
+                edit_rename_directory(&path, &old_name, &new_name, None).map(|(results, errors)| {
+                    let total_occurrences: usize =
+                        results.iter().map(|r| r.occurrences_renamed).sum();
+                    aptu_coder_core::types::EditRenameOutput {
+                        path: path.display().to_string(),
+                        old_name,
+                        new_name,
+                        occurrences_renamed: total_occurrences,
+                        files_changed: Some(results),
+                        errors: Some(errors),
+                    }
+                })
             })
         } else {
             tokio::task::spawn_blocking(move || {
-                edit_rename_in_file(&path, &old_name, &new_name, kind.as_deref())
+                edit_rename_in_file(&path, &old_name, &new_name, None)
             })
         };
 
@@ -2994,9 +2991,13 @@ impl CodeAnalyzer {
             }
         };
 
+        let position_str = match output.position {
+            aptu_coder_core::types::InsertPosition::Before => "before",
+            aptu_coder_core::types::InsertPosition::After => "after",
+        };
         let text = format!(
             "Inserted content {} '{}' in {} (at byte offset {})",
-            output.position, output.symbol_name, output.path, output.byte_offset
+            position_str, output.symbol_name, output.path, output.byte_offset
         );
         let mut result = CallToolResult::success(vec![Content::text(text.clone())])
             .with_meta(Some(no_cache_meta()));
