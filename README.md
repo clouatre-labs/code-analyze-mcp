@@ -145,7 +145,6 @@ All optional parameters may be omitted. Shared optional parameters for `analyze_
 | `analyze_file` | Functions, classes, and imports with signatures and line ranges | all |
 | `analyze_module` | Lightweight function and import index (~75% smaller than `analyze_file`) | all |
 | `analyze_symbol` | Call graph for a named symbol across a directory; callers, callees, call depth | all |
-| `analyze_raw` | Raw file content with line numbers; optional start/end line range; paginates via `next_start_line` | any file |
 | `edit_overwrite` | Create or overwrite a file; creates parent directories | any file |
 | `edit_replace` | Replace a unique exact text block; errors if zero or multiple matches | all |
 | `edit_rename` | AST-aware rename within a file; skips identifiers in strings and comments | all |

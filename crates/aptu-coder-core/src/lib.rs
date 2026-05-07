@@ -61,7 +61,7 @@ pub use analyze::{
     AnalysisOutput, AnalyzeError, CallChainEntry, FileAnalysisOutput, FocusedAnalysisConfig,
     FocusedAnalysisOutput, analyze_directory, analyze_directory_with_progress, analyze_file,
     analyze_focused, analyze_focused_with_progress, analyze_focused_with_progress_with_entries,
-    analyze_module_file, analyze_raw_range, analyze_str,
+    analyze_module_file, analyze_str,
 };
 pub use config::AnalysisConfig;
 pub use edit::{
@@ -72,13 +72,13 @@ pub use lang::{language_for_extension, supported_languages};
 pub use parser::ParserError;
 pub use types::{
     AnalysisMode, AnalysisResult, AnalyzeDirectoryParams, AnalyzeFileField, AnalyzeFileParams,
-    AnalyzeModuleParams, AnalyzeRawOutput, AnalyzeRawParams, AnalyzeSymbolParams, CallChain,
-    CallEdge, CallInfo, ClassInfo, DefUseKind, DefUseSite, EditInsertOutput, EditInsertParams,
-    EditOverwriteOutput, EditOverwriteParams, EditRenameOutput, EditRenameParams,
-    EditReplaceOutput, EditReplaceParams, ErrorMeta, ExecCommandParams, FileInfo, FileRenameError,
-    FileRenameResult, FocusedAnalysisData, FunctionInfo, ImplTraitInfo, ImportInfo, InsertPosition,
-    ModuleFunctionInfo, ModuleImportInfo, ModuleInfo, OutputControlParams, PaginationParams,
-    ReferenceInfo, ReferenceType, STDIN_MAX_BYTES, SemanticAnalysis, ShellOutput, SymbolMatchMode,
+    AnalyzeModuleParams, AnalyzeSymbolParams, CallChain, CallEdge, CallInfo, ClassInfo, DefUseKind,
+    DefUseSite, EditInsertOutput, EditInsertParams, EditOverwriteOutput, EditOverwriteParams,
+    EditRenameOutput, EditRenameParams, EditReplaceOutput, EditReplaceParams, ErrorMeta,
+    ExecCommandParams, FileInfo, FileRenameError, FileRenameResult, FocusedAnalysisData,
+    FunctionInfo, ImplTraitInfo, ImportInfo, InsertPosition, ModuleFunctionInfo, ModuleImportInfo,
+    ModuleInfo, OutputControlParams, PaginationParams, ReferenceInfo, ReferenceType,
+    STDIN_MAX_BYTES, SemanticAnalysis, ShellOutput, SymbolMatchMode,
 };
 
 /// Captures from a custom tree-sitter query.

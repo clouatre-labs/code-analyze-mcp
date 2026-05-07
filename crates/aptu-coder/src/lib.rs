@@ -1925,237 +1925,6 @@ impl CodeAnalyzer {
 
     #[instrument(skip(self, _context))]
     #[tool(
-        name = "analyze_raw",
-        title = "Analyze Raw",
-        description = "Raw UTF-8 file content with line numbers; no AST parsing. Returns path, total_lines, start_line, end_line, content, next_start_line (null at EOF; pass as start_line to continue pagination). Omitting start_line/end_line returns the full file; for files over 100 lines use analyze_module first to locate the range. Fails if directory path supplied; fails on binary or non-UTF-8 files. Use analyze_file or analyze_module for AST-structured output. Example queries: Show lines 100-150 of src/lib.rs.",
-        output_schema = schema_for_type::<types::AnalyzeRawOutput>(),
-        annotations(
-            title = "Analyze Raw",
-            read_only_hint = true,
-            destructive_hint = false,
-            idempotent_hint = true,
-            open_world_hint = false
-        )
-    )]
-    async fn analyze_raw(
-        &self,
-        params: Parameters<types::AnalyzeRawParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let params = params.0;
-        let _validated_path = match validate_path(&params.path, true) {
-            Ok(p) => p,
-            Err(e) => return Ok(err_to_tool_result(e)),
-        };
-        let t_start = std::time::Instant::now();
-        let param_path = params.path.clone();
-        let seq = self
-            .session_call_seq
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let sid = self.session_id.lock().await.clone();
-
-        // Guard against directory paths
-        if std::fs::metadata(&params.path)
-            .map(|m| m.is_dir())
-            .unwrap_or(false)
-        {
-            let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-            self.metrics_tx.send(crate::metrics::MetricEvent {
-                ts: crate::metrics::unix_ms(),
-                tool: "analyze_raw",
-                duration_ms: dur,
-                output_chars: 0,
-                param_path_depth: crate::metrics::path_component_count(&param_path),
-                max_depth: None,
-                result: "error",
-                error_type: Some("invalid_params".to_string()),
-                session_id: sid.clone(),
-                seq: Some(seq),
-                cache_hit: None,
-            });
-            return Ok(err_to_tool_result(ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_PARAMS,
-                "path is a directory; use analyze_directory instead".to_string(),
-                Some(error_meta(
-                    "validation",
-                    false,
-                    "pass a file path, not a directory",
-                )),
-            )));
-        }
-
-        let path = std::path::PathBuf::from(&params.path);
-        let handle = tokio::task::spawn_blocking(move || {
-            aptu_coder_core::analyze_raw_range(&path, params.start_line, params.end_line)
-        });
-
-        let output = match handle.await {
-            Ok(Ok(v)) => v,
-            Ok(Err(aptu_coder_core::AnalyzeError::InvalidRange { start, end, total })) => {
-                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-                self.metrics_tx.send(crate::metrics::MetricEvent {
-                    ts: crate::metrics::unix_ms(),
-                    tool: "analyze_raw",
-                    duration_ms: dur,
-                    output_chars: 0,
-                    param_path_depth: crate::metrics::path_component_count(&param_path),
-                    max_depth: None,
-                    result: "error",
-                    error_type: Some("invalid_params".to_string()),
-                    session_id: sid.clone(),
-                    seq: Some(seq),
-                    cache_hit: None,
-                });
-                return Ok(err_to_tool_result(ErrorData::new(
-                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                    format!("invalid range: start ({start}) > end ({end}); file has {total} lines"),
-                    Some(error_meta(
-                        "validation",
-                        false,
-                        "ensure start_line <= end_line",
-                    )),
-                )));
-            }
-            Ok(Err(aptu_coder_core::AnalyzeError::NotAFile(_))) => {
-                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-                self.metrics_tx.send(crate::metrics::MetricEvent {
-                    ts: crate::metrics::unix_ms(),
-                    tool: "analyze_raw",
-                    duration_ms: dur,
-                    output_chars: 0,
-                    param_path_depth: crate::metrics::path_component_count(&param_path),
-                    max_depth: None,
-                    result: "error",
-                    error_type: Some("invalid_params".to_string()),
-                    session_id: sid.clone(),
-                    seq: Some(seq),
-                    cache_hit: None,
-                });
-                return Ok(err_to_tool_result(ErrorData::new(
-                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                    "path is not a file".to_string(),
-                    Some(error_meta(
-                        "validation",
-                        false,
-                        "provide a file path, not a directory",
-                    )),
-                )));
-            }
-            Ok(Err(aptu_coder_core::AnalyzeError::RangelessLargeFile { total_lines })) => {
-                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-                self.metrics_tx.send(crate::metrics::MetricEvent {
-                    ts: crate::metrics::unix_ms(),
-                    tool: "analyze_raw",
-                    duration_ms: dur,
-                    output_chars: 0,
-                    param_path_depth: crate::metrics::path_component_count(&param_path),
-                    max_depth: None,
-                    result: "error",
-                    error_type: Some("invalid_params".to_string()),
-                    session_id: sid.clone(),
-                    seq: Some(seq),
-                    cache_hit: None,
-                });
-                return Ok(err_to_tool_result(ErrorData::new(
-                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                    format!(
-                        "file has {total_lines} lines; provide start_line and end_line, or call analyze_module first to locate the range"
-                    ),
-                    Some(error_meta(
-                        "validation",
-                        false,
-                        "call analyze_module to get function line numbers, then retry with start_line and end_line",
-                    )),
-                )));
-            }
-            Ok(Err(e)) => {
-                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-                self.metrics_tx.send(crate::metrics::MetricEvent {
-                    ts: crate::metrics::unix_ms(),
-                    tool: "analyze_raw",
-                    duration_ms: dur,
-                    output_chars: 0,
-                    param_path_depth: crate::metrics::path_component_count(&param_path),
-                    max_depth: None,
-                    result: "error",
-                    error_type: Some("internal_error".to_string()),
-                    session_id: sid.clone(),
-                    seq: Some(seq),
-                    cache_hit: None,
-                });
-                return Ok(err_to_tool_result(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    e.to_string(),
-                    Some(error_meta(
-                        "resource",
-                        false,
-                        "check file path and permissions",
-                    )),
-                )));
-            }
-            Err(e) => {
-                let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-                self.metrics_tx.send(crate::metrics::MetricEvent {
-                    ts: crate::metrics::unix_ms(),
-                    tool: "analyze_raw",
-                    duration_ms: dur,
-                    output_chars: 0,
-                    param_path_depth: crate::metrics::path_component_count(&param_path),
-                    max_depth: None,
-                    result: "error",
-                    error_type: Some("internal_error".to_string()),
-                    session_id: sid.clone(),
-                    seq: Some(seq),
-                    cache_hit: None,
-                });
-                return Ok(err_to_tool_result(ErrorData::new(
-                    rmcp::model::ErrorCode::INTERNAL_ERROR,
-                    e.to_string(),
-                    Some(error_meta(
-                        "resource",
-                        false,
-                        "check file path and permissions",
-                    )),
-                )));
-            }
-        };
-
-        let text = format!(
-            "File: {} (total: {} lines, showing: {}-{})\n\n{}",
-            output.path, output.total_lines, output.start_line, output.end_line, output.content
-        );
-        let mut result = CallToolResult::success(vec![Content::text(text.clone())])
-            .with_meta(Some(no_cache_meta()));
-        let structured = match serde_json::to_value(&output).map_err(|e| {
-            ErrorData::new(
-                rmcp::model::ErrorCode::INTERNAL_ERROR,
-                format!("serialization failed: {e}"),
-                Some(error_meta("internal", false, "report this as a bug")),
-            )
-        }) {
-            Ok(v) => v,
-            Err(e) => return Ok(err_to_tool_result(e)),
-        };
-        result.structured_content = Some(structured);
-        let dur = t_start.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
-        self.metrics_tx.send(crate::metrics::MetricEvent {
-            ts: crate::metrics::unix_ms(),
-            tool: "analyze_raw",
-            duration_ms: dur,
-            output_chars: text.len(),
-            param_path_depth: crate::metrics::path_component_count(&param_path),
-            max_depth: None,
-            result: "ok",
-            error_type: None,
-            session_id: sid,
-            seq: Some(seq),
-            cache_hit: None,
-        });
-        Ok(result)
-    }
-
-    #[instrument(skip(self, _context))]
-    #[tool(
         name = "edit_overwrite",
         title = "Edit Overwrite",
         description = "Creates or overwrites a file with UTF-8 content; creates parent directories if needed. Returns path, bytes_written. Fails if directory path supplied. AST-unaware (no language constraint). Use edit_replace for targeted single-block edits; edit_rename/edit_insert for AST-targeted changes. Example queries: Overwrite src/config.rs with updated content.",
@@ -3061,7 +2830,7 @@ impl CodeAnalyzer {
     #[tool(
         name = "exec_command",
         title = "Exec Command",
-        description = "Execute shell command via sh -c (or $SHELL if set). Returns stdout, stderr, interleaved, exit_code, timed_out, output_truncated. Output capped at 2000 lines and 50 KB per stream; use timeout_secs to limit execution time. working_dir sets initial working directory; cd and absolute paths in command string bypass this restriction. Fails if working_dir does not exist, is not a directory, or is outside CWD. Pass stdin to pipe UTF-8 content into the process (max 1 MB). For file creation and edits, prefer the edit_* tools. Example queries: Run the test suite and capture output.",
+        description = "Execute shell command via sh -c (or $SHELL if set). Returns stdout, stderr, interleaved, exit_code, timed_out, output_truncated. Output capped at 2000 lines and 50 KB per stream; use timeout_secs to limit execution time. working_dir sets initial working directory; cd and absolute paths in command string bypass this restriction. Fails if working_dir does not exist, is not a directory, or is outside CWD. Pass stdin to pipe UTF-8 content into the process (max 1 MB). For file creation and edits, prefer the edit_* tools. For raw file content, use: `sed -n 'START,ENDp' FILE` (add `grep -n ''` pipe for line-numbered output). Call analyze_module first to locate function line ranges. Example queries: Run the test suite and capture output.",
         output_schema = schema_for_type::<types::ShellOutput>(),
         annotations(
             title = "Exec Command",
@@ -3606,7 +3375,7 @@ impl ServerHandler for CodeAnalyzer {
             "Recommended workflow:\n\
             1. Start with analyze_directory(path=<repo_root>, max_depth=2, summary=true) to identify source package (largest by file count; exclude {excluded}).\n\
             2. Re-run analyze_directory(path=<source_package>, max_depth=2, summary=true) for module map. Include test directories (tests/, *_test.go, test_*.py, test_*.rs, *.spec.ts, *.spec.js).\n\
-            3. For key files, prefer analyze_module for function/import index; use analyze_file for signatures and types.\n\
+            3. For key files, prefer analyze_module for function/import index; use analyze_file for signatures and types. For raw source lines use exec_command: `sed -n 'START,ENDp' FILE` or `grep -n '' FILE | sed -n 'START,ENDp'` for line-numbered output.\n\
             4. Use analyze_symbol to trace call graphs.\n\
             Prefer summary=true on 1000+ files. Set max_depth=2; increase if packages too large. Paginate with cursor/page_size. For subagents: DISABLE_PROMPT_CACHING=1."
         );
@@ -3678,7 +3447,7 @@ impl ServerHandler for CodeAnalyzer {
             let mut router = self.tool_router.write().await;
             match profile {
                 "edit" => {
-                    // Enable only: analyze_raw, edit_replace, edit_overwrite, exec_command
+                    // Enable only: edit_replace, edit_overwrite, exec_command
                     router.disable_route("analyze_directory");
                     router.disable_route("analyze_file");
                     router.disable_route("analyze_module");
@@ -3687,7 +3456,7 @@ impl ServerHandler for CodeAnalyzer {
                     router.disable_route("edit_insert");
                 }
                 "analyze" => {
-                    // Enable only: analyze_directory, analyze_file, analyze_module, analyze_symbol, analyze_raw, exec_command
+                    // Enable only: analyze_directory, analyze_file, analyze_module, analyze_symbol, exec_command
                     router.disable_route("edit_replace");
                     router.disable_route("edit_overwrite");
                     router.disable_route("edit_rename");

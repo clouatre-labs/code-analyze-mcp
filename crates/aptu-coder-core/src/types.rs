@@ -823,32 +823,6 @@ mod error_meta_tests {
 #[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct AnalyzeRawParams {
-    /// Path to the file to read (must be a file, not a directory).
-    pub path: String,
-    /// Starting line number (1-indexed, inclusive). Defaults to 1 if omitted.
-    pub start_line: Option<usize>,
-    /// Ending line number (1-indexed, inclusive). Defaults to the last line if omitted.
-    pub end_line: Option<usize>,
-}
-
-#[non_exhaustive]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schemars", derive(JsonSchema))]
-pub struct AnalyzeRawOutput {
-    pub path: String,
-    pub total_lines: usize,
-    pub start_line: usize,
-    pub end_line: usize,
-    pub content: String,
-    /// When `end_line < total_lines`, the `start_line` value for the next page.
-    /// `None` when `end_line == total_lines` (EOF reached).
-    pub next_start_line: Option<usize>,
-}
-
-#[non_exhaustive]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schemars", derive(JsonSchema))]
 pub struct EditOverwriteParams {
     /// Path to the file to create or overwrite.
     pub path: String,
