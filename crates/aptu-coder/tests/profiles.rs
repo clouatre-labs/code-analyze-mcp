@@ -213,18 +213,14 @@ async fn test_edit_profile_tool_count() {
         .filter_map(|t| t["name"].as_str().map(|s| s.to_string()))
         .collect();
 
-    // Assert: edit profile should have exactly 4 tools
+    // Assert: edit profile should have exactly 3 tools
     assert_eq!(
-        tool_count, 4,
-        "edit profile should enable exactly 4 tools, got: {:?}",
+        tool_count, 3,
+        "edit profile should enable exactly 3 tools, got: {:?}",
         tool_names
     );
 
     // Verify the correct tools are present
-    assert!(
-        tool_names.contains(&"analyze_raw".to_string()),
-        "edit profile should include analyze_raw"
-    );
     assert!(
         tool_names.contains(&"edit_replace".to_string()),
         "edit profile should include edit_replace"
@@ -254,10 +250,10 @@ async fn test_analyze_profile_tool_count() {
         .filter_map(|t| t["name"].as_str().map(|s| s.to_string()))
         .collect();
 
-    // Assert: analyze profile should have exactly 6 tools
+    // Assert: analyze profile should have exactly 5 tools
     assert_eq!(
-        tool_count, 6,
-        "analyze profile should enable exactly 6 tools, got: {:?}",
+        tool_count, 5,
+        "analyze profile should enable exactly 5 tools, got: {:?}",
         tool_names
     );
 
@@ -279,10 +275,6 @@ async fn test_analyze_profile_tool_count() {
         "analyze profile should include analyze_symbol"
     );
     assert!(
-        tool_names.contains(&"analyze_raw".to_string()),
-        "analyze profile should include analyze_raw"
-    );
-    assert!(
         tool_names.contains(&"exec_command".to_string()),
         "analyze profile should include exec_command"
     );
@@ -297,10 +289,10 @@ async fn test_no_profile_tool_count() {
     let tools = &resp["result"]["tools"];
     let tool_count = tools.as_array().map(|a| a.len()).unwrap_or(0);
 
-    // Assert: no profile should enable all 10 tools
+    // Assert: no profile should enable all 9 tools
     assert_eq!(
-        tool_count, 10,
-        "no profile should enable all 10 tools, got: {}",
+        tool_count, 9,
+        "no profile should enable all 9 tools, got: {}",
         tool_count
     );
 }
@@ -314,10 +306,10 @@ async fn test_unknown_profile_tool_count() {
     let tools = &resp["result"]["tools"];
     let tool_count = tools.as_array().map(|a| a.len()).unwrap_or(0);
 
-    // Assert: unknown profile should enable all 10 tools (lenient fallback)
+    // Assert: unknown profile should enable all 9 tools (lenient fallback)
     assert_eq!(
-        tool_count, 10,
-        "unknown profile should enable all 10 tools, got: {}",
+        tool_count, 9,
+        "unknown profile should enable all 9 tools, got: {}",
         tool_count
     );
 }

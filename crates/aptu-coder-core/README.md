@@ -17,7 +17,6 @@ Core library for code structure analysis using tree-sitter.
 - **File analysis** - Functions, classes, and imports with signatures and line ranges
 - **Symbol call graphs** - Callers and callees across a directory with configurable depth
 - **Module index** - Lightweight function and import index (~75% smaller than full file analysis)
-- **Raw file access** - Line-range file reads via `analyze_raw_range`
 - **Edit operations** - In-file edits: overwrite, exact-block replace, AST-aware rename, before/after insert
 - **In-memory analysis** - `analyze_str` parses source text directly without a file path; returns the same `FileAnalysisOutput` as `analyze_file`
 - **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Fortran, JavaScript, C/C++, C#
