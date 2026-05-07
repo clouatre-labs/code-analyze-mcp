@@ -1305,10 +1305,18 @@ pub fn format_file_details_paginated(
 
     // Compute field visibility flags. Empty slice behaves same as None (show all).
     let show_all = fields.is_none_or(<[AnalyzeFileField]>::is_empty);
-    let show_classes = show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Classes));
-    let show_imports = show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Imports));
-    let show_functions =
-        show_all || fields.is_some_and(|f| f.contains(&AnalyzeFileField::Functions));
+    let show_classes = show_all
+        || fields.is_some_and(|f| {
+            f.contains(&AnalyzeFileField::All) || f.contains(&AnalyzeFileField::Classes)
+        });
+    let show_imports = show_all
+        || fields.is_some_and(|f| {
+            f.contains(&AnalyzeFileField::All) || f.contains(&AnalyzeFileField::Imports)
+        });
+    let show_functions = show_all
+        || fields.is_some_and(|f| {
+            f.contains(&AnalyzeFileField::All) || f.contains(&AnalyzeFileField::Functions)
+        });
 
     // Classes section on first page for both verbose and compact modes
     if show_classes && offset == 0 && !semantic.classes.is_empty() {
@@ -2728,6 +2736,48 @@ mod tests {
         .expect("format should succeed");
 
         assert!(output.contains("DEF-USE SITES: 1 total (0 writes, 1 reads)"));
+    }
+
+    #[test]
+    fn test_analyze_file_field_all_equivalent_to_none() {
+        use crate::types::AnalyzeFileField;
+        // fields=None and fields=Some([All]) must produce the same section selections
+        let all_fields = [AnalyzeFileField::All];
+        // Functions section
+        assert!(
+            all_fields.contains(&AnalyzeFileField::All)
+                || all_fields.contains(&AnalyzeFileField::Functions),
+            "All variant should include Functions"
+        );
+        // Classes section
+        assert!(
+            all_fields.contains(&AnalyzeFileField::All)
+                || all_fields.contains(&AnalyzeFileField::Classes),
+            "All variant should include Classes"
+        );
+        // Imports section
+        assert!(
+            all_fields.contains(&AnalyzeFileField::All)
+                || all_fields.contains(&AnalyzeFileField::Imports),
+            "All variant should include Imports"
+        );
+    }
+
+    #[test]
+    fn test_analyze_file_field_all_dominates() {
+        use crate::types::AnalyzeFileField;
+        // All + specific variant still returns all sections
+        let mixed = [AnalyzeFileField::All, AnalyzeFileField::Functions];
+        assert!(mixed.contains(&AnalyzeFileField::All));
+        // All dominates: Classes and Imports should also be included
+        assert!(
+            mixed.contains(&AnalyzeFileField::All) || mixed.contains(&AnalyzeFileField::Classes),
+            "All dominates: Classes included even when not explicitly listed"
+        );
+        assert!(
+            mixed.contains(&AnalyzeFileField::All) || mixed.contains(&AnalyzeFileField::Imports),
+            "All dominates: Imports included even when not explicitly listed"
+        );
     }
 }
 

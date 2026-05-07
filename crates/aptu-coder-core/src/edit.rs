@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
+#[non_exhaustive]
 #[derive(Debug, Error)]
 pub enum EditError {
     #[error("I/O error: {0}")]
@@ -284,15 +285,10 @@ pub fn edit_insert_at_symbol(
 
     std::fs::write(path, &updated)?;
 
-    let position_str = match position {
-        InsertPosition::Before => "before",
-        InsertPosition::After => "after",
-    };
-
     Ok(EditInsertOutput {
         path: path.display().to_string(),
         symbol_name: symbol_name.to_string(),
-        position: position_str.to_string(),
+        position,
         byte_offset,
     })
 }
@@ -426,7 +422,7 @@ mod tests {
         let out = edit_insert_at_symbol(f.path(), "foo", InsertPosition::Before, "bar_").unwrap();
         let updated = std::fs::read_to_string(f.path()).unwrap();
         assert!(updated.contains("fn bar_foo()"));
-        assert_eq!(out.position, "before");
+        assert_eq!(out.position, InsertPosition::Before);
     }
 
     #[test]
@@ -437,7 +433,7 @@ mod tests {
             edit_insert_at_symbol(f.path(), "foo", InsertPosition::After, "_renamed").unwrap();
         let updated = std::fs::read_to_string(f.path()).unwrap();
         assert!(updated.contains("fn foo_renamed()"));
-        assert_eq!(out.position, "after");
+        assert_eq!(out.position, InsertPosition::After);
     }
 
     #[test]

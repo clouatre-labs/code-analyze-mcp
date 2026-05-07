@@ -70,10 +70,19 @@ pub use edit::{
 };
 pub use lang::{language_for_extension, supported_languages};
 pub use parser::ParserError;
-pub use types::*;
+pub use types::{
+    AnalysisMode, AnalysisResult, AnalyzeDirectoryParams, AnalyzeFileField, AnalyzeFileParams,
+    AnalyzeModuleParams, AnalyzeRawOutput, AnalyzeRawParams, AnalyzeSymbolParams, CallChain,
+    CallEdge, CallInfo, ClassInfo, DefUseKind, DefUseSite, EditInsertOutput, EditInsertParams,
+    EditOverwriteOutput, EditOverwriteParams, EditRenameOutput, EditRenameParams,
+    EditReplaceOutput, EditReplaceParams, ErrorMeta, ExecCommandParams, FileInfo, FileRenameError,
+    FileRenameResult, FocusedAnalysisData, FunctionInfo, ImplTraitInfo, ImportInfo, InsertPosition,
+    ModuleFunctionInfo, ModuleImportInfo, ModuleInfo, OutputControlParams, PaginationParams,
+    ReferenceInfo, ReferenceType, STDIN_MAX_BYTES, SemanticAnalysis, ShellOutput, SymbolMatchMode,
+};
 
 /// Captures from a custom tree-sitter query.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct QueryCapture {
     /// The capture name from the query (without leading `@`).
     pub capture_name: String,
