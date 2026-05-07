@@ -242,17 +242,24 @@ fn paginate_focus_chains(
     Ok((paginated.items, next))
 }
 
-/// Resolve the preferred Unix shell for command execution.
-/// Priority: APTU_SHELL env var > bash (PATH search) > /bin/sh.
-#[cfg(unix)]
+/// Resolve the preferred shell for command execution.
+/// Priority: APTU_SHELL env var > bash (PATH search) > /bin/sh (unix) / cmd (windows).
+/// APTU_SHELL is honored on all platforms so callers can override the shell uniformly.
 fn resolve_shell() -> String {
     if let Ok(shell) = std::env::var("APTU_SHELL") {
         return shell;
     }
-    if which::which("bash").is_ok() {
-        return "bash".to_string();
+    #[cfg(unix)]
+    {
+        if which::which("bash").is_ok() {
+            return "bash".to_string();
+        }
+        "/bin/sh".to_string()
     }
-    "/bin/sh".to_string()
+    #[cfg(not(unix))]
+    {
+        "cmd".to_string()
+    }
 }
 
 /// MCP server handler that wires the four analysis tools to the rmcp transport.
@@ -3077,10 +3084,7 @@ impl CodeAnalyzer {
         let timeout_secs = params.timeout_secs.unwrap_or(30);
 
         // Spawn the command using tokio::process::Command for proper async handling
-        #[cfg(unix)]
         let shell = resolve_shell();
-        #[cfg(not(unix))]
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "cmd".to_string());
 
         let mut cmd = tokio::process::Command::new(shell);
         cmd.arg("-c").arg(&command);

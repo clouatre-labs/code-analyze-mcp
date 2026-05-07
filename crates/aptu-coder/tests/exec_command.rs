@@ -454,23 +454,26 @@ async fn test_handler_timeout_partial_output() {
 
 #[tokio::test]
 async fn test_handler_shell_preference() {
-    // Test APTU_SHELL override: set it to sh and verify it's used
-    unsafe {
-        std::env::set_var("APTU_SHELL", "sh");
-    }
+    // Serialize all tests that mutate APTU_SHELL to prevent races when the
+    // test suite runs in parallel (tokio::test spawns concurrent tasks).
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = ENV_LOCK.lock().unwrap();
+
+    // SAFETY: the static mutex above ensures no other test reads or writes
+    // APTU_SHELL while we hold the guard.
+    unsafe { std::env::set_var("APTU_SHELL", "sh") };
     let resp = call_exec_command_raw(serde_json::json!({
         "command": "echo $0"
     }))
     .await;
+    unsafe { std::env::remove_var("APTU_SHELL") };
+
     let sc = &resp["result"]["structuredContent"];
     let stdout = sc["stdout"].as_str().unwrap_or("");
     assert!(
         stdout.contains("sh"),
         "expected sh in $0 output, got: {stdout}"
     );
-    unsafe {
-        std::env::remove_var("APTU_SHELL");
-    }
 }
 
 #[tokio::test]
