@@ -90,8 +90,9 @@ All five checks must pass for the run to be scored as correct.
 
 ### Edit Profile Constraint
 
-As of PR #763, the `analyze_raw` tool requires explicit `start_line` and `end_line` parameters for files
-exceeding 100 lines. Bare calls (without line ranges) on large files return a server error. The benchmark
+As of PR #763, the `analyze_raw` tool requires explicit `start_line` and `end_line` parameters for code
+files (recognized language extension) exceeding 100 lines. Bare calls (without line ranges) on large code
+files return a server error. Non-code files (Markdown, JSON, TOML, plain text) are exempt (PR #767). The benchmark
 prompts for conditions A and C (MCP tools) have been updated to include explicit line ranges:
 
 - `analyze_raw(path="...mod.rs", start_line=62, end_line=260)` -- covers the get_language_info and get_ts_language functions
