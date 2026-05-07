@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "aptu-coder": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["PROXY_PATH_PLACEHOLDER"],
+      "env": {
+        "APTU_CODER_PROFILE": "edit"
+      }
+    }
+  }
+}
