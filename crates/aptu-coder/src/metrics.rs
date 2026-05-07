@@ -163,29 +163,36 @@ impl MetricsWriter {
 
         // Export metrics summary on shutdown (issue #773)
         if let Ok(export_path) = std::env::var("APTU_CODER_METRICS_EXPORT_FILE") {
-            let mut tool_calls = Vec::new();
-            let mut total_duration_ms = 0u64;
-            for (tool_name, (count, duration)) in tool_counts {
-                tool_calls.push(serde_json::json!({
-                    "tool": tool_name,
-                    "call_count": count,
-                    "total_duration_ms": duration
-                }));
-                total_duration_ms += duration;
-            }
-            let summary = serde_json::json!({
-                "session_id": export_session_id.unwrap_or_default(),
-                "tool_calls": tool_calls,
-                "total_duration_ms": total_duration_ms
-            });
-            if let Ok(json_str) = serde_json::to_string(&summary)
-                && let Err(e) = tokio::fs::write(&export_path, json_str).await
-            {
+            if !std::path::Path::new(&export_path).is_absolute() {
                 tracing::warn!(
-                    error = %e,
                     path = %export_path,
-                    "metrics: failed to write export file"
+                    "metrics: APTU_CODER_METRICS_EXPORT_FILE must be an absolute path; skipping export"
                 );
+            } else {
+                let mut tool_calls = Vec::new();
+                let mut total_duration_ms = 0u64;
+                for (tool_name, (count, duration)) in tool_counts {
+                    tool_calls.push(serde_json::json!({
+                        "tool": tool_name,
+                        "call_count": count,
+                        "total_duration_ms": duration
+                    }));
+                    total_duration_ms += duration;
+                }
+                let summary = serde_json::json!({
+                    "session_id": export_session_id.unwrap_or_default(),
+                    "tool_calls": tool_calls,
+                    "total_duration_ms": total_duration_ms
+                });
+                if let Ok(json_str) = serde_json::to_string(&summary)
+                    && let Err(e) = tokio::fs::write(&export_path, json_str).await
+                {
+                    tracing::warn!(
+                        error = %e,
+                        path = %export_path,
+                        "metrics: failed to write export file"
+                    );
+                }
             }
         }
     }
@@ -682,5 +689,64 @@ mod tests {
             0,
             "no export file should be created when env var is unset"
         );
+    }
+
+    #[tokio::test]
+    async fn test_metrics_export_relative_path_rejected() {
+        let _guard = metrics_export_lock();
+        // Arrange: set export env var to a relative path
+        let relative_path = "relative/path/metrics.json";
+        unsafe {
+            std::env::set_var("APTU_CODER_METRICS_EXPORT_FILE", relative_path);
+        }
+
+        let dir = TempDir::new().unwrap();
+        // Use a unique marker to ensure we don't pick up files from other tests
+        let marker = "metrics_export_relative_test";
+
+        // Create metrics writer and send events
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<MetricEvent>();
+        let writer = MetricsWriter::new(rx, Some(dir.path().to_path_buf()));
+
+        // Act: send events and run writer
+        tx.send(MetricEvent {
+            ts: unix_ms(),
+            tool: "analyze_directory",
+            duration_ms: 100,
+            output_chars: 50,
+            param_path_depth: 1,
+            max_depth: None,
+            result: "ok",
+            error_type: None,
+            session_id: Some(marker.to_string()),
+            seq: None,
+            cache_hit: None,
+        })
+        .unwrap();
+        drop(tx);
+        writer.run().await;
+
+        // Assert: no export file should be created for relative path
+        let entries: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.contains("metrics.json"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(
+            entries.len(),
+            0,
+            "no export file should be created for relative path"
+        );
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var("APTU_CODER_METRICS_EXPORT_FILE");
+        }
     }
 }

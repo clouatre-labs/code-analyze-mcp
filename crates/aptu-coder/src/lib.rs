@@ -3449,7 +3449,7 @@ impl ServerHandler for CodeAnalyzer {
         drop(meta_lock);
 
         // Resolve the active profile: _meta wins; fall back to env var.
-        let active_profile = meta_profile.or_else(|| std::env::var("APTU_CODER_PROFILE").ok());
+        let active_profile = meta_profile.or(std::env::var("APTU_CODER_PROFILE").ok());
 
         if let Some(ref profile) = active_profile {
             let mut router = self.tool_router.write().await;
