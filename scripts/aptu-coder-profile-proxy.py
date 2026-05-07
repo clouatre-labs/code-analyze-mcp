@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.14
 """
 Thin asyncio proxy for aptu-coder MCP server.
 
@@ -111,9 +111,15 @@ async def main():
             forward_stderr_from_subprocess(),
         )
     except KeyboardInterrupt:
+        # Interruption is intentionally suppressed here; cleanup runs via finally.
         pass
     finally:
-        # Wait for subprocess to finish
+        # Terminate subprocess on exit to prevent orphaned processes,
+        # then wait for it to fully exit before propagating its return code.
+        try:
+            proc.terminate()
+        except ProcessLookupError:
+            pass  # already exited
         await proc.wait()
         sys.exit(proc.returncode or 0)
 

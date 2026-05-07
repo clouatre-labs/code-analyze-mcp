@@ -86,7 +86,7 @@ git -C "$REPO_ROOT" worktree add "$RUN_WORKTREE" origin/main 2>&1
 # The task is to re-wire tsx support. We strip it first so the agent must
 # add it back correctly. Stripping is idempotent (safe to run multiple times).
 
-python3 << STRIP_TSX_EOF
+python3.14 << STRIP_TSX_EOF
 def strip_tsx_language_info_arm(lines):
     """Remove the tsx arm from get_language_info using anchor-based matching.
 
@@ -197,7 +197,7 @@ print("TSX stripping complete")
 STRIP_TSX_EOF
 
 # Verify syntax
-python3 << SYNTAX_CHECK_EOF
+python3.14 << SYNTAX_CHECK_EOF
 import ast
 import sys
 
@@ -395,7 +395,7 @@ echo "Run completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # ---------------------------------------------------------------------------
 # Extract report and telemetry
 # ---------------------------------------------------------------------------
-python3 - "$SCRATCH_FILE" "$OUTPUT_FILE" "$TELEMETRY_FILE" << 'PYEOF'
+python3.14 - "$SCRATCH_FILE" "$OUTPUT_FILE" "$TELEMETRY_FILE" << 'PYEOF'
 import json, sys
 
 scratch, out_path, tel_path = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -483,7 +483,7 @@ if [[ -f "$MOD_RS_FILE" ]]; then
   ! grep -q '^pub mod tsx;' "$MOD_RS_FILE" && GREP_5=true || true
 fi
 
-python3 -c "
+python3.14 -c "
 import json, sys
 tel_path = '$TELEMETRY_FILE'
 ver_path = '$VERIFICATION_FILE'
@@ -520,7 +520,7 @@ if [[ ${#_sessions[@]} -gt 0 ]]; then
   cp "$LATEST_SESSION" "$SESSION_COPY"
   echo "Session JSONL: $SESSION_COPY"
 
-  python3 - "$SESSION_COPY" "$TOOL_SET" << 'PYEOF'
+  python3.14 - "$SESSION_COPY" "$TOOL_SET" << 'PYEOF'
 import json, sys
 
 session_file, expected_tool_set = sys.argv[1], sys.argv[2]
@@ -599,7 +599,7 @@ echo ""
 echo "=== Run complete ==="
 if [[ -f "$OUTPUT_FILE" ]]; then
   echo "Report:    $OUTPUT_FILE"
-  python3 -c "
+  python3.14 -c "
 import json
 d = json.load(open('$OUTPUT_FILE'))
 fc  = len(d.get('files_created', []))
@@ -613,7 +613,7 @@ print(f'  files_created={fc}  files_modified={fm}  queries={qw}  extensions={er}
 fi
 if [[ -f "$TELEMETRY_FILE" ]]; then
   echo "Telemetry: $TELEMETRY_FILE"
-  python3 -c "
+  python3.14 -c "
 import json
 t = json.load(open('$TELEMETRY_FILE'))
 print(f'  turns={t.get(\"num_turns\",\"?\")}  cost_usd={t.get(\"cost_usd\",\"?\")}  input_tokens={t.get(\"input_tokens\",\"?\")}')
@@ -621,7 +621,7 @@ print(f'  turns={t.get(\"num_turns\",\"?\")}  cost_usd={t.get(\"cost_usd\",\"?\"
 fi
 if [[ -f "$VERIFICATION_FILE" ]]; then
   echo "Verification: $VERIFICATION_FILE"
-  python3 -c "
+  python3.14 -c "
 import json
 v = json.load(open('$VERIFICATION_FILE'))
 print(f'  cargo_test=' + ('PASS' if v.get('cargo_test_passed') else 'FAIL') + f'  spdx={v.get(\"spdx_header_present\")}  files={len(v.get(\"changed_files\",[]))}')
