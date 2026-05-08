@@ -486,13 +486,16 @@ impl SemanticExtractor {
         source: &str,
         language: &str,
         ast_recursion_limit: Option<usize>,
-        deadline: Option<std::time::Instant>,
+        timeout_micros: Option<u64>,
     ) -> Result<SemanticAnalysis, ParserError> {
+        let deadline = timeout_micros
+            .map(|us| std::time::Instant::now() + std::time::Duration::from_micros(us));
+
         // Check deadline at the start
         #[allow(clippy::collapsible_if)]
         if let Some(d) = deadline {
             if std::time::Instant::now() >= d {
-                return Err(ParserError::Timeout(0));
+                return Err(ParserError::Timeout(timeout_micros.unwrap_or(0)));
             }
         }
         let lang_info = get_language_info(language)
@@ -542,6 +545,7 @@ impl SemanticExtractor {
             &mut functions,
             &mut classes,
             deadline,
+            timeout_micros.unwrap_or(0),
         )?;
         Self::extract_calls(
             source,
@@ -551,14 +555,45 @@ impl SemanticExtractor {
             &mut calls,
             &mut call_frequency,
             deadline,
+            timeout_micros.unwrap_or(0),
         )?;
-        Self::extract_imports(source, compiled, root, max_depth, &mut imports, deadline)?;
-        Self::extract_impl_methods(source, compiled, root, max_depth, &mut classes, deadline)?;
-        Self::extract_references(source, compiled, root, max_depth, &mut references, deadline)?;
+        Self::extract_imports(
+            source,
+            compiled,
+            root,
+            max_depth,
+            &mut imports,
+            deadline,
+            timeout_micros.unwrap_or(0),
+        )?;
+        Self::extract_impl_methods(
+            source,
+            compiled,
+            root,
+            max_depth,
+            &mut classes,
+            deadline,
+            timeout_micros.unwrap_or(0),
+        )?;
+        Self::extract_references(
+            source,
+            compiled,
+            root,
+            max_depth,
+            &mut references,
+            deadline,
+            timeout_micros.unwrap_or(0),
+        )?;
 
         // Extract impl-trait blocks for Rust files (empty for other languages)
         let impl_traits = if language == "rust" {
-            Self::extract_impl_traits_from_tree(source, compiled, root, deadline)?
+            Self::extract_impl_traits_from_tree(
+                source,
+                compiled,
+                root,
+                deadline,
+                timeout_micros.unwrap_or(0),
+            )?
         } else {
             vec![]
         };
@@ -587,6 +622,7 @@ impl SemanticExtractor {
         functions: &mut Vec<FunctionInfo>,
         classes: &mut Vec<ClassInfo>,
         deadline: Option<std::time::Instant>,
+        timeout_micros: u64,
     ) -> Result<(), ParserError> {
         let mut seen_functions = std::collections::HashSet::new();
         let mut timed_out = false;
@@ -751,7 +787,7 @@ impl SemanticExtractor {
         });
 
         if timed_out {
-            return Err(ParserError::Timeout(0));
+            return Err(ParserError::Timeout(timeout_micros));
         }
 
         Ok(())
@@ -806,6 +842,7 @@ impl SemanticExtractor {
         None
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn extract_calls(
         source: &str,
         compiled: &CompiledQueries,
@@ -814,6 +851,7 @@ impl SemanticExtractor {
         calls: &mut Vec<CallInfo>,
         call_frequency: &mut HashMap<String, usize>,
         deadline: Option<std::time::Instant>,
+        timeout_micros: u64,
     ) -> Result<(), ParserError> {
         let mut timed_out = false;
 
@@ -887,7 +925,7 @@ impl SemanticExtractor {
         });
 
         if timed_out {
-            return Err(ParserError::Timeout(0));
+            return Err(ParserError::Timeout(timeout_micros));
         }
 
         Ok(())
@@ -900,6 +938,7 @@ impl SemanticExtractor {
         max_depth: Option<u32>,
         imports: &mut Vec<ImportInfo>,
         deadline: Option<std::time::Instant>,
+        timeout_micros: u64,
     ) -> Result<(), ParserError> {
         let Some(ref import_query) = compiled.import else {
             return Ok(());
@@ -936,7 +975,7 @@ impl SemanticExtractor {
         });
 
         if timed_out {
-            return Err(ParserError::Timeout(0));
+            return Err(ParserError::Timeout(timeout_micros));
         }
 
         Ok(())
@@ -949,6 +988,7 @@ impl SemanticExtractor {
         max_depth: Option<u32>,
         classes: &mut [ClassInfo],
         deadline: Option<std::time::Instant>,
+        timeout_micros: u64,
     ) -> Result<(), ParserError> {
         let Some(ref impl_query) = compiled.impl_block else {
             return Ok(());
@@ -1038,7 +1078,7 @@ impl SemanticExtractor {
         });
 
         if timed_out {
-            return Err(ParserError::Timeout(0));
+            return Err(ParserError::Timeout(timeout_micros));
         }
 
         Ok(())
@@ -1051,6 +1091,7 @@ impl SemanticExtractor {
         max_depth: Option<u32>,
         references: &mut Vec<ReferenceInfo>,
         deadline: Option<std::time::Instant>,
+        timeout_micros: u64,
     ) -> Result<(), ParserError> {
         let Some(ref ref_query) = compiled.reference else {
             return Ok(());
@@ -1097,7 +1138,7 @@ impl SemanticExtractor {
         });
 
         if timed_out {
-            return Err(ParserError::Timeout(0));
+            return Err(ParserError::Timeout(timeout_micros));
         }
 
         Ok(())
@@ -1112,6 +1153,7 @@ impl SemanticExtractor {
         compiled: &CompiledQueries,
         root: Node<'_>,
         deadline: Option<std::time::Instant>,
+        timeout_micros: u64,
     ) -> Result<Vec<ImplTraitInfo>, ParserError> {
         let Some(query) = &compiled.impl_trait else {
             return Ok(vec![]);
@@ -1168,7 +1210,7 @@ impl SemanticExtractor {
         });
 
         if timed_out {
-            return Err(ParserError::Timeout(0));
+            return Err(ParserError::Timeout(timeout_micros));
         }
 
         Ok(results)
@@ -1729,11 +1771,10 @@ mod tests_python {
 
     #[test]
     fn test_parse_timeout_triggers_error() {
-        // Arrange: simple Rust source with a deadline in the past (1 microsecond ago)
+        // Arrange: simple Rust source with a very short timeout (1 microsecond)
         let source = r#"fn hello() -> u32 { 42 }"#;
-        let deadline = Some(std::time::Instant::now() - std::time::Duration::from_micros(1));
-        // Act: extract with an already-expired deadline
-        let result = SemanticExtractor::extract(source, "rust", None, deadline);
+        // Act: extract with a very short timeout that will expire immediately
+        let result = SemanticExtractor::extract(source, "rust", None, Some(1u64));
         // Assert: should return a Timeout error
         assert!(
             matches!(result, Err(ParserError::Timeout(_))),

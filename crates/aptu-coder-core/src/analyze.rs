@@ -566,11 +566,12 @@ fn collect_file_analysis(
                 "unknown".to_string()
             };
 
-            // Compute deadline for this file if parse_timeout_micros is set
-            let deadline = parse_timeout_micros
-                .map(|micros| std::time::Instant::now() + std::time::Duration::from_micros(micros));
-
-            match SemanticExtractor::extract(&source, &language, ast_recursion_limit, deadline) {
+            match SemanticExtractor::extract(
+                &source,
+                &language,
+                ast_recursion_limit,
+                parse_timeout_micros,
+            ) {
                 Ok(mut semantic) => {
                     // Populate file path on references
                     for r in &mut semantic.references {
