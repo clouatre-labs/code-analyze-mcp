@@ -765,17 +765,17 @@ async fn test_exec_cache_hit_on_sequential_repeat() {
 
     // Act: first call executes the command
     let resp1 = call_exec_command_raw(params1).await;
-    let exit1 = resp1["structured_content"]["exit_code"].as_i64();
-    let stdout1 = resp1["structured_content"]["stdout"].as_str().unwrap_or("");
+    let sc1 = &resp1["result"]["structuredContent"];
+    let stdout1 = sc1["stdout"].as_str().unwrap_or("").to_string();
 
     // Second call should hit the cache (same command, no stdin)
     let resp2 = call_exec_command_raw(params2).await;
-    let exit2 = resp2["structured_content"]["exit_code"].as_i64();
-    let stdout2 = resp2["structured_content"]["stdout"].as_str().unwrap_or("");
+    let sc2 = &resp2["result"]["structuredContent"];
+    let stdout2 = sc2["stdout"].as_str().unwrap_or("").to_string();
 
     // Assert: both calls succeeded and returned the same output
-    assert_eq!(exit1, Some(0), "first call should succeed");
-    assert_eq!(exit2, Some(0), "second call should succeed");
+    assert_eq!(sc1["exit_code"], 0, "first call should succeed: {sc1}");
+    assert_eq!(sc2["exit_code"], 0, "second call should succeed: {sc2}");
     assert_eq!(stdout1, stdout2, "cached output should match original");
     assert!(
         stdout1.contains("cache_test_123"),
@@ -795,14 +795,16 @@ async fn test_exec_cache_skipped_with_stdin() {
 
     // Act: call with stdin
     let resp = call_exec_command_raw(params).await;
-    let exit = resp["structured_content"]["exit_code"].as_i64();
-    let stdout = resp["structured_content"]["stdout"].as_str().unwrap_or("");
+    let sc = &resp["result"]["structuredContent"];
 
     // Assert: command executed and stdin was passed through
-    assert_eq!(exit, Some(0), "cat with stdin should succeed");
+    assert_eq!(sc["exit_code"], 0, "cat with stdin should succeed: {sc}");
     assert!(
-        stdout.contains("test_stdin_data"),
-        "stdout should contain the stdin content"
+        sc["stdout"]
+            .as_str()
+            .unwrap_or("")
+            .contains("test_stdin_data"),
+        "stdout should contain the stdin content: {sc}"
     );
 }
 
@@ -815,18 +817,17 @@ async fn test_exec_cache_not_populated_on_failure() {
 
     // Act: first call executes and fails
     let resp1 = call_exec_command_raw(params1).await;
-    let exit1 = resp1["structured_content"]["exit_code"].as_i64();
+    let sc1 = &resp1["result"]["structuredContent"];
 
     // Second call should re-execute (not cached because first failed)
     let resp2 = call_exec_command_raw(params2).await;
-    let exit2 = resp2["structured_content"]["exit_code"].as_i64();
+    let sc2 = &resp2["result"]["structuredContent"];
 
     // Assert: both calls failed (non-zero exit)
-    assert_ne!(exit1, Some(0), "false command should fail");
+    assert_ne!(sc1["exit_code"], 0, "false command should fail: {sc1}");
     assert_ne!(
-        exit2,
-        Some(0),
-        "false command should fail on second call too"
+        sc2["exit_code"], 0,
+        "false command should fail on second call too: {sc2}"
     );
 }
 
@@ -841,14 +842,13 @@ async fn test_exec_cache_bypassed_with_false_param() {
 
     // Act: call with cache disabled
     let resp = call_exec_command_raw(params).await;
-    let exit = resp["structured_content"]["exit_code"].as_i64();
-    let stdout = resp["structured_content"]["stdout"].as_str().unwrap_or("");
+    let sc = &resp["result"]["structuredContent"];
 
     // Assert: command executed successfully
-    assert_eq!(exit, Some(0), "command should succeed");
+    assert_eq!(sc["exit_code"], 0, "command should succeed: {sc}");
     assert!(
-        stdout.contains("bypass_cache"),
-        "output should contain the echo string"
+        sc["stdout"].as_str().unwrap_or("").contains("bypass_cache"),
+        "output should contain the echo string: {sc}"
     );
 }
 
@@ -860,26 +860,25 @@ async fn test_exec_slot_files_always_written() {
 
     // Act: execute the command
     let resp = call_exec_command_raw(params).await;
-    let stdout_path = resp["structured_content"]["stdout_path"].as_str();
-    let stderr_path = resp["structured_content"]["stderr_path"].as_str();
+    let sc = &resp["result"]["structuredContent"];
+    let stdout_path = sc["stdout_path"].as_str();
+    let stderr_path = sc["stderr_path"].as_str();
 
-    // Assert: slot file paths are present in the response
+    // Assert: slot file paths are present in structuredContent
     assert!(
         stdout_path.is_some(),
-        "stdout_path should be present in structured_content"
+        "stdout_path should be present in structuredContent: {sc}"
     );
     assert!(
         stderr_path.is_some(),
-        "stderr_path should be present in structured_content"
-    );
-    let stdout_path_str = stdout_path.unwrap();
-    let stderr_path_str = stderr_path.unwrap();
-    assert!(
-        stdout_path_str.contains("aptu-coder-overflow"),
-        "stdout_path should reference the overflow directory"
+        "stderr_path should be present in structuredContent: {sc}"
     );
     assert!(
-        stderr_path_str.contains("aptu-coder-overflow"),
-        "stderr_path should reference the overflow directory"
+        stdout_path.unwrap().contains("aptu-coder-overflow"),
+        "stdout_path should reference the overflow directory: {sc}"
+    );
+    assert!(
+        stderr_path.unwrap().contains("aptu-coder-overflow"),
+        "stderr_path should reference the overflow directory: {sc}"
     );
 }

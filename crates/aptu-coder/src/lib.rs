@@ -310,8 +310,12 @@ impl CodeAnalyzer {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(10);
+        let exec_cache_capacity: u64 = std::env::var("APTU_CODER_EXEC_CACHE_CAPACITY")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(64);
         let exec_cache = moka::future::Cache::builder()
-            .max_capacity(64)
+            .max_capacity(exec_cache_capacity)
             .time_to_live(std::time::Duration::from_secs(exec_cache_ttl_secs))
             .build();
         CodeAnalyzer {
