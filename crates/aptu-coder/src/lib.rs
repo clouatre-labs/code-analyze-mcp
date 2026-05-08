@@ -194,6 +194,32 @@ fn validate_path(path: &str, require_exists: bool) -> Result<std::path::PathBuf,
     Ok(canonical_path)
 }
 
+/// Maps an io::Error to an ErrorData with kind-specific message and preserved context.
+fn io_error_to_path_error(
+    err: &std::io::Error,
+    path_context: &str,
+    suggested_action: &'static str,
+) -> ErrorData {
+    let msg = match err.kind() {
+        std::io::ErrorKind::NotFound => format!("{path_context} not found"),
+        std::io::ErrorKind::PermissionDenied => format!("permission denied: {path_context}"),
+        _ => format!("{path_context} is invalid"),
+    };
+    let mut meta = error_meta("validation", false, suggested_action);
+    // Preserve io::Error context in data field
+    if let Some(obj) = meta.as_object_mut() {
+        obj.insert(
+            "ioErrorKind".to_string(),
+            serde_json::json!(format!("{:?}", err.kind())),
+        );
+        obj.insert(
+            "ioErrorSource".to_string(),
+            serde_json::json!(err.to_string()),
+        );
+    }
+    ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, msg, Some(meta))
+}
+
 /// Validates a path relative to a working directory.
 /// The working_dir itself must be within the server CWD.
 /// The resolved path must also be within the working_dir.
@@ -204,26 +230,7 @@ fn validate_path_in_dir(
 ) -> Result<std::path::PathBuf, ErrorData> {
     // Canonicalize the working_dir to resolve symlinks
     let canonical_working_dir = std::fs::canonicalize(working_dir).map_err(|e| {
-        let msg = match e.kind() {
-            std::io::ErrorKind::NotFound => "working_dir not found".to_string(),
-            std::io::ErrorKind::PermissionDenied => {
-                "permission denied accessing working_dir".to_string()
-            }
-            _ => "working_dir is invalid".to_string(),
-        };
-        let mut meta = error_meta("validation", false, "provide a valid working directory");
-        // Preserve io::Error context in data field
-        if let Some(obj) = meta.as_object_mut() {
-            obj.insert(
-                "ioErrorKind".to_string(),
-                serde_json::json!(format!("{:?}", e.kind())),
-            );
-            obj.insert(
-                "ioErrorSource".to_string(),
-                serde_json::json!(e.to_string()),
-            );
-        }
-        ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, msg, Some(meta))
+        io_error_to_path_error(&e, "working_dir", "provide a valid working directory")
     })?;
 
     // Verify working_dir is actually a directory
@@ -272,28 +279,11 @@ fn validate_path_in_dir(
     let canonical_path = if require_exists {
         let target_path = canonical_working_dir.join(path);
         std::fs::canonicalize(&target_path).map_err(|e| {
-            let msg = match e.kind() {
-                std::io::ErrorKind::NotFound => format!("path not found: {path}"),
-                std::io::ErrorKind::PermissionDenied => format!("permission denied: {path}"),
-                _ => "path is invalid".to_string(),
-            };
-            let mut meta = error_meta(
-                "validation",
-                false,
+            io_error_to_path_error(
+                &e,
+                path,
                 "provide a valid path within the working directory",
-            );
-            // Preserve io::Error context in data field
-            if let Some(obj) = meta.as_object_mut() {
-                obj.insert(
-                    "ioErrorKind".to_string(),
-                    serde_json::json!(format!("{:?}", e.kind())),
-                );
-                obj.insert(
-                    "ioErrorSource".to_string(),
-                    serde_json::json!(e.to_string()),
-                );
-            }
-            ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, msg, Some(meta))
+            )
         })?
     } else {
         // For non-existent files, walk up the path until we find an existing ancestor
