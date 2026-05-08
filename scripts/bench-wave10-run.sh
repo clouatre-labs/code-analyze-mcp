@@ -245,8 +245,8 @@ esac
 # ---------------------------------------------------------------------------
 # Tool isolation flags
 # ---------------------------------------------------------------------------
-# Edit profile: only 4 tools allowed
-MCP_TOOLS="mcp__aptu-coder__analyze_raw,mcp__aptu-coder__edit_replace,mcp__aptu-coder__edit_overwrite,mcp__aptu-coder__exec_command"
+# Edit profile: only 3 tools allowed
+MCP_TOOLS="mcp__aptu-coder__edit_replace,mcp__aptu-coder__edit_overwrite,mcp__aptu-coder__exec_command"
 ALLOWED_TOOLS="$MCP_TOOLS"
 
 # ---------------------------------------------------------------------------
@@ -525,14 +525,13 @@ import json, sys
 
 session_file, expected_tool_set = sys.argv[1], sys.argv[2]
 
-# Edit profile: only 4 tools allowed
+# Edit profile: only 3 tools allowed
 EDIT_PROFILE_TOOLS = {
-    "mcp__aptu-coder__analyze_raw",
     "mcp__aptu-coder__edit_replace",
     "mcp__aptu-coder__edit_overwrite",
     "mcp__aptu-coder__exec_command",
 }
-assert len(EDIT_PROFILE_TOOLS) == 4, f"Expected 4 edit-profile tools, got {len(EDIT_PROFILE_TOOLS)}"
+assert len(EDIT_PROFILE_TOOLS) == 3, f"Expected 3 edit-profile tools, got {len(EDIT_PROFILE_TOOLS)}"
 
 # All MCP tools (for validation)
 ALL_MCP_TOOLS = {
@@ -540,7 +539,6 @@ ALL_MCP_TOOLS = {
     "mcp__aptu-coder__analyze_file",
     "mcp__aptu-coder__analyze_module",
     "mcp__aptu-coder__analyze_symbol",
-    "mcp__aptu-coder__analyze_raw",
     "mcp__aptu-coder__edit_overwrite",
     "mcp__aptu-coder__edit_replace",
     "mcp__aptu-coder__edit_rename",
