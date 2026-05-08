@@ -252,11 +252,10 @@ ALLOWED_TOOLS="$MCP_TOOLS"
 # ---------------------------------------------------------------------------
 # MCP config generation
 # ---------------------------------------------------------------------------
-# Generate the MCP config at runtime with the absolute proxy path substituted
-PROXY_SCRIPT="$REPO_ROOT/scripts/aptu-coder-profile-proxy.py"
+# Generate the MCP config at runtime with the metrics export file path substituted
 MCP_CONFIG="/tmp/wave10-mcp-edit-profile-${RUN_ID}.json"
 
-sed "s|PROXY_PATH_PLACEHOLDER|$PROXY_SCRIPT|g" "$MCP_CONFIG_TEMPLATE" > "$MCP_CONFIG"
+sed "s|METRICS_RUN_ID_PLACEHOLDER|${RUN_ID}|g" "$MCP_CONFIG_TEMPLATE" > "$MCP_CONFIG"
 
 MCP_FLAGS=(--mcp-config "$MCP_CONFIG")
 
@@ -359,7 +358,7 @@ EOF
 # ---------------------------------------------------------------------------
 # Cleanup trap
 # ---------------------------------------------------------------------------
-trap 'rm -f "$SCRATCH_FILE" "$MCP_CONFIG"; git -C "$REPO_ROOT" worktree remove --force "$RUN_WORKTREE" 2>/dev/null || true' EXIT
+trap 'rm -f "$SCRATCH_FILE"; git -C "$REPO_ROOT" worktree remove --force "$RUN_WORKTREE" 2>/dev/null || true' EXIT
 
 # ---------------------------------------------------------------------------
 # Run
@@ -376,6 +375,10 @@ fi
 # Remove inherited benchmark results directory to prevent stale file confusion
 rm -rf "$RUN_WORKTREE/docs/benchmarks/wave10/results/runs/"* 2>/dev/null || true
 
+# Set metrics export file path for aptu-coder server
+APTU_CODER_METRICS_EXPORT_FILE="/tmp/wave10-metrics-${RUN_ID}.json"
+export APTU_CODER_METRICS_EXPORT_FILE
+
 (cd "$RUN_WORKTREE" && DISABLE_PROMPT_CACHING=1 claude \
   -p \
   --model "$MODEL" \
@@ -391,6 +394,17 @@ rm -rf "$RUN_WORKTREE/docs/benchmarks/wave10/results/runs/"* 2>/dev/null || true
   2> "$LOG_FILE")
 
 echo "Run completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# ---------------------------------------------------------------------------
+# Display server-side metrics
+# ---------------------------------------------------------------------------
+if [[ -f "$APTU_CODER_METRICS_EXPORT_FILE" ]]; then
+  echo "=== Server-side metrics ==="
+  jq '.' "$APTU_CODER_METRICS_EXPORT_FILE"
+  cp "$APTU_CODER_METRICS_EXPORT_FILE" "$RUNS_DIR/metrics-${RUN_ID}.json"
+else
+  echo "WARNING: metrics export file not found: $APTU_CODER_METRICS_EXPORT_FILE" >&2
+fi
 
 # ---------------------------------------------------------------------------
 # Extract report and telemetry
