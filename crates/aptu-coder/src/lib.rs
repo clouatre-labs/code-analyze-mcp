@@ -211,15 +211,19 @@ fn validate_path_in_dir(
             }
             _ => "working_dir is invalid".to_string(),
         };
-        ErrorData::new(
-            rmcp::model::ErrorCode::INVALID_PARAMS,
-            msg,
-            Some(error_meta(
-                "validation",
-                false,
-                "provide a valid working directory",
-            )),
-        )
+        let mut meta = error_meta("validation", false, "provide a valid working directory");
+        // Preserve io::Error context in data field
+        if let Some(obj) = meta.as_object_mut() {
+            obj.insert(
+                "ioErrorKind".to_string(),
+                serde_json::json!(format!("{:?}", e.kind())),
+            );
+            obj.insert(
+                "ioErrorSource".to_string(),
+                serde_json::json!(e.to_string()),
+            );
+        }
+        ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, msg, Some(meta))
     })?;
 
     // Verify working_dir is actually a directory
@@ -273,15 +277,23 @@ fn validate_path_in_dir(
                 std::io::ErrorKind::PermissionDenied => format!("permission denied: {path}"),
                 _ => "path is invalid".to_string(),
             };
-            ErrorData::new(
-                rmcp::model::ErrorCode::INVALID_PARAMS,
-                msg,
-                Some(error_meta(
-                    "validation",
-                    false,
-                    "provide a valid path within the working directory",
-                )),
-            )
+            let mut meta = error_meta(
+                "validation",
+                false,
+                "provide a valid path within the working directory",
+            );
+            // Preserve io::Error context in data field
+            if let Some(obj) = meta.as_object_mut() {
+                obj.insert(
+                    "ioErrorKind".to_string(),
+                    serde_json::json!(format!("{:?}", e.kind())),
+                );
+                obj.insert(
+                    "ioErrorSource".to_string(),
+                    serde_json::json!(e.to_string()),
+                );
+            }
+            ErrorData::new(rmcp::model::ErrorCode::INVALID_PARAMS, msg, Some(meta))
         })?
     } else {
         // For non-existent files, walk up the path until we find an existing ancestor
@@ -3974,6 +3986,31 @@ mod tests {
         assert!(
             result.is_ok(),
             "validate_path should still work without working_dir"
+        );
+    }
+
+    #[test]
+    fn test_edit_overwrite_working_dir_is_file() {
+        // Arrange: create a temporary file (not directory) to use as working_dir
+        let cwd = std::env::current_dir().expect("should get cwd");
+        let temp_dir = tempfile::TempDir::new_in(&cwd).expect("should create temp dir in cwd");
+        let temp_file = temp_dir.path().join("test_file.txt");
+        std::fs::write(&temp_file, "test content").expect("should write test file");
+
+        // Act: call validate_path_in_dir with a file as working_dir
+        let result = validate_path_in_dir("some_file.txt", false, &temp_file);
+
+        // Assert: should reject because working_dir is not a directory
+        assert!(
+            result.is_err(),
+            "validate_path_in_dir should reject a file as working_dir"
+        );
+        let err = result.unwrap_err();
+        let err_msg = err.message.to_lowercase();
+        assert!(
+            err_msg.contains("directory"),
+            "Error message should mention 'directory': {}",
+            err.message
         );
     }
 
