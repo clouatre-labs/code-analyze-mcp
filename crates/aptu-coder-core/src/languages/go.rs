@@ -182,4 +182,56 @@ mod tests {
         let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
         assert!(has_write, "should contain a Write DefUseSite");
     }
+
+    #[test]
+    fn test_defuse_go_short_var_decl() {
+        // Arrange: short var declaration := is Write
+        let src = "package p\nfunc main() { x := 42 }\n";
+        // Act
+        let sites = SemanticExtractor::extract_def_use_for_file(src, "go", "x", "test.go", None);
+        // Assert
+        assert!(
+            !sites.is_empty(),
+            "short var decl should produce defuse sites"
+        );
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "short var decl should be Write");
+    }
+
+    #[test]
+    fn test_defuse_go_multi_return() {
+        // Arrange: multi-return := captures all LHS identifiers as Write
+        let src = "package p\nfunc main() { a, b := f() }\nfunc f() (int, int) { return 1, 2 }\n";
+        // Act
+        let sites_a = SemanticExtractor::extract_def_use_for_file(src, "go", "a", "test.go", None);
+        let sites_b = SemanticExtractor::extract_def_use_for_file(src, "go", "b", "test.go", None);
+        // Assert
+        assert!(
+            !sites_a.is_empty(),
+            "multi-return a should produce defuse sites"
+        );
+        assert!(
+            !sites_b.is_empty(),
+            "multi-return b should produce defuse sites"
+        );
+        let a_write = sites_a.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        let b_write = sites_b.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(a_write, "multi-return a should be Write");
+        assert!(b_write, "multi-return b should be Write");
+    }
+
+    #[test]
+    fn test_defuse_go_blank_identifier() {
+        // Arrange: blank identifier _ in multi-return
+        let src =
+            "package p\nfunc main() { _, err := f() }\nfunc f() (int, error) { return 1, nil }\n";
+        // Act
+        let sites = SemanticExtractor::extract_def_use_for_file(src, "go", "_", "test.go", None);
+        // Assert: blank identifier may be captured or excluded; test documents behavior
+        // If captured, it should be Write; if not captured, sites will be empty
+        if !sites.is_empty() {
+            let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+            assert!(has_write, "blank identifier if captured should be Write");
+        }
+    }
 }

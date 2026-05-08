@@ -36,6 +36,9 @@ pub const IMPORT_QUERY: &str = r"
 /// Tree-sitter query for extracting definition and use sites.
 pub const DEFUSE_QUERY: &str = r"
 (assignment left: (identifier) @write.assign)
+(assignment left: (pattern_list (identifier) @write.tuple))
+(assignment left: (tuple_pattern (identifier) @write.tuple))
+(assignment left: (list_pattern (identifier) @write.list))
 (augmented_assignment left: (identifier) @writeread.augmented)
 (named_expression name: (identifier) @write.named)
 (identifier) @read.usage
@@ -173,5 +176,63 @@ mod tests {
         assert!(!sites.is_empty(), "defuse sites should not be empty");
         let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
         assert!(has_write, "should contain a Write DefUseSite");
+    }
+
+    #[test]
+    fn test_defuse_python_augmented_assignment() {
+        // Arrange: augmented assignment += is WriteRead
+        let src = "x = 1\nx += 2\n";
+        // Act
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "python", "x", "test.py", None);
+        // Assert
+        assert!(
+            !sites.is_empty(),
+            "augmented assignment should produce defuse sites"
+        );
+        let has_writeread = sites
+            .iter()
+            .any(|s| matches!(s.kind, DefUseKind::WriteRead));
+        assert!(has_writeread, "augmented assignment should be WriteRead");
+    }
+
+    #[test]
+    fn test_defuse_python_tuple_unpack() {
+        // Arrange: tuple unpack captures all LHS identifiers as Write
+        let src = "a, b = (1, 2)\n";
+        // Act
+        let sites_a =
+            SemanticExtractor::extract_def_use_for_file(src, "python", "a", "test.py", None);
+        let sites_b =
+            SemanticExtractor::extract_def_use_for_file(src, "python", "b", "test.py", None);
+        // Assert
+        assert!(
+            !sites_a.is_empty(),
+            "tuple unpack a should produce defuse sites"
+        );
+        assert!(
+            !sites_b.is_empty(),
+            "tuple unpack b should produce defuse sites"
+        );
+        let a_write = sites_a.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        let b_write = sites_b.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(a_write, "tuple unpack a should be Write");
+        assert!(b_write, "tuple unpack b should be Write");
+    }
+
+    #[test]
+    fn test_defuse_python_walrus() {
+        // Arrange: walrus operator := is Write (named_expression)
+        let src = "if (x := 42):\n    pass\n";
+        // Act
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "python", "x", "test.py", None);
+        // Assert
+        assert!(
+            !sites.is_empty(),
+            "walrus operator should produce defuse sites"
+        );
+        let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(has_write, "walrus operator should be Write");
     }
 }

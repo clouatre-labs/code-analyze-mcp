@@ -45,6 +45,9 @@ pub const IMPORT_QUERY: &str = r"
 /// Tree-sitter query for extracting definition and use sites.
 pub const DEFUSE_QUERY: &str = r"
 (variable_declarator name: (identifier) @write.declarator)
+(variable_declarator name: (object_pattern (shorthand_property_identifier_pattern) @write.object))
+(variable_declarator name: (object_pattern (pair_pattern value: (identifier) @write.pair)))
+(variable_declarator name: (array_pattern (identifier) @write.array))
 (assignment_expression left: (identifier) @write.assign)
 (augmented_assignment_expression left: (identifier) @writeread.augmented)
 (update_expression argument: (identifier) @writeread.update)
@@ -258,5 +261,85 @@ mod tests {
         assert!(!sites.is_empty(), "defuse sites should not be empty");
         let has_write = sites.iter().any(|s| matches!(s.kind, DefUseKind::Write));
         assert!(has_write, "should contain a Write DefUseSite");
+    }
+
+    #[test]
+    fn test_defuse_ts_object_destructuring() {
+        // Arrange: object destructuring {a, b} = obj captures nested identifiers as Write
+        let src = "const {a, b} = obj;\n";
+        // Act
+        let sites_a =
+            SemanticExtractor::extract_def_use_for_file(src, "typescript", "a", "test.ts", None);
+        let sites_b =
+            SemanticExtractor::extract_def_use_for_file(src, "typescript", "b", "test.ts", None);
+        // Assert
+        assert!(
+            !sites_a.is_empty(),
+            "object destructuring a should produce defuse sites"
+        );
+        assert!(
+            !sites_b.is_empty(),
+            "object destructuring b should produce defuse sites"
+        );
+        let a_write = sites_a.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        let b_write = sites_b.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(a_write, "object destructuring a should be Write");
+        assert!(b_write, "object destructuring b should be Write");
+    }
+
+    #[test]
+    fn test_defuse_ts_array_destructuring() {
+        // Arrange: array destructuring [x, y] = arr captures nested identifiers as Write
+        let src = "const [x, y] = arr;\n";
+        // Act
+        let sites_x =
+            SemanticExtractor::extract_def_use_for_file(src, "typescript", "x", "test.ts", None);
+        let sites_y =
+            SemanticExtractor::extract_def_use_for_file(src, "typescript", "y", "test.ts", None);
+        // Assert
+        assert!(
+            !sites_x.is_empty(),
+            "array destructuring x should produce defuse sites"
+        );
+        assert!(
+            !sites_y.is_empty(),
+            "array destructuring y should produce defuse sites"
+        );
+        let x_write = sites_x.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        let y_write = sites_y.iter().any(|s| matches!(s.kind, DefUseKind::Write));
+        assert!(x_write, "array destructuring x should be Write");
+        assert!(y_write, "array destructuring y should be Write");
+    }
+
+    #[test]
+    fn test_defuse_ts_optional_chaining() {
+        // Arrange: optional chaining obj?.field is Read
+        let src = "const result = obj?.field;\n";
+        // Act
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "typescript", "obj", "test.ts", None);
+        // Assert
+        assert!(
+            !sites.is_empty(),
+            "optional chaining should produce defuse sites"
+        );
+        let has_read = sites.iter().any(|s| matches!(s.kind, DefUseKind::Read));
+        assert!(has_read, "optional chaining should be Read");
+    }
+
+    #[test]
+    fn test_defuse_ts_type_assertion() {
+        // Arrange: type assertion (x as T) is Read
+        let src = "const y = (x as number);\n";
+        // Act
+        let sites =
+            SemanticExtractor::extract_def_use_for_file(src, "typescript", "x", "test.ts", None);
+        // Assert
+        assert!(
+            !sites.is_empty(),
+            "type assertion should produce defuse sites"
+        );
+        let has_read = sites.iter().any(|s| matches!(s.kind, DefUseKind::Read));
+        assert!(has_read, "type assertion should be Read");
     }
 }
