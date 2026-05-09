@@ -142,6 +142,10 @@ mod tests {
         assert_eq!(language_for_extension("hpp"), Some("cpp"));
         #[cfg(feature = "lang-cpp")]
         assert_eq!(language_for_extension("cc"), Some("cpp"));
+        #[cfg(feature = "lang-kotlin")]
+        assert_eq!(language_for_extension("kt"), Some("kotlin"));
+        #[cfg(feature = "lang-kotlin")]
+        assert_eq!(language_for_extension("kts"), Some("kotlin"));
     }
 
     #[test]
