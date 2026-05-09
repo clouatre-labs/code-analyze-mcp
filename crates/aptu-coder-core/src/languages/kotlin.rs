@@ -62,13 +62,15 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
                                     // constructor_invocation: $ => seq($.type, $.value_arguments)
                                     // So the first child should be the type
                                     if let Some(type_node) = spec_child.child(0) {
-                                        let text = &source[type_node.start_byte()..type_node.end_byte()];
+                                        let text =
+                                            &source[type_node.start_byte()..type_node.end_byte()];
                                         inherits.push(format!("extends {text}"));
                                     }
                                 }
                                 "type" | "user_type" => {
                                     // This is an interface (direct type without constructor)
-                                    let text = &source[spec_child.start_byte()..spec_child.end_byte()];
+                                    let text =
+                                        &source[spec_child.start_byte()..spec_child.end_byte()];
                                     inherits.push(format!("implements {text}"));
                                 }
                                 _ => {}

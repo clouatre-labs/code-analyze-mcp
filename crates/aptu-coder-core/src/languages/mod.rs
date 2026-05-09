@@ -17,10 +17,10 @@ pub mod fortran;
 pub mod go;
 #[cfg(feature = "lang-java")]
 pub mod java;
-#[cfg(feature = "lang-kotlin")]
-pub mod kotlin;
 #[cfg(feature = "lang-javascript")]
 pub mod javascript;
+#[cfg(feature = "lang-kotlin")]
+pub mod kotlin;
 #[cfg(feature = "lang-python")]
 pub mod python;
 #[cfg(feature = "lang-rust")]
