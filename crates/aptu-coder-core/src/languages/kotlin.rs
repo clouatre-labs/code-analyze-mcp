@@ -41,45 +41,39 @@ use tree_sitter::Node;
 pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
     let mut inherits = Vec::new();
 
-    // Look for delegation_specifiers in the class declaration
-    // The grammar shows: optional(seq(':', $.delegation_specifiers))
-    // So we need to find the delegation_specifiers node
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(u32::try_from(i).unwrap_or(u32::MAX))
-            && child.kind() == "delegation_specifiers"
+    // Find the delegation_specifiers child of the class node.
+    // Grammar: optional(seq(':', $.delegation_specifiers))
+    let Some(delegation) = (0..node.child_count())
+        .filter_map(|i| node.child(u32::try_from(i).ok()?))
+        .find(|n| n.kind() == "delegation_specifiers")
+    else {
+        return inherits;
+    };
+
+    // Each delegation_specifier holds either a constructor_invocation (superclass)
+    // or a user_type (interface).
+    for spec in (0..delegation.child_count())
+        .filter_map(|j| delegation.child(u32::try_from(j).ok()?))
+        .filter(|n| n.kind() == "delegation_specifier")
+    {
+        for spec_child in (0..spec.child_count()).filter_map(|k| spec.child(u32::try_from(k).ok()?))
         {
-            // Found delegation_specifiers, iterate through its children (delegation_specifier nodes)
-            for j in 0..child.child_count() {
-                if let Some(spec) = child.child(u32::try_from(j).unwrap_or(u32::MAX))
-                    && spec.kind() == "delegation_specifier"
-                {
-                    // delegation_specifier can contain: annotation, constructor_invocation, explicit_delegation, or type
-                    for k in 0..spec.child_count() {
-                        if let Some(spec_child) = spec.child(u32::try_from(k).unwrap_or(u32::MAX)) {
-                            match spec_child.kind() {
-                                "constructor_invocation" => {
-                                    // This is a superclass (has constructor invocation with parens)
-                                    // constructor_invocation: $ => seq($.type, $.value_arguments)
-                                    // So the first child should be the type
-                                    if let Some(type_node) = spec_child.child(0) {
-                                        let text =
-                                            &source[type_node.start_byte()..type_node.end_byte()];
-                                        inherits.push(format!("extends {text}"));
-                                    }
-                                }
-                                "type" | "user_type" => {
-                                    // This is an interface (direct type without constructor)
-                                    let text =
-                                        &source[spec_child.start_byte()..spec_child.end_byte()];
-                                    inherits.push(format!("implements {text}"));
-                                }
-                                _ => {}
-                            }
-                        }
+            match spec_child.kind() {
+                "constructor_invocation" => {
+                    // Superclass: constructor_invocation = type + value_arguments.
+                    // The first child is the type node.
+                    if let Some(type_node) = spec_child.child(0) {
+                        let text = &source[type_node.start_byte()..type_node.end_byte()];
+                        inherits.push(format!("extends {text}"));
                     }
                 }
+                "type" | "user_type" => {
+                    // Interface: direct type without constructor call.
+                    let text = &source[spec_child.start_byte()..spec_child.end_byte()];
+                    inherits.push(format!("implements {text}"));
+                }
+                _ => {}
             }
-            break;
         }
     }
 
