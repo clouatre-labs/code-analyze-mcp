@@ -84,10 +84,91 @@ pub fn extract_inheritance(node: &Node, source: &str) -> Vec<String> {
     inherits
 }
 
+/// Extract the function name from a Kotlin `function_declaration` node.
+#[must_use]
+pub fn extract_function_name(node: &Node, source: &str, _lang: &str) -> Option<String> {
+    if node.kind() != "function_declaration" {
+        return None;
+    }
+    node.child_by_field_name("name")
+        .and_then(|n| get_node_text(&n, source))
+}
+
+/// Find the receiver type (enclosing class or object) for a Kotlin function.
+///
+/// Returns `None` for top-level functions (including extension functions) and
+/// functions whose only enclosing type is a `companion_object`.
+#[must_use]
+pub fn find_receiver_type(node: &Node, source: &str) -> Option<String> {
+    if node.kind() != "function_declaration" {
+        return None;
+    }
+    let mut current = *node;
+    while let Some(parent) = current.parent() {
+        match parent.kind() {
+            "class_declaration" | "object_declaration" => {
+                return parent
+                    .child_by_field_name("name")
+                    .and_then(|n| get_node_text(&n, source));
+            }
+            _ => {
+                current = parent;
+            }
+        }
+    }
+    None
+}
+
+/// Find the method name when a function lives inside a named type body.
+///
+/// Returns `None` for top-level functions and functions inside `companion_object`
+/// that have no enclosing `class_declaration` or `object_declaration`.
+#[must_use]
+pub fn find_method_for_receiver(
+    node: &Node,
+    source: &str,
+    _depth: Option<usize>,
+) -> Option<String> {
+    if node.kind() != "function_declaration" {
+        return None;
+    }
+    let mut current = *node;
+    let mut in_type_body = false;
+    while let Some(parent) = current.parent() {
+        match parent.kind() {
+            "class_declaration" | "object_declaration" => {
+                in_type_body = true;
+                break;
+            }
+            _ => {
+                current = parent;
+            }
+        }
+    }
+    if !in_type_body {
+        return None;
+    }
+    node.child_by_field_name("name")
+        .and_then(|n| get_node_text(&n, source))
+}
+
 #[cfg(all(test, feature = "lang-kotlin"))]
 mod tests {
     use super::*;
     use tree_sitter::{Parser, StreamingIterator};
+
+    fn find_node<'a>(root: tree_sitter::Node<'a>, kind: &str) -> Option<tree_sitter::Node<'a>> {
+        if root.kind() == kind {
+            return Some(root);
+        }
+        let mut cursor = root.walk();
+        for child in root.children(&mut cursor) {
+            if let Some(n) = find_node(child, kind) {
+                return Some(n);
+            }
+        }
+        None
+    }
 
     fn parse_kotlin(src: &str) -> tree_sitter::Tree {
         let mut parser = Parser::new();
@@ -382,5 +463,82 @@ mod tests {
             "expected implements Comparable, got {:?}",
             bases
         );
+    }
+
+    #[test]
+    fn test_extract_function_name_free_function() {
+        let src = "fun greet() {}";
+        let tree = parse_kotlin(src);
+        let root = tree.root_node();
+        let node = find_node(root, "function_declaration").expect("function_declaration not found");
+        let result = extract_function_name(&node, src, "kotlin");
+        assert_eq!(result, Some("greet".to_string()));
+    }
+
+    #[test]
+    fn test_extract_function_name_method_in_class() {
+        let src = "class Foo { fun bar() {} }";
+        let tree = parse_kotlin(src);
+        let root = tree.root_node();
+        // find the inner function_declaration (bar), not the class
+        let class_node = find_node(root, "class_declaration").expect("class_declaration not found");
+        let node =
+            find_node(class_node, "function_declaration").expect("function_declaration not found");
+        let result = extract_function_name(&node, src, "kotlin");
+        assert_eq!(result, Some("bar".to_string()));
+    }
+
+    #[test]
+    fn test_find_receiver_type_top_level_returns_none() {
+        let src = "fun greet() {}";
+        let tree = parse_kotlin(src);
+        let root = tree.root_node();
+        let node = find_node(root, "function_declaration").expect("function_declaration not found");
+        let result = find_receiver_type(&node, src);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_receiver_type_method_in_class() {
+        let src = "class Foo { fun bar() {} }";
+        let tree = parse_kotlin(src);
+        let root = tree.root_node();
+        let class_node = find_node(root, "class_declaration").expect("class_declaration not found");
+        let node =
+            find_node(class_node, "function_declaration").expect("function_declaration not found");
+        let result = find_receiver_type(&node, src);
+        assert_eq!(result, Some("Foo".to_string()));
+    }
+
+    #[test]
+    fn test_find_receiver_type_extension_function_returns_none() {
+        let src = "fun String.greet() {}";
+        let tree = parse_kotlin(src);
+        let root = tree.root_node();
+        let node = find_node(root, "function_declaration").expect("function_declaration not found");
+        let result = find_receiver_type(&node, src);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_method_for_receiver_top_level_returns_none() {
+        let src = "fun greet() {}";
+        let tree = parse_kotlin(src);
+        let root = tree.root_node();
+        let node = find_node(root, "function_declaration").expect("function_declaration not found");
+        let result = find_method_for_receiver(&node, src, None);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_method_for_receiver_method_in_class() {
+        let src = "class Foo { fun bar() {} }";
+        let tree = parse_kotlin(src);
+        let root = tree.root_node();
+        let class_node = find_node(root, "class_declaration").expect("class_declaration not found");
+        let node =
+            find_node(class_node, "function_declaration").expect("function_declaration not found");
+        let result = find_method_for_receiver(&node, src, None);
+        assert_eq!(result, Some("bar".to_string()));
     }
 }
