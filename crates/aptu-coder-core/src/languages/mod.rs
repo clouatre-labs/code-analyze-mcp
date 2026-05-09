@@ -28,6 +28,19 @@ pub mod typescript;
 
 use tree_sitter::{Language, Node};
 
+/// Extract the source text for a node with a bounds check.
+///
+/// Returns `None` if the node's byte range falls outside `source`.
+#[must_use]
+pub fn get_node_text(node: &Node, source: &str) -> Option<String> {
+    let end = node.end_byte();
+    if end <= source.len() {
+        Some(source[node.start_byte()..end].to_string())
+    } else {
+        None
+    }
+}
+
 /// Handler to extract function name from a node.
 pub type ExtractFunctionNameHandler = fn(&Node, &str, &str) -> Option<String>;
 
@@ -136,9 +149,9 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             impl_query: None,
             impl_trait_query: None,
             defuse_query: Some(go::DEFUSE_QUERY),
-            extract_function_name: None,
+            extract_function_name: Some(go::extract_function_name),
             find_method_for_receiver: Some(go::find_method_for_receiver),
-            find_receiver_type: None,
+            find_receiver_type: Some(go::find_receiver_type),
             extract_inheritance: Some(go::extract_inheritance),
         }),
         #[cfg(feature = "lang-cpp")]
@@ -168,9 +181,9 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             impl_query: None,
             impl_trait_query: None,
             defuse_query: Some(java::DEFUSE_QUERY),
-            extract_function_name: None,
-            find_method_for_receiver: None,
-            find_receiver_type: None,
+            extract_function_name: Some(java::extract_function_name),
+            find_method_for_receiver: Some(java::find_method_for_receiver),
+            find_receiver_type: Some(java::find_receiver_type),
             extract_inheritance: Some(java::extract_inheritance),
         }),
         #[cfg(feature = "lang-fortran")]
@@ -200,9 +213,9 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             impl_query: None,
             impl_trait_query: None,
             defuse_query: Some(csharp::DEFUSE_QUERY),
-            extract_function_name: None,
+            extract_function_name: Some(csharp::extract_function_name),
             find_method_for_receiver: Some(csharp::find_method_for_receiver),
-            find_receiver_type: None,
+            find_receiver_type: Some(csharp::find_receiver_type),
             extract_inheritance: Some(csharp::extract_inheritance),
         }),
         #[cfg(feature = "lang-javascript")]
@@ -216,9 +229,9 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             impl_query: None,
             impl_trait_query: None,
             defuse_query: Some(javascript::DEFUSE_QUERY),
-            extract_function_name: None,
-            find_method_for_receiver: None,
-            find_receiver_type: None,
+            extract_function_name: Some(javascript::extract_function_name),
+            find_method_for_receiver: Some(javascript::find_method_for_receiver),
+            find_receiver_type: Some(javascript::find_receiver_type),
             extract_inheritance: Some(javascript::extract_inheritance),
         }),
         _ => None,
