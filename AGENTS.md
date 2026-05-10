@@ -85,3 +85,4 @@ Canonical parameter lists live in the `types` module (`crates/aptu-coder-core/sr
 - Reference host-specific tools or clients in tool descriptions or server instructions (e.g. Claude Code's Grep, Glob, Read)
 - Use `gh release create` to tag releases; always create a GPG-signed annotated tag and push it to trigger the release workflow
 - Remove `DISABLE_PROMPT_CACHING=1` from server instructions; caching data never read again is detrimental
+- Use relative links in `README.md`; all links must be absolute (`https://github.com/clouatre-labs/aptu-coder/blob/main/...`) so they resolve correctly when README is rendered on crates.io, docs.rs, and other mirrors
