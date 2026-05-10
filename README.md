@@ -35,7 +35,7 @@ AeroDyn integration audit task on Claude Code against [OpenFAST](https://github.
 
 ## Overview
 
-aptu-coder is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, TypeScript, TSX, Fortran, JavaScript, C/C++, and C#, and integrates with any MCP-compatible orchestrator.
+aptu-coder is a Model Context Protocol server that gives AI agents precise structural context about a codebase: directory trees, symbol definitions, and call graphs, without reading raw files. It supports Rust, Python, Go, Java, Kotlin, TypeScript, TSX, Fortran, JavaScript, C/C++, and C#, and integrates with any MCP-compatible orchestrator.
 
 ## Supported Languages
 
@@ -49,6 +49,7 @@ All languages are enabled by default. Disable individual languages at compile ti
 | TSX | `.tsx` | `lang-tsx` |
 | Go | `.go` | `lang-go` |
 | Java | `.java` | `lang-java` |
+| Kotlin | `.kt`, `.kts` | `lang-kotlin` |
 | Fortran | `.f`, `.f77`, `.f90`, `.f95`, `.f03`, `.f08`, `.for`, `.ftn` | `lang-fortran` |
 | JavaScript | `.js`, `.mjs`, `.cjs` | `lang-javascript` |
 | C | `.c` | `lang-cpp` |
@@ -193,6 +194,11 @@ The server's own instructions expose a 4-step recommended workflow for unknown r
 | `CODE_ANALYZE_DIR_CACHE_CAPACITY` | `20` | Maximum number of directory-analysis results held in the in-process LRU cache. |
 | `DISABLE_PROMPT_CACHING` | unset | Set to `1` to disable prompt caching (recommended for single-pass subagent sessions). |
 | `DISABLE_PROMPT_CACHING_HAIKU` | unset | Set to `1` to disable prompt caching for Haiku-specific pipelines only. |
+| `APTU_SHELL` | unset | Shell used by `exec_command`. Defaults to `bash` (PATH search) then `/bin/sh`. Override to use a different shell. |
+| `APTU_CODER_PROFILE` | unset | Tool subset profile. `edit` enables only edit tools and `exec_command`; `analyze` enables only analyze tools and `exec_command`; unknown values leave all tools enabled. Can also be set per-session via `io.clouatre-labs/profile` in the MCP `_meta` field. |
+| `APTU_CODER_EXEC_CACHE_TTL_SECS` | `10` | TTL in seconds for `exec_command` result caching. Increase for stable, slow commands. |
+| `APTU_CODER_EXEC_CACHE_CAPACITY` | `64` | Maximum number of cached `exec_command` results held in memory. |
+| `APTU_CODER_METRICS_EXPORT_FILE` | unset | Absolute path for a one-shot JSONL metrics export written on server shutdown. Relative paths are ignored. |
 
 ## Observability
 
