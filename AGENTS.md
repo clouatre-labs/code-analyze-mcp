@@ -10,6 +10,10 @@ Rust workspace with two crates:
 Seven MCP tools: `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` (analyze_* family); `edit_overwrite`, `edit_replace` (edit_* family); `exec_command` (exec_* family).
 Rust edition 2024, async with tokio, MCP protocol via `rmcp`. Supported languages are listed in `crates/aptu-coder-core/src/lang.rs`.
 
+## CI runners
+
+All CI jobs run on `ubuntu-24.04-arm` (ARM64). Build, test, lint, and release jobs all target this image.
+
 ## Commands
 
 ```
@@ -50,6 +54,8 @@ Canonical parameter lists live in the `types` module (`crates/aptu-coder-core/sr
 - `import_lookup=true` on `analyze_symbol` requires a non-empty `symbol` (the module path to search for); returns INVALID_PARAMS if symbol is empty. Mutually exclusive with normal call-graph lookup.
 - `def_use=true` on `analyze_symbol` triggers def-use extraction; `def_use_sites` is populated in `structuredContent` only when paginating in DefUse cursor mode, not on the initial call (the handler clears it on the first response and bootstraps a cursor to page through def-use results).
 - `git_ref` is supported on both `analyze_directory` and `analyze_symbol` to restrict analysis to files changed relative to a git ref.
+- `working_dir` on `edit_overwrite` and `edit_replace` sets the base directory for path resolution; must be within the server CWD.
+- `APTU_CODER_PROFILE` (env var) or `io.clouatre-labs/profile` (MCP `_meta`) activates a tool subset: `edit` disables all analyze_* tools; `analyze` disables edit_replace and edit_overwrite.
 
 ## Do not
 

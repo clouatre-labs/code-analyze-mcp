@@ -22,6 +22,8 @@ Flag:
 - rmcp, tree-sitter, schemars version assumptions; verify against installed versions
 - Missing `cargo deny check advisories licenses` run when `Cargo.toml` changes
 - New dependency added without justification in the PR description
+- `working_dir` outside the server CWD boundary accepted without error (must be rejected with INVALID_PARAMS)
+- Profile-based tool routing (`APTU_CODER_PROFILE` / `io.clouatre-labs/profile`) bypassed or ignored in tools/list
 - `gh release create` used instead of `git tag -s vX.Y.Z -m "vX.Y.Z"`
 - Tool descriptions or server instructions reference host-specific clients (e.g. "Claude Code", "Cursor")
 - Commit missing GPG signature or DCO sign-off (`-S --signoff`)

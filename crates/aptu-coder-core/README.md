@@ -19,7 +19,7 @@ Core library for code structure analysis using tree-sitter.
 - **Module index** - Lightweight function and import index (~75% smaller than full file analysis)
 - **Edit operations** - In-file edits: overwrite, exact-block replace
 - **In-memory analysis** - `analyze_str` parses source text directly without a file path; returns the same `FileAnalysisOutput` as `analyze_file`
-- **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Fortran, JavaScript, C/C++, C#
+- **Multi-language** - Rust, Python, TypeScript, TSX, Go, Java, Kotlin, Fortran, JavaScript, C/C++, C#
 - **Pagination** - Cursor-based pagination for large outputs
 - **Caching** - LRU cache for parsed results with mtime-based invalidation
 - **Parallel** - Rayon-based parallel file analysis
@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Supported Languages
 
-Rust, Python, TypeScript, TSX, Go, Java, Fortran, JavaScript, C/C++, C#. See the [MCP server README](https://github.com/clouatre-labs/aptu-coder/blob/main/README.md#supported-languages) for the full table with file extensions and feature flags.
+Rust, Python, TypeScript, TSX, Go, Java, Kotlin, Fortran, JavaScript, C/C++, C#. See the [MCP server README](https://github.com/clouatre-labs/aptu-coder/blob/main/README.md#supported-languages) for the full table with file extensions and feature flags.
 
 ## Configuration
 

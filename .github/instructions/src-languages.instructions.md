@@ -29,3 +29,7 @@ Flag handler functions with signatures that deviate from these types.
 ## Optional fields
 
 `reference_query`, `import_query`, `impl_query`, `impl_trait_query` are `Option<&'static str>`. Use `None` for languages that do not support the concept. Flag `Some("")` (empty string) as a substitute for `None`.
+
+## Kotlin-specific notes
+
+Kotlin registers two extensions: `.kt` (source) and `.kts` (script). Both map to the same `LanguageInfo` entry. When writing Kotlin tree-sitter queries, note that `.kts` files may contain top-level expressions that `.kt` source files do not; queries should not assume a class or object wrapper is always present.

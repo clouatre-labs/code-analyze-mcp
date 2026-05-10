@@ -9,7 +9,7 @@
 ## Design Goals
 
 - **Minimize token usage**: Return only structured, relevant context - no prose, no noise
-- **Language-agnostic parsing via tree-sitter**: Support 11 languages (Rust, Go, Java, Python, TypeScript, TSX, Fortran, JavaScript, C, C++, C#) with a unified query-based extraction system; TypeScript and TSX use distinct grammars (`LANGUAGE_TYPESCRIPT` and `LANGUAGE_TSX`) but share the same queries in `crates/aptu-coder-core/src/languages/typescript.rs`
+- **Language-agnostic parsing via tree-sitter**: Support 12 languages (Rust, Go, Java, Kotlin, Python, TypeScript, TSX, Fortran, JavaScript, C, C++, C#) with a unified query-based extraction system; TypeScript and TSX use distinct grammars (`LANGUAGE_TYPESCRIPT` and `LANGUAGE_TSX`) but share the same queries in `crates/aptu-coder-core/src/languages/typescript.rs`
 - **Seven focused MCP tools**: `analyze_directory`, `analyze_file`, `analyze_module`, `analyze_symbol` (analyze_* family); `edit_overwrite`, `edit_replace` (edit_* family); `exec_command` (exec_* family) -- each with a clear, explicit interface rather than a single tool with auto-detected modes
 - **Compatible with any MCP orchestrator**: Designed to work with any standards-compliant MCP host
 - **Performance via parallelism**: Use rayon for parallel file processing and ignore crate for efficient .gitignore-aware directory walking
@@ -34,6 +34,7 @@ For the reasoning behind these goals, see [DESIGN-GUIDE.md](DESIGN-GUIDE.md).
 | `lang` | `crates/aptu-coder-core/src/lang.rs` | Extension-to-language mapping |
 | `languages/mod` | `crates/aptu-coder-core/src/languages/mod.rs` | LanguageInfo registry and handler function types |
 | `languages/rust` | `crates/aptu-coder-core/src/languages/rust.rs` | Rust-specific queries and semantic handlers |
+| `languages/kotlin` | `crates/aptu-coder-core/src/languages/kotlin.rs` | Kotlin-specific queries and semantic handlers; supports `.kt` and `.kts` extensions |
 | `cache` | `crates/aptu-coder-core/src/cache.rs` | LRU cache with mtime invalidation and lock_or_recover pattern |
 | `completion` | `crates/aptu-coder-core/src/completion.rs` | Path completion support respecting .gitignore |
 | `test_detection` | `crates/aptu-coder-core/src/test_detection.rs` | Test file detection by path heuristics (directory and filename patterns) |
