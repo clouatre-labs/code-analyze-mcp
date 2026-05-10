@@ -44,7 +44,7 @@ scientific HPC code, where:
 | `modules/inflowwind/src/` | 21 | Inflow wind field computation |
 | `modules/elastodyn/src/` | 5 | Structural dynamics |
 
-### Why this codebase highlights code-analyze-mcp
+### Why this codebase highlights aptu-coder
 
 1. **Name collision problem.** Every physics module exports `CalcOutput` and `UpdateStates`. A grep for
    `subroutine CalcOutput` returns hits in all 20+ modules. `analyze_symbol` with a scoped path returns
@@ -140,11 +140,11 @@ analysis task itself.
 **Orchestrator:** goose (calls `bench-v13-run.sh` for each run in sequence; reads telemetry and
 report JSON after each run completes)
 **Tool isolation:**
-- MCP conditions (A, C): `--mcp-config docs/benchmarks/v13/mcp-code-analyze-only.json --strict-mcp-config --allowedTools "mcp__code-analyze__analyze_directory,mcp__code-analyze__analyze_file,mcp__code-analyze__analyze_symbol,mcp__code-analyze__analyze_module"`
+- MCP conditions (A, C): `--mcp-config docs/benchmarks/v13/mcp-code-analyze-only.json --strict-mcp-config --allowedTools "mcp__aptu-coder__analyze_directory,mcp__aptu-coder__analyze_file,mcp__aptu-coder__analyze_symbol,mcp__aptu-coder__analyze_module"`
 - Native conditions (B, D): `--mcp-config <empty> --strict-mcp-config --allowedTools "Bash,Glob,Grep,Read,Write,ToolSearch"`
 
 `--strict-mcp-config` prevents Claude Code from loading any MCP servers not listed in the config
-file. The empty config for native conditions ensures the `code-analyze-mcp` server is not available
+file. The empty config for native conditions ensures the `aptu-coder` server is not available
 even if the user's global Claude Code config has it enabled.
 
 **Structured output:** Each run uses `--json-schema` to enforce the output shape. The runner extracts

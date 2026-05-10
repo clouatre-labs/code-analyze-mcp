@@ -501,7 +501,7 @@ impl CodeAnalyzer {
         event_rx: mpsc::UnboundedReceiver<LogEvent>,
         metrics_tx: crate::metrics::MetricsSender,
     ) -> Self {
-        let file_cap: usize = std::env::var("CODE_ANALYZE_FILE_CACHE_CAPACITY")
+        let file_cap: usize = std::env::var("APTU_CODER_FILE_CACHE_CAPACITY")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(100);
@@ -4284,5 +4284,33 @@ mod tests {
             "Error should mention 'outside' or 'working', got: {}",
             err.message
         );
+    }
+
+    #[test]
+    fn test_file_cache_capacity_default() {
+        // Arrange: ensure the env var is not set
+        unsafe { std::env::remove_var("APTU_CODER_FILE_CACHE_CAPACITY") };
+
+        // Act
+        let analyzer = make_analyzer();
+
+        // Assert: default file cache capacity is 100
+        assert_eq!(analyzer.cache.file_capacity(), 100);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_file_cache_capacity_from_env() {
+        // Arrange
+        unsafe { std::env::set_var("APTU_CODER_FILE_CACHE_CAPACITY", "42") };
+
+        // Act
+        let analyzer = make_analyzer();
+
+        // Cleanup before assertions to minimise env pollution window
+        unsafe { std::env::remove_var("APTU_CODER_FILE_CACHE_CAPACITY") };
+
+        // Assert
+        assert_eq!(analyzer.cache.file_capacity(), 42);
     }
 }

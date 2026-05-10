@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNS_DIR="$REPO_ROOT/docs/benchmarks/v12/results/runs"
 PROMPTS_DIR="$REPO_ROOT/docs/benchmarks/v12/prompts"
-MCP_CODE_ANALYZE_ONLY="$REPO_ROOT/docs/benchmarks/v12/mcp-code-analyze-only.json"
+MCP_APTU_CODER_CONFIG="$REPO_ROOT/docs/benchmarks/v12/mcp-aptu-coder-only.json"
 
 mkdir -p "$RUNS_DIR"
 
@@ -72,7 +72,7 @@ LOG_FILE="$RUNS_DIR/${RUN_ID}.log"
 # Tool isolation flags
 if [[ "$TOOL_SET" == "mcp" ]]; then
   ALLOWED_TOOLS="mcp__aptu-coder__analyze_directory,mcp__aptu-coder__analyze_file,mcp__aptu-coder__analyze_symbol,mcp__aptu-coder__analyze_module"
-  MCP_FLAGS="--mcp-config $MCP_CODE_ANALYZE_ONLY --strict-mcp-config"
+  MCP_FLAGS="--mcp-config $MCP_APTU_CODER_CONFIG --strict-mcp-config"
   trap 'rm -f "$JSONL_FILE"' EXIT
 else
   ALLOWED_TOOLS="Bash,Glob,Grep,Read,Write,ToolSearch"

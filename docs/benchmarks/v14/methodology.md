@@ -92,7 +92,7 @@ Environment variables:
 - `ANTHROPIC_DEFAULT_SONNET_MODEL` -- model ID for conditions A/B (default: claude-sonnet-4-6)
 - `ANTHROPIC_DEFAULT_HAIKU_MODEL` -- model ID for conditions C/D (default: claude-haiku-4-5)
 
-Tool isolation: MCP conditions (A, C) use --strict-mcp-config with mcp-code-analyze-only.json.
+Tool isolation: MCP conditions (A, C) use --strict-mcp-config with mcp-aptu-coder-only.json.
 Native conditions (B, D) use empty MCP config. Tool isolation is validated by parsing session JSONL.
 
 ## Conditions
@@ -177,6 +177,6 @@ See run-order.txt. Pilots execute in order (A, B, C, D). Scored runs execute in 
 - docs/benchmarks/v14/prompts/condition-d-native-haiku.md
 - docs/benchmarks/v14/run-order.txt
 - docs/benchmarks/v14/scores-template.json
-- docs/benchmarks/v14/mcp-code-analyze-only.json
+- docs/benchmarks/v14/mcp-aptu-coder-only.json
 - docs/benchmarks/v14/results/runs/.gitkeep
 - scripts/bench-v14-run.sh

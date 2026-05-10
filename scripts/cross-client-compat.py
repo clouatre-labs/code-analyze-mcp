@@ -269,7 +269,7 @@ class TestMcpInspector(unittest.TestCase):
         )
         config = {
             "mcpServers": {
-                "code-analyze": {
+                "aptu-coder": {
                     "command": str(self.server_binary),
                     "args": [],
                 }
@@ -303,7 +303,7 @@ class TestMcpInspector(unittest.TestCase):
                 "--config",
                 self.config_file.name,
                 "--server",
-                "code-analyze",
+                "aptu-coder",
                 "--method",
                 "tools/list",
             ]
@@ -324,7 +324,7 @@ class TestMcpInspector(unittest.TestCase):
                 "--config",
                 self.config_file.name,
                 "--server",
-                "code-analyze",
+                "aptu-coder",
                 "--method",
                 "tools/call",
                 "--tool-name",
