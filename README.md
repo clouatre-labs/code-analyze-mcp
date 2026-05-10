@@ -199,10 +199,21 @@ The server's own instructions expose a 4-step recommended workflow for unknown r
 | `APTU_CODER_EXEC_CACHE_TTL_SECS` | `10` | TTL in seconds for `exec_command` result caching. Increase for stable, slow commands. |
 | `APTU_CODER_EXEC_CACHE_CAPACITY` | `64` | Maximum number of cached `exec_command` results held in memory. |
 | `APTU_CODER_METRICS_EXPORT_FILE` | unset | Absolute path for a one-shot JSONL metrics export written on server shutdown. Relative paths are ignored. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OpenTelemetry OTLP HTTP endpoint URL (e.g., `http://localhost:4318`). When set, enables export of traces, logs, and metrics via OTLP/HTTP. When unset, noop providers are used with zero overhead. |
+| `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | unset | Reserved per OpenTelemetry GenAI semantic conventions. Capture of tool arguments and results as serialized blobs is not implemented by design (bounded individual parameters are recorded instead). |
+| `XDG_DATA_HOME` | `~/.local/share` | Base directory for daily-rotated JSONL metrics files. The server writes to `$XDG_DATA_HOME/aptu-coder/metrics/` and retains files for 30 days. Defaults to `~/.local/share` if unset. |
 
 ## Observability
 
-All seven tools emit metrics to daily-rotated JSONL files at `$XDG_DATA_HOME/aptu-coder/` (fallback: `~/.local/share/aptu-coder/`). Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](https://github.com/clouatre-labs/aptu-coder/blob/main/docs/OBSERVABILITY.md) for the full schema.
+The server emits two parallel, independent telemetry streams.
+
+**JSONL metrics (always-on)** are written daily-rotated to `$XDG_DATA_HOME/aptu-coder/metrics/` (fallback: `~/.local/share/aptu-coder/metrics/`) regardless of configuration. Each record captures tool name, duration, output size, and result status. Files are retained for 30 days. See [docs/OBSERVABILITY.md](https://github.com/clouatre-labs/aptu-coder/blob/main/docs/OBSERVABILITY.md) for the full schema.
+
+**OpenTelemetry export (opt-in)** is enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is set to an OTLP HTTP endpoint URL. When set, the server initializes OpenTelemetry trace, log, and meter providers and exports asynchronously via OTLP/HTTP. When unset, noop providers are used with zero runtime overhead.
+
+Each tool invocation is wrapped in a span carrying OpenTelemetry GenAI semantic attributes (`gen_ai.system`, `gen_ai.operation.name`, `gen_ai.tool.name`). W3C Trace Context is extracted from the MCP `_meta` field on each call, allowing MCP clients to propagate their trace context so tool spans appear as children in a distributed trace.
+
+For the span attribute policy, the never-record list, and details on what is instrumented, see [OBSERVABILITY.md](OBSERVABILITY.md) at the repository root.
 
 ## Documentation
 
