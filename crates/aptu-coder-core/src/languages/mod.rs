@@ -215,9 +215,9 @@ pub fn get_language_info(lang_name: &str) -> Option<LanguageInfo> {
             impl_query: None,
             impl_trait_query: None,
             defuse_query: None,
-            extract_function_name: None,
-            find_method_for_receiver: None,
-            find_receiver_type: None,
+            extract_function_name: Some(fortran::extract_function_name),
+            find_method_for_receiver: Some(fortran::find_method_for_receiver),
+            find_receiver_type: Some(fortran::find_receiver_type),
             extract_inheritance: Some(fortran::extract_inheritance),
         }),
         #[cfg(feature = "lang-csharp")]
