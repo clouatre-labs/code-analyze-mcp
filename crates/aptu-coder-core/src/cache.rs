@@ -93,12 +93,12 @@ pub struct AnalysisCache {
 
 impl AnalysisCache {
     /// Create a new cache with the specified file capacity.
-    /// The directory cache capacity is read from the `CODE_ANALYZE_DIR_CACHE_CAPACITY`
+    /// The directory cache capacity is read from the `APTU_CODER_DIR_CACHE_CAPACITY`
     /// environment variable (default: 20).
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         let file_capacity = capacity.max(1);
-        let dir_capacity: usize = std::env::var("CODE_ANALYZE_DIR_CACHE_CAPACITY")
+        let dir_capacity: usize = std::env::var("APTU_CODER_DIR_CACHE_CAPACITY")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(20);

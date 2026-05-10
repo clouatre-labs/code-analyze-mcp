@@ -195,8 +195,8 @@ The server's own instructions expose a 4-step recommended workflow for unknown r
 | `APTU_CODER_METRICS_EXPORT_FILE` | unset | Absolute path for a one-shot JSONL metrics export written on server shutdown. Relative paths are ignored. |
 | `APTU_CODER_PROFILE` | unset | Tool subset profile. `edit` enables only edit tools and `exec_command`; `analyze` enables only analyze tools and `exec_command`; unknown values leave all tools enabled. Can also be set per-session via `io.clouatre-labs/profile` in the MCP `_meta` field. |
 | `APTU_SHELL` | unset | Shell used by `exec_command`. Defaults to `bash` (PATH search) then `/bin/sh`. Override to use a different shell. |
-| `CODE_ANALYZE_DIR_CACHE_CAPACITY` | `20` | Maximum number of directory-analysis results held in the in-process LRU cache. |
-| `CODE_ANALYZE_FILE_CACHE_CAPACITY` | `100` | Maximum number of file-analysis results held in the in-process LRU cache. Increase for large repos where many files are queried repeatedly. |
+| `APTU_CODER_DIR_CACHE_CAPACITY` | `20` | Maximum number of directory-analysis results held in the in-process LRU cache. |
+| `APTU_CODER_FILE_CACHE_CAPACITY` | `100` | Maximum number of file-analysis results held in the in-process LRU cache. Increase for large repos where many files are queried repeatedly. |
 | `DISABLE_PROMPT_CACHING` | unset | Set to `1` to disable prompt caching (recommended for single-pass subagent sessions). |
 | `DISABLE_PROMPT_CACHING_HAIKU` | unset | Set to `1` to disable prompt caching for Haiku-specific pipelines only. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OpenTelemetry OTLP HTTP endpoint URL (e.g., `http://localhost:4318`). When set, enables export of traces, logs, and metrics via OTLP/HTTP. When unset, noop providers are used with zero overhead. |

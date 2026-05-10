@@ -501,7 +501,7 @@ impl CodeAnalyzer {
         event_rx: mpsc::UnboundedReceiver<LogEvent>,
         metrics_tx: crate::metrics::MetricsSender,
     ) -> Self {
-        let file_cap: usize = std::env::var("CODE_ANALYZE_FILE_CACHE_CAPACITY")
+        let file_cap: usize = std::env::var("APTU_CODER_FILE_CACHE_CAPACITY")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(100);

@@ -36,7 +36,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNS_DIR="$REPO_ROOT/docs/benchmarks/v13/results/runs"
 PROMPTS_DIR="$REPO_ROOT/docs/benchmarks/v13/prompts"
-MCP_CONFIG="$REPO_ROOT/docs/benchmarks/v13/mcp-code-analyze-only.json"
+MCP_CONFIG="$REPO_ROOT/docs/benchmarks/v13/mcp-aptu-coder-only.json"
 
 mkdir -p "$RUNS_DIR"
 
