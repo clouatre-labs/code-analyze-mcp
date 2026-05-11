@@ -84,6 +84,13 @@ pub fn summary_cursor_conflict(summary: Option<bool>, cursor: Option<&str>) -> b
     summary == Some(true) && cursor.is_some()
 }
 
+/// Session and client metadata recorded as span attributes on every tool call.
+pub struct ClientMetadata {
+    pub session_id: Option<String>,
+    pub client_name: Option<String>,
+    pub client_version: Option<String>,
+}
+
 /// Extract W3C Trace Context from MCP request _meta field and set as parent span context.
 ///
 /// Attempts to extract traceparent and tracestate from the request's _meta field.
@@ -91,8 +98,29 @@ pub fn summary_cursor_conflict(summary: Option<bool>, cursor: Option<&str>) -> b
 /// re-parents it to the caller's trace. This must be called after the `#[instrument]`
 /// span has been entered (i.e., inside the function body) for `set_parent` to take effect.
 /// If extraction fails or _meta is absent, silently proceeds with root context (no panic).
-pub fn extract_and_set_trace_context(meta: Option<&rmcp::model::Meta>) {
+pub fn extract_and_set_trace_context(
+    meta: Option<&rmcp::model::Meta>,
+    client_meta: ClientMetadata,
+) {
     use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+
+    let span = tracing::Span::current();
+
+    // Record session and client attributes
+    if let Some(sid) = client_meta.session_id {
+        span.record("mcp.session.id", &sid);
+    }
+    if let Some(cn) = client_meta.client_name {
+        span.record("client.name", &cn);
+    }
+    if let Some(cv) = client_meta.client_version {
+        span.record("client.version", &cv);
+    }
+
+    // Extract agent-session-id from _meta if present (opportunistic; silent no-op if absent)
+    if let Some(asi_str) = meta.and_then(|m| m.0.get("agent-session-id").and_then(|v| v.as_str())) {
+        span.record("mcp.client.session.id", asi_str);
+    }
 
     let Some(meta) = meta else { return };
 
@@ -124,7 +152,7 @@ pub fn extract_and_set_trace_context(meta: Option<&rmcp::model::Meta>) {
 
     // Re-parent the current tracing span (already entered via #[instrument]) to the
     // extracted OTel context. set_parent is a no-op if the OTel layer is not installed.
-    let _ = tracing::Span::current().set_parent(parent_cx);
+    let _ = span.set_parent(parent_cx);
 }
 
 /// Helper struct for W3C Trace Context extraction from HashMap
@@ -486,6 +514,8 @@ pub struct CodeAnalyzer {
     session_id: Arc<TokioMutex<Option<String>>>,
     // Store profile metadata from initialize request for use in on_initialized
     profile_meta: Arc<TokioMutex<Option<serde_json::Map<String, serde_json::Value>>>>,
+    client_name: Arc<TokioMutex<Option<String>>>,
+    client_version: Arc<TokioMutex<Option<String>>>,
 }
 
 #[tool_router]
@@ -528,6 +558,8 @@ impl CodeAnalyzer {
             session_call_seq: Arc::new(std::sync::atomic::AtomicU32::new(0)),
             session_id: Arc::new(TokioMutex::new(None)),
             profile_meta: Arc::new(TokioMutex::new(None)),
+            client_name: Arc::new(TokioMutex::new(None)),
+            client_version: Arc::new(TokioMutex::new(None)),
         }
     }
 
@@ -1123,7 +1155,7 @@ impl CodeAnalyzer {
         Ok(output)
     }
 
-    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty))]
+    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty, mcp.session.id = tracing::field::Empty, client.name = tracing::field::Empty, client.version = tracing::field::Empty, mcp.client.session.id = tracing::field::Empty))]
     #[tool(
         name = "analyze_directory",
         title = "Analyze Directory",
@@ -1144,7 +1176,17 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         // Extract W3C Trace Context from request _meta if present
-        extract_and_set_trace_context(Some(&context.meta));
+        let session_id = self.session_id.lock().await.clone();
+        let client_name = self.client_name.lock().await.clone();
+        let client_version = self.client_version.lock().await.clone();
+        extract_and_set_trace_context(
+            Some(&context.meta),
+            ClientMetadata {
+                session_id,
+                client_name,
+                client_version,
+            },
+        );
         let span = tracing::Span::current();
         span.record("gen_ai.system", "mcp");
         span.record("gen_ai.operation.name", "execute_tool");
@@ -1303,11 +1345,13 @@ impl CodeAnalyzer {
             session_id: sid,
             seq: Some(seq),
             cache_hit: Some(dir_cache_hit),
+            exit_code: None,
+            timed_out: false,
         });
         Ok(result)
     }
 
-    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty))]
+    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty, mcp.session.id = tracing::field::Empty, client.name = tracing::field::Empty, client.version = tracing::field::Empty, mcp.client.session.id = tracing::field::Empty))]
     #[tool(
         name = "analyze_file",
         title = "Analyze File",
@@ -1328,7 +1372,17 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         // Extract W3C Trace Context from request _meta if present
-        extract_and_set_trace_context(Some(&context.meta));
+        let session_id = self.session_id.lock().await.clone();
+        let client_name = self.client_name.lock().await.clone();
+        let client_version = self.client_version.lock().await.clone();
+        extract_and_set_trace_context(
+            Some(&context.meta),
+            ClientMetadata {
+                session_id,
+                client_name,
+                client_version,
+            },
+        );
         let span = tracing::Span::current();
         span.record("gen_ai.system", "mcp");
         span.record("gen_ai.operation.name", "execute_tool");
@@ -1544,11 +1598,13 @@ impl CodeAnalyzer {
             session_id: sid,
             seq: Some(seq),
             cache_hit: Some(file_cache_hit),
+            exit_code: None,
+            timed_out: false,
         });
         Ok(result)
     }
 
-    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, symbol = tracing::field::Empty))]
+    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, symbol = tracing::field::Empty, mcp.session.id = tracing::field::Empty, client.name = tracing::field::Empty, client.version = tracing::field::Empty, mcp.client.session.id = tracing::field::Empty))]
     #[tool(
         name = "analyze_symbol",
         title = "Analyze Symbol",
@@ -1569,7 +1625,17 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         // Extract W3C Trace Context from request _meta if present
-        extract_and_set_trace_context(Some(&context.meta));
+        let session_id = self.session_id.lock().await.clone();
+        let client_name = self.client_name.lock().await.clone();
+        let client_version = self.client_version.lock().await.clone();
+        extract_and_set_trace_context(
+            Some(&context.meta),
+            ClientMetadata {
+                session_id,
+                client_name,
+                client_version,
+            },
+        );
         let span = tracing::Span::current();
         span.record("gen_ai.system", "mcp");
         span.record("gen_ai.operation.name", "execute_tool");
@@ -1733,7 +1799,9 @@ impl CodeAnalyzer {
                 error_type: None,
                 session_id: sid,
                 seq: Some(seq),
-                cache_hit: Some(false),
+                cache_hit: None,
+                exit_code: None,
+                timed_out: false,
             });
             return Ok(result);
         }
@@ -1964,12 +2032,14 @@ impl CodeAnalyzer {
             error_type: None,
             session_id: sid,
             seq: Some(seq),
-            cache_hit: Some(false),
+            cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         });
         Ok(result)
     }
 
-    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty))]
+    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty, mcp.session.id = tracing::field::Empty, client.name = tracing::field::Empty, client.version = tracing::field::Empty, mcp.client.session.id = tracing::field::Empty))]
     #[tool(
         name = "analyze_module",
         title = "Analyze Module",
@@ -1990,7 +2060,17 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         // Extract W3C Trace Context from request _meta if present
-        extract_and_set_trace_context(Some(&context.meta));
+        let session_id = self.session_id.lock().await.clone();
+        let client_name = self.client_name.lock().await.clone();
+        let client_version = self.client_version.lock().await.clone();
+        extract_and_set_trace_context(
+            Some(&context.meta),
+            ClientMetadata {
+                session_id,
+                client_name,
+                client_version,
+            },
+        );
         let span = tracing::Span::current();
         span.record("gen_ai.system", "mcp");
         span.record("gen_ai.operation.name", "execute_tool");
@@ -2031,6 +2111,8 @@ impl CodeAnalyzer {
                 session_id: sid.clone(),
                 seq: Some(seq),
                 cache_hit: None,
+                exit_code: None,
+                timed_out: false,
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -2217,11 +2299,13 @@ impl CodeAnalyzer {
             session_id: sid,
             seq: Some(seq),
             cache_hit: Some(module_cache_hit),
+            exit_code: None,
+            timed_out: false,
         });
         Ok(result)
     }
 
-    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty))]
+    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty, mcp.session.id = tracing::field::Empty, client.name = tracing::field::Empty, client.version = tracing::field::Empty, mcp.client.session.id = tracing::field::Empty))]
     #[tool(
         name = "edit_overwrite",
         title = "Edit Overwrite",
@@ -2242,7 +2326,17 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         // Extract W3C Trace Context from request _meta if present
-        extract_and_set_trace_context(Some(&context.meta));
+        let session_id = self.session_id.lock().await.clone();
+        let client_name = self.client_name.lock().await.clone();
+        let client_version = self.client_version.lock().await.clone();
+        extract_and_set_trace_context(
+            Some(&context.meta),
+            ClientMetadata {
+                session_id,
+                client_name,
+                client_version,
+            },
+        );
         let span = tracing::Span::current();
         span.record("gen_ai.system", "mcp");
         span.record("gen_ai.operation.name", "execute_tool");
@@ -2294,6 +2388,8 @@ impl CodeAnalyzer {
                 session_id: sid.clone(),
                 seq: Some(seq),
                 cache_hit: None,
+                exit_code: None,
+                timed_out: false,
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -2330,6 +2426,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -2357,6 +2455,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -2384,6 +2484,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -2426,11 +2528,13 @@ impl CodeAnalyzer {
             session_id: sid,
             seq: Some(seq),
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         });
         Ok(result)
     }
 
-    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty))]
+    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, path = tracing::field::Empty, mcp.session.id = tracing::field::Empty, client.name = tracing::field::Empty, client.version = tracing::field::Empty, mcp.client.session.id = tracing::field::Empty))]
     #[tool(
         name = "edit_replace",
         title = "Edit Replace",
@@ -2451,7 +2555,17 @@ impl CodeAnalyzer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
         // Extract W3C Trace Context from request _meta if present
-        extract_and_set_trace_context(Some(&context.meta));
+        let session_id = self.session_id.lock().await.clone();
+        let client_name = self.client_name.lock().await.clone();
+        let client_version = self.client_version.lock().await.clone();
+        extract_and_set_trace_context(
+            Some(&context.meta),
+            ClientMetadata {
+                session_id,
+                client_name,
+                client_version,
+            },
+        );
         let span = tracing::Span::current();
         span.record("gen_ai.system", "mcp");
         span.record("gen_ai.operation.name", "execute_tool");
@@ -2503,6 +2617,8 @@ impl CodeAnalyzer {
                 session_id: sid.clone(),
                 seq: Some(seq),
                 cache_hit: None,
+                exit_code: None,
+                timed_out: false,
             });
             return Ok(err_to_tool_result(ErrorData::new(
                 rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -2540,6 +2656,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -2567,6 +2685,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -2596,6 +2716,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INVALID_PARAMS,
@@ -2623,6 +2745,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -2650,6 +2774,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: None,
+                    exit_code: None,
+                    timed_out: false,
                 });
                 return Ok(err_to_tool_result(ErrorData::new(
                     rmcp::model::ErrorCode::INTERNAL_ERROR,
@@ -2695,6 +2821,8 @@ impl CodeAnalyzer {
             session_id: sid,
             seq: Some(seq),
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         });
         Ok(result)
     }
@@ -2712,7 +2840,7 @@ impl CodeAnalyzer {
             open_world_hint = true
         )
     )]
-    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, command = tracing::field::Empty, exit_code = tracing::field::Empty, timed_out = tracing::field::Empty, output_truncated = tracing::field::Empty))]
+    #[instrument(skip(self, context), fields(gen_ai.system = tracing::field::Empty, gen_ai.operation.name = tracing::field::Empty, gen_ai.tool.name = tracing::field::Empty, error = tracing::field::Empty, error.type = tracing::field::Empty, command = tracing::field::Empty, exit_code = tracing::field::Empty, timed_out = tracing::field::Empty, output_truncated = tracing::field::Empty, mcp.session.id = tracing::field::Empty, client.name = tracing::field::Empty, client.version = tracing::field::Empty, mcp.client.session.id = tracing::field::Empty))]
     pub async fn exec_command(
         &self,
         params: Parameters<types::ExecCommandParams>,
@@ -2721,7 +2849,17 @@ impl CodeAnalyzer {
         let t_start = std::time::Instant::now();
         let params = params.0;
         // Extract W3C Trace Context from request _meta if present
-        extract_and_set_trace_context(Some(&context.meta));
+        let session_id = self.session_id.lock().await.clone();
+        let client_name = self.client_name.lock().await.clone();
+        let client_version = self.client_version.lock().await.clone();
+        extract_and_set_trace_context(
+            Some(&context.meta),
+            ClientMetadata {
+                session_id,
+                client_name,
+                client_version,
+            },
+        );
         let span = tracing::Span::current();
         span.record("gen_ai.system", "mcp");
         span.record("gen_ai.operation.name", "execute_tool");
@@ -2906,6 +3044,8 @@ impl CodeAnalyzer {
                     session_id: sid.clone(),
                     seq: Some(seq),
                     cache_hit: Some(was_cached),
+                    exit_code,
+                    timed_out,
                 });
                 return Ok(err_to_tool_result(e));
             }
@@ -2927,6 +3067,8 @@ impl CodeAnalyzer {
             session_id: sid,
             seq: Some(seq),
             cache_hit: Some(was_cached),
+            exit_code,
+            timed_out,
         });
         Ok(result)
     }
@@ -3219,12 +3361,22 @@ impl ServerHandler for CodeAnalyzer {
     #[instrument(skip(self, context), fields(service.name = tracing::field::Empty, service.version = tracing::field::Empty))]
     async fn initialize(
         &self,
-        _request: InitializeRequestParams,
+        request: InitializeRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, ErrorData> {
         let span = tracing::Span::current();
         span.record("service.name", "aptu-coder");
         span.record("service.version", env!("CARGO_PKG_VERSION"));
+
+        // Store client_info from the initialize request
+        {
+            let mut client_name_lock = self.client_name.lock().await;
+            *client_name_lock = Some(request.client_info.name.clone());
+        }
+        {
+            let mut client_version_lock = self.client_version.lock().await;
+            *client_version_lock = Some(request.client_info.version.clone());
+        }
 
         // The _meta field is extracted from params and stored in request extensions.
         // Extract it and store for use in on_initialized.
