@@ -790,6 +790,8 @@ impl CodeAnalyzer {
                         dc.put("analyze_directory", &k, &v);
                         dc.drain_write_failures()
                     });
+                    let metrics_tx = self.metrics_tx.clone();
+                    let sid = self.session_id.lock().await.clone();
                     tokio::spawn(async move {
                         if let Ok(failures) = handle.await
                             && failures > 0
@@ -799,6 +801,23 @@ impl CodeAnalyzer {
                                 failures,
                                 "L2 disk cache write failed"
                             );
+                            metrics_tx.send(crate::metrics::MetricEvent {
+                                ts: crate::metrics::unix_ms(),
+                                tool: "analyze_directory",
+                                duration_ms: 0,
+                                output_chars: 0,
+                                param_path_depth: 0,
+                                max_depth: None,
+                                result: "ok",
+                                error_type: None,
+                                session_id: sid,
+                                seq: None,
+                                cache_hit: None,
+                                cache_write_failure: Some(true),
+                                cache_tier: None,
+                                exit_code: None,
+                                timed_out: false,
+                            });
                         }
                     });
                 }
@@ -882,6 +901,8 @@ impl CodeAnalyzer {
                         dc.put("analyze_file", &k, &v);
                         dc.drain_write_failures()
                     });
+                    let metrics_tx = self.metrics_tx.clone();
+                    let sid = self.session_id.lock().await.clone();
                     tokio::spawn(async move {
                         if let Ok(failures) = handle.await
                             && failures > 0
@@ -891,6 +912,23 @@ impl CodeAnalyzer {
                                 failures,
                                 "L2 disk cache write failed"
                             );
+                            metrics_tx.send(crate::metrics::MetricEvent {
+                                ts: crate::metrics::unix_ms(),
+                                tool: "analyze_file",
+                                duration_ms: 0,
+                                output_chars: 0,
+                                param_path_depth: 0,
+                                max_depth: None,
+                                result: "ok",
+                                error_type: None,
+                                session_id: sid,
+                                seq: None,
+                                cache_hit: None,
+                                cache_write_failure: Some(true),
+                                cache_tier: None,
+                                exit_code: None,
+                                timed_out: false,
+                            });
                         }
                     });
                 }
