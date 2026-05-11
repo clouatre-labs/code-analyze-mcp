@@ -88,7 +88,94 @@ impl MetricsWriter {
         }
     }
 
-    #[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
+    /// Write accumulated batch to file. Fire-and-forget semantics: errors are logged but not propagated.
+    async fn flush_batch(file: &mut tokio::fs::File, batch: Vec<MetricEvent>) {
+        for event in batch {
+            // Record to OTel metrics if available
+            record_otel_metrics(&event);
+
+            // Always write to JSONL as fallback
+            if let Ok(mut json) = serde_json::to_string(&event) {
+                json.push('\n');
+                let _ = file.write_all(json.as_bytes()).await;
+            }
+        }
+        let _ = file.flush().await;
+    }
+
+    /// Check for date transition and rotate metrics file if needed.
+    /// Returns the current file path and updates state if rotation occurred.
+    fn rotate_metrics_file(
+        base_dir: &std::path::Path,
+        current_date: &mut String,
+        current_file: &mut Option<PathBuf>,
+        dir_created: &mut bool,
+    ) -> PathBuf {
+        let new_date = current_date_str();
+        if new_date != *current_date {
+            *current_date = new_date;
+            *current_file = None;
+            *dir_created = false;
+        }
+
+        if current_file.is_none() {
+            *current_file = Some(base_dir.join(format!("metrics-{}.jsonl", current_date)));
+        }
+
+        current_file
+            .as_ref()
+            .expect("current_file is guaranteed Some after check above")
+            .clone()
+    }
+
+    /// Receive and accumulate a batch of events from the channel.
+    async fn receive_batch(
+        rx: &mut tokio::sync::mpsc::UnboundedReceiver<MetricEvent>,
+        tool_counts: &mut std::collections::HashMap<&'static str, (u64, u64)>,
+        export_session_id: &mut Option<String>,
+    ) -> Option<Vec<MetricEvent>> {
+        let mut batch = Vec::new();
+        if let Some(event) = rx.recv().await {
+            Self::accumulate_event(tool_counts, export_session_id, &event);
+            batch.push(event);
+            for _ in 0..99 {
+                match rx.try_recv() {
+                    Ok(e) => {
+                        Self::accumulate_event(tool_counts, export_session_id, &e);
+                        batch.push(e);
+                    }
+                    Err(
+                        mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected,
+                    ) => break,
+                }
+            }
+            Some(batch)
+        } else {
+            None
+        }
+    }
+
+    /// Ensure metrics directory exists for the given path.
+    async fn ensure_metrics_dir(path: &std::path::Path, dir_created: &mut bool) {
+        if !*dir_created
+            && let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            match tokio::fs::create_dir_all(parent).await {
+                Ok(()) => {
+                    *dir_created = true;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        path = %parent.display(),
+                        "metrics: failed to create directory; will retry next batch"
+                    );
+                }
+            }
+        }
+    }
+
     pub async fn run(mut self) {
         cleanup_old_files(&self.base_dir).await;
         let mut current_date = current_date_str();
@@ -100,80 +187,30 @@ impl MetricsWriter {
         let mut export_session_id: Option<String> = None;
 
         loop {
-            let mut batch = Vec::new();
-            if let Some(event) = self.rx.recv().await {
-                Self::accumulate_event(&mut tool_counts, &mut export_session_id, &event);
-                batch.push(event);
-                for _ in 0..99 {
-                    match self.rx.try_recv() {
-                        Ok(e) => {
-                            Self::accumulate_event(&mut tool_counts, &mut export_session_id, &e);
-                            batch.push(e);
-                        }
-                        Err(
-                            mpsc::error::TryRecvError::Empty
-                            | mpsc::error::TryRecvError::Disconnected,
-                        ) => break,
-                    }
-                }
-            } else {
+            let Some(batch) =
+                Self::receive_batch(&mut self.rx, &mut tool_counts, &mut export_session_id).await
+            else {
                 break;
-            }
+            };
 
-            let new_date = current_date_str();
-            if new_date != current_date {
-                current_date = new_date;
-                current_file = None;
-                self.dir_created = false;
-            }
+            let path = Self::rotate_metrics_file(
+                &self.base_dir,
+                &mut current_date,
+                &mut current_file,
+                &mut self.dir_created,
+            );
 
-            if current_file.is_none() {
-                current_file = Some(
-                    self.base_dir
-                        .join(format!("metrics-{}.jsonl", current_date)),
-                );
-            }
-
-            let path = current_file.as_ref().unwrap();
-
-            // Create directory once per day
-            if !self.dir_created
-                && let Some(parent) = path.parent()
-                && !parent.as_os_str().is_empty()
-            {
-                match tokio::fs::create_dir_all(parent).await {
-                    Ok(()) => {
-                        self.dir_created = true;
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            error = %e,
-                            path = %parent.display(),
-                            "metrics: failed to create directory; will retry next batch"
-                        );
-                    }
-                }
-            }
+            Self::ensure_metrics_dir(&path, &mut self.dir_created).await;
 
             // Open file once per batch
             let file = tokio::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(path)
+                .open(&path)
                 .await;
 
             if let Ok(mut file) = file {
-                for event in batch {
-                    // Record to OTel metrics if available
-                    record_otel_metrics(&event);
-
-                    // Always write to JSONL as fallback
-                    if let Ok(mut json) = serde_json::to_string(&event) {
-                        json.push('\n');
-                        let _ = file.write_all(json.as_bytes()).await;
-                    }
-                }
-                let _ = file.flush().await;
+                Self::flush_batch(&mut file, batch).await;
             }
         }
 

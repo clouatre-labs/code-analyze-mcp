@@ -149,90 +149,120 @@ impl FileAnalysisOutput {
         }
     }
 }
-#[instrument(skip_all, fields(path = %root.display()))]
-// public API; callers expect owned semantics
-#[allow(clippy::needless_pass_by_value)]
-#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
-pub fn analyze_directory_with_progress(
-    root: &Path,
-    entries: Vec<WalkEntry>,
-    progress: Arc<AtomicUsize>,
-    ct: CancellationToken,
-) -> Result<AnalysisOutput, AnalyzeError> {
-    // Check if already cancelled
-    if ct.is_cancelled() {
-        return Err(AnalyzeError::Cancelled);
+/// Check if a file is eligible for analysis based on size and language support.
+fn check_file_eligibility(entry: &WalkEntry) -> bool {
+    // Check file size before reading
+    if entry.path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
+        tracing::debug!("skipping large file: {}", entry.path.display());
+        return false;
     }
 
-    // Detect language from file extension
-    let file_entries: Vec<&WalkEntry> = entries
+    // Try to read file content; skip binary or unreadable files
+    std::fs::read_to_string(&entry.path).is_ok()
+}
+
+/// Process a single file entry and extract its analysis data.
+fn process_file_entry(entry: &WalkEntry, source: &str) -> FileInfo {
+    let path_str = entry.path.display().to_string();
+    let line_count = source.lines().count();
+
+    // Detect language from extension
+    let ext = entry.path.extension().and_then(|e| e.to_str());
+
+    // Detect language and extract counts
+    let (language, function_count, class_count) = if let Some(ext_str) = ext {
+        if let Some(lang) = language_for_extension(ext_str) {
+            let lang_str = lang.to_string();
+            match ElementExtractor::extract_with_depth(source, &lang_str) {
+                Ok((func_count, class_count)) => (lang_str, func_count, class_count),
+                Err(_) => (lang_str, 0, 0),
+            }
+        } else {
+            ("unknown".to_string(), 0, 0)
+        }
+    } else {
+        ("unknown".to_string(), 0, 0)
+    };
+
+    let is_test = is_test_file(&entry.path);
+
+    FileInfo {
+        path: path_str,
+        line_count,
+        function_count,
+        class_count,
+        language,
+        is_test,
+    }
+}
+
+/// Analyze a single file entry in parallel context.
+fn analyze_single_file(
+    entry: &WalkEntry,
+    progress: &Arc<AtomicUsize>,
+    ct: &CancellationToken,
+) -> Option<FileInfo> {
+    // Check cancellation per file
+    if ct.is_cancelled() {
+        return None;
+    }
+
+    // Check file eligibility
+    if !check_file_eligibility(entry) {
+        progress.fetch_add(1, Ordering::Relaxed);
+        return None;
+    }
+
+    // Read file content (already checked in check_file_eligibility)
+    let Ok(source) = std::fs::read_to_string(&entry.path) else {
+        progress.fetch_add(1, Ordering::Relaxed);
+        return None;
+    };
+
+    let file_info = process_file_entry(entry, &source);
+    progress.fetch_add(1, Ordering::Relaxed);
+
+    Some(file_info)
+}
+
+/// Initialize analysis context and collect file entries.
+fn init_analysis_context(entries: &[WalkEntry]) -> Vec<&WalkEntry> {
+    entries
         .iter()
         .filter(|e| !e.is_dir && !e.is_symlink)
-        .collect();
+        .collect()
+}
 
+/// Build the final analysis output from results.
+fn build_analysis_output(
+    entries: Vec<WalkEntry>,
+    analysis_results: Vec<FileInfo>,
+) -> AnalysisOutput {
+    let formatted = format_structure(&entries, &analysis_results, None);
+    AnalysisOutput {
+        formatted,
+        files: analysis_results,
+        entries,
+        next_cursor: None,
+        subtree_counts: None,
+    }
+}
+
+/// Run parallel analysis on file entries and log completion.
+fn run_parallel_analysis(
+    file_entries: &[&WalkEntry],
+    progress: &Arc<AtomicUsize>,
+    ct: &CancellationToken,
+) -> Result<Vec<FileInfo>, AnalyzeError> {
     let start = Instant::now();
-    tracing::debug!(file_count = file_entries.len(), root = %root.display(), "analysis start");
+    tracing::debug!(file_count = file_entries.len(), "analysis start");
 
     let _parse_span = tracing::info_span!("ast.parse_batch", count = file_entries.len()).entered();
 
     // Parallel analysis of files
     let analysis_results: Vec<FileInfo> = file_entries
         .par_iter()
-        .filter_map(|entry| {
-            // Check cancellation per file
-            if ct.is_cancelled() {
-                return None;
-            }
-
-            let path_str = entry.path.display().to_string();
-
-            // Detect language from extension
-            let ext = entry.path.extension().and_then(|e| e.to_str());
-
-            // Check file size before reading
-            if entry.path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
-                tracing::debug!("skipping large file: {}", entry.path.display());
-                progress.fetch_add(1, Ordering::Relaxed);
-                return None;
-            }
-
-            // Try to read file content; skip binary or unreadable files
-            let Ok(source) = std::fs::read_to_string(&entry.path) else {
-                progress.fetch_add(1, Ordering::Relaxed);
-                return None;
-            };
-
-            // Count lines
-            let line_count = source.lines().count();
-
-            // Detect language and extract counts
-            let (language, function_count, class_count) = if let Some(ext_str) = ext {
-                if let Some(lang) = language_for_extension(ext_str) {
-                    let lang_str = lang.to_string();
-                    match ElementExtractor::extract_with_depth(&source, &lang_str) {
-                        Ok((func_count, class_count)) => (lang_str, func_count, class_count),
-                        Err(_) => (lang_str, 0, 0),
-                    }
-                } else {
-                    ("unknown".to_string(), 0, 0)
-                }
-            } else {
-                ("unknown".to_string(), 0, 0)
-            };
-
-            progress.fetch_add(1, Ordering::Relaxed);
-
-            let is_test = is_test_file(&entry.path);
-
-            Some(FileInfo {
-                path: path_str,
-                line_count,
-                function_count,
-                class_count,
-                language,
-                is_test,
-            })
-        })
+        .filter_map(|entry| analyze_single_file(entry, progress, ct))
         .collect();
 
     // Check if cancelled after parallel processing
@@ -246,18 +276,32 @@ pub fn analyze_directory_with_progress(
         "analysis complete"
     );
 
+    Ok(analysis_results)
+}
+
+#[instrument(skip_all, fields(path = %root.display()))]
+// public API; callers expect owned semantics
+#[allow(clippy::needless_pass_by_value)]
+pub fn analyze_directory_with_progress(
+    root: &Path,
+    entries: Vec<WalkEntry>,
+    progress: Arc<AtomicUsize>,
+    ct: CancellationToken,
+) -> Result<AnalysisOutput, AnalyzeError> {
+    // Check if already cancelled
+    if ct.is_cancelled() {
+        return Err(AnalyzeError::Cancelled);
+    }
+
+    tracing::debug!(root = %root.display(), "analysis start");
+
+    let file_entries = init_analysis_context(&entries);
+    let analysis_results = run_parallel_analysis(&file_entries, &progress, &ct)?;
+
     let _format_span = tracing::info_span!("output.format").entered();
 
-    // Format output
-    let formatted = format_structure(&entries, &analysis_results, None);
-
-    Ok(AnalysisOutput {
-        formatted,
-        files: analysis_results,
-        entries,
-        next_cursor: None,
-        subtree_counts: None,
-    })
+    // Build and return output
+    Ok(build_analysis_output(entries, analysis_results))
 }
 
 /// Analyze a directory structure and return formatted output and file data.
@@ -1319,8 +1363,27 @@ fn resolve_wildcard_imports(file_path: &Path, imports: &mut [ImportInfo]) {
     }
 }
 
+/// Validate and canonicalize a wildcard target path, checking for self-references.
+/// Returns the canonical path if valid, or None if validation fails.
+fn validate_wildcard_target(
+    target_to_read: &Path,
+    file_path_canonical: &Path,
+    module: &str,
+) -> Option<PathBuf> {
+    let Ok(canonical) = target_to_read.canonicalize() else {
+        tracing::debug!(target = ?target_to_read, import = %module, "unable to canonicalize path");
+        return None;
+    };
+
+    if canonical == file_path_canonical {
+        tracing::debug!(target = ?canonical, import = %module, "cannot import from self");
+        return None;
+    }
+
+    Some(canonical)
+}
+
 /// Resolve one wildcard import in place. On any failure the import is left unchanged.
-#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
 fn resolve_single_wildcard(
     import: &mut ImportInfo,
     file_path: &Path,
@@ -1339,15 +1402,10 @@ fn resolve_single_wildcard(
         return;
     };
 
-    let Ok(canonical) = target_to_read.canonicalize() else {
-        tracing::debug!(target = ?target_to_read, import = %module, "unable to canonicalize path");
+    let Some(canonical) = validate_wildcard_target(&target_to_read, file_path_canonical, &module)
+    else {
         return;
     };
-
-    if canonical == file_path_canonical {
-        tracing::debug!(target = ?canonical, import = %module, "cannot import from self");
-        return;
-    }
 
     if let Some(cached) = resolved_cache.get(&canonical) {
         tracing::debug!(import = %module, symbols_count = cached.len(), "using cached symbols");
@@ -1396,11 +1454,53 @@ fn locate_target_file(
     }
 }
 
-/// Read and parse a target .py file, returning its exported symbols.
-#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
-fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>> {
+/// Build a tree-sitter parser for Python and parse the source code.
+fn build_parser_for_file(source: &str) -> Option<tree_sitter::Tree> {
     use tree_sitter::Parser;
 
+    let lang_info = crate::languages::get_language_info("python")?;
+    let mut parser = Parser::new();
+    if parser.set_language(&lang_info.language).is_err() {
+        return None;
+    }
+    parser.parse(source, None)
+}
+
+/// Extract all public symbols from a parsed tree (functions and classes).
+fn extract_all_symbols(tree: &tree_sitter::Tree, source: &str) -> Vec<String> {
+    let mut symbols = Vec::new();
+    let root = tree.root_node();
+    let mut cursor = root.walk();
+    for child in root.children(&mut cursor) {
+        if matches!(child.kind(), "function_definition" | "class_definition")
+            && let Some(name_node) = child.child_by_field_name("name")
+        {
+            let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
+            if !name.starts_with('_') {
+                symbols.push(name);
+            }
+        }
+    }
+    symbols
+}
+
+/// Try to resolve symbols from __all__ or fallback to function/class extraction.
+fn resolve_symbols_from_tree(tree: &tree_sitter::Tree, source: &str, module: &str) -> Vec<String> {
+    let mut symbols = Vec::new();
+    extract_all_from_tree(tree, source, &mut symbols);
+    if !symbols.is_empty() {
+        tracing::debug!(import = %module, symbols = ?symbols, "using __all__ symbols");
+        return symbols;
+    }
+
+    // Fallback: extract functions/classes from the tree
+    let symbols = extract_all_symbols(tree, source);
+    tracing::debug!(import = %module, fallback_symbols = ?symbols, "using fallback function/class names");
+    symbols
+}
+
+/// Read and parse a target .py file, returning its exported symbols.
+fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>> {
     // Check file size before reading
     if target_path.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_SIZE_BYTES {
         tracing::debug!("skipping large file: {}", target_path.display());
@@ -1416,35 +1516,10 @@ fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>>
     };
 
     // Parse once with tree-sitter
-    let lang_info = crate::languages::get_language_info("python")?;
-    let mut parser = Parser::new();
-    if parser.set_language(&lang_info.language).is_err() {
-        return None;
-    }
-    let tree = parser.parse(&source, None)?;
+    let tree = build_parser_for_file(&source)?;
 
-    // First, try to extract __all__ from the same tree
-    let mut symbols = Vec::new();
-    extract_all_from_tree(&tree, &source, &mut symbols);
-    if !symbols.is_empty() {
-        tracing::debug!(import = %module, symbols = ?symbols, "using __all__ symbols");
-        return Some(symbols);
-    }
-
-    // Fallback: extract functions/classes from the tree
-    let root = tree.root_node();
-    let mut cursor = root.walk();
-    for child in root.children(&mut cursor) {
-        if matches!(child.kind(), "function_definition" | "class_definition")
-            && let Some(name_node) = child.child_by_field_name("name")
-        {
-            let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
-            if !name.starts_with('_') {
-                symbols.push(name);
-            }
-        }
-    }
-    tracing::debug!(import = %module, fallback_symbols = ?symbols, "using fallback function/class names");
+    // Try to extract __all__ or fallback to function/class extraction
+    let symbols = resolve_symbols_from_tree(&tree, &source, module);
     Some(symbols)
 }
 

@@ -839,11 +839,81 @@ pub fn format_focused_summary(
     format_focused_summary_internal(graph, symbol, follow_depth, base_path, None, None, &[])
 }
 
+/// Render top files section with class/function counts and hints.
+fn render_top_files_section(
+    files_in_dir: &[&FileInfo],
+    dir_path: &Path,
+    has_classes: bool,
+) -> String {
+    let top_files_sorted: Vec<&FileInfo> = if has_classes {
+        let mut sorted = files_in_dir.to_vec();
+        sorted.sort_unstable_by(|a, b| {
+            b.class_count
+                .cmp(&a.class_count)
+                .then(b.function_count.cmp(&a.function_count))
+                .then(a.path.cmp(&b.path))
+        });
+        sorted
+    } else {
+        let mut sorted = files_in_dir.to_vec();
+        sorted.sort_unstable_by(|a, b| {
+            b.function_count
+                .cmp(&a.function_count)
+                .then(a.path.cmp(&b.path))
+        });
+        sorted
+    };
+
+    let top_n: Vec<String> = top_files_sorted
+        .iter()
+        .take(3)
+        .filter(|f| {
+            if has_classes {
+                f.class_count > 0
+            } else {
+                f.function_count > 0
+            }
+        })
+        .map(|f| {
+            let rel = Path::new(&f.path).strip_prefix(dir_path).map_or_else(
+                |_| {
+                    Path::new(&f.path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map_or_else(|| "?".to_owned(), std::borrow::ToOwned::to_owned)
+                },
+                |p| p.to_string_lossy().into_owned(),
+            );
+            let count = if has_classes {
+                f.class_count
+            } else {
+                f.function_count
+            };
+            let suffix = if has_classes { 'C' } else { 'F' };
+            format!("{rel}({count}{suffix})")
+        })
+        .collect();
+
+    if top_n.is_empty() {
+        String::new()
+    } else {
+        let joined = top_n.join(", ");
+        format!(" top: {joined}")
+    }
+}
+
+/// Aggregate directory statistics from analyzed files.
+fn aggregate_dir_stats(files_in_dir: &[&FileInfo]) -> (usize, usize, usize) {
+    let dir_loc: usize = files_in_dir.iter().map(|f| f.line_count).sum();
+    let dir_functions: usize = files_in_dir.iter().map(|f| f.function_count).sum();
+    let dir_classes: usize = files_in_dir.iter().map(|f| f.class_count).sum();
+    (dir_loc, dir_functions, dir_classes)
+}
+
 /// Format a compact summary for large directory analysis results.
 /// Used when output would exceed the size threshold or when explicitly requested.
 #[instrument(skip_all)]
 #[allow(clippy::too_many_lines)] // exhaustive directory summary formatting; splitting harms readability
-#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
 pub fn format_summary(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],
@@ -968,9 +1038,7 @@ pub fn format_summary(
                 }
             } else {
                 let dir_file_count = files_in_dir.len();
-                let dir_loc: usize = files_in_dir.iter().map(|f| f.line_count).sum();
-                let dir_functions: usize = files_in_dir.iter().map(|f| f.function_count).sum();
-                let dir_classes: usize = files_in_dir.iter().map(|f| f.class_count).sum();
+                let (dir_loc, dir_functions, dir_classes) = aggregate_dir_stats(&files_in_dir);
 
                 // Track largest non-excluded directory for SUGGESTION
                 let entry_name_str = name.to_string();
@@ -999,64 +1067,9 @@ pub fn format_summary(
 
                 // Build hint: top-N files sorted by class_count desc, fallback to function_count
                 let hint = if files_in_dir.len() > 1 && (dir_classes > 0 || dir_functions > 0) {
-                    let mut top_files = files_in_dir.clone();
-                    top_files.sort_unstable_by(|a, b| {
-                        b.class_count
-                            .cmp(&a.class_count)
-                            .then(b.function_count.cmp(&a.function_count))
-                            .then(a.path.cmp(&b.path))
-                    });
-
-                    let has_classes = top_files.iter().any(|f| f.class_count > 0);
-
-                    // Re-sort for function fallback if no classes
-                    if !has_classes {
-                        top_files.sort_unstable_by(|a, b| {
-                            b.function_count
-                                .cmp(&a.function_count)
-                                .then(a.path.cmp(&b.path))
-                        });
-                    }
-
+                    let has_classes = files_in_dir.iter().any(|f| f.class_count > 0);
                     let dir_path = Path::new(&dir_path_str);
-                    let top_n: Vec<String> = top_files
-                        .iter()
-                        .take(3)
-                        .filter(|f| {
-                            if has_classes {
-                                f.class_count > 0
-                            } else {
-                                f.function_count > 0
-                            }
-                        })
-                        .map(|f| {
-                            let rel = Path::new(&f.path).strip_prefix(dir_path).map_or_else(
-                                |_| {
-                                    Path::new(&f.path)
-                                        .file_name()
-                                        .and_then(|n| n.to_str())
-                                        .map_or_else(
-                                            || "?".to_owned(),
-                                            std::borrow::ToOwned::to_owned,
-                                        )
-                                },
-                                |p| p.to_string_lossy().into_owned(),
-                            );
-                            let count = if has_classes {
-                                f.class_count
-                            } else {
-                                f.function_count
-                            };
-                            let suffix = if has_classes { 'C' } else { 'F' };
-                            format!("{rel}({count}{suffix})")
-                        })
-                        .collect();
-                    if top_n.is_empty() {
-                        String::new()
-                    } else {
-                        let joined = top_n.join(", ");
-                        format!(" top: {joined}")
-                    }
+                    render_top_files_section(&files_in_dir, dir_path, has_classes)
                 } else {
                     String::new()
                 };
