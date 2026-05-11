@@ -82,6 +82,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "rmcp",
+ "rustls",
  "serde",
  "serde_json",
  "serial_test",
