@@ -31,6 +31,10 @@ pub struct MetricEvent {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_hit: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub timed_out: bool,
 }
 
 /// Sender half of the metrics channel; cloned and passed to tools for event emission.
@@ -462,6 +466,8 @@ mod tests {
             session_id: None,
             seq: None,
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         };
         tx.send(make_event()).unwrap();
         tx.send(make_event()).unwrap();
@@ -512,6 +518,8 @@ mod tests {
             session_id: None,
             seq: None,
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("analyze_directory"));
@@ -533,6 +541,8 @@ mod tests {
             session_id: None,
             seq: None,
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""result":"error""#));
@@ -555,6 +565,8 @@ mod tests {
             session_id: Some("1742468880123-42".to_string()),
             seq: Some(5),
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         };
         let serialized = serde_json::to_string(&event).unwrap();
         let json_str = r#"{"ts":1700000000000,"tool":"analyze_file","duration_ms":100,"output_chars":500,"param_path_depth":2,"max_depth":3,"result":"ok","error_type":null,"session_id":"1742468880123-42","seq":5}"#;
@@ -590,6 +602,8 @@ mod tests {
             session_id: Some("test-session-123".to_string()),
             seq: None,
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         })
         .unwrap();
         tx.send(MetricEvent {
@@ -604,6 +618,8 @@ mod tests {
             session_id: Some("test-session-123".to_string()),
             seq: None,
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         })
         .unwrap();
         drop(tx);
@@ -671,6 +687,8 @@ mod tests {
             session_id: Some("test-session-456".to_string()),
             seq: None,
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         })
         .unwrap();
         drop(tx);
@@ -725,6 +743,8 @@ mod tests {
             session_id: Some(marker.to_string()),
             seq: None,
             cache_hit: None,
+            exit_code: None,
+            timed_out: false,
         })
         .unwrap();
         drop(tx);
@@ -771,6 +791,7 @@ fn record_otel_metrics(event: &MetricEvent) {
 
     static DURATION_HISTOGRAM: OnceLock<Histogram<f64>> = OnceLock::new();
     static CALL_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
+    static CACHE_HITS_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
 
     let histogram = DURATION_HISTOGRAM.get_or_init(|| {
         global::meter("aptu-coder")
@@ -788,6 +809,13 @@ fn record_otel_metrics(event: &MetricEvent) {
             .build()
     });
 
+    let cache_hits_counter = CACHE_HITS_COUNTER.get_or_init(|| {
+        global::meter("aptu-coder")
+            .u64_counter("mcp.server.tool.cache_hits_total")
+            .with_description("Number of tool responses served from cache")
+            .build()
+    });
+
     let error_type = event.error_type.as_deref().unwrap_or("success");
     let attributes = [
         KeyValue::new("gen_ai.tool.name", event.tool.to_string()),
@@ -799,4 +827,11 @@ fn record_otel_metrics(event: &MetricEvent) {
 
     histogram.record(event.duration_ms as f64 / 1000.0, &attributes);
     counter.add(1, &attributes);
+
+    if event.cache_hit == Some(true) {
+        cache_hits_counter.add(
+            1,
+            &[KeyValue::new("gen_ai.tool.name", event.tool.to_string())],
+        );
+    }
 }

@@ -104,14 +104,28 @@ fn test_traceparent_malformed_no_panic() {
     let meta = rmcp::model::Meta(meta_map);
 
     // Act: call the real extraction function -- must not panic regardless of input
-    aptu_coder::extract_and_set_trace_context(Some(&meta));
+    aptu_coder::extract_and_set_trace_context(
+        Some(&meta),
+        aptu_coder::ClientMetadata {
+            session_id: None,
+            client_name: None,
+            client_version: None,
+        },
+    );
 }
 
 #[test]
 #[serial]
 fn test_traceparent_missing_meta_no_panic() {
     // Act: None meta must be handled silently
-    aptu_coder::extract_and_set_trace_context(None);
+    aptu_coder::extract_and_set_trace_context(
+        None,
+        aptu_coder::ClientMetadata {
+            session_id: None,
+            client_name: None,
+            client_version: None,
+        },
+    );
 }
 
 #[test]
