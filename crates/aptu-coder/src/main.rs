@@ -7,6 +7,7 @@ use aptu_coder::{
 };
 use rmcp::serve_server;
 use rmcp::transport::stdio;
+use rustls::crypto::aws_lc_rs;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as TokioMutex;
 use tracing_subscriber::filter::LevelFilter;
@@ -17,6 +18,10 @@ mod otel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    aws_lc_rs::default_provider()
+        .install_default()
+        .expect("failed to install rustls CryptoProvider");
+
     if std::env::args().any(|a| a == "--version") {
         println!("{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
