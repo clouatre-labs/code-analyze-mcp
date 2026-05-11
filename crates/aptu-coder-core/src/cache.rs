@@ -478,6 +478,7 @@ impl DiskCache {
     }
 
     /// Atomic write via NamedTempFile::persist (rename(2)). Silently drops all errors.
+    #[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
     pub fn put<T: Serialize>(&self, tool: &str, key: &blake3::Hash, value: &T) {
         if self.disabled {
             return;
