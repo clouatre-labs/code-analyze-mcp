@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: 2026 aptu-coder contributors -->
+
 # aptu-coder-remote
 
 Remote repository exploration tools for GitLab and GitHub, implemented as MCP tools.

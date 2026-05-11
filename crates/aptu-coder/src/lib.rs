@@ -3488,6 +3488,7 @@ impl CodeAnalyzer {
 /// Executes a shell command and returns the output.
 /// This is a free async function (not a method) to allow use in moka::future::Cache::get_with().
 /// It spawns the command, collects output with timeout handling, and persists output to slot files.
+#[allow(clippy::cognitive_complexity)] // TODO: refactor in follow-up issue
 async fn run_exec_impl(
     command: String,
     working_dir_path: Option<std::path::PathBuf>,

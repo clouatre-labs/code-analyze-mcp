@@ -2,6 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Platform, RemoteError, detect_platform, parse_line_range, slice_lines};
+use std::sync::Mutex;
+
+/// Serialise env-var mutations across tests to avoid data races.
+/// std::env is global process state; concurrent mutation is UB.
+static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+/// Run `f` with `key` set to `value` (or removed when `None`), then restore.
+fn with_env<F: FnOnce()>(key: &str, value: Option<&str>, f: F) {
+    let _guard = ENV_MUTEX.lock().unwrap();
+    let saved = std::env::var(key).ok();
+    // SAFETY: protected by ENV_MUTEX; no other thread mutates this key concurrently.
+    unsafe {
+        match value {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+    }
+    f();
+    unsafe {
+        match saved {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Platform detection tests
@@ -112,53 +137,26 @@ fn test_parse_line_range_invalid_zero_start() {
 
 #[test]
 fn test_missing_gitlab_token() {
-    // Remove the token from the environment for this test
-    let key = "GITLAB_TOKEN";
-    let saved = std::env::var(key).ok();
-    // SAFETY: single-threaded test; std::env is not thread-safe but isolation
-    // is acceptable here given the test binary is not run with --test-threads > 1
-    // for this crate.
-    unsafe {
-        std::env::remove_var(key);
-    }
-
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let result = rt.block_on(crate::fetch_tree("https://gitlab.com/o/r", None, None, 2));
-
-    // Restore the env var
-    if let Some(v) = saved {
-        unsafe {
-            std::env::set_var(key, v);
-        }
-    }
-
-    let err = result.expect_err("should fail with missing token");
-    assert!(
-        matches!(err, RemoteError::MissingGitLabToken),
-        "expected MissingGitLabToken, got: {err}"
-    );
+    with_env("GITLAB_TOKEN", None, || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(crate::fetch_tree("https://gitlab.com/o/r", None, None, 2));
+        let err = result.expect_err("should fail with missing token");
+        assert!(
+            matches!(err, RemoteError::MissingGitLabToken),
+            "expected MissingGitLabToken, got: {err}"
+        );
+    });
 }
 
 #[test]
 fn test_missing_github_token() {
-    let key = "GITHUB_TOKEN";
-    let saved = std::env::var(key).ok();
-    unsafe {
-        std::env::remove_var(key);
-    }
-
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let result = rt.block_on(crate::fetch_tree("https://github.com/o/r", None, None, 2));
-
-    if let Some(v) = saved {
-        unsafe {
-            std::env::set_var(key, v);
-        }
-    }
-
-    let err = result.expect_err("should fail with missing token");
-    assert!(
-        matches!(err, RemoteError::MissingGitHubToken),
-        "expected MissingGitHubToken, got: {err}"
-    );
+    with_env("GITHUB_TOKEN", None, || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(crate::fetch_tree("https://github.com/o/r", None, None, 2));
+        let err = result.expect_err("should fail with missing token");
+        assert!(
+            matches!(err, RemoteError::MissingGitHubToken),
+            "expected MissingGitHubToken, got: {err}"
+        );
+    });
 }
