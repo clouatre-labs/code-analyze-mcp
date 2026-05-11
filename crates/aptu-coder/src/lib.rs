@@ -3485,35 +3485,26 @@ impl CodeAnalyzer {
     }
 }
 
-/// Executes a shell command and returns the output.
-/// This is a free async function (not a method) to allow use in moka::future::Cache::get_with().
-/// It spawns the command, collects output with timeout handling, and persists output to slot files.
-#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
-async fn run_exec_impl(
-    command: String,
-    working_dir_path: Option<std::path::PathBuf>,
-    timeout_secs: Option<u64>,
+/// Build and configure a tokio::process::Command with stdio, working directory, and resource limits.
+fn build_exec_command(
+    command: &str,
+    working_dir_path: Option<&std::path::PathBuf>,
     memory_limit_mb: Option<u64>,
     cpu_limit_secs: Option<u64>,
-    stdin: Option<String>,
-    seq: u32,
-) -> types::ShellOutput {
-    use tokio::io::AsyncBufReadExt as _;
-    use tokio_stream::StreamExt as TokioStreamExt;
-    use tokio_stream::wrappers::LinesStream;
-
+    stdin_present: bool,
+) -> tokio::process::Command {
     let shell = resolve_shell();
     let mut cmd = tokio::process::Command::new(shell);
-    cmd.arg("-c").arg(&command);
+    cmd.arg("-c").arg(command);
 
-    if let Some(ref wd) = working_dir_path {
+    if let Some(wd) = working_dir_path {
         cmd.current_dir(wd);
     }
 
     cmd.stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
-    if stdin.is_some() {
+    if stdin_present {
         cmd.stdin(std::process::Stdio::piped());
     } else {
         cmd.stdin(std::process::Stdio::null());
@@ -3544,39 +3535,22 @@ async fn run_exec_impl(
         }
     }
 
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => {
-            return types::ShellOutput::new(
-                String::new(),
-                format!("failed to spawn command: {e}"),
-                format!("failed to spawn command: {e}"),
-                None,
-                false,
-                false,
-            );
-        }
-    };
+    cmd
+}
+
+/// Run a spawned child process with timeout handling and output draining.
+/// Returns (exit_code, timed_out, output_truncated, output_collection_error).
+async fn run_with_timeout(
+    mut child: tokio::process::Child,
+    timeout_secs: Option<u64>,
+    tx: tokio::sync::mpsc::UnboundedSender<(bool, String)>,
+) -> (Option<i32>, bool, bool, Option<String>) {
+    use tokio::io::AsyncBufReadExt as _;
+    use tokio_stream::StreamExt as TokioStreamExt;
+    use tokio_stream::wrappers::LinesStream;
 
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
-
-    if let Some(stdin_content) = stdin
-        && let Some(mut stdin_handle) = child.stdin.take()
-    {
-        use tokio::io::AsyncWriteExt as _;
-        match stdin_handle.write_all(stdin_content.as_bytes()).await {
-            Ok(()) => {
-                drop(stdin_handle);
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
-            Err(e) => {
-                warn!("failed to write stdin: {e}");
-            }
-        }
-    }
-
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(bool, String)>();
 
     let mut drain_task = tokio::spawn(async move {
         let so_stream = stdout_pipe.map(|p| {
@@ -3609,7 +3583,7 @@ async fn run_exec_impl(
         }
     });
 
-    let (exit_code, timed_out, mut output_truncated, output_collection_error) = tokio::select! {
+    tokio::select! {
         _ = &mut drain_task => {
             let (status, drain_truncated) = match tokio::time::timeout(
                 std::time::Duration::from_millis(500),
@@ -3643,7 +3617,62 @@ async fn run_exec_impl(
             drain_task.abort();
             (None, true, false, None)
         }
+    }
+}
+
+/// Executes a shell command and returns the output.
+/// This is a free async function (not a method) to allow use in moka::future::Cache::get_with().
+/// It spawns the command, collects output with timeout handling, and persists output to slot files.
+async fn run_exec_impl(
+    command: String,
+    working_dir_path: Option<std::path::PathBuf>,
+    timeout_secs: Option<u64>,
+    memory_limit_mb: Option<u64>,
+    cpu_limit_secs: Option<u64>,
+    stdin: Option<String>,
+    seq: u32,
+) -> types::ShellOutput {
+    let mut cmd = build_exec_command(
+        &command,
+        working_dir_path.as_ref(),
+        memory_limit_mb,
+        cpu_limit_secs,
+        stdin.is_some(),
+    );
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            return types::ShellOutput::new(
+                String::new(),
+                format!("failed to spawn command: {e}"),
+                format!("failed to spawn command: {e}"),
+                None,
+                false,
+                false,
+            );
+        }
     };
+
+    if let Some(stdin_content) = stdin
+        && let Some(mut stdin_handle) = child.stdin.take()
+    {
+        use tokio::io::AsyncWriteExt as _;
+        match stdin_handle.write_all(stdin_content.as_bytes()).await {
+            Ok(()) => {
+                drop(stdin_handle);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
+            Err(e) => {
+                warn!("failed to write stdin: {e}");
+            }
+        }
+    }
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(bool, String)>();
+
+    let (exit_code, timed_out, mut output_truncated, output_collection_error) =
+        run_with_timeout(child, timeout_secs, tx).await;
 
     let mut lines: Vec<(bool, String)> = Vec::new();
     while let Some(item) = rx.recv().await {

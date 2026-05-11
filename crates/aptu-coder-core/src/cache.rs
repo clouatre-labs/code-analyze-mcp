@@ -477,8 +477,27 @@ impl DiskCache {
         }
     }
 
+    /// Serialize and compress a value. Returns None if serialization or compression fails.
+    fn serialize_entry<T: Serialize>(value: &T) -> Option<Vec<u8>> {
+        let bytes = serde_json::to_vec(value).ok()?;
+        snap::raw::Encoder::new().compress_vec(&bytes).ok()
+    }
+
+    /// Write compressed data to a temporary file and atomically rename it to the target path.
+    /// Returns None if any step fails; silently drops all errors.
+    fn write_entry_atomically(
+        dir: &std::path::Path,
+        path: &std::path::Path,
+        compressed: &[u8],
+    ) -> Option<()> {
+        use std::io::Write;
+        let mut tmp = NamedTempFile::new_in(dir).ok()?;
+        tmp.write_all(compressed).ok()?;
+        tmp.persist(path).ok()?;
+        Some(())
+    }
+
     /// Atomic write via NamedTempFile::persist (rename(2)). Silently drops all errors.
-    #[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
     pub fn put<T: Serialize>(&self, tool: &str, key: &blake3::Hash, value: &T) {
         if self.disabled {
             return;
@@ -493,36 +512,11 @@ impl DiskCache {
             self.record_write_failure();
             return;
         }
-        let bytes = match serde_json::to_vec(value) {
-            Ok(b) => b,
-            Err(e) => {
-                debug!(tool, error = %e, "disk cache serialization failed");
-                return;
-            }
+        let compressed = match Self::serialize_entry(value) {
+            Some(c) => c,
+            None => return,
         };
-        let compressed = match snap::raw::Encoder::new().compress_vec(&bytes) {
-            Ok(c) => c,
-            Err(e) => {
-                debug!(tool, error = %e, "disk cache compression failed");
-                return;
-            }
-        };
-        let mut tmp = match NamedTempFile::new_in(&dir) {
-            Ok(f) => f,
-            Err(e) => {
-                warn!(tool, error = %e, "disk cache: failed to create temp file");
-                self.record_write_failure();
-                return;
-            }
-        };
-        use std::io::Write;
-        if let Err(e) = tmp.write_all(&compressed) {
-            warn!(tool, error = %e, "disk cache: write failed");
-            self.record_write_failure();
-            return;
-        }
-        if let Err(e) = tmp.persist(&path) {
-            warn!(tool, error = %e, "disk cache: atomic rename failed");
+        if Self::write_entry_atomically(&dir, &path, &compressed).is_none() {
             self.record_write_failure();
         }
     }
