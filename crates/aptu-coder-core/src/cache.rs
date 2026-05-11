@@ -389,16 +389,25 @@ impl DiskCache {
     /// If `disabled` is true, or if directory creation fails, all operations are no-ops.
     pub fn new(base: std::path::PathBuf, disabled: bool) -> Self {
         if disabled {
-            return Self { base, disabled: true };
+            return Self {
+                base,
+                disabled: true,
+            };
         }
         if let Err(e) = std::fs::create_dir_all(&base) {
             warn!(path = %base.display(), error = %e, "disk cache disabled: failed to create cache directory");
-            return Self { base, disabled: true };
+            return Self {
+                base,
+                disabled: true,
+            };
         }
         if let Err(e) = std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o700)) {
             warn!(path = %base.display(), error = %e, "disk cache: failed to set directory permissions to 0700");
         }
-        Self { base, disabled: false }
+        Self {
+            base,
+            disabled: false,
+        }
     }
 
     pub fn entry_path(&self, tool: &str, key: &blake3::Hash) -> std::path::PathBuf {
@@ -564,7 +573,13 @@ mod disk_cache_tests {
         let key = blake3::hash(b"should-not-exist");
         cache.put("analyze_file", &key, &serde_json::json!({"x": 1}));
         let result: Option<serde_json::Value> = cache.get("analyze_file", &key);
-        assert!(result.is_none(), "cache must be disabled after dir creation failure");
-        assert!(cache.disabled, "disabled flag must be true after dir creation failure");
+        assert!(
+            result.is_none(),
+            "cache must be disabled after dir creation failure"
+        );
+        assert!(
+            cache.disabled,
+            "disabled flag must be true after dir creation failure"
+        );
     }
 }
