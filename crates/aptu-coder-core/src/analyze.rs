@@ -152,7 +152,7 @@ impl FileAnalysisOutput {
 #[instrument(skip_all, fields(path = %root.display()))]
 // public API; callers expect owned semantics
 #[allow(clippy::needless_pass_by_value)]
-#[allow(clippy::cognitive_complexity)] // TODO: refactor in follow-up issue
+#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
 pub fn analyze_directory_with_progress(
     root: &Path,
     entries: Vec<WalkEntry>,
@@ -1320,7 +1320,7 @@ fn resolve_wildcard_imports(file_path: &Path, imports: &mut [ImportInfo]) {
 }
 
 /// Resolve one wildcard import in place. On any failure the import is left unchanged.
-#[allow(clippy::cognitive_complexity)] // TODO: refactor in follow-up issue
+#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
 fn resolve_single_wildcard(
     import: &mut ImportInfo,
     file_path: &Path,
@@ -1397,7 +1397,7 @@ fn locate_target_file(
 }
 
 /// Read and parse a target .py file, returning its exported symbols.
-#[allow(clippy::cognitive_complexity)] // TODO: refactor in follow-up issue
+#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
 fn parse_target_symbols(target_path: &Path, module: &str) -> Option<Vec<String>> {
     use tree_sitter::Parser;
 

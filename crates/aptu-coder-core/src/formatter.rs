@@ -843,7 +843,7 @@ pub fn format_focused_summary(
 /// Used when output would exceed the size threshold or when explicitly requested.
 #[instrument(skip_all)]
 #[allow(clippy::too_many_lines)] // exhaustive directory summary formatting; splitting harms readability
-#[allow(clippy::cognitive_complexity)] // TODO: refactor in follow-up issue
+#[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
 pub fn format_summary(
     entries: &[WalkEntry],
     analysis_results: &[FileInfo],

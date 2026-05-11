@@ -88,7 +88,7 @@ impl MetricsWriter {
         }
     }
 
-    #[allow(clippy::cognitive_complexity)] // TODO: refactor in follow-up issue
+    #[allow(clippy::cognitive_complexity)] // TODO(#846): refactor to reduce complexity
     pub async fn run(mut self) {
         cleanup_old_files(&self.base_dir).await;
         let mut current_date = current_date_str();
