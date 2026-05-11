@@ -14,7 +14,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 
 /// A single metric event emitted by a tool invocation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MetricEvent {
     pub ts: u64,
     pub tool: &'static str,
@@ -31,6 +32,8 @@ pub struct MetricEvent {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_hit: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_tier: Option<&'static str>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -468,6 +471,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         };
         tx.send(make_event()).unwrap();
         tx.send(make_event()).unwrap();
@@ -520,6 +524,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("analyze_directory"));
@@ -543,6 +548,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""result":"error""#));
@@ -567,6 +573,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         };
         let serialized = serde_json::to_string(&event).unwrap();
         let json_str = r#"{"ts":1700000000000,"tool":"analyze_file","duration_ms":100,"output_chars":500,"param_path_depth":2,"max_depth":3,"result":"ok","error_type":null,"session_id":"1742468880123-42","seq":5}"#;
@@ -604,6 +611,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         })
         .unwrap();
         tx.send(MetricEvent {
@@ -620,6 +628,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         })
         .unwrap();
         drop(tx);
@@ -689,6 +698,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         })
         .unwrap();
         drop(tx);
@@ -745,6 +755,7 @@ mod tests {
             cache_hit: None,
             exit_code: None,
             timed_out: false,
+            cache_tier: None,
         })
         .unwrap();
         drop(tx);
