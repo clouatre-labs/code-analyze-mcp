@@ -484,17 +484,16 @@ impl DiskCache {
     }
 
     /// Write compressed data to a temporary file and atomically rename it to the target path.
-    /// Returns None if any step fails; silently drops all errors.
+    /// Returns Err if any step fails; caller silently drops the error.
     fn write_entry_atomically(
         dir: &std::path::Path,
         path: &std::path::Path,
         compressed: &[u8],
-    ) -> Option<()> {
+    ) -> Result<(), std::io::Error> {
         use std::io::Write;
-        let mut tmp = NamedTempFile::new_in(dir).ok()?;
-        tmp.write_all(compressed).ok()?;
-        tmp.persist(path).ok()?;
-        Some(())
+        let mut tmp = NamedTempFile::new_in(dir)?;
+        tmp.write_all(compressed)?;
+        tmp.persist(path).map(|_| ()).map_err(|e| e.error)
     }
 
     /// Atomic write via NamedTempFile::persist (rename(2)). Silently drops all errors.
@@ -516,7 +515,10 @@ impl DiskCache {
             Some(c) => c,
             None => return,
         };
-        if Self::write_entry_atomically(&dir, &path, &compressed).is_none() {
+        if Self::write_entry_atomically(&dir, &path, &compressed)
+            .ok()
+            .is_none()
+        {
             self.record_write_failure();
         }
     }

@@ -122,7 +122,10 @@ impl MetricsWriter {
             *current_file = Some(base_dir.join(format!("metrics-{}.jsonl", current_date)));
         }
 
-        current_file.as_ref().unwrap().clone()
+        current_file
+            .as_ref()
+            .expect("current_file is guaranteed Some after check above")
+            .clone()
     }
 
     /// Receive and accumulate a batch of events from the channel.
