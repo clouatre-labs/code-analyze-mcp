@@ -44,4 +44,4 @@ tracing-opentelemetry = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true }
 tempfile = { workspace = true }
-serial_test = "3"
+serial_test = "=3.4.0"
