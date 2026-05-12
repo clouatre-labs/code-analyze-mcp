@@ -456,3 +456,127 @@ async fn test_github_not_found() {
         "expected NotFound, got {result:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// detect_platform uncovered branches
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_detect_platform_non_https() {
+    let result = detect_platform("http://github.com/owner/repo");
+    assert!(matches!(result, Err(RemoteError::InvalidUrl(_))));
+}
+
+#[test]
+fn test_detect_platform_too_few_segments() {
+    let result = detect_platform("https://github.com/owner");
+    assert!(matches!(result, Err(RemoteError::InvalidUrl(_))));
+}
+
+#[test]
+fn test_detect_platform_github_extra_segments() {
+    let result = detect_platform("https://github.com/owner/repo/extra");
+    assert!(matches!(result, Err(RemoteError::InvalidUrl(_))));
+}
+
+// ---------------------------------------------------------------------------
+// parse_line_range uncovered branches
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_parse_line_range_zero_start() {
+    let result = parse_line_range("0-5");
+    assert!(matches!(result, Err(RemoteError::InvalidLineRange(_))));
+}
+
+#[test]
+fn test_parse_line_range_end_before_start() {
+    let result = parse_line_range("5-3");
+    assert!(matches!(result, Err(RemoteError::InvalidLineRange(_))));
+}
+
+// ---------------------------------------------------------------------------
+// build_tree_output coverage (via github_fetch_tree which calls it)
+// and fetch_tree / fetch_file public API missing-token error paths
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_fetch_tree_missing_github_token() {
+    init_crypto();
+    use super::fetch_tree;
+    let _guard = ENV_MUTEX.lock().unwrap();
+    // SAFETY: protected by ENV_MUTEX
+    unsafe { std::env::remove_var("GITHUB_TOKEN") };
+    let result = fetch_tree("https://github.com/owner/repo", None, None, 1).await;
+    assert!(
+        matches!(result, Err(RemoteError::MissingGitHubToken)),
+        "expected MissingGitHubToken, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_fetch_file_missing_github_token() {
+    init_crypto();
+    use super::fetch_file;
+    let _guard = ENV_MUTEX.lock().unwrap();
+    unsafe { std::env::remove_var("GITHUB_TOKEN") };
+    let result = fetch_file("https://github.com/owner/repo", "README.md", None, None).await;
+    assert!(
+        matches!(result, Err(RemoteError::MissingGitHubToken)),
+        "expected MissingGitHubToken, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_fetch_tree_missing_gitlab_token() {
+    use super::fetch_tree;
+    let _guard = ENV_MUTEX.lock().unwrap();
+    unsafe { std::env::remove_var("GITLAB_TOKEN") };
+    let result = fetch_tree("https://gitlab.com/owner/repo", None, None, 1).await;
+    assert!(
+        matches!(result, Err(RemoteError::MissingGitLabToken)),
+        "expected MissingGitLabToken, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_fetch_file_missing_gitlab_token() {
+    use super::fetch_file;
+    let _guard = ENV_MUTEX.lock().unwrap();
+    unsafe { std::env::remove_var("GITLAB_TOKEN") };
+    let result = fetch_file("https://gitlab.com/owner/repo", "README.md", None, None).await;
+    assert!(
+        matches!(result, Err(RemoteError::MissingGitLabToken)),
+        "expected MissingGitLabToken, got {result:?}"
+    );
+}
+
+#[test]
+fn test_build_tree_output_extension_counts() {
+    use super::{RemoteTreeEntry, build_tree_output};
+
+    let entries = vec![
+        RemoteTreeEntry {
+            path: "src".to_string(),
+            entry_type: "tree".to_string(),
+        },
+        RemoteTreeEntry {
+            path: "src/main.rs".to_string(),
+            entry_type: "blob".to_string(),
+        },
+        RemoteTreeEntry {
+            path: "src/lib.rs".to_string(),
+            entry_type: "blob".to_string(),
+        },
+        RemoteTreeEntry {
+            path: "README.md".to_string(),
+            entry_type: "blob".to_string(),
+        },
+    ];
+    let out = build_tree_output(entries);
+    assert_eq!(out.total_files, 3);
+    assert_eq!(out.extension_counts.get("rs"), Some(&2));
+    assert_eq!(out.extension_counts.get("md"), Some(&1));
+    assert!(out.formatted.contains("total files: 3"));
+    assert_eq!(out.entries.len(), 4);
+}

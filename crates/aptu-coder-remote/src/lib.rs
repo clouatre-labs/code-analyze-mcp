@@ -173,7 +173,7 @@ pub fn slice_lines(content: &str, start: usize, end: usize) -> String {
 // Internal: extension counting + formatting
 // ---------------------------------------------------------------------------
 
-fn build_tree_output(entries: Vec<RemoteTreeEntry>) -> RemoteTreeOutput {
+pub(crate) fn build_tree_output(entries: Vec<RemoteTreeEntry>) -> RemoteTreeOutput {
     let mut extension_counts: HashMap<String, u64> = HashMap::new();
     let mut total_files: u64 = 0;
 
