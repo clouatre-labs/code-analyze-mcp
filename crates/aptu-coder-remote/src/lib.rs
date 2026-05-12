@@ -173,7 +173,7 @@ pub fn slice_lines(content: &str, start: usize, end: usize) -> String {
 // Internal: extension counting + formatting
 // ---------------------------------------------------------------------------
 
-fn build_tree_output(entries: Vec<RemoteTreeEntry>) -> RemoteTreeOutput {
+pub(crate) fn build_tree_output(entries: Vec<RemoteTreeEntry>) -> RemoteTreeOutput {
     let mut extension_counts: HashMap<String, u64> = HashMap::new();
     let mut total_files: u64 = 0;
 
@@ -222,7 +222,7 @@ struct GitLabTreeItem {
     path: String,
 }
 
-async fn gitlab_fetch_tree(
+pub(crate) async fn gitlab_fetch_tree(
     host: &str,
     token: &str,
     project: &str, // "owner/repo"
@@ -290,7 +290,7 @@ struct GitLabFileContent {
     size: Option<u64>,
 }
 
-async fn gitlab_fetch_file(
+pub(crate) async fn gitlab_fetch_file(
     host: &str,
     token: &str,
     project: &str,
@@ -354,18 +354,49 @@ async fn gitlab_fetch_file(
 // GitHub helpers (using the `octocrab` crate)
 // ---------------------------------------------------------------------------
 
-async fn github_fetch_tree(
+/// Build an `Octocrab` instance. When `base_url` is `Some`, the base URI is
+/// overridden (used in tests to point at a wiremock server). The builder is
+/// fully consumed here -- no non-`Send` state leaks into the caller's async
+/// future.
+fn build_octocrab(token: &str, base_url: Option<&str>) -> Result<octocrab::Octocrab, RemoteError> {
+    let builder = octocrab::OctocrabBuilder::new().personal_token(token);
+    let builder = if let Some(url) = base_url {
+        builder
+            .base_uri(url)
+            .map_err(|e| RemoteError::Api(e.to_string()))?
+    } else {
+        builder
+    };
+    builder.build().map_err(|e| RemoteError::Api(e.to_string()))
+}
+
+/// Map an octocrab error to `RemoteError`. Checks the `status_code` on the
+/// inner `GitHubError` when the variant is `GitHub`; falls back to checking
+/// the `Display` string for "404" / "Not Found".
+fn map_octocrab_err(e: octocrab::Error) -> RemoteError {
+    if let octocrab::Error::GitHub { ref source, .. } = e
+        && source.status_code.as_u16() == 404
+    {
+        return RemoteError::NotFound(source.to_string());
+    }
+    let msg = e.to_string();
+    if msg.contains("404") || msg.contains("Not Found") {
+        RemoteError::NotFound(msg)
+    } else {
+        RemoteError::Api(msg)
+    }
+}
+
+pub(crate) async fn github_fetch_tree(
     token: &str,
     owner: &str,
     repo: &str,
     path: Option<&str>,
     git_ref: Option<&str>,
     depth: u32,
+    base_url: Option<&str>,
 ) -> Result<Vec<RemoteTreeEntry>, RemoteError> {
-    let octo = octocrab::OctocrabBuilder::new()
-        .personal_token(token)
-        .build()
-        .map_err(|e| RemoteError::Api(e.to_string()))?;
+    let octo = build_octocrab(token, base_url)?;
 
     let path_str = path.unwrap_or("").to_string();
     let repo_handler = octo.repos(owner, repo);
@@ -376,14 +407,7 @@ async fn github_fetch_tree(
         builder
     };
 
-    let mut content_items = builder.send().await.map_err(|e| {
-        let msg = e.to_string();
-        if msg.contains("404") || msg.contains("Not Found") {
-            RemoteError::NotFound(msg)
-        } else {
-            RemoteError::Api(msg)
-        }
-    })?;
+    let mut content_items = builder.send().await.map_err(map_octocrab_err)?;
 
     let items = content_items.take_items();
 
@@ -434,17 +458,15 @@ async fn github_fetch_tree(
     Ok(entries)
 }
 
-async fn github_fetch_file(
+pub(crate) async fn github_fetch_file(
     token: &str,
     owner: &str,
     repo: &str,
     path: &str,
     git_ref: Option<&str>,
+    base_url: Option<&str>,
 ) -> Result<RemoteFileOutput, RemoteError> {
-    let octo = octocrab::OctocrabBuilder::new()
-        .personal_token(token)
-        .build()
-        .map_err(|e| RemoteError::Api(e.to_string()))?;
+    let octo = build_octocrab(token, base_url)?;
 
     let repo_handler = octo.repos(owner, repo);
     let builder = repo_handler.get_content().path(path);
@@ -454,14 +476,7 @@ async fn github_fetch_file(
         builder
     };
 
-    let mut content_items = builder.send().await.map_err(|e| {
-        let msg = e.to_string();
-        if msg.contains("404") || msg.contains("Not Found") {
-            RemoteError::NotFound(msg)
-        } else {
-            RemoteError::Api(msg)
-        }
-    })?;
+    let mut content_items = builder.send().await.map_err(map_octocrab_err)?;
 
     let items = content_items.take_items();
     let item = items
@@ -511,7 +526,8 @@ pub async fn fetch_tree(
         Platform::GitHub => {
             let token =
                 std::env::var("GITHUB_TOKEN").map_err(|_| RemoteError::MissingGitHubToken)?;
-            let entries = github_fetch_tree(&token, &owner, &repo, path, git_ref, depth).await?;
+            let entries =
+                github_fetch_tree(&token, &owner, &repo, path, git_ref, depth, None).await?;
             Ok(build_tree_output(entries))
         }
     }
@@ -539,7 +555,7 @@ pub async fn fetch_file(
         Platform::GitHub => {
             let token =
                 std::env::var("GITHUB_TOKEN").map_err(|_| RemoteError::MissingGitHubToken)?;
-            github_fetch_file(&token, &owner, &repo, path, git_ref).await?
+            github_fetch_file(&token, &owner, &repo, path, git_ref, None).await?
         }
     };
 
