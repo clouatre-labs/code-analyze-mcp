@@ -1978,8 +1978,8 @@ impl CodeAnalyzer {
                 error_type: None,
                 session_id: sid,
                 seq: Some(seq),
-                cache_hit: Some(false),
-                cache_tier: Some(CacheTier::Miss.as_str()),
+                cache_hit: None,
+                cache_tier: None,
                 cache_write_failure: None,
                 exit_code: None,
                 timed_out: false,
@@ -2224,8 +2224,8 @@ impl CodeAnalyzer {
             error_type: None,
             session_id: sid,
             seq: Some(seq),
-            cache_hit: Some(false),
-            cache_tier: Some(CacheTier::Miss.as_str()),
+            cache_hit: None,
+            cache_tier: None,
             cache_write_failure: None,
             exit_code: None,
             timed_out: false,
@@ -2324,158 +2324,68 @@ impl CodeAnalyzer {
             )));
         }
 
-        // Check file cache using mtime-keyed CacheKey (same pattern as handle_file_details_mode).
-        let module_cache_key = std::fs::metadata(&params.path).ok().and_then(|meta| {
-            meta.modified().ok().map(|mtime| cache::CacheKey {
-                path: std::path::PathBuf::from(&params.path),
-                modified: mtime,
-                mode: AnalysisMode::FileDetails,
-            })
-        });
-        let (module_info, module_cache_hit) = if let Some(ref key) = module_cache_key
-            && let Some(cached_file) = self.cache.get(key)
-        {
-            // Reconstruct ModuleInfo from the cached FileAnalysisOutput.
-            // Path and language are derived from params.path since FileAnalysisOutput
-            // does not store them.
-            let file_path = std::path::Path::new(&params.path);
-            let name = file_path
-                .file_name()
-                .and_then(|n: &std::ffi::OsStr| n.to_str())
-                .unwrap_or("unknown")
-                .to_string();
-            let language = file_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .and_then(aptu_coder_core::lang::language_for_extension)
-                .unwrap_or("unknown")
-                .to_string();
-            let mut mi = types::ModuleInfo::default();
-            mi.name = name;
-            mi.line_count = cached_file.line_count;
-            mi.language = language;
-            mi.functions = cached_file
-                .semantic
-                .functions
-                .iter()
-                .map(|f| {
-                    let mut mfi = types::ModuleFunctionInfo::default();
-                    mfi.name = f.name.clone();
-                    mfi.line = f.line;
-                    mfi
-                })
-                .collect();
-            mi.imports = cached_file
-                .semantic
-                .imports
-                .iter()
-                .map(|i| {
-                    let mut mii = types::ModuleImportInfo::default();
-                    mii.module = i.module.clone();
-                    mii.items = i.items.clone();
-                    mii
-                })
-                .collect();
-            (mi, true)
-        } else {
-            // Cache miss: call analyze_file (returns FileAnalysisOutput) so we can populate
-            // the file cache for future calls. Then reconstruct ModuleInfo from the result,
-            // mirroring the cache-hit path above.
-            let file_output = match analyze::analyze_file(&params.path, None) {
-                Ok(v) => v,
+        // Route through handle_file_details_mode to inherit L1+L2 caching
+        let mut analyze_file_params: AnalyzeFileParams = Default::default();
+        analyze_file_params.path = params.path.clone();
+        let (arc_output, module_tier) =
+            match self.handle_file_details_mode(&analyze_file_params).await {
+                Ok((output, tier)) => (output, tier),
                 Err(e) => {
-                    let error_data = match &e {
-                        analyze::AnalyzeError::Io(io_err) => match io_err.kind() {
-                            std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {
-                                ErrorData::new(
-                                    rmcp::model::ErrorCode::INVALID_PARAMS,
-                                    format!("Failed to analyze module: {e}"),
-                                    Some(error_meta(
-                                        "validation",
-                                        false,
-                                        "ensure file exists, is readable, and has a supported extension",
-                                    )),
-                                )
-                            }
-                            _ => ErrorData::new(
-                                rmcp::model::ErrorCode::INTERNAL_ERROR,
-                                format!("Failed to analyze module: {e}"),
-                                Some(error_meta("internal", false, "report this as a bug")),
-                            ),
-                        },
-                        analyze::AnalyzeError::UnsupportedLanguage(_)
-                        | analyze::AnalyzeError::InvalidRange { .. }
-                        | analyze::AnalyzeError::NotAFile(_) => ErrorData::new(
-                            rmcp::model::ErrorCode::INVALID_PARAMS,
-                            format!("Failed to analyze module: {e}"),
-                            Some(error_meta(
-                                "validation",
-                                false,
-                                "ensure the path is a supported source file",
-                            )),
-                        ),
+                    let error_data = match e.code {
+                        rmcp::model::ErrorCode::INVALID_PARAMS => e,
                         _ => ErrorData::new(
                             rmcp::model::ErrorCode::INTERNAL_ERROR,
-                            format!("Failed to analyze module: {e}"),
+                            format!("Failed to analyze module: {}", e.message),
                             Some(error_meta("internal", false, "report this as a bug")),
                         ),
                     };
                     return Ok(err_to_tool_result(error_data));
                 }
             };
-            let arc_output = std::sync::Arc::new(file_output);
-            if let Some(key) = module_cache_key.clone() {
-                self.cache.put(key, arc_output.clone());
-            }
-            let file_path = std::path::Path::new(&params.path);
-            let name = file_path
-                .file_name()
-                .and_then(|n: &std::ffi::OsStr| n.to_str())
-                .unwrap_or("unknown")
-                .to_string();
-            let language = file_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .and_then(aptu_coder_core::lang::language_for_extension)
-                .unwrap_or("unknown")
-                .to_string();
-            let mut mi = types::ModuleInfo::default();
-            mi.name = name;
-            mi.line_count = arc_output.line_count;
-            mi.language = language;
-            mi.functions = arc_output
-                .semantic
-                .functions
-                .iter()
-                .map(|f| {
-                    let mut mfi = types::ModuleFunctionInfo::default();
-                    mfi.name = f.name.clone();
-                    mfi.line = f.line;
-                    mfi
-                })
-                .collect();
-            mi.imports = arc_output
-                .semantic
-                .imports
-                .iter()
-                .map(|i| {
-                    let mut mii = types::ModuleImportInfo::default();
-                    mii.module = i.module.clone();
-                    mii.items = i.items.clone();
-                    mii
-                })
-                .collect();
-            (mi, false)
-        };
+
+        // Reconstruct ModuleInfo from FileAnalysisOutput
+        let file_path = std::path::Path::new(&params.path);
+        let name = file_path
+            .file_name()
+            .and_then(|n: &std::ffi::OsStr| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let language = file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .and_then(aptu_coder_core::lang::language_for_extension)
+            .unwrap_or("unknown")
+            .to_string();
+        let mut module_info = types::ModuleInfo::default();
+        module_info.name = name;
+        module_info.line_count = arc_output.line_count;
+        module_info.language = language;
+        module_info.functions = arc_output
+            .semantic
+            .functions
+            .iter()
+            .map(|f| {
+                let mut mfi = types::ModuleFunctionInfo::default();
+                mfi.name = f.name.clone();
+                mfi.line = f.line;
+                mfi
+            })
+            .collect();
+        module_info.imports = arc_output
+            .semantic
+            .imports
+            .iter()
+            .map(|i| {
+                let mut mii = types::ModuleImportInfo::default();
+                mii.module = i.module.clone();
+                mii.items = i.items.clone();
+                mii
+            })
+            .collect();
 
         let text = format_module_info(&module_info);
 
         // Record cache tier in span
-        let module_tier = if module_cache_hit {
-            CacheTier::L1Memory
-        } else {
-            CacheTier::Miss
-        };
         tracing::Span::current().record("cache_tier", module_tier.as_str());
 
         // Add content_hash to _meta
