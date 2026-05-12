@@ -3853,6 +3853,12 @@ struct FocusedAnalysisParams {
     parse_timeout_micros: Option<u64>,
 }
 
+fn disable_routes(router: &mut ToolRouter<CodeAnalyzer>, tools: &[&'static str]) {
+    for tool in tools {
+        router.disable_route(*tool);
+    }
+}
+
 #[tool_handler]
 impl ServerHandler for CodeAnalyzer {
     #[instrument(skip(self, context), fields(service.name = tracing::field::Empty, service.version = tracing::field::Empty))]
@@ -3979,24 +3985,27 @@ impl ServerHandler for CodeAnalyzer {
             // Profiles: "edit" (3 tools), "analyze" (5 tools), "remote" (all 9 tools), absent/unknown (7 tools, no remote_*).
             let enable_remote = active_profile.as_deref() == Some("remote");
             if !enable_remote {
-                router.disable_route("remote_tree");
-                router.disable_route("remote_file");
+                disable_routes(&mut router, &["remote_tree", "remote_file"]);
             }
 
             if let Some(ref profile) = active_profile {
                 match profile.as_str() {
                     "edit" => {
                         // Enable only: edit_replace, edit_overwrite, exec_command
-                        router.disable_route("analyze_directory");
-                        router.disable_route("analyze_file");
-                        router.disable_route("analyze_module");
-                        router.disable_route("analyze_symbol");
+                        disable_routes(
+                            &mut router,
+                            &[
+                                "analyze_directory",
+                                "analyze_file",
+                                "analyze_module",
+                                "analyze_symbol",
+                            ],
+                        );
                         // remote_tree and remote_file already disabled above
                     }
                     "analyze" => {
                         // Enable only: analyze_directory, analyze_file, analyze_module, analyze_symbol, exec_command
-                        router.disable_route("edit_replace");
-                        router.disable_route("edit_overwrite");
+                        disable_routes(&mut router, &["edit_replace", "edit_overwrite"]);
                         // remote_tree and remote_file already disabled above
                     }
                     "remote" => {
