@@ -6,8 +6,15 @@ use base64::Engine;
 use std::sync::{Mutex, OnceLock};
 
 /// Install the rustls CryptoProvider exactly once per test process.
-/// Required because octocrab and wiremock both pull in rustls, which panics
-/// if no provider is installed when TLS is initialised.
+///
+/// octocrab and wiremock both pull in rustls transitively. rustls panics at
+/// runtime if no `CryptoProvider` has been installed when TLS is first
+/// initialised. In the production binary this is done in `main()` via
+/// `aws_lc_rs::default_provider().install_default()`. Tests have no `main`,
+/// so each test that creates an `Octocrab` instance or a wiremock `MockServer`
+/// must call this function before doing so. The `OnceLock` ensures the
+/// provider is installed at most once regardless of test execution order or
+/// parallelism.
 fn init_crypto() {
     static CRYPTO: OnceLock<()> = OnceLock::new();
     CRYPTO.get_or_init(|| {
