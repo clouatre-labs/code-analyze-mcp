@@ -15,18 +15,14 @@
     "brave_search": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@brave/brave-search-mcp-server", "--transport", "stdio"],
+      "args": [
+        "-y",
+        "@brave/brave-search-mcp-server",
+        "--transport",
+        "stdio"
+      ],
       "env": {
         "BRAVE_API_KEY": "${BRAVE_API_KEY}"
-      }
-    },
-    "aptu": {
-      "type": "stdio",
-      "command": "aptu-mcp",
-      "args": ["--read-only"],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
-        "GROQ_API_KEY": "${GROQ_API_KEY}"
       }
     }
   }
