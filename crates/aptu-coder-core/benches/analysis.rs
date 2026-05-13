@@ -259,6 +259,41 @@ fn analyze_module_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
+fn analyze_directory_depth_benchmark(c: &mut Criterion) {
+    let mut group = c.benchmark_group("analyze_directory_depth");
+    group.sample_size(10);
+
+    // Benchmark max_depth=1 at repo root (sync walker path)
+    group.bench_function("depth_1_repo_root", |b| {
+        b.iter(|| {
+            let path = std::hint::black_box(Path::new("."));
+            let entries =
+                aptu_coder_core::traversal::walk_directory(path, std::hint::black_box(Some(1)))
+                    .unwrap();
+            let progress = Arc::new(AtomicUsize::new(0));
+            let ct = CancellationToken::new();
+
+            aptu_coder_core::analyze::analyze_directory_with_progress(path, entries, progress, ct)
+        });
+    });
+
+    // Benchmark max_depth=2 at repo root (parallel walker path for comparison)
+    group.bench_function("depth_2_repo_root", |b| {
+        b.iter(|| {
+            let path = std::hint::black_box(Path::new("."));
+            let entries =
+                aptu_coder_core::traversal::walk_directory(path, std::hint::black_box(Some(2)))
+                    .unwrap();
+            let progress = Arc::new(AtomicUsize::new(0));
+            let ct = CancellationToken::new();
+
+            aptu_coder_core::analyze::analyze_directory_with_progress(path, entries, progress, ct)
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     overview_benchmark,
@@ -267,6 +302,7 @@ criterion_group!(
     subtree_count_overhead,
     subtree_count_overhead_500,
     subtree_count_overhead_1000,
-    analyze_module_benchmark
+    analyze_module_benchmark,
+    analyze_directory_depth_benchmark
 );
 criterion_main!(benches);

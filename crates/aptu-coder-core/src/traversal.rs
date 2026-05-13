@@ -49,15 +49,24 @@ pub fn walk_directory(
     max_depth: Option<u32>,
 ) -> Result<Vec<WalkEntry>, TraversalError> {
     let start = Instant::now();
+
+    // Optimization: use synchronous walker for max_depth == Some(1) to avoid thread spawn overhead.
+    if max_depth == Some(1) {
+        return walk_directory_sync(root, start);
+    }
+
     let mut builder = WalkBuilder::new(root);
     builder.hidden(true).standard_filters(true);
 
     // Map max_depth: 0 = unlimited (None), positive = Some(n)
-    if let Some(depth) = max_depth
+    let max_depth_usize = if let Some(depth) = max_depth
         && depth > 0
     {
         builder.max_depth(Some(depth as usize));
-    }
+        Some(depth as usize)
+    } else {
+        None
+    };
 
     let (sender, receiver) = std::sync::mpsc::channel::<WalkEntry>();
     let entry_count = Arc::new(AtomicUsize::new(0));
@@ -94,6 +103,13 @@ pub fn walk_directory(
                 if count >= MAX_WALK_ENTRIES {
                     return ignore::WalkState::Quit;
                 }
+                // Skip recursing into directories at the depth boundary. The entry
+                // itself has already been sent above; this only prevents descent into
+                // its children, avoiding gitignore matching on large trees (target/,
+                // node_modules/) whose contents would be discarded by the depth limit.
+                if is_dir && max_depth_usize.is_some_and(|max_d| depth >= max_d) {
+                    return ignore::WalkState::Skip;
+                }
                 ignore::WalkState::Continue
             }
             Err(e) => {
@@ -125,6 +141,77 @@ pub fn walk_directory(
     );
 
     // Restore sort contract: walk_parallel does not guarantee order.
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(entries)
+}
+
+/// Synchronous walker for max_depth == Some(1) to eliminate thread spawn overhead.
+fn walk_directory_sync(root: &Path, start: Instant) -> Result<Vec<WalkEntry>, TraversalError> {
+    let mut builder = WalkBuilder::new(root);
+    builder.hidden(true).standard_filters(true);
+    builder.max_depth(Some(1));
+
+    let mut entries = Vec::new();
+    let entry_count = Arc::new(AtomicUsize::new(0));
+
+    for result in builder.build() {
+        match result {
+            Ok(entry) => {
+                let path = entry.path().to_path_buf();
+                let depth = entry.depth();
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+                let is_symlink = entry.path_is_symlink();
+
+                let symlink_target = if is_symlink {
+                    std::fs::read_link(&path).ok()
+                } else {
+                    None
+                };
+
+                let mtime = entry.metadata().ok().and_then(|m| m.modified().ok());
+
+                let walk_entry = WalkEntry {
+                    path: path.clone(),
+                    depth,
+                    is_dir,
+                    is_symlink,
+                    symlink_target,
+                    mtime,
+                    canonical_path: path.clone(),
+                };
+                entries.push(walk_entry);
+                let count = entry_count.fetch_add(1, Ordering::Relaxed);
+                if count >= MAX_WALK_ENTRIES {
+                    break;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "skipping unreadable entry");
+            }
+        }
+    }
+
+    entries.truncate(MAX_WALK_ENTRIES);
+    if entries.len() >= MAX_WALK_ENTRIES {
+        tracing::warn!(
+            "walk truncated at {} entries (MAX_WALK_ENTRIES={}); results are partial",
+            MAX_WALK_ENTRIES,
+            MAX_WALK_ENTRIES
+        );
+    }
+
+    let dir_count = entries.iter().filter(|e| e.is_dir).count();
+    let file_count = entries.iter().filter(|e| !e.is_dir).count();
+
+    tracing::debug!(
+        entries = entries.len(),
+        dirs = dir_count,
+        files = file_count,
+        duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+        "walk complete (sync)"
+    );
+
+    // Sort entries lexicographically.
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(entries)
 }
@@ -362,6 +449,49 @@ mod tests {
             assert!(
                 !msg.contains("invalid git_ref"),
                 "abc123 should pass validation"
+            );
+        }
+    }
+
+    #[test]
+    fn test_walk_directory_depth1_sync_matches_depth2_filtered() {
+        // Create a small test directory structure
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Create: root/file1.txt, root/dir1/, root/dir1/file2.txt, root/dir1/dir2/file3.txt
+        std::fs::write(root.join("file1.txt"), b"content1").unwrap();
+        std::fs::create_dir(root.join("dir1")).unwrap();
+        std::fs::write(root.join("dir1/file2.txt"), b"content2").unwrap();
+        std::fs::create_dir(root.join("dir1/dir2")).unwrap();
+        std::fs::write(root.join("dir1/dir2/file3.txt"), b"content3").unwrap();
+
+        // Walk with max_depth=1 (sync walker)
+        let entries_depth1 = walk_directory(root, Some(1)).unwrap();
+
+        // Walk with max_depth=2 (parallel walker)
+        let entries_depth2 = walk_directory(root, Some(2)).unwrap();
+
+        // Filter depth2 entries to only those at depth <= 1
+        let entries_depth2_filtered: Vec<_> =
+            entries_depth2.iter().filter(|e| e.depth <= 1).collect();
+
+        // Both should have the same number of entries at depth <= 1
+        assert_eq!(
+            entries_depth1.len(),
+            entries_depth2_filtered.len(),
+            "depth=1 sync walker should match depth=2 filtered to depth<=1"
+        );
+
+        // Verify that all entries in depth1 are present in depth2_filtered
+        for entry1 in &entries_depth1 {
+            let found = entries_depth2_filtered.iter().any(|e2| {
+                e2.path == entry1.path && e2.depth == entry1.depth && e2.is_dir == entry1.is_dir
+            });
+            assert!(
+                found,
+                "entry {:?} from depth=1 not found in depth=2 filtered",
+                entry1.path
             );
         }
     }
