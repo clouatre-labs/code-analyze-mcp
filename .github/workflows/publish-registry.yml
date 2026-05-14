@@ -22,6 +22,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      MCP_PUBLISHER_VERSION: '1.7.8'
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -33,6 +35,8 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_TAG="v${VERSION}"
+          TMPDIR="$(mktemp -d)"
+          echo "MCPB_TMPDIR=${TMPDIR}" >> "$GITHUB_ENV"
 
           declare -a targets=("aarch64-apple-darwin" "aarch64-unknown-linux-musl" "x86_64-unknown-linux-musl")
           declare -A shas
@@ -42,8 +46,8 @@ jobs:
             gh release download "${RELEASE_TAG}" \
               --repo clouatre-labs/aptu-coder \
               --pattern "${MCPB_NAME}" \
-              --dir /tmp
-            sha=$(sha256sum "/tmp/${MCPB_NAME}" | cut -d' ' -f1)
+              --dir "${TMPDIR}"
+            sha=$(sha256sum "${TMPDIR}/${MCPB_NAME}" | cut -d' ' -f1)
             shas["${target}"]="$sha"
           done
 
@@ -90,7 +94,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release download v1.7.8 \
+          gh release download "v${MCP_PUBLISHER_VERSION}" \
             --repo modelcontextprotocol/registry \
             --pattern "mcp-publisher_linux_arm64.tar.gz" \
             --output /tmp/mcp-publisher.tar.gz
@@ -108,3 +112,7 @@ jobs:
 
       - name: Publish to MCP Registry
         run: mcp-publisher publish
+
+      - name: Cleanup temporary files
+        if: always()
+        run: rm -rf "${MCPB_TMPDIR:-}"
