@@ -29,10 +29,9 @@ jobs:
       - name: Download MCPB files and compute SHA256
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-
-          VERSION="${{ inputs.version }}"
           RELEASE_TAG="v${VERSION}"
 
           declare -a targets=("aarch64-apple-darwin" "aarch64-unknown-linux-musl" "x86_64-unknown-linux-musl")
@@ -53,10 +52,10 @@ jobs:
           echo "SHA_X86_64_LINUX_MUSL=${shas[x86_64-unknown-linux-musl]}" >> "$GITHUB_ENV"
 
       - name: Build server.json from template
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-
-          VERSION="${{ inputs.version }}"
 
           jq \
             --arg version "$VERSION" \
