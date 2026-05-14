@@ -26,6 +26,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+  DISPATCH_VERSION: ${{ inputs.version }}
 
 jobs:
   verify-tag-signature:
@@ -83,12 +84,9 @@ jobs:
 
       - name: Extract version from tag or input
         id: extract_version
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            VERSION="$INPUT_VERSION"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$DISPATCH_VERSION"
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
