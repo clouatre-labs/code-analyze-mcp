@@ -90,8 +90,6 @@ jobs:
             server.json > server.json.tmp && mv server.json.tmp server.json
 
       - name: Install mcp-publisher
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           gh release download "v${MCP_PUBLISHER_VERSION}" \
