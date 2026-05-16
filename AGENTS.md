@@ -102,6 +102,7 @@ Escalate to `analyze_symbol` when: (1) you need all callers of a function, (2) y
 - Assume any API exists based on training data; verify against installed crate versions
 - Reference host-specific tools or clients in tool descriptions or server instructions (e.g. Claude Code's Grep, Glob, Read)
 - Use `gh release create` to tag releases; always create a GPG-signed annotated tag and push it to trigger the release workflow
+- Never revert `release.yml` `update-homebrew` to full formula regeneration; it must update URLs and SHA256s in-place so that structural changes in `clouatre-labs/homebrew-tap/Formula/aptu-coder.rb` survive releases
 - Remove `DISABLE_PROMPT_CACHING=1` from server instructions; caching data never read again is detrimental
 - Use relative links in `README.md`; all links must be absolute (`https://github.com/clouatre-labs/aptu-coder/blob/main/...`) so they resolve correctly when README is rendered on crates.io, docs.rs, and other mirrors
 - Never call `remote_file` or `remote_tree` on a local repository.
