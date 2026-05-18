@@ -103,6 +103,19 @@ All changes go through a pull request; no direct pushes to main are permitted.
 - No unresolved review comments
 - Reviewer approves or all raised issues are addressed
 
+## Code Quality Rules
+
+This project follows a Rust adaptation of the [NASA/JPL Power of 10](https://en.wikipedia.org/wiki/The_Power_of_10:_Rules_for_Developing_Safety-Critical_Code) to ensure code reliability and maintainability. The following rules are mechanically enforced via CI:
+
+- **Zero warnings:** `cargo fmt --check`, `cargo clippy --workspace -- -D warnings`, `cargo test`, and `cargo deny check` must all pass
+- **Every unsafe block requires a SAFETY comment:** Enforced by `clippy::undocumented_unsafe_blocks = deny` in workspace lints
+- **No .unwrap() or .expect() in library or server code:** Restricted to tests, examples, and startup paths (future mechanical enforcement via `clippy::unwrap_used`)
+- **No unchecked indexing on untrusted data:** Use `.get()` with explicit error propagation instead of `[]`
+- **Loops over untrusted or externally-driven data must have an explicit bound or checked max-iteration guard**
+- **Minimize #[cfg] feature combinations:** Each supported combination must be covered by CI
+
+Note: Mechanical enforcement of `unwrap_used` is deferred to a follow-on issue.
+
 ## Automated Review Tooling
 
 This repository uses [aptu](https://github.com/clouatre-labs/aptu) for automated issue triage and pull request review via GitHub Actions.
