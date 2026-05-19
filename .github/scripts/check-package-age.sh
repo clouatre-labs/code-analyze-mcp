@@ -83,8 +83,8 @@ while IFS=':' read -r NAME VERSION; do
 
   echo -n "Checking $NAME@$VERSION... "
 
-  # Query crates.io API for this specific version
-  RESPONSE=$(curl -s "https://crates.io/api/v1/crates/$NAME/$VERSION" 2>/dev/null || echo "{}")
+  # Query crates.io API for this specific version (10s timeout to avoid hanging the job)
+  RESPONSE=$(curl -s --max-time 10 "https://crates.io/api/v1/crates/$NAME/$VERSION" 2>/dev/null || echo "{}")
 
   # Extract the created_at timestamp
   CREATED_AT=$(echo "$RESPONSE" | jq -r '.version.created_at // empty' 2>/dev/null || echo "")
