@@ -3642,6 +3642,9 @@ fn build_exec_command(
             warn!("memory_limit_mb is not enforced on this platform (Linux only)");
         }
         if memory_limit_mb.is_some() || cpu_limit_secs.is_some() {
+            // SAFETY: This closure runs in the child process after fork() and before exec(),
+            // making it safe to call setrlimit (a signal-safe syscall). No Rust objects are
+            // accessed or mutated, and the closure does not unwind.
             unsafe {
                 cmd.pre_exec(move || {
                     #[cfg(target_os = "linux")]

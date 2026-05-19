@@ -53,6 +53,9 @@ rustls = "0.23"
 url = "2"
 axum = { version = "0.8", features = ["http1", "tokio"], default-features = false }
 
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+
 [profile.release]
 opt-level = "z"
 lto = true
